@@ -1,0 +1,20 @@
+### LOCAL RECIPIENTS ###
+# This should prevent local users (/etc/passwd) from having emails on our system
+# XXX we should ensure that 'postmaster' still has a viable address as that is required
+mydestination = localhost
+local_recipient_maps =
+
+virtual_alias_domains =
+virtual_alias_maps = proxy:mysql:/etc/postfix/mysql-virtual_forwardings.cf, proxy:mysql:/etc/postfix/mysql-virtual_email2email.cf
+virtual_mailbox_domains = proxy:mysql:/etc/postfix/mysql-virtual_domains.cf
+virtual_mailbox_maps = proxy:mysql:/etc/postfix/mysql-virtual_mailboxes.cf
+
+virtual_mailbox_base = /home/email/
+virtual_uid_maps = static:5000
+virtual_gid_maps = static:5000
+
+virtual_create_maildirsize = yes
+virtual_maildir_extended = yes
+
+# services with proxy: allows postfix to use a single proxy connection to our database and must be listed here 
+proxy_read_maps = $virtual_alias_maps $virtual_mailbox_domains $virtual_mailbox_maps

@@ -26,7 +26,15 @@ Then create the `email` user locking down its account so there is no login allow
 
     yum install postfix
 
+The included [main.cf](https://github.com/mozilla/deuxdrop/postfix/main.cf) inside the [postfix](https://github.com/mozilla/deuxdrop/postfix/) directory can simply be concatenated to existing your `/etc/postfix/main.cf`.  A `/etc/init.d/postfix reload` will be required after changing the config
+
 ### /etc/postfix/main.cf
+
+    ### LOCAL RECIPIENTS ###
+    # This should prevent local users (/etc/passwd) from having emails on our system
+    # XXX we should ensure that 'postmaster' still has a viable address as that is required
+    mydestination = localhost
+    local_recipient_maps =
 
     virtual_alias_domains =
     virtual_alias_maps = proxy:mysql:/etc/postfix/mysql-virtual_forwardings.cf, proxy:mysql:/etc/postfix/mysql-virtual_email2email.cf
