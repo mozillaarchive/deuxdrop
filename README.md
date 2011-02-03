@@ -61,9 +61,9 @@ We use a `postfix` user to access the MySQL tables, this user has SELECT access 
 
 **NOTE:** the use of `PASSWORD` where our `postfix` user password should be
 
-### /etc/postfix/mysql-virtual_forwardings.cf
+### [/etc/postfix/mysql-virtual_forwardings.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/mysql-virtual_forwardings.cf)
 
-Creates a virtual forwards user1@domain to user2@domain _not currently required, but useful_
+Creates a virtual forwards `user1@domain` to `user2@domain` _not currently required, but useful_
 
     user = postfix
     password = PASSWORD
@@ -71,7 +71,7 @@ Creates a virtual forwards user1@domain to user2@domain _not currently required,
     query = SELECT destination FROM forwardings WHERE source='%s'
     hosts = 127.0.0.1
 
-### /etc/postfix/mysql-virtual_email2email.cf
+### [/etc/postfix/mysql-virtual_email2email.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/mysql-virtual_email2email.cf)
 
 Ensures that our user email gets mapped to our users
 
@@ -81,7 +81,7 @@ Ensures that our user email gets mapped to our users
     query = SELECT email FROM users WHERE email='%s'
     hosts = 127.0.0.1
 
-### /etc/postfix/mysql-virtual_domains.cf
+### [/etc/postfix/mysql-virtual_domains.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/mysql-virtual_domains.cf)
 
 Provides postfix with the domain name it should accept messages for e.g. `raindrop.it`
 
@@ -91,7 +91,7 @@ Provides postfix with the domain name it should accept messages for e.g. `raindr
     query = SELECT domain AS virtual FROM domains WHERE domain='%s'
     hosts = 127.0.0.1
 
-### /etc/postfix/mysql-virtual_mailboxes.cf
+### [/etc/postfix/mysql-virtual_mailboxes.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/mysql-virtual_mailboxes.cf)
 
 Provides the virtual mailbox file location by taking `user@domain` and splitting it into `$MAILDIR/domain/user/`
 
