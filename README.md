@@ -210,19 +210,22 @@ The `cur` directory is never used in this system.  Normally email clients move m
 ## Python `process.py`
 
     yum install MySQL-python notify-python python-simplejson python-dateutil
+    mkdir /var/www/email
 
 The Python process needs to be daemonized and run when the system is started as the `email` user.
 
-_Psuedo code:_
-* recursively watch `/home/email/` for new files in the Maildir directories
-* convert new messages into JSON format
-* for each new message write JSON format to files in `/var/www/email/`
-* for each new message create entry in MySQL `messsages.messsages`
+_Pseudo code:_
+
+* Recursively watch `/home/email/` for new files in the Maildir directories
+* For each new message convert into JSON format
+* For each new message write JSON format to files in `/var/www/email/`
+* For each new message create entry in MySQL `messsages.messsages`
 
 ## Node.js
 
 **NOT IMPLEMENTED**
 
-_Psuedo code:_
+_Pseudo code:_
+
 * Authenticate users against the `email.users` table
 * provide API access to message index and message JSON files
