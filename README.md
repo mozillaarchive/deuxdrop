@@ -105,28 +105,15 @@ Provides the virtual mailbox file location by taking `user@domain` and splitting
 
     yum install mysql-server
 
-This table information will be available in an SQL file and will be checked into the repo such that you could run `mysql -u root -p < email.sql`
+**NOTE:** you'll need to run `mysql_install_db` before you can start the server via `/etc/init.d/mysqld start` and then you'll want to change the root password
 
 ### EMAIL TABLE
 
 Create the email table that Postfix will use to handle routing and delivery.
 
+_see [email.sql](https://github.com/mozilla/deuxdrop/blob/master/mysql/email.sql)_
+
     create database email;
-
-Give the `postfix` user SELECT only privileges on the database.
-
-**NOTE:** the use of `PASSWORD` where our `postfix` user password should be
-
-    GRANT SELECT ON email.* to 'postfix'@'localhost' IDENTIFIED BY 'PASSWORD';
-    GRANT SELECT ON email.* to 'postfix'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
-
-We give the `node` user more privileges than `postfix` but only to the `users` table.
-
-**NOTE:** the use of `PASSWORD` where our `node` user password should be
-
-    GRANT SELECT,UPDATE,INSERT,DELETE ON email.users to 'node'@'localhost' IDENTIFIED BY 'PASSWORD';
-    GRANT SELECT,UPDATE,INSERT,DELETE ON email.users to 'node'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
-
     use email;
 
 #### DOMAIN TABLE
@@ -172,6 +159,23 @@ Provides our users and their passwords for authentication.
       PRIMARY KEY (`email`)
     ) ENGINE=MyISAM DEFAULT CHARSET=utf8
 
+_see [email-grant.sql](https://github.com/mozilla/deuxdrop/blob/master/mysql/email-grant.sql)_
+
+Give the `postfix` user SELECT only privileges on the database.
+
+**NOTE:** the use of `PASSWORD` where our `postfix` user password should be
+
+    GRANT SELECT ON email.* to 'postfix'@'localhost' IDENTIFIED BY 'PASSWORD';
+    GRANT SELECT ON email.* to 'postfix'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
+
+We give the `node` user more privileges than `postfix` but only to the `users` table.
+
+**NOTE:** the use of `PASSWORD` where our `node` user password should be
+
+    GRANT SELECT,UPDATE,INSERT,DELETE ON email.users to 'node'@'localhost' IDENTIFIED BY 'PASSWORD';
+    GRANT SELECT,UPDATE,INSERT,DELETE ON email.users to 'node'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
+
+**NOTE:** after adding mysql users you'll need to run `mysqladmin reload` to use their accounts
 
 ### MESSAGES TABLE
 
@@ -179,7 +183,19 @@ This table handles the index of messages received and processed by the system.
 
 It is designed to be a single lightweight and fast table avoiding joins and other costly queries.
 
+_see [messages.sql](https://github.com/mozilla/deuxdrop/blob/master/mysql/messages.sql)_
+
     create database messages;
+    use messages;
+
+    CREATE TABLE `messages` (
+      `date` datetime NOT NULL,
+      `file` varchar(255) NOT NULL,
+      `domain` varchar(255) NOT NULL,
+      `username` varchar(255) NOT NULL,
+    ) ENGINE=MyISAM DEFAULT CHARSET=utf8
+
+_see [messages-grant.sql](https://github.com/mozilla/deuxdrop/blob/master/mysql/messages-grant.sql)_
 
 We grant `INSERT` only access to a `python` user for creating the message index as it processes messages.
 
@@ -195,15 +211,7 @@ We grant more privileges to our `node` user than our `python` user.
     GRANT SELECT,UPDATE,INSERT,DELETE ON messages.* to 'node'@'localhost' IDENTIFIED BY 'PASSWORD';
     GRANT SELECT,UPDATE,INSERT,DELETE ON messages.* to 'node'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
 
-    use messages;
-
-    CREATE TABLE `messages` (
-      `date` datetime NOT NULL,
-      `file` varchar(255) NOT NULL,
-      `domain` varchar(255) NOT NULL,
-      `username` varchar(255) NOT NULL,
-    ) ENGINE=MyISAM DEFAULT CHARSET=utf8
-
+**NOTE:** after adding mysql users you'll need to run `mysqladmin reload` to use their accounts
 
 ## Maildir
 
