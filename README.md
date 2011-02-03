@@ -26,7 +26,7 @@ Then create the `email` user locking down its account so there is no login allow
 
     yum install postfix
 
-The included [main.cf](https://github.com/mozilla/deuxdrop/postfix/main.cf) inside the [postfix](https://github.com/mozilla/deuxdrop/postfix/) directory can simply be concatenated to existing your `/etc/postfix/main.cf`.  A `/etc/init.d/postfix reload` will be required after changing the config
+The included [main.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/main.cf) inside the [postfix](https://github.com/mozilla/deuxdrop/tree/master/postfix) directory can simply be concatenated to existing your `/etc/postfix/main.cf`.  A `/etc/init.d/postfix reload` will be required after changing the config
 
 ### /etc/postfix/main.cf
 
