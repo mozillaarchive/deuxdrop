@@ -49,4 +49,47 @@ var wy = exports.wy = new $wmsy.WmsyDomain({id: "page-peep-convchat",
                                             domain: "deuxnius",
                                             clickToFocus: true});
 
+wy.defineWidget({
+  name: "page-conversations",
+  constraint: {
+    type: "page",
+    obj: { kind: "convchat" },
+  },
+  focus: wy.focus.container.vertical("messages"),
+  structure: {
+    header: ["Conv: ", wy.bind(["conversation", "subject"])],
+    messages: wy.vertList({type: "message-band"}, ["conversation", "msgs"]),
+  },
+  style: {
+  },
+});
+
+wy.defineWidget({
+  name: "message-band-generic",
+  constraint: {
+    type: "message-band",
+  },
+  focus: wy.focus.item,
+  structure: {
+    author: wy.bind(["from", "name"]),
+    body: wy.bind("body"),
+  },
+  events: {
+    root: {
+      command: function() {
+        this.emit_gotoPage({
+          kind: "convchat",
+          conversation: this.__context.store.gimmeConvForDigest(this.obj),
+        });
+      },
+    },
+  },
+  style: {
+    body: [
+      "white-space: pre-wrap;",
+    ],
+  },
+});
+
+
 }); // end define

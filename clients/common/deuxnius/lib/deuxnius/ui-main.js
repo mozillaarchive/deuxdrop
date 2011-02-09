@@ -40,12 +40,20 @@ define(
     "wmsy/wmsy",
     "./unifile",
     "./pwomise",
+    "./model/store",
+    "./pages/peeps",
+    "./pages/peep-conversations",
+    "./pages/peep-convchat",
     "exports"
   ],
   function(
     $wmsy,
     $unifile,
     $pwomise,
+    $store,
+    $ui_pages_peeps,
+    $ui_pages_convs,
+    $ui_pages_convchat,
     exports
   ) {
 
@@ -192,6 +200,9 @@ wy.defineWidget({
     type: "app-state",
     obj: { state: "pager" },
   },
+  provideContext: {
+    store: "store",
+  },
   structure: {
     page: wy.widget({type: "page"}, "curPage"),
   },
@@ -214,6 +225,12 @@ function App(dataDirUrl) {
 
   this.loginPeeps = null;
   this.fetchLoginCandidates();
+
+  this.store = null;
+
+  this.progressFunc = this._progressFunc.bind(this);
+  this.soFar = 0;
+  this.total = 0;
 }
 App.prototype = {
   _explode: function(why) {
@@ -224,6 +241,13 @@ App.prototype = {
   },
 
   update: function() {
+    if (this.binding)
+      this.binding.update();
+  },
+
+  _progressFunc: function(soFar, total) {
+    this.soFar = soFar;
+    this.total = total;
     if (this.binding)
       this.binding.update();
   },
@@ -257,6 +281,19 @@ App.prototype = {
    * Point the importer at the login peep's directory.
    */
   loginAs: function(loginPeep) {
+    this.store = new $store.Store(this.dataDirUrl, loginPeep.email);
+    this.state = "chewing";
+    this.update();
+
+    var self = this;
+    when(this.store.catchUp(this.progressFunc), function() {
+      self.state = "pager";
+      self.curPage = {
+        kind: "peeps",
+        contacts: self.store.gimmePeeps(),
+      };
+      self.update();
+    });
   },
 
 

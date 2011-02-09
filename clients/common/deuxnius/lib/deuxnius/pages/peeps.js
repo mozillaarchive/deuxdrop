@@ -72,7 +72,7 @@ wy.defineWidget({
     type: "page",
     obj: { kind: "peeps" },
   },
-  focus: wy.focus.container("peeps"),
+  focus: wy.focus.container.vertical("peeps"),
   structure: {
     header: "Peeps!",
     peeps: wy.vertList({type: "peep-summary-band"}, "contacts"),
@@ -88,15 +88,18 @@ wy.defineWidget({
     type: "peep-summary-band",
   },
   focus: wy.focus.item,
-  emit: "gotoPage",
+  emit: ["gotoPage"],
   structure: {
+    name: wy.bind("name"),
+    email: wy.bind("email"),
+    unreadConvs: wy.bind("unreadPrivCount"),
   },
   events: {
     root: {
       command: function() {
         this.emit_gotoPage({
           kind: "conversations",
-          conversations: this.obj.conversations,
+          conversations: this.__context.store.gimmePrivConvsForPeep(this.obj),
         });
       },
     },

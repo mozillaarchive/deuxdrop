@@ -79,10 +79,114 @@
 
 define(
   [
+    "../pwomise",
+    "./json-dump-importer",
     "exports"
   ],
   function(
+    $pwomise,
+    $importer,
     exports
   ) {
+
+var USER_DB = "deuxnius_user";
+var CONV_DB_PREFIX = "deuxnius_conv_";
+
+function gimmeDB(name) {
+  if ("google" in window) {
+    return new Lawnchair({adaptor: "gears", name: name}, function() {});
+  }
+  else {
+    return new Lawnchair({name: name}, function() {});
+  }
+}
+
+function Store(baseUrl, username) {
+  this.baseUrl = baseUrl;
+  this.username = username;
+  this.userDB = gimmeDB(USER_DB);
+  this.convDB = gimmeDB(CONV_DB_PREFIX + this.username);
+
+  this.importer = null;
+
+  this.userDigest = null;
+  this.convMap = null;
+}
+Store.prototype = {
+  catchUp: function(progressFunc) {
+    var deferred = this._catchupDeferred = $pwomise.defer("catchUp",
+                                                          this.username);
+
+    var self = this;
+    this.userDB.get(this.username, function(udata) {
+      if (udata && udata.allGood === $importer.REV) {
+        self.userDigest = udata;
+        self._chewDigest();
+        self._catchupDeferred.resolve();
+        return true;
+      }
+
+      self.importer = new $importer.DumpImporter(self,
+                                                 self.username,
+                                                 self.baseUrl + "/" +
+                                                 self.username);
+      return deferred.resolve(self.importer.go(progressFunc));
+    });
+
+    return deferred.promise;
+  },
+
+  putUser: function(userObj) {
+    userObj.key = this.username;
+    this.userDB.save(userObj);
+
+    this.userDigest = userObj;
+    this._chewDigest();
+  },
+
+  putConv: function(convObj) {
+    convObj.key = convObj.id;
+    this.convDB.save(convObj);
+  },
+
+  _chewDigest: function() {
+    // - create a conversation map
+    var convMap = this.convMap = {};
+    var convs = this.userDigest.convs;
+    for (var i = 0; i < convs.length; i++) {
+      convs[i].recent = new Date(convs[i].recent_ts);
+      this.convMap[convs[i].id] = convs[i];
+    }
+    console.log("STORE good to go", this);
+  },
+
+  gimmePeeps: function() {
+    return this.userDigest.privPeeps;
+  },
+
+  _sortRecentTsDesc: function(a, b) {
+    return b.recent_ts - a.recent_ts;
+  },
+
+  gimmePrivConvsForPeep: function(peep) {
+    var privConvs = [];
+    for (var i = 0; i < peep.privConvIds.length; i++) {
+      privConvs.push(this.convMap[peep.privConvIds[i]]);
+    }
+    privConvs.sort(this._sortRecentTsDesc);
+    return privConvs;
+  },
+
+  // XXX refactor to be async even though the underlying dude is not.
+  gimmeConvForDigest: function(convDigest) {
+    var rval;
+    function notreallyasync(val) {
+      rval = val;
+    }
+    this.convDB.get(convDigest.id, notreallyasync);
+    return rval;
+  },
+};
+exports.Store = Store;
 
 }); // end define

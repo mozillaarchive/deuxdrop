@@ -55,9 +55,35 @@ wy.defineWidget({
     type: "page",
     obj: { kind: "conversations" },
   },
+  focus: wy.focus.container.vertical("convs"),
   structure: {
+    header: "Conversations:",
+    convs: wy.vertList({type: "conversation-summary-band"}, "conversations"),
   },
   style: {
+  },
+});
+
+wy.defineWidget({
+  name: "conversation-summary-band-generic",
+  constraint: {
+    type: "conversation-summary-band",
+  },
+  focus: wy.focus.item,
+  emit: ["gotoPage"],
+  structure: {
+    subject: wy.bind("subject"),
+    unreadConvs: wy.bind("msgCount"),
+  },
+  events: {
+    root: {
+      command: function() {
+        this.emit_gotoPage({
+          kind: "convchat",
+          conversation: this.__context.store.gimmeConvForDigest(this.obj),
+        });
+      },
+    },
   },
 });
 

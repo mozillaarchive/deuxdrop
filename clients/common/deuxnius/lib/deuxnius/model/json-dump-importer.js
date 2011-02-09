@@ -42,10 +42,226 @@
 
 define(
   [
+    "../unifile",
+    "../pwomise",
     "exports"
   ],
   function(
+    $unifile,
+    $pwomise,
     exports
   ) {
+
+var when = $pwomise.when;
+
+/**
+ * Return true if the message is ridiculous and should be ignored.  Reasons:
+ * - The subject is blank or just "RE:"
+ */
+function isDumbMessage(msg) {
+  return (!msg.subject || msg.subject.trim().toLowerCase() == "re:");
+}
+
+var RE_RE = /^[Rr][Ee]:/;
+
+exports.REV = 2;
+
+function DumpImporter(store, email, url) {
+  this.store = store;
+  this.email = email;
+  this.userDisplayName = null;
+  this.url = url;
+  this.progressFunc = null;
+
+  this.iNextMsg = 0;
+  this.messageUrls = null;
+
+  this.convMap = {};
+  this.nextConvId = 1;
+
+  this.userDigest = null;
+}
+DumpImporter.prototype = {
+  go: function(progressFunc) {
+    this.progressFunc = progressFunc;
+
+    var self = this;
+    return when($unifile.list(this.url), function(msgUrls) {
+      self.messageUrls = msgUrls;
+
+      self.progressFunc(0, self.messageUrls.length);
+      return self._chewNextMessage();
+    }, null, "message list", this.url);
+  },
+
+  _chewNextMessage: function() {
+    if (this.iNextMsg >= this.messageUrls.length) {
+      this._finalize();
+      return true;
+    }
+
+    if (this.iNextMsg % 10 == 0)
+      this.progressFunc(this.iNextMsg, this.messageUrls.length);
+
+    var self = this;
+    return when($unifile.readFile(this.messageUrls[this.iNextMsg++]),
+        function(contents) {
+      if (contents)
+        self._processMessageBlob(contents);
+      return self._chewNextMessage();
+    });
+  },
+
+  _processMessageBlob: function(msgStr) {
+    var msg = JSON.parse(msgStr);
+
+    if (isDumbMessage(msg))
+      return;
+
+    if (!this.userDisplayName &&
+        msg.from.email == this.email)
+      this.userDisplayName = msg.from.display;
+
+    // - kill off quoted stuff assuming outlooky style quoting
+    var idxQuoty = msg.body.indexOf("-----Original Message-----");
+    if (idxQuoty != -1) {
+      msg.body = msg.body.substring(0, idxQuoty);
+    }
+
+    // - thread by subject, ignoring RE:
+    var normSubj;
+    if (RE_RE.test(msg.subject))
+      normSubj = msg.subject.substring(3).trim();
+    else
+      normSubj = msg.subject.trim();
+
+    var conv;
+    if (!this.convMap.hasOwnProperty(normSubj)) {
+      conv = this.convMap[normSubj] = {
+        id: this.nextConvId++,
+        subject: normSubj,
+        msgs: [],
+        msgFlags: [],
+        flags: {read: false, starred: false},
+      };
+    }
+    else {
+      conv = this.convMap[normSubj];
+    }
+
+    conv.msgs.push(msg);
+    conv.msgFlags.push({read: false, starred: false});
+  },
+
+  _sortByDateAsc: function(a, b) {
+    return b.date_ms - a.date_ms;
+  },
+
+  /**
+   * Process a conversation to produce a summary to store on the user and with
+   *  grouping info.
+   */
+  _persistAndMungeConv: function(conv) {
+    conv.parties = 0;
+    conv.peepMap = {};
+
+    conv.msgs.sort(this._sortByDateAsc);
+
+    // - populate the conversation's peepmap
+    for (var iMsg = 0; iMsg < conv.msgs.length; iMsg++) {
+      var msg = conv.msgs[iMsg];
+
+      if (!(msg.from.email in conv.peepMap)) {
+        conv.parties++;
+        conv.peepMap[msg.from.email] = msg.from;
+      }
+      for (var iRecip = 0; iRecip < msg.recipients.length; iRecip++) {
+        var recip = msg.recipients[iRecip];
+        if (!(recip.email in conv.peepMap)) {
+          conv.parties++;
+          conv.peepMap[recip.email] = recip;
+        }
+      }
+    }
+
+    conv.oldest_ts = conv.msgs[0].date_ms;
+    conv.recent_ts = conv.msgs[conv.msgs.length - 1].date_ms;
+
+    // - update the global peepMap and privPeeps if this is privatey
+    if (conv.parties < 5) {
+      for (var email in conv.peepMap) {
+        var name = conv.peepMap[email].name;
+
+        var gpeep;
+        if (!(email in this.peepMap)) {
+          gpeep = this.peepMap[email] = {
+            name: name,
+            email: email,
+            privCount: 0,
+            unreadPrivCount: 0,
+            oldest_ts: conv.oldest_ts,
+            recent_ts: conv.recent_ts,
+            privConvIds: [],
+          };
+          this.userDigest.privPeeps.push(gpeep);
+        }
+        else {
+          gpeep = this.peepMap[email];
+        }
+        gpeep.privCount++;
+        gpeep.unreadPrivCount++;
+        gpeep.privConvIds.push(conv.id);
+      }
+    }
+
+    this.store.putConv(conv);
+
+    var digest = {
+      id: conv.id,
+      subject: conv.subject,
+      parties: conv.parties,
+      peepMap: conv.peepMap,
+      msgCount: conv.msgs.length,
+      oldest_ts: conv.oldest_ts,
+      recent_ts: conv.recent_ts,
+      flags: {
+        read: conv.flags.read,
+      },
+    };
+    this.userDigest.convs.push(digest);
+  },
+
+  _sortByRecentTsDesc: function(a, b) {
+    return a.recent_ts - b.recent_ts;
+  },
+
+  /**
+   * Finalize the gobbling process
+   */
+  _finalize: function() {
+    this.peepMap = {};
+    this.userDigest = {
+      username: this.email,
+      email: this.email,
+      name: this.userDisplayName,
+      convs: [],
+      privPeeps: [],
+      allGood: false,
+    };
+
+    // - munge conversations
+    for (var normSubj in this.convMap) {
+      var conv = this.convMap[normSubj];
+      this._persistAndMungeConv(conv);
+    }
+
+    this.userDigest.privPeeps.sort(this._sortByRecentTsDesc);
+
+    this.userDigest.allGood = exports.REV;
+
+    this.store.putUser(this.userDigest);
+  },
+};
+exports.DumpImporter = DumpImporter;
 
 }); // end define

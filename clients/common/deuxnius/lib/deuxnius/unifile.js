@@ -130,6 +130,26 @@ exports.list = function(aPath, XHRImpl) {
   //return file.list(aPath);
 };
 
+exports.readFile = function(aPathOrWebFile, XHRImpl) {
+  if (aPathOrWebFile instanceof WebFile) {
+    aPathOrWebFile = aPathOrWebFile._base + "/" + aPathOrWebFile.name;
+  }
+
+  var deferred = pwomise.defer("readFile", aPathOrWebFile);
+  var req = new (XHRImpl || XMLHttpRequest)();
+  req.open("GET", aPathOrWebFile, true);
+  req.addEventListener("load", function() {
+    if (req.status != 200) {
+      deferred.resolve(null);
+      return;
+    }
+
+    deferred.resolve(req.responseText);
+  }, false);
+  req.send(null);
+  return deferred.promise;
+};
+
 exports.listMatchingDescendants = function(aPath) {
 
 };
