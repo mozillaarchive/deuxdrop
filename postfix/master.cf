@@ -1,0 +1,12 @@
+# Do not forget to execute "postfix reload" after appending this file to your master.cf.
+#
+# ==========================================================================
+# service type  private unpriv  chroot  wakeup  maxproc command + args
+#               (yes)   (yes)   (yes)   (never) (100)
+# ==========================================================================
+
+# the gutter collects all the raindrops and pipes them out somewhere else. hehe
+# XXX We want to be using a "spawn" instead of pipe so we can hold on to the db connection 
+gutter     unix  -       n       n       -       -       pipe
+  directory=/var/www/email/ flags=hq user=email argv=/usr/local/bin/process.py --sender=${sender} --extension=${extension} --user=${user} --recipient=${recipient} --domain=${domain}
+

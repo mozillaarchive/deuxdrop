@@ -2,6 +2,14 @@
 
 import os, os.path, sys
 
+# this is available in python 2.7
+try:
+  import argparse
+except:
+  print "missing dependency"
+  print "yum install python-argparse"
+  sys.exit(0)
+
 try:
   import MySQLdb
 except:
@@ -9,17 +17,7 @@ except:
   print "yum install MySQL-python"
   sys.exit(0)
 
-import asyncore
-
-try:
-  import pyinotify
-except:
-  print "missing dependency"
-  print "yum install notify-python"
-  sys.exit(0)
-
-
-from mailbox import Maildir, MaildirMessage
+# this is available in python 2.7
 try:
   import json
 except:
@@ -27,11 +25,9 @@ except:
   print "yum install python-simplejson"
   sys.exit(0)
 
-import time
-import re
+import datetime, time, re, uuid
 from email import message_from_file
 from email.utils import unquote, getaddresses
-import datetime
 
 try:
   from dateutil.tz import tzutc, tzlocal
@@ -40,11 +36,11 @@ except:
   print "yum install python-dateutil"
   sys.exit(0)
 
+from email import message_from_file
 from email.utils import mktime_tz, parsedate_tz
 from email.header import decode_header
 from email.Iterators import typed_subpart_iterator
 
-MAILDIR_DIRECTORY = "/home/email/"
 JSON_DIRECTORY = "/var/www/email/"
 
 DB_PARAMS = { "host" : "localhost", 
@@ -91,49 +87,29 @@ class Database:
     self.__conn.commit()
     self.__conn.close()
 
-class EventHandler(pyinotify.ProcessEvent):
-  def my_init(self, processor):
-    self.processor = processor
-
-  def process_IN_CREATE(self, event):
-    # <Event dir=False mask=0x100 maskname=IN_CREATE name=filename path=/home/email pathname=/home/email/filename wd=1 >
-    # print "IN_CREATE:", event.pathname
-    (path, is_tmp) = os.path.split(event.path)
-    if not event.dir and is_tmp != "tmp":
-      msgs = Maildir(path, factory=MaildirMessage)
-      for key in msgs.keys():
-        # By popping the messages we remove them from the Maildir
-        self.processor.process(path, event.name, msgs.pop(key))
-
 class EmailProcessor:
-  def __init__( self, maildir, jsondir, database ):
-    self.maildir = maildir
-    self.jsondir = jsondir
+  def __init__( self, database ):
+    self.jsondir = JSON_DIRECTORY
     self.database = database
 
-  def process( self, maildir_path, name, msg ):
+  def process( self, sender, user, domain, extension, recipient, message ):
     # print "process: ", maildir_path, msg
-    (domain, username) = self._get_domain_username_from_maildir_path(maildir_path)
-    json_path = self._get_or_create_json_path(domain, username)
+
+    json_path = self._get_or_create_json_path(domain, user)
 
     obj = {}
-    obj.update(self.process_body(msg))
-    obj.update(self.process_headers(msg))
+    obj.update(self.process_body(message))
+    obj.update(self.process_headers(message))
 
     try:
       # Write out our object in JSON
-      f = open(os.path.join(json_path, "%s.json" % name), "w")
+      f = open(os.path.join(json_path, "%s.json" % str(uuid.uuid4())), "w")
       json.dump(obj, f, indent=4)
       f.close()
 
-      self.database.add_message(obj, domain, username, name)
+      self.database.add_message(obj, domain, user, name)
     except:
       print "error delivering message"
-
-  def _get_domain_username_from_maildir_path( self, maildir_path ):
-    (domain, username) = os.path.split(maildir_path)
-    (ignore, domain) = os.path.split(domain)
-    return (domain, username)
 
   def _get_or_create_json_path( self, domain, username ):
     json_path = os.path.join(self.jsondir, domain, username)
@@ -167,7 +143,7 @@ class EmailProcessor:
                      "replace")
       email_body = body.strip()
 
-    return { "body" : email_body }
+    return { "body" : { "text" : email_body } }
 
   def process_headers( self, msg ):
     # Given we have no opportunity to introduce an object which can ignore
@@ -205,7 +181,7 @@ class EmailProcessor:
           msgdates["utctimestamp"] = utctimestamp
           msgdates["isotimestamp"] = timestamp.isoformat()
           msgdates["mysqltimestamp"] = timestamp.strftime('%Y-%m-%d %H:%M:%S')
-    return { "headers" : headers, "involves" : involves, "dates" : msgdates }
+    return { "involves" : involves, "dates" : msgdates }
 
 
   def _safe_convert_header( self, header_val, default="ascii" ):
@@ -214,19 +190,16 @@ class EmailProcessor:
     return u"".join(header_sections)
 
 
-wm = pyinotify.WatchManager()
-db = Database(DB_PARAMS)
-notifier = pyinotify.AsyncNotifier(wm, EventHandler(processor=EmailProcessor(MAILDIR_DIRECTORY, JSON_DIRECTORY, db)))
-#notifier.coalesce_events()
+parser = argparse.ArgumentParser(description='Raindrop message processor')
+parser.add_argument('--sender', dest="sender")
+parser.add_argument('--extension', dest="extension")
+parser.add_argument('--user', dest="user")
+parser.add_argument('--recipient', dest="recipient")
+parser.add_argument('--domain', dest="domain")
+parser.add_argument('-', dest="message", type = argparse.FileType('r'), default = '-')
 
-wdd = wm.add_watch(MAILDIR_DIRECTORY, pyinotify.IN_CREATE, rec=True)
+options = parser.parse_args()
+# XXX This opens a DB connection for every email processed.  How could that go wrong?
+e = EmailProcessor(Database(DB_PARAMS))
+e.process(options.sender, options.user, options.domain, options.extension, options.recipient, message_from_file(options.message))
 
-try:
-  asyncore.loop()
-except KeyboardInterrupt:
-  db.shutdown()
-  wm.rm_watch(wdd.values())
-  notifier.stop()
-  sys.exit(0)
-except pyinotify.NotifierError, err:
-    print >> sys.stderr, err
