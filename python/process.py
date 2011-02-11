@@ -15,7 +15,7 @@ try:
   import pyinotify
 except:
   print "missing dependency"
-  print "yum install notify-python"
+  print "yum install python-inotify"
   sys.exit(0)
 
 
