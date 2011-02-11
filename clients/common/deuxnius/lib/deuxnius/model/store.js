@@ -136,6 +136,16 @@ Store.prototype = {
     return deferred.promise;
   },
 
+  beginTransaction: function() {
+    this.userDB.beginBatch();
+    this.convDB.beginBatch();
+  },
+
+  endTransaction: function() {
+    this.convDB.endBatch();
+    this.userDB.endBatch();
+  },
+
   putUser: function(userObj) {
     userObj.key = this.username;
     this.userDB.save(userObj);
@@ -185,6 +195,10 @@ Store.prototype = {
     }
     this.convDB.get(convDigest.id, notreallyasync);
     return rval;
+  },
+
+  emailBelongsToUser: function(email) {
+    return email == this.username;
   },
 };
 exports.Store = Store;

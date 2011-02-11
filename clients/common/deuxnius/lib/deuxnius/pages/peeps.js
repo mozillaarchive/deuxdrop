@@ -74,11 +74,9 @@ wy.defineWidget({
   },
   focus: wy.focus.container.vertical("peeps"),
   structure: {
-    header: "Peeps!",
     peeps: wy.vertList({type: "peep-summary-band"}, "contacts"),
   },
   style: {
-    header: ".pageHeader",
   },
 });
 
@@ -90,19 +88,49 @@ wy.defineWidget({
   focus: wy.focus.item,
   emit: ["gotoPage"],
   structure: {
-    name: wy.bind("name"),
-    email: wy.bind("email"),
     unreadConvs: wy.bind("unreadPrivCount"),
+    mainBit: {
+      name: wy.bind("name"),
+      email: wy.bind("email"),
+    },
   },
   events: {
     root: {
       command: function() {
-        this.emit_gotoPage({
+        this.emit_gotoPage("push", {
           kind: "conversations",
+          heading: "with " + this.obj.name,
+          filterPeep: this.obj,
           conversations: this.__context.store.gimmePrivConvsForPeep(this.obj),
         });
       },
     },
+  },
+  style: {
+    root: {
+      _: [
+        "display: block;",
+        "padding: 4px;",
+        "border-bottom: 1px solid black;",
+        "cursor: pointer;",
+      ],
+      ":hover": [
+        "background-color: #eeeeee;",
+      ],
+    },
+    name: [
+      "display: block;",
+      "font-size: 150%;",
+      "color: #3465a4;",
+    ],
+    email: [
+      "display:block;",
+    ],
+    unreadConvs: [
+      "float: right;",
+      "font-size: 150%;",
+      "padding: 0.5em;",
+    ],
   },
 });
 

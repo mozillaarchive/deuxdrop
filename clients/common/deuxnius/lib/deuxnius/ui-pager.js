@@ -45,116 +45,97 @@ define(
     exports
   ) {
 
-var wy = exports.wy = new $wmsy.WmsyDomain({id: "page-peep-conversations",
+var wy = exports.wy = new $wmsy.WmsyDomain({id: "ui-pager",
                                             domain: "deuxnius",
                                             clickToFocus: true});
 
+/**
+ * UI fully configured steady-state that uses a page idiom; intended to support
+ *  a mobile idiom but perhaps mappable to a tabbed-style interface too?
+ *
+ * Potential transition idioms:
+ * - Hierarchical descent (ex: contact => conversation)
+ * - Modal dialog style (ex: define a new tag)
+ * - Popup style (ex: select a tag from a big list)
+ */
 wy.defineWidget({
-  name: "page-conversations",
+  name: "app-state-pager",
   constraint: {
-    type: "page",
-    obj: { kind: "conversations" },
+    type: "app-state",
+    obj: { state: "pager" },
   },
   provideContext: {
-    filterPeep: "filterPeep",
-  },
-  focus: wy.focus.container.vertical("convs"),
-  structure: {
-    header: "Conversations:",
-    convs: wy.vertList({type: "conversation-summary-band"}, "conversations"),
-  },
-  style: {
-  },
-});
-
-wy.defineWidget({
-  name: "cite-peep",
-  constraint: {
-    type: "cite-peep",
+    store: "store",
   },
   structure: {
-    name: wy.bind("name"),
-  },
-  style: {
-    root: [
-      "display: inline-block;",
-    ],
-  },
-});
-
-
-wy.defineWidget({
-  name: "conversation-summary-band-generic",
-  constraint: {
-    type: "conversation-summary-band",
-  },
-  focus: wy.focus.item,
-  emit: ["gotoPage"],
-  structure: {
-    unreadConvs: wy.bind("msgCount"),
-    mainBit: {
-      subject: wy.bind("subject"),
-      participants: wy.widgetFlow({type: "cite-peep"}, wy.computed("otherPeeps"),
-                                  {separator: ", "}),
+    headerBar: {
+      backButton: wy.button("back"),
+      header: "",
     },
+    page: wy.widget({type: "page"}),
   },
   impl: {
-    /**
-     * Return the list of peeps who are not the user and not the user we are
-     *  filtering on.
-     */
-    otherPeeps: function() {
-      var other = [];
-      var store = this.__context.store, filterPeep = this.__context.filterPeep;
-      for (var email in this.obj.peepMap) {
-        if (store.emailBelongsToUser(email))
-          continue;
-        if (email === filterPeep.email)
-          continue;
-        other.push(this.obj.peepMap[email]);
-      }
-      return other;
+    postInit: function() {
+      this.pageStack = [];
+      this.curPage = null;
+      this.curMeta = null;
+    },
+    pageOp: function(action, pageDef) {
+      if (this.curMeta)
+        this.curMeta.scroll = this.domNode.scrollTop;
+
+      switch (action) {
+        case "push":
+          this.curMeta = {scroll: 0};
+          this.pageStack.push([pageDef, this.curMeta]);
+          this.curPage = pageDef;
+          break;
+        case "pop":
+          if (this.pageStack.length > 1)
+            this.pageStack.pop();
+          var curTupe = this.pageStack[this.pageStack.length - 1];
+          this.curPage = curTupe[0];
+          this.curMeta = curTupe[1];
+          break;
+      };
+
+      this.header_element.textContent = this.curPage.heading;
+      this.page_set(this.curPage);
+      this.domNode.scrollTop = this.curMeta.scroll;
+    },
+  },
+  receive: {
+    gotoPage: function(action, pageDef) {
+      this.pageOp(action, pageDef);
     },
   },
   events: {
-    root: {
+    backButton: {
       command: function() {
-        this.emit_gotoPage("push", {
-          kind: "convchat",
-          heading: this.obj.subject,
-          conversation: this.__context.store.gimmeConvForDigest(this.obj),
-        });
+        this.pageOp("pop", null);
       },
     },
   },
   style: {
-    root: {
-      _: [
-        "display: block;",
-        "padding: 4px;",
-        "border-bottom: 1px solid black;",
-        "cursor: pointer;",
-      ],
-      ":hover": [
-        "background-color: #eeeeee;",
-      ],
-    },
-    subject: [
-      "display: block;",
-      "font-size: 140%;",
-      "color: #3465a4;",
+    root: [
+      "width: 800px;",
+      "height: 480px;",
+      "overflow: auto;",
+      "border: 1px solid black;",
     ],
-    email: [
-      "display:block;",
+    headerBar: [
+      "background: blue -webkit-gradient(linear,left top,left bottom,from(rgba(255, 255, 255, 0.6)),color-stop(0.5,rgba(255, 255, 255, 0.15)),color-stop(0.5,rgba(255, 255, 255, 0.01)),to(transparent));",
     ],
-    unreadConvs: [
-      "clear: both;",
-      "float: right;",
+    header: [
       "font-size: 150%;",
-      "padding: 0.2em;",
+      "color: white;",
+    ],
+    "backButton": [
+      "vertical-align: top;",
     ],
   },
 });
+
 
 
 }); // end define

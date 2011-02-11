@@ -64,7 +64,7 @@ function isDumbMessage(msg) {
 
 var RE_RE = /^[Rr][Ee]:/;
 
-exports.REV = 2;
+exports.REV = 3;
 
 function DumpImporter(store, email, url) {
   this.store = store;
@@ -83,6 +83,8 @@ function DumpImporter(store, email, url) {
 }
 DumpImporter.prototype = {
   go: function(progressFunc) {
+    this.store.beginTransaction();
+
     this.progressFunc = progressFunc;
 
     var self = this;
@@ -260,6 +262,8 @@ DumpImporter.prototype = {
     this.userDigest.allGood = exports.REV;
 
     this.store.putUser(this.userDigest);
+
+    this.store.endTransaction();
   },
 };
 exports.DumpImporter = DumpImporter;

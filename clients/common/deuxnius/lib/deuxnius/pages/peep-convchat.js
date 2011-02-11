@@ -49,6 +49,15 @@ var wy = exports.wy = new $wmsy.WmsyDomain({id: "page-peep-convchat",
                                             domain: "deuxnius",
                                             clickToFocus: true});
 
+wy.defineStyleBase("convchat", [
+  ".messageFrom {",
+  "}",
+  ".messageTo {",
+  "}",
+  ".message {",
+  "}",
+]);
+
 wy.defineWidget({
   name: "page-conversations",
   constraint: {
@@ -57,12 +66,39 @@ wy.defineWidget({
   },
   focus: wy.focus.container.vertical("messages"),
   structure: {
-    header: ["Conv: ", wy.bind(["conversation", "subject"])],
     messages: wy.vertList({type: "message-band"}, ["conversation", "msgs"]),
   },
   style: {
+    root: [
+      "padding: 6px;",
+    ],
   },
 });
+
+wy.defineWidget({
+  name: "smart-date",
+  constraint: {
+    type: "smart-date",
+  },
+  structure: {
+    rep: "",
+  },
+  impl: {
+    postInit: function() {
+      this.date = new Date(this.obj);
+
+      this.rep_element.textContent = this.date.toLocaleDateString() + " " +
+                                     this.date.toLocaleTimeString();
+    },
+  },
+  style: {
+    root: [
+      "display: inline-block;",
+    ],
+  },
+});
+
+var COMPRESS_MULTI_NEWLINE = /\n(?:[ \t]*\n){2,}/g;
 
 wy.defineWidget({
   name: "message-band-generic",
@@ -70,23 +106,100 @@ wy.defineWidget({
     type: "message-band",
   },
   focus: wy.focus.item,
-  structure: {
+  structure: wy.block({
+    date: wy.widget({type: "smart-date"}, "date_ms"),
     author: wy.bind(["from", "name"]),
-    body: wy.bind("body"),
-  },
-  events: {
-    root: {
-      command: function() {
-        this.emit_gotoPage({
-          kind: "convchat",
-          conversation: this.__context.store.gimmeConvForDigest(this.obj),
-        });
-      },
+    body: wy.computed("mungedBody"),
+    arrowBorder: "",
+    arrow: "",
+  }, {dir: wy.computed("dir")}),
+  impl: {
+    dir: function() {
+      return this.__context.store.emailBelongsToUser(this.obj.from.email) ?
+        "from" : "to";
+    },
+    mungedBody: function() {
+      return this.obj.body.trim().replace(COMPRESS_MULTI_NEWLINE, "\n\n");
     },
   },
+  events: {
+  },
   style: {
+    root: {
+      _: [
+        "position: relative;",
+        "box-shadow: 0 1px 2px #CCE0FF;",
+        "margin: 5px 0px;",
+        "padding: 10px 20px;",
+        "background-color: white;",
+        "border: 1px solid #BEBEBE;",
+        "border-radius: 5px;",
+      ],
+      '[dir="from"]': {
+        _: [
+          "float: left;",
+        ],
+        author: [
+          "color: #FF5959;",
+        ],
+        arrow: [
+          "border-width: 20px 20px 0px 0px;",
+          "left: 20px;",
+        ],
+        arrowBorder: [
+          "border-width: 22px 22px 0px 0px;",
+          "left: 19px;",
+        ],
+      },
+      '[dir="to"]': {
+        _: [
+          "float: right;",
+        ],
+        author: [
+          "color: #008EED;"
+        ],
+        arrow: [
+          "border-width: 20px 0px 0px 20px;",
+          "right: 20px;",
+        ],
+        arrowBorder: [
+          "border-width: 22px 0px 0px 22px;",
+          "right: 19px;",
+        ],
+      },
+    },
+    author: [
+      "display: inline-block;",
+      "font-size: 18px;",
+      "line-height: 28px;",
+    ],
+    date: [
+      "color: gray;",
+      "float: right;",
+    ],
     body: [
+      "display: block;",
       "white-space: pre-wrap;",
+    ],
+    arrow: [
+      "display: block;",
+      "position: absolute;",
+      "bottom: -18px;",
+      "height: 20px;",
+      "width: 20px;",
+      "border-style: solid;",
+      "box-sizing: border-box;",
+      "border-color: white transparent transparent transparent;",
+    ],
+    arrowBorder: [
+      "display: block;",
+      "position: absolute;",
+      "bottom: -22px;",
+      "height: 22px;",
+      "width: 22px;",
+      "border-color: #BEBEBE transparent transparent transparent;",
+      "border-style: solid;",
+      "box-sizing: border-box;",
     ],
   },
 });

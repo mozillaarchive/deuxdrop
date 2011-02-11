@@ -41,6 +41,7 @@ define(
     "./unifile",
     "./pwomise",
     "./model/store",
+    "./ui-pager",
     "./pages/peeps",
     "./pages/peep-conversations",
     "./pages/peep-convchat",
@@ -51,6 +52,7 @@ define(
     $unifile,
     $pwomise,
     $store,
+    $ui_pager,
     $ui_pages_peeps,
     $ui_pages_convs,
     $ui_pages_convchat,
@@ -94,12 +96,16 @@ wy.defineWidget({
   structure: {
     contents: wy.widget({type: "app-state"}, wy.SELF),
   },
+  emit: ["gotoPage"],
   impl: {
     postInit: function() {
       // Tell the binding about us so it can tell us to update when it changes
       //  its state.
       this.obj.binding = this;
-    }
+    },
+    setPage: function(page) {
+      this.emit_gotoPage("push", page);
+    },
   },
 });
 
@@ -186,35 +192,6 @@ wy.defineWidget({
 });
 
 /**
- * UI fully configured steady-state that uses a page idiom; intended to support
- *  a mobile idiom but perhaps mappable to a tabbed-style interface too?
- *
- * Potential transition idioms:
- * - Hierarchical descent (ex: contact => conversation)
- * - Modal dialog style (ex: define a new tag)
- * - Popup style (ex: select a tag from a big list)
- */
-wy.defineWidget({
-  name: "app-state-pager",
-  constraint: {
-    type: "app-state",
-    obj: { state: "pager" },
-  },
-  provideContext: {
-    store: "store",
-  },
-  structure: {
-    page: wy.widget({type: "page"}, "curPage"),
-  },
-  receive: {
-    gotoPage: function(pageDef) {
-      this.obj.curPage = pageDef;
-      this.update();
-    },
-  },
-});
-
-/**
  * Drives the initial connection / setup process.
  */
 function App(dataDirUrl) {
@@ -243,6 +220,13 @@ App.prototype = {
   update: function() {
     if (this.binding)
       this.binding.update();
+  },
+
+  setPage: function(page) {
+    if (this.binding) {
+      this.binding.update();
+      this.binding.setPage(page);
+    }
   },
 
   _progressFunc: function(soFar, total) {
@@ -288,15 +272,13 @@ App.prototype = {
     var self = this;
     when(this.store.catchUp(this.progressFunc), function() {
       self.state = "pager";
-      self.curPage = {
+      self.setPage({
         kind: "peeps",
+        heading: "Peeps",
         contacts: self.store.gimmePeeps(),
-      };
-      self.update();
+      });
     });
   },
-
-
 };
 
 exports.main = function main() {
