@@ -14,10 +14,10 @@ CREATE TABLE `forwardings` (
   `source` varchar(255) NOT NULL,
   `destination` varchar(255) NOT NULL,
   PRIMARY KEY (`source`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 CREATE TABLE `users` (
   `email` varchar(255) NOT NULL,
   `password` varchar(48) NOT NULL,
   PRIMARY KEY (`email`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
