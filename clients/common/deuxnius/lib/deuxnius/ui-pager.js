@@ -75,6 +75,7 @@ wy.defineWidget({
     page: wy.widget({type: "page"}),
   },
   impl: {
+    __scrollingDomNode: "domNode",
     postInit: function() {
       this.pageStack = [];
       this.curPage = null;
@@ -120,6 +121,8 @@ wy.defineWidget({
     root: [
       "width: 800px;",
       "height: 480px;",
+      // fancy focus ring wants us to be a containing block
+      "position: relative;",
       "overflow: auto;",
       "border: 1px solid black;",
     ],
