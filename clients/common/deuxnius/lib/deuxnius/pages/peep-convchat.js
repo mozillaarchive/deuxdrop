@@ -58,8 +58,13 @@ wy.defineStyleBase("convchat", [
   "}",
 ]);
 
+// XXX we don't have a proper unique identifier on messages for this rep!
+// (But the timestamp is sufficiently unique for the page...)
+wy.defineIdSpace("convmsg",
+                 function (convmsg) { return convmsg.date_ms; });
+
 wy.defineWidget({
-  name: "page-conversations",
+  name: "page-convchat",
   constraint: {
     type: "page",
     obj: { kind: "convchat" },
@@ -106,6 +111,7 @@ wy.defineWidget({
     type: "message-band",
   },
   focus: wy.focus.item,
+  idspaces: ["convmsg"],
   structure: wy.block({
     date: wy.widget({type: "smart-date"}, "date_ms"),
     author: wy.bind(["from", "name"]),

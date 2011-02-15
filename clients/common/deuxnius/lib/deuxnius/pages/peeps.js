@@ -49,6 +49,10 @@ var wy = exports.wy = new $wmsy.WmsyDomain({id: "page-peeps",
                                             domain: "deuxnius",
                                             clickToFocus: true});
 
+wy.defineIdSpace("contact",
+                 function (contact) { return contact.email; });
+
+
 /**
  * List the human contacts of the user, optionally providing some ordering more
  *  profound than just alphabetically.
@@ -86,6 +90,7 @@ wy.defineWidget({
     type: "peep-summary-band",
   },
   focus: wy.focus.item,
+  idspaces: ["contact"],
   emit: ["gotoPage"],
   structure: {
     unreadConvs: wy.bind("unreadPrivCount"),

@@ -49,6 +49,9 @@ var wy = exports.wy = new $wmsy.WmsyDomain({id: "page-peep-conversations",
                                             domain: "deuxnius",
                                             clickToFocus: true});
 
+wy.defineIdSpace("conversation",
+                 function (conv) { return conv.id; });
+
 wy.defineWidget({
   name: "page-conversations",
   constraint: {
@@ -89,6 +92,7 @@ wy.defineWidget({
     type: "conversation-summary-band",
   },
   focus: wy.focus.item,
+  idspaces: ["conversation"],
   emit: ["gotoPage"],
   structure: {
     unreadConvs: wy.bind("msgCount"),

@@ -67,6 +67,7 @@ wy.defineWidget({
   provideContext: {
     store: "store",
   },
+  focus: wy.focus.container.vertical("page"),
   structure: {
     headerBar: {
       backButton: wy.button("back"),
@@ -75,6 +76,7 @@ wy.defineWidget({
     page: wy.widget({type: "page"}),
   },
   impl: {
+    // The fancy focus ring needs a hint to know what part of us is scrolly.
     __scrollingDomNode: "domNode",
     postInit: function() {
       this.pageStack = [];
@@ -82,12 +84,15 @@ wy.defineWidget({
       this.curMeta = null;
     },
     pageOp: function(action, pageDef) {
-      if (this.curMeta)
+      if (this.curMeta) {
         this.curMeta.scroll = this.domNode.scrollTop;
+        this.curMeta.persistedFocus = this.FOCUS.persistFocus();
+        // XXX ideally we would nuke the focus entirely at this point.
+      }
 
       switch (action) {
         case "push":
-          this.curMeta = {scroll: 0};
+          this.curMeta = {scroll: 0, persistedFocus: null};
           this.pageStack.push([pageDef, this.curMeta]);
           this.curPage = pageDef;
           break;
@@ -98,11 +103,16 @@ wy.defineWidget({
           this.curPage = curTupe[0];
           this.curMeta = curTupe[1];
           break;
+        default:
+          throw new Error("action '" + action + "' is not a known page-op");
       };
 
       this.header_element.textContent = this.curPage.heading;
       this.page_set(this.curPage);
       this.domNode.scrollTop = this.curMeta.scroll;
+      this.FOCUS.restorePersistedFocus(this.curMeta.persistedFocus);
+      this.FOCUS.ensureDomainFocused(
+        this.FOCUS.findFocusDomainForBinding(this));
     },
   },
   receive: {
@@ -123,7 +133,9 @@ wy.defineWidget({
       "height: 480px;",
       // fancy focus ring wants us to be a containing block
       "position: relative;",
-      "overflow: auto;",
+      // scroll vertically, not horizontally
+      "overflow-y: auto;",
+      "overflow-x: none;",
       "border: 1px solid black;",
     ],
     headerBar: [
