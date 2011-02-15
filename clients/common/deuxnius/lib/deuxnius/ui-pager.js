@@ -135,7 +135,7 @@ wy.defineWidget({
       "position: relative;",
       // scroll vertically, not horizontally
       "overflow-y: auto;",
-      "overflow-x: none;",
+      "overflow-x: hidden;",
       "border: 1px solid black;",
     ],
     headerBar: [
