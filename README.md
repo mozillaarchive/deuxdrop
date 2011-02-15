@@ -4,7 +4,6 @@
 * Postfix
   * Postfix-mysql
 * MySQL
-* Maildir
 * Python `process.py`
 * Node.js
 
@@ -16,9 +15,9 @@ First create the `email` group for our user.
 
     groupadd email --gid 5000
 
-Then create the `email` user locking down its account so there is no login allowed.  The `-m` option creates our required `/home/email/` directory.
+Then create the `email` user locking down its account so there is no login allowed.
 
-    useradd email --gid 5000 --uid 5000 --shell /sbin/nologin -m
+    useradd email --gid 5000 --uid 5000 --shell /sbin/nologin
 
 **NOTE:** the use of `5000` for both our `gid` and `uid`, this number is referenced in the Postfix `main.cf`
 
@@ -28,7 +27,7 @@ Then create the `email` user locking down its account so there is no login allow
 
 The included [main.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/main.cf) inside the [postfix](https://github.com/mozilla/deuxdrop/tree/master/postfix) directory can simply be concatenated to existing your `/etc/postfix/main.cf`.  A `/etc/init.d/postfix reload` will be required after changing the config
 
-### /etc/postfix/main.cf
+### [/etc/postfix/main.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/main.cf)
 
     ### LOCAL RECIPIENTS ###
     # This should prevent local users (/etc/passwd) from having emails on our system
@@ -39,17 +38,18 @@ The included [main.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/m
     virtual_alias_domains =
     virtual_alias_maps = proxy:mysql:/etc/postfix/mysql-virtual_forwardings.cf, proxy:mysql:/etc/postfix/mysql-virtual_email2email.cf
     virtual_mailbox_domains = proxy:mysql:/etc/postfix/mysql-virtual_domains.cf
-    virtual_mailbox_maps = proxy:mysql:/etc/postfix/mysql-virtual_mailboxes.cf
 
-    virtual_mailbox_base = /home/email/
-    virtual_uid_maps = static:5000
-    virtual_gid_maps = static:5000
-
-    virtual_create_maildirsize = yes
-    virtual_maildir_extended = yes
+    # references the transport specified in master.cf
+    virtual_transport = gutter
 
     # services with proxy: allows postfix to use a single proxy connection to our database and must be listed here 
-    proxy_read_maps = $virtual_alias_maps $virtual_mailbox_domains $virtual_mailbox_maps
+    proxy_read_maps = $virtual_alias_maps $virtual_mailbox_domains
+
+### [/etc/postfix/master.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/master.cf)
+
+    gutter     unix  -       n       n       -       -       pipe
+      directory=/var/www/email/ flags=hq user=email argv=/usr/local/bin/process.py --sender=${sender} --extension=${extension} --user=${user} --recipient=${recipient} --domain=${domain}
+
 
 ## Postfix-MySQL
 
@@ -213,26 +213,16 @@ We grant more privileges to our `node` user than our `python` user.
 
 **NOTE:** after adding mysql users you'll need to run `mysqladmin reload` to use their accounts
 
-## Maildir
-
-All mail from Postfix is dropped into the configured location for our `email` user as `/home/email/`.
-
-For `user@domain` the directory layout will look like `/home/email/domain/user/` and then Maildir will add 3 subdirectories to that; `/home/email/domain/user/{tmp,cur,new}`
-
-Initially messages are delivered to `tmp` and then once the write is complete they are moved to `new`; completing delivery.
-
-The `cur` directory is never used in this system.  Normally email clients move messages from the `new` to the `cur` directory as they are opened but we are deleting them after opening them; this may change.
-
 ## Python `process.py`
 
-    yum install MySQL-python notify-python python-simplejson python-dateutil
+    yum install MySQL-python python-simplejson python-dateutil python-argparse
     mkdir /var/www/email
 
-The Python process needs to be daemonized and run when the system is started as the `email` user.
+The Python process should be located in the `/usr/local/bin/` directory and owned by the `email` user.
 
 _Pseudo code:_
 
-* Recursively watch `/home/email/` for new files in the Maildir directories
+* Receive new messages as pipe input
 * For each new message convert into JSON format
 * For each new message write JSON format to files in `/var/www/email/`
 * For each new message create entry in MySQL `messsages.messsages`

@@ -9,5 +9,5 @@ CREATE TABLE `messages` (
   `date` datetime NOT NULL,
   `file` varchar(255) NOT NULL,
   `domain` varchar(255) NOT NULL,
-  `username` varchar(255) NOT NULL,
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+  `username` varchar(255) NOT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
