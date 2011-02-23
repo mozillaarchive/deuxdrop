@@ -1,0 +1,68 @@
+body .mobile,
+body.conversationView #secondaryNav li.back {
+    display: block;
+}
+
+body #secondaryNav {
+    width: 100%;
+    height: 48px;
+    border-right: none;
+    border-bottom: 1px solid #222;
+    
+    -webkit-box-shadow: 0 -10px 3px 10px #000000;
+       -moz-box-shadow: 0 -10px 3px 10px #000000;
+            box-shadow: 0 -10px 3px 10px #000000;
+}
+
+body #secondaryNav ul {
+    margin: 0;
+}
+
+body #primaryNav {
+    width: 100%;
+    padding: 48px 0 0 0;
+    margin: 0;
+    border-right: none;
+    
+    -webkit-box-shadow: none;
+       -moz-box-shadow: none;
+            box-shadow: none;
+    
+    -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+       -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+            transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+}
+
+body.conversationView #primaryNav {
+    left: -100%;
+}
+
+body.conversationView #secondaryNav li.inbox,
+body.conversationView #secondaryNav li.labels,
+body.conversationView #secondaryNav li.trash {
+    display: none;
+}
+
+body #conversation {
+    margin: 0;
+}
+
+body .message {
+    right: -100%;
+    
+    -webkit-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+       -moz-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+            transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+}
+
+body.conversationView .message {
+    right: 0;
+    
+    -webkit-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+       -moz-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+            transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+}
+
+body .message .fullMsgHeader {
+    padding: 60px 0 5px;
+}
