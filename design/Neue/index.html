@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="initial-scale=1.0; maximum-scale=1.0; width=device-width;">
     <title>&#x270E; Neue Mail</title>
     <link rel="stylesheet" type="text/css" href="style.css">
     <script type="text/javascript" src="js/jquery-1.5.min.js"></script>
@@ -19,14 +20,22 @@
                 <li class="labels"></li>
                 <li class="inbox selected"></li>
                 <li class="compose"></li>
-                <li class="trash"></li>
+                <li class="search"></li>
             </ul>
         </nav>
     </aside>
 
     <div id="primaryNav" class="messages">
         
+        <section id="search">
+            <div class="hbox">
+                <input type="text" placeholder="search" class="boxFlex search">
+                <button><img src="i/search.png"></button>
+            </div>
+        </section>
+        
         <div id="listWrap" class="clearfix">
+        
             <section id="labels">
                 <header>
                     <h1>Labels</h1>

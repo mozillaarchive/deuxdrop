@@ -28,9 +28,9 @@ body #primaryNav {
        -moz-box-shadow: none;
             box-shadow: none;
     
-    -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-       -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-            transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+    -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+       -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+            transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
 }
 
 body.conversationView #primaryNav {
@@ -39,7 +39,7 @@ body.conversationView #primaryNav {
 
 body.conversationView #secondaryNav li.inbox,
 body.conversationView #secondaryNav li.labels,
-body.conversationView #secondaryNav li.trash {
+body.conversationView #secondaryNav li.search {
     display: none;
 }
 
@@ -50,17 +50,17 @@ body #conversation {
 body .message {
     right: -100%;
     
-    -webkit-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-       -moz-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-            transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+    -webkit-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+       -moz-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+            transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
 }
 
 body.conversationView .message {
     right: 0;
     
-    -webkit-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-       -moz-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-            transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+    -webkit-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+       -moz-transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+            transition: right 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
 }
 
 body .message .fullMsgHeader {

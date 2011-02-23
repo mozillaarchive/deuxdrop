@@ -94,44 +94,29 @@ button:active {
         display: block;
         float: left;
         cursor: pointer;
-        background-image: url("i/sprite.png");
+        background-position: left center;
         background-repeat: no-repeat;
     }
     
-    #secondaryNav li.selected {
-        background-image: -moz-radial-gradient(center 45deg, circle closest-side, rgba(255,255,255,0.75) 0%, transparent 125%), url("i/sprite.png");
+    #secondaryNav li.selected,
+    #secondaryNav li.on {
+        background-position: right center;
     }
     
     #secondaryNav li.inbox {
-        background-position: center 13px;
-    }
-    
-    #secondaryNav li.inbox.selected {
-        background-position: center center, center 13px;
+        background-image: url("i/sidebar_inbox.png");
     }
     
     #secondaryNav li.compose {
-        background-position: center -28px;
-    }
-    
-    #secondaryNav li.compose.selected {
-        background-position: center center, center -28px;
+        background-image: url("i/sidebar_compose.png");
     }
     
     #secondaryNav li.labels {
-        background-position: center -69px;
+        background-image: url("i/sidebar_labels.png");
     }
     
-    #secondaryNav li.labels.selected  {
-        background-position: center center, center -69px;
-    }
-    
-    #secondaryNav li.trash {
-        background-position: center -112px;
-    }
-    
-    #secondaryNav li.trash.selected {
-        background-position: center center, center -112px;
+    #secondaryNav li.search {
+        background-image: url("i/sidebar_search.png");
     }
     
     #secondaryNav li.back {
@@ -144,6 +129,7 @@ button:active {
     top: 0;
     left: 0;
     width: 320px;
+    height: 100%;
     position: fixed;
     overflow: hidden;
     margin: 0 0 0 48px;
@@ -160,31 +146,79 @@ button:active {
         width: 640px;
         left: 0;
         
-        -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-           -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-                transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+        -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+           -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+                transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
     }
     
     #primaryNav.messages #listWrap {
         left: -100%;
         
-        -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-           -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
-                transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.15);
+        -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+           -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+                transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+    }
+
+    #primaryNav section#search {
+        display: block;
+        width: 100%;
+        float: none;
+        padding: 10px;
+        border-bottom: 1px solid #e6e6e6;
+        margin-top: -53px;
+    
+        -webkit-transition: all 0.2s ease-out;
+           -moz-transition: all 0.2s ease-out;
+                transition: all 0.2s ease-out;
+    }
+    
+    #primaryNav section#search.visible {
+        margin-top: 0;
+    }
+    
+    #primaryNav section#search img {
+        vertical-align: middle;
+    }
+    
+    #primaryNav section#search input {
+        font-size: 16px;
+        padding: 5px;
+        border-width: 1px;
+        border-style: solid;
+        border-color: #bbb transparent #e6e6e6 #bbb;
+        font-family: "Helvetica Neue", Helvetica, Arial, Sans-serif;
+        outline: none;
+        
+        -webkit-border-radius: 2px 0 0 2px;
+           -moz-border-radius: 2px 0 0 2px;
+                border-radius: 2px 0 0 2px;
+    }
+    
+    #primaryNav section#search input:focus {
+        border-color: #2EA4FF;
+
+        -webkit-box-shadow: 0 0 3px rgba(46,164,255,1) inset;
+           -moz-box-shadow: 0 0 3px rgba(46,164,255,1) inset;
+                box-shadow: 0 0 3px rgba(46,164,255,1) inset;
+    }
+    
+    #primaryNav section#search button {
+        -webkit-border-radius: 0 2px 2px 0;
+           -moz-border-radius: 0 2px 2px 0;
+                border-radius: 0 2px 2px 0;
     }
 
     #primaryNav section {
         float: left;
         width: 50%;
         display: inline-block;
-        border-right: 1px solid #e6e6e6;
         overflow-y: auto;
         overflow-x: hidden;
     }
     
     #primaryNav section header {
         width: 100%;
-        padding: 5px;
+        padding: 5px 10px;
         position: relative;
         z-index: 101;
         border-bottom: 1px solid #aaa;

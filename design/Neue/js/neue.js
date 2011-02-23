@@ -6,7 +6,7 @@ $(document).ready(function($) {
     // size sections to 100% height of window
     $(window).bind("load resize", function() {
         var h = $(window).height();
-        $("#primaryNav, #conversation, #primaryNav section").css({ "height" : h });
+        $("#conversation").css({ "height" : h });
     });
     
     // size listWrap 
@@ -33,6 +33,13 @@ $(document).ready(function($) {
         $("#primaryNav").removeClass('messages');
         $("#primaryNav").addClass('labels');
         
+    });
+    
+    // search stuff
+    $("li.search").click(function() {
+        $(this).toggleClass("on");
+        $("section#search").toggleClass("visible");
+        $("input.search").focus();
     });
     
     // toggle conversation
