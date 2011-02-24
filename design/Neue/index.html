@@ -13,6 +13,29 @@
 
 <div id="wrapper">
 
+    <div id="composeWrap">
+        <div id="composeWindow" class="vbox">
+            <div class="hbox inputWrap">
+                <label for="to">to:</label>
+                <input id="to" type="text" class="boxFlex">
+            </div>
+            
+            <div class="hbox inputWrap">
+                <label for="subject">subject:</label>
+                <input id="subject" type="text" class="boxFlex">
+            </div>
+            
+            <textarea class="composeInput boxFlex" placeholder="message..."></textarea>
+            
+            <footer class="hbox">
+                <button>discard</button>
+                <div class="boxFlex"></div>
+                <button class="save">save</button>
+                <button class="send">send</button>
+            </footer>
+        </div>
+    </div>
+
     <aside id="secondaryNav">
         <nav>
             <ul class="clearfix">
