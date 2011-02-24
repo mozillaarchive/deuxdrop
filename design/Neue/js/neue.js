@@ -36,10 +36,10 @@ $(document).ready(function($) {
     });
     
     // search stuff
-    $("li.search").click(function() {
-        $(this).toggleClass("on");
+    $("li.search.off").click(function() {
+        $(this).toggleClass("on off");
         $("section#search").toggleClass("visible");
-        $("input.search").focus();
+        $(".visible input.search").focus();
     });
     
     // toggle conversation
