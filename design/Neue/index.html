@@ -6,10 +6,77 @@
     <link rel="stylesheet" type="text/css" href="style.css">
     <script type="text/javascript" src="js/jquery-1.5.min.js"></script>
     <script type="text/javascript" src="js/jquery-textOverflow.js"></script>
+    <script type="text/javascript" src="js/jquery.tmpl.min.js"></script>
+    <script type="text/javascript" src="js/jquery.prettydate.js"></script>
+    <script type="text/javascript" src="js/app.js"></script>
     <script type="text/javascript" src="js/neue.js"></script>
 </head>
 
 <body>
+
+<script id="tmplBoxList" type="text/x-jquery-tmpl">
+  <li id="${id}">${name}</li>
+</script>
+
+<script id="tmplHeaderList" type="text/x-jquery-tmpl">
+  <li id="${Msgno}" class="${typeof(Unseen) !== 'undefined' ? '' : 'read'} messageItem messagePrev">
+    <div class="msgHeader hbox">
+      <div class="sender overflow boxFlex">
+        ${from[0].personal || sender[0].personal || fromaddress || senderaddress || reply_toaddress}
+      </div>
+      <div class="meta">
+        <span class="msgCount">${typeof(references) !== 'undefined' ? references.split("\n").length : 1}</span>
+        <span class="date">${date}</span>
+        <span class="starred">${Flagged ? "&#9733;" : ""}</span>
+      </div>
+    </div>
+    <div class="subjectWrap hbox">
+      <span class="subject boxFlex overflow">${subject}</span>
+      <input type="checkbox">
+    </div>
+  </li>
+
+</script>
+
+<script id="tmplMessage" type="text/x-jquery-tmpl">
+  <div>
+    <div class="title hbox">
+      <div class="subject overflow boxFlex">
+        ${headers.subject}
+      </div>
+      <div class="tags">
+        <span>inbox</span>
+      </div>
+      <span class="starred">&#9733;</span>
+    </div>
+    <div class="messageBody">
+      <div class="messageBodyHeader hbox">
+        <div class="boxFlex">
+          <span class="from">${headers.from[0].personal || headers.sender[0].personal}</span>
+          <span class="to">to ${headers.to[0].personal || headers.toaddress }</span>
+        </div>
+        <div>
+          <span class="date">${headers.date}</span>
+        </div>
+      </div>
+      <div class="theBody">
+      {{if type == "PLAIN"}}
+        <pre>${body}
+
+</pre>
+      {{else type == "HTML"}}
+      <iframe id="bodyFrame" width="100%" height="100%" style="border: none"></iframe>
+      {{/if}}
+      </div>
+      <div class="messageBodyFooter hbox">
+        <div class="boxFlex">
+          <button>reply</button>
+          <button>forward</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</script>
 
 <div id="wrapper">
 
@@ -42,6 +109,7 @@
                 <li class="back messagePrev active"></li>
                 <li class="labels"></li>
                 <li class="inbox selected"></li>
+                <li class="settings"></li>
                 <li class="compose"></li>
                 <li class="search off"></li>
             </ul>
@@ -49,22 +117,22 @@
     </aside>
 
     <div id="primaryNav" class="messages">
-        
+
         <section id="search">
             <div class="hbox">
                 <input type="text" placeholder="search" class="boxFlex search">
                 <button><img src="i/search.png"></button>
             </div>
         </section>
-        
+
         <div id="listWrap" class="clearfix">
-        
+
             <section id="labels">
                 <header>
                     <h1>Labels</h1>
                 </header>
                 
-                <ul class="default">
+                <ul id="folderList" class="default">
                     <li class="inbox">Inbox</li>
                     <li>Starred</li>
                     <li>Sent</li>
@@ -83,9 +151,9 @@
             
             <section id="messages">
                 <header>
-                    <h1>Inbox</h1>
+                    <h1 id="folderName">Inbox</h1>
                 </header>
-                <ul>
+                <ul id="msgList">
                     <li class="messagePrev active">
                         <div class="msgHeader hbox">
                             <div class="sender overflow boxFlex">
@@ -155,6 +223,37 @@
                     
                 </ul>
             </section>
+
+            <section id="settings">
+                <header>
+                    <h1>Settings</h1>
+                </header>
+
+        <div>
+            <div class="hbox inputWrap">
+                <label for="to">username:</label>
+                <input id="username" type="text" class="boxFlex">
+            </div>
+
+            <div class="hbox inputWrap">
+                <label for="subject">password:</label>
+                <input id="password" type="password" class="boxFlex">
+            </div>
+                        
+            <div class="hbox inputWrap">
+                <label for="subject">server:</label>
+                <input id="server" type="text" class="boxFlex">
+            </div>
+
+            <footer class="hbox">
+                <button>discard</button>
+                <div class="boxFlex"></div>
+                <button class="save">save</button>
+            </footer>
+        </div>
+
+            </section>
+
         </div>
         
     </div>
@@ -172,31 +271,33 @@
                     <button>more</button>
                 </div>
             </div>
-            <div class="title hbox">
-                <div class="subject overflow boxFlex">
-                    Lunch tomorrow
-                </div>
-                <div class="tags">
-                    <span>inbox</span>
-                </div>
-                <span class="starred">&#x2605;</span>
-            </div>
-            <div class="messageBody">
-                <div class="messageBodyHeader hbox">
-                    <div class="boxFlex">
-                        <span class="from">Bryan Clark</span> 
-                        <span class="to">to Andy Chung</span>
+            <div id="messageContent">
+                <div class="title hbox">
+                    <div class="subject overflow boxFlex">
+                        Lunch tomorrow
                     </div>
-                    <div>
-                        <span class="date">Oct 7</span>
+                    <div class="tags">
+                        <span>inbox</span>
                     </div>
+                    <span class="starred">&#x2605;</span>
                 </div>
-                <p>Hey Andy</p>
-                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec cursus consequat ante ut viverra. Integer turpis libero, fringilla at bibendum sed, elementum ut diam. Cras dignissim turpis nec lorem placerat pellentesque. Nam enim risus, suscipit id volutpat fermentum, venenatis et torto</p>
-                <div class="messageBodyFooter hbox">
-                    <div class="boxFlex">
-                        <button>reply</button>
-                        <button>forward</button>
+                <div class="messageBody">
+                    <div class="messageBodyHeader hbox">
+                        <div class="boxFlex">
+                            <span class="from">Bryan Clark</span> 
+                            <span class="to">to Andy Chung</span>
+                        </div>
+                        <div>
+                            <span class="date">Oct 7</span>
+                        </div>
+                    </div>
+                    <p>Hey Andy</p>
+                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec cursus consequat ante ut viverra. Integer turpis libero, fringilla at bibendum sed, elementum ut diam. Cras dignissim turpis nec lorem placerat pellentesque. Nam enim risus, suscipit id volutpat fermentum, venenatis et torto</p>
+                    <div class="messageBodyFooter hbox">
+                        <div class="boxFlex">
+                            <button>reply</button>
+                            <button>forward</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -147,6 +147,10 @@ button:active {
         margin: 0 5px 0 0;
     }
 
+#settings div {
+    padding: 10px;
+}
+
 #secondaryNav {
     top: 0;
     left: 0;
@@ -200,6 +204,11 @@ button:active {
     #secondaryNav li.search {
         background-image: url("i/sidebar_search.png");
     }
+
+    #secondaryNav li.settings {
+        background-position: center center;
+        background-image: url("i/sidebar_settings.png");
+    }
     
     #secondaryNav li.back {
         display: none;
@@ -225,7 +234,7 @@ button:active {
 
     #primaryNav #listWrap {
         position: relative;
-        width: 640px;
+        width: 960px;
         height: 100%;
         left: 0;
         
@@ -236,6 +245,14 @@ button:active {
     
     #primaryNav.messages #listWrap {
         left: -100%;
+        
+        -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+           -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+                transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+    }
+
+    #primaryNav.settings #listWrap {
+        left: -200%;
         
         -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
            -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
@@ -294,7 +311,7 @@ button:active {
 
     #primaryNav section {
         float: left;
-        width: 50%;
+        width: 33.33%;
         height: 100%;
         display: inline-block;
         overflow-y: auto;

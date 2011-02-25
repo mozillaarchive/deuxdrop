@@ -58,6 +58,7 @@ body.conversationView #primaryNav {
 }
 
 body.conversationView #secondaryNav li.inbox,
+body.conversationView #secondaryNav li.settings,
 body.conversationView #secondaryNav li.compose,
 body.conversationView #secondaryNav li.labels,
 body.conversationView #secondaryNav li.search {

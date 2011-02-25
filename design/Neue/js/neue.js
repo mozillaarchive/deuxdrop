@@ -6,11 +6,11 @@ $(document).ready(function($) {
     // size listWrap 
     $(window).bind('load resize', function() {
         var w = $('#primaryNav').width();
-        $('#listWrap').css({ 'width' : (w*2+2) });
+        $('#listWrap').css({ 'width' : (w*3+3) });
     });
     
     // selected state for sidebar
-    $('#secondaryNav li.inbox, #secondaryNav li.labels, #secondaryNav li.compose').click(function() {
+    $('#secondaryNav li.inbox, #secondaryNav li.labels, #secondaryNav li.settings, #secondaryNav li.compose').click(function() {
         $(this).addClass('selected');
         $(this).siblings().removeClass('selected');
         $('#composeWrap').removeClass('open');
@@ -19,13 +19,17 @@ $(document).ready(function($) {
     // inbox interaction
     $('.inbox').click(function() {
         $('#primaryNav').addClass('messages');
+        $('#primaryNav').removeClass('settings');
         $('#secondaryNav li.inbox').addClass('selected');
         $('#secondaryNav li.inbox').siblings().removeClass('selected');
+        mail.showFolder($("#folderList li:first-child").attr('id'));
     });
     
     // remove messages class when clicking labels
     $('.labels').click(function() {
+        mail.getFolders();
         $('#primaryNav').removeClass('messages');
+        $('#primaryNav').removeClass('settings');
         $('#primaryNav').addClass('labels');
         
     });
@@ -36,6 +40,13 @@ $(document).ready(function($) {
         $('section#search').removeClass('visible');
         $('li.search').removeClass('on');
         $('input#to').focus();
+    });
+
+    $('.settings').click(function() {
+        dump("clicked on settings\n");
+        $('#primaryNav').removeClass('labels');
+        $('#primaryNav').removeClass('messages');
+        $('#primaryNav').addClass('settings');
     });
     
     // search stuff
@@ -53,4 +64,7 @@ $(document).ready(function($) {
         $('body').toggleClass('conversationView');
     });
     
+    mail.getFolders(function() {
+        mail.showFolder($("#folderList li:first-child").attr('id'));
+    });
 }); 
