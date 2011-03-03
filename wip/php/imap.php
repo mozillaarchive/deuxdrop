@@ -83,10 +83,14 @@ class ImapBase {
         //$r['entries'] = imap_fetch_overview($imap,"1:{$boxinfo->Nmsgs}",0);
         $this->orig_conn = $this->conn;
         $sorted_mbox = imap_sort($this->conn, SORTARRIVAL, 1);
+        $totalrows = $boxinfo->Nmsgs;
+        if ($totalrows > 200) {
+            $totalrows = 200;
+        }
         //echo json_encode($sorted_mbox);
-        imap_headers($this->conn);
+        //imap_headers($this->conn);
         $r['entries'] = array();
-        for ($i=1; $i < $boxinfo->Nmsgs; $i++) {
+        for ($i=1; $i < $totalrows; $i++) {
             try {
                 $headers = imap_header($this->conn, $sorted_mbox[$i]);
                 array_push($r['entries'], $this->decode_headers($headers));
