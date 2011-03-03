@@ -23,6 +23,7 @@ $map->connect('default', '', NULL, 'index');
 $map->connect('message', '/message/:mid', 'storage', 'get_message');
 $map->connect('message_list', '/folder/:name', 'storage', 'list_messages');
 $map->connect('folder_list', '/folder', 'storage', 'list_folders');
+$map->connect('message_send', '/send', 'storage', 'send_message');
 
 # e.g. http://example.net/routemap/index.php?news/2008/01/01
 //phpinfo();

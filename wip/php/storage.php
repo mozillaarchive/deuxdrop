@@ -17,5 +17,8 @@ class storage {
         return $imap->list_messages($num_msgs);
     }
 
-
+    static public function send_message() {
+        $imap = new ImapBase();
+        return $imap->send_message();
+    }
 }
