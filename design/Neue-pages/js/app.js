@@ -83,7 +83,7 @@ var mail = {
                 });
             },
             error: function(jqXHR, errorStr, ex) {
-                dump("failed getting folders "+ex+"\n");
+                //dump("failed getting folders ["+jqXHR.responseText+"]\n");
             }
         });
     },
@@ -122,6 +122,9 @@ var mail = {
                     // switch to the front, loading the queried folder
                     mail.showMessage($(this).attr('id'));
                 });
+            },
+            error: function(jqXHR, errorStr, ex) {
+                //dump("failed getting message ["+jqXHR.statusText+"]\n");
             }
         });
     },
@@ -183,7 +186,7 @@ var mail = {
                     });
             },
             error: function(jqXHR, errorStr, ex) {
-                dump("failed getting folders "+ex+"\n");
+                //dump("failed getting folders "+ex+"\n");
             }
         });
     },
@@ -198,14 +201,14 @@ var mail = {
             data: data,
             context: $('#msgList'),
             success: function(data, textStatus, jqXHR) {
-                dump(JSON.stringify(data)+"\n\n");
+                //dump(JSON.stringify(data)+"\n\n");
                 if (data.result === "ok")
                     history.go(-1)
                 else
                     alert(data.error);
             },
             error: function(jqXHR, errorStr, ex) {
-                dump("failed getting folders "+ex+"\n");
+                //dump("failed getting folders "+ex+"\n");
             }
         });        
     }

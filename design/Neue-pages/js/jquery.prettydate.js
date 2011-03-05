@@ -43,16 +43,14 @@ $.prettyDate = {
 	
 	// Takes an ISO time and returns a string representing how
 	// long ago the date represents.
-	format: function(time, format) {
+	format: function(time) {
 		var date = new Date(Date.parse(time)),
 		//var date = new Date((time || "").replace(/-/g,"/").replace(/[TZ]/g," ")),
 			diff = ($.prettyDate.now().getTime() - date.getTime()) / 1000,
 			day_diff = Math.floor(diff / 86400);
-		if (typeof(format) === 'undefined')
-			format = "%b %e, %Y";
-			
+
 		if ( isNaN(day_diff) || day_diff < 0 || day_diff >= 31 )
-			return date.toLocaleFormat(format);
+			return date.toLocaleDateString();
 		
 		var messages = $.prettyDate.messages;
 		return (day_diff == 0 && (
@@ -64,7 +62,7 @@ $.prettyDate = {
 			day_diff == 1 && messages.yesterday ||
 			day_diff < 7 && messages.days(day_diff) ||
 			day_diff < 31 && messages.weeks(Math.ceil( day_diff / 7 )) ||
-			date.toLocaleFormat(format);
+			date.toLocaleDateString();
 	}
 	
 };
