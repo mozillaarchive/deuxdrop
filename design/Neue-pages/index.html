@@ -9,8 +9,10 @@
     <script type="text/javascript" src="js/jquery.tmpl.min.js"></script>
     <script type="text/javascript" src="js/jquery.prettydate.js"></script>
     <script type="text/javascript" src="js/jquery.ba-hashchange.min.js"></script>
-    <script type="text/javascript" src="js/neue.js"></script>
+    <script type="text/javascript" src="js/storage.js"></script>
+    <script type="text/javascript" src="js/remotestore.js"></script>
     <script type="text/javascript" src="js/app.js"></script>
+    <script type="text/javascript" src="js/neue.js"></script>
 </head>
 
 <body>
@@ -113,8 +115,9 @@
 
         <pages>
         <page id="labels" class="primary clearfix boxFlex">
-            <header>
-                <h1>Labels</h1>
+            <header class="hbox">
+                <h1 class="boxFlex" >Labels</h1>
+                <button class="refresh">refresh</button>
             </header>
             
             <ul id="folderList" class="default">
@@ -135,8 +138,9 @@
         </page>
 
         <page id="messages" class="primary clearfix boxFlex selected">
-            <header>
-                <h1 id="folderName">Inbox</h1>
+            <header class="hbox">
+                <h1 class="boxFlex" id="folderName">Inbox</h1>
+                <button class="refresh">refresh</button>
             </header>
             <ul id="msgList">
                 <li class="messagePrev active">

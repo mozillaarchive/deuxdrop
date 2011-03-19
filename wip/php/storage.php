@@ -12,8 +12,8 @@ class storage {
         return $imap->list_folders();
     }
     
-    static public function list_messages($num_msgs=0) {
-        $imap = new ImapBase();
+    static public function list_messages($folder, $num_msgs=0) {
+        $imap = new ImapBase($folder);
         return $imap->list_messages($num_msgs);
     }
 

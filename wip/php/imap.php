@@ -16,7 +16,7 @@ class ImapBase {
         if ($mailbox)
             $folder = $mailbox;
         else
-            $folder = $config["mailbox"];
+            $folder = '';//$config["mailbox"];
 
         if(isset($_POST['folder']))
             $folder = $_POST['folder'];
@@ -42,19 +42,37 @@ class ImapBase {
         imap_close($this->conn);
     }
     
+    private function decodeMimeStr($string, $charset="UTF-8" )
+    {
+          $newString = '';
+          $elements=imap_mime_header_decode($string);
+          for($i=0;$i<count($elements);$i++)
+          {
+            if ($elements[$i]->charset == 'default')
+              $elements[$i]->charset = 'iso-8859-1';
+            $newString .= iconv($elements[$i]->charset, $charset, $elements[$i]->text);
+          }
+          return $newString;
+    } 
+
     protected function decode_headers($headers) {
         $msg = array();
         //echo json_encode($headers);
         foreach($headers as $k=>$v) {
             if (is_string($v)) {
-                $u = imap_utf8($v);
-            //echo $v." ---> ". json_encode($u)."\n";
-                $msg[$k] = $u;
+                $u = $this->decodeMimeStr($v);
+                //$u = imap_utf8($v);
+            //echo "$k [$v]->[$u]\n";
+                if ($u)
+                    $msg[$k] = $u;
+                else
+                    $msg[$k] = $v;
             } else if (is_scalar($v)) {
                 $msg[$k] = $v;
             } else {
                 $msg[$k] = $this->decode_headers($v);
             }
+            //echo $k." ---> ". json_encode($msg[$k])."\n";
         }
         return $msg;
     }
@@ -92,8 +110,10 @@ class ImapBase {
         $r['entries'] = array();
         for ($i=1; $i < $totalrows; $i++) {
             try {
-                $headers = imap_header($this->conn, $sorted_mbox[$i]);
-                array_push($r['entries'], $this->decode_headers($headers));
+                $headers = $this->decode_headers(imap_header($this->conn, $sorted_mbox[$i]));
+                //$headers['uid'] = imap_uid($this->conn, $sorted_mbox[$i]);
+                //assert($headers['uid'] != $headers['MsgNo']);
+                array_push($r['entries'], $headers);
             } catch(Exception $e) {
                 continue;
             }
@@ -102,16 +122,17 @@ class ImapBase {
     }
 
 
-    public function get_message($mid) {
+    public function get_message($msguid) {
         // input $mbox = IMAP stream, $mid = message id
         // output all the following:
         // the message may in $htmlmsg, $plainmsg, or both
         $htmlmsg = $plainmsg = $charset = '';
         $attachments = array();
-    
+        //$mid = imap_msgno($this->conn, $msguid);
+        $mid = $msguid;
         $msg = array();
         // HEADER
-        $msg['headers'] = imap_header($this->conn ,$mid);
+        $msg['headers'] = $this->decode_headers(imap_header($this->conn ,$mid));
         // add code here to get date, from, to, cc, subject...
     
         // BODY
@@ -137,14 +158,11 @@ class ImapBase {
         //print json_encode($s);
         $part['body'] = NULL;
         // Any part may be encoded, even plain text messages, so check everything.
-        //if ($p->encoding==4)
-        //    $part['body'] = quoted_printable_decode($data);
-        //elseif ($p->encoding==3)
-        //    $part['body'] = base64_decode($data);
-        // no need to decode 7-bit, 8-bit, or binary
-        if (!property_exists($p, 'parts') && $part['body'] == NULL)
-            $part['body'] = $data;
-    
+        if ($p->encoding==4)
+            $part['body'] = quoted_printable_decode($data);
+        elseif ($p->encoding==3)
+            $part['body'] = base64_decode($data);
+
         foreach ($p as $k=>$v) {
             if ($k != 'parameters' && $k != 'dparameters')
                 $part[ strtolower( $k ) ] = $v;
@@ -155,7 +173,19 @@ class ImapBase {
         if (property_exists($p,"dparameters") && $p->dparameters)
             foreach ($p->dparameters as $x)
                 $part[ strtolower( $x->attribute ) ] = $x->value;
+
+        if (property_exists($p, 'charset')) {
+            $data = iconv($p->charset, "UTF-8", $data);
+        } else
+        if (array_key_exists('charset', $part)) {
+            $data = iconv($part['charset'], "UTF-8", $data);
+        }
+
+        // no need to decode 7-bit, 8-bit, or binary
+        if (!property_exists($p, 'parts') && $part['body'] == NULL)
+            $part['body'] = $data;
     
+
         // SUBPART RECURSION
         if (property_exists($p, 'parts')) {
             $part['parts'] = array();

@@ -1,4 +1,8 @@
 
+// this contains primarily initialization and navigation related code,
+// it calls into pages to initialize the display of any page that is
+// navigated to
+
 $(document).ready(function($) {
 
     function goPage(hash) {
@@ -20,8 +24,7 @@ $(document).ready(function($) {
         else
             $('body').removeClass('secondary');
 
-        if (mail[page])
-            mail[page].apply(mail, data);
+        pages.show(page, data);
     }
 
     // overflow
@@ -47,10 +50,7 @@ $(document).ready(function($) {
     });
 
     // initialize
-    mail.labels();
-    //mail.labels(function() {
-    //    mail.messages($("#folderList li:first-child").attr('id'));
-    //});
+    pages.init();
 
 
     $(window).hashchange( function(){
@@ -58,43 +58,5 @@ $(document).ready(function($) {
     })
     $(window).hashchange();
     
-    $("#saveSettings").click(function(evt) {
-        localStorage.fullname = $('#settings input#fullname').val();
-        localStorage.email = $('#settings input#email').val();
-        localStorage.username = $('#settings input#username').val();
-        var pw1 = $('#settings input#password').val();
-        var pw2 = $('#settings input#password2').val();
-        if (pw1 === pw2) {
-            localStorage.password = pw1;
-            alert("login stored");
-        } else {
-            alert("passwords do not match");
-        }
-    });
-    $("#discardSettings").click(function(evt) {
-        localStorage.fullname = "";
-        localStorage.email = "";
-        localStorage.username = "";
-        localStorage.password = "";
-        $('#settings input#fullname').val("");
-        $('#settings input#email').val("");
-        $('#settings input#username').val("");
-        $('#settings input#password').val("");
-        $('#settings input#password2').val("");
-        alert("login cleared");
-    });
-    $("#discardMessage").click(function(evt) {
-        history.go(-1);
-    });
-    $("#saveDraftMessage").click(function(evt) {
-        alert("not implemented");
-    });
-    $("#sendMessage").click(function(evt) {
-        mail.send({
-            to: $("#to").val(),
-            subject: $("#messageSubject").val(),
-            message: $("#messageBody").val()
-        })
-    });
 });
 
