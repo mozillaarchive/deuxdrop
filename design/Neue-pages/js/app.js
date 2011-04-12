@@ -16,6 +16,9 @@ String.prototype.wordWrap = function(m, b, c){
 
 var pages = {
     pages: {},
+    get: function(id) {
+      return this.pages[id];  
+    },
     show: function goPage(id, data) {
         var page = this.pages[id];
         if (page)
@@ -99,12 +102,9 @@ pages.add({
         //dump("updateLabels: "+JSON.stringify(labels)+"\n");
         $("#folderList").empty();
         $.each(labels, function(i) {
-           var m = /^\{.+\}(.*)$/.exec(labels[i]);
-           if (m) {
             $("#tmplBoxList")
-                .tmpl( {'id': m[1],'name': m[1]} )
+                .tmpl( {'id': labels[i],'name': labels[i]} )
                 .appendTo("#folderList");  
-           }
         });
         $("#folderList li").click(function(e) {
             location.hash = "messages/" + $(this).attr('id');
@@ -114,35 +114,64 @@ pages.add({
 
 pages.add({
     id: 'messages',
+    label: '',
     init: function() {
         var self = this;
         $('#messages button.refresh').click(function(e) {
-            self.show($('#folderName').text(), true);
+            self.show($('#folderName').text(), mail.MESSAGES_REFRESH);
         });
+        
+        // initiate loading more messages on scrolling
+        $("#messages").scroll(function(){
+            var innerHeight = $('#msgList').height() +
+                    $('#messages div[data-role="header"').height();
+            var bottom = innerHeight-$(this).scrollTop();
+            //dump("list scroll top "+$(this).scrollTop()+" sh:"+innerHeight+"  "+(innerHeight-$(this).scrollTop())+"==oh:"+$(this).outerHeight()+"\n");
+            if  (bottom < $(this).outerHeight()){
+                // If scrollbar is at the bottom
+                pages.get('messages').show(undefined, mail.MESSAGES_MORE);
+            } else
+            if ($(this).scrollTop() === 0) {
+                // check for new mail?
+            }
+        });
+    
     },
-    show: function(label, refresh) {
-        if (typeof(label) === 'undefined')
-            label = $("#folderList li:first-child").attr('id');
-        $('#msgList').empty();
-        $('#folderName').text(label);
+    show: function(newlabel, flags, search) {
+        if (typeof(newlabel) === 'undefined')
+            newlabel = this.label;
+        if (newlabel !== this.label || flags & mail.MESSAGES_REFRESH) {
+            $('#msgList').empty();
+            this.label = newlabel;
+        }
+        if (this.label === "") {
+            mail.labels(false, function(labels) {
+                pages.get('messages').show(labels[0], flags, search)
+            });
+            return;
+        }
+        $('#folderName').text(this.label);
 
         var self = this;
-        mail.messages(label, refresh, function(messages) {
-            self.updateMessages(messages);
+        var index = $('#msgList').children().length;
+        mail.messages(this.label, flags, index, search, function(messages) {
+            self.updateMessages(messages, index);
+        }, function(jqXHR, errorStr, ex) {
+            dump("failed getting messages "+errorStr+" - "+ex+"\n");
         });
     },
 
-    updateMessages: function(messages) {
+    updateMessages: function(messages, index) {
         var e = messages;
-        $.each(e, function(i) {
-            //dump(JSON.stringify(e[i])+"\n\n");
-            var msg = e[i];
+        dump("adding more messages "+(messages.length - index) +"\n");
+        for (var i = index; i < messages.length; i++) {
+            var msg = messages[i];
+            
             msg.date = $.prettyDate.format(msg.date);
-            //dump("date is "+JSON.stringify(e[i])+"\n");
             $("#tmplHeaderList")
                 .tmpl( msg )
                 .appendTo("#msgList");  
-        });
+        }
         $(".messagePrev").click(function(e) {
             $(this).toggleClass("selected");
             $(this).siblings().removeClass('selected');
@@ -173,7 +202,7 @@ pages.add({
         //alert(id);
         $('#messageContent').empty();
         //$(".messagePrev.active").toggleClass("selected");
-        $('page.secondary').removeClass('selected');
+        $('div[data-role="page"].secondary').removeClass('selected');
         $('body').addClass('secondary');
         $('#conversation').addClass('selected');
 

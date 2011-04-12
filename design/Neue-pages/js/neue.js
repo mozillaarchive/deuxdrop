@@ -10,7 +10,7 @@ $(document).ready(function($) {
         var page = data.shift();
         var target = $('#'+page);
         var menu = $("nav li."+page);
-        
+        dump("page "+page+" data "+data+"\n");
         // change the menu highlight
         menu.siblings().removeClass('selected');
         menu.addClass('selected');
@@ -38,12 +38,12 @@ $(document).ready(function($) {
         }
         var command = $(this).attr('data-for');
         var target = $('#'+command);
-        var type = target.get(0).nodeName;
+        var type = target.attr('data-role');
         
-        if (type === "PAGE") {
+        if (type === "page") {
             location.hash = $(this).attr('data-for');
         } else
-        if (type === "TOOLBAR") {
+        if (type === "toolbar") {
             $(this).toggleClass("on off");
             target.toggleClass('visible');
         }
@@ -52,11 +52,17 @@ $(document).ready(function($) {
     // initialize
     pages.init();
 
+    // search bar functionality
+    $("#searchSubmit").click(function(evt) {
+        pages.get('messages').show(undefined, mail.MESSAGES_REFRESH, $("#searchText").val());
+    });
+
 
     $(window).hashchange( function(){
         goPage( location.hash ? location.hash : '#messages' );
     })
-    $(window).hashchange();
-    
+    // remove design elements we dont want
+    $('#msgList').empty();
+    goPage('#messages');
 });
 

@@ -1,8 +1,12 @@
 
-body #apptoolbar,
-body #msgtoolbar {
+body #wrapper > div[data-role="toolbar"] {
     width: 100%;
     height: 48px;
+/* place at bottom?
+    top: auto;
+    bottom: 0;
+    position: absolute;
+*/
     border-right: none;
     border-bottom: 1px solid #222;
     
@@ -11,34 +15,25 @@ body #msgtoolbar {
             box-shadow: 0 -10px 3px 10px #000000;
 }
 
-body #apptoolbar ul {
+body #wrapper > div[data-role="toolbar"] ul {
     margin: 0;
-}
-
-body #apptoolbar {
-    width: 100%;
-    margin: 0;
-    border-right: none;
-    
-    -webkit-box-shadow: none;
-       -moz-box-shadow: none;
-            box-shadow: none;
-    
-    -webkit-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
-       -moz-transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
-            transition: left 0.2s cubic-bezier(0.0, 0.0, 0.0, 1.0);
+    height: 100%;
 }
 
 body #content {
-    width: 100%;
-    margin: 48px 1px 1px 1px;
+    margin: 48px 0 0;
 }
 
-body page {
+body div[data-role="pages"] {
+    width: 100%;
+    height: 100%;
+}
+
+body div[data-role="page"] {
     left: -100%;
     height: 100%;
     width: 100%;
-    position: fixed;
+    /*position: fixed;*/
     opacity: 0;
     overflow: hidden;
     margin: 1px;
@@ -50,7 +45,7 @@ body page {
                 transition: all 0.2s ease-out;
 }
 
-    body page.selected {
+    body div[data-role="page"].selected {
         display: block;
         left: auto;
         opacity: 1;
@@ -59,11 +54,11 @@ body page {
         padding: 0;
     }
 
-    body page.secondary {
+    body div[data-role="page"].secondary {
         width: 100%;
         margin: 0;
     }
-    body page.secondary.selected {
+    body div[data-role="page"].secondary.selected {
         z-index: 50;
     }
 
@@ -82,11 +77,11 @@ body #compose .compose-inner {
     padding: 4px;
 }
 
-body page.popup {
+body div[data-role="page"].popup {
     background: #fff;
 }
 
-body page.popup .popup-inner {
+body div[data-role="page"].popup .popup-inner {
     border: none;
     border-radius: 0;
     box-shadow: none;

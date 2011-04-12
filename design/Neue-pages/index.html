@@ -23,15 +23,15 @@
 </script>
 
 <script id="tmplHeaderList" type="text/x-jquery-tmpl">
-  <li id="${Msgno}" class="${typeof(Unseen) !== 'undefined' ? '' : 'read'} messageItem messagePrev">
+  <li id="${uid}" class="${seen === 0 ? 'msg_unseen' : 'msg_seen'} messageItem messagePrev">
     <div class="msgHeader hbox">
       <div class="sender overflow boxFlex">
-        ${from[0].personal || sender[0].personal || fromaddress || senderaddress || reply_toaddress}
+        ${from[0].personal || fromaddress || reply_toaddress}
       </div>
       <div class="meta">
-        <span class="msgCount">${typeof(references) !== 'undefined' ? references.split("\n").length : 1}</span>
+        <span class="msgCount">${typeof(references) !== 'undefined' ? references.split(/\s/).length : 1}</span>
         <span class="date">${date}</span>
-        <span class="starred">${Flagged ? "&#9733;" : ""}</span>
+        <span class="${flagged ? 'starred':''}">&#9733;</span>
       </div>
     </div>
     <div class="subjectWrap hbox">
@@ -84,41 +84,20 @@
 
 <div id="wrapper">
     
-    <toolbar id="apptoolbar">
-        <nav>
-            <ul class="clearfix">
-                <li class="labels" data-for="labels"></li>
-                <li class="messages selected" data-for="messages"></li>
-                <li class="settings" data-for="settings"></li>
-                <li class="compose" data-for="compose"></li>
-                <li class="search off" data-for="search"></li>
-            </ul>
-        </nav>
-    </toolbar>
-
-    <toolbar id="msgtoolbar">
-        <nav>
-            <ul class="clearfix">
-                <li class="back messagePrev active"></li>
-                <li class="search off" data-for="search"></li>
-            </ul>
-        </nav>
-    </toolbar>
-
     <div id="content">
-        <toolbar id="search">
+        <div data-role="toolbar" id="search">
             <div class="hbox">
-                <input type="text" placeholder="search" class="boxFlex search">
-                <button><img src="i/search.png"></button>
+                <input id="searchText" type="text" placeholder="search" class="boxFlex search">
+                <button id="searchSubmit"><img src="i/search.png"></button>
             </div>
-        </toolbar>
+        </div>
 
-        <pages>
-        <page id="labels" class="primary clearfix boxFlex">
-            <header class="hbox">
+      <div data-role="pages">
+        <div data-role="page" id="labels" class="primary clearfix boxFlex">
+            <div data-role="header" class="hbox">
                 <h1 class="boxFlex" >Labels</h1>
                 <button class="refresh">refresh</button>
-            </header>
+            </div>
             
             <ul id="folderList" class="default">
                 <li class="inbox">Inbox</li>
@@ -130,18 +109,13 @@
                 <li>Trash</li>
             </ul>
             
-            <ul class="custom">
-                <li>Travel</li>
-                <li>Work</li>
-                <li>Family</li>
-            </ul>
-        </page>
+        </div>
 
-        <page id="messages" class="primary clearfix boxFlex selected">
-            <header class="hbox">
+        <div data-role="page" id="messages" class="primary clearfix boxFlex selected">
+            <div data-role="header" class="hbox">
                 <h1 class="boxFlex" id="folderName">Inbox</h1>
                 <button class="refresh">refresh</button>
-            </header>
+            </div>
             <ul id="msgList">
                 <li class="messagePrev active">
                     <div class="msgHeader hbox">
@@ -211,16 +185,16 @@
                 </li>
                 
             </ul>
-        </page>
+        </div>
 
 
 
-        <page id="settings" class="primary clearfix boxFlex">
-            <header class="hbox">
+        <div data-role="page" id="settings" class="primary clearfix boxFlex">
+            <div data-role="header" class="hbox">
                 <h1 class="boxFlex">Settings</h1>
                 <button id="discardSettings">discard</button>
                 <button id="saveSettings" class="save">save</button>
-            </header>
+            </div>
 
             <div>
                 <div class="hbox inputWrap">
@@ -251,10 +225,10 @@
                 </footer>
             </div>
 
-        </page>
+        </div>
 
     
-        <page id="conversation" class="secondary clearfix boxFlex">
+        <div data-role="page" id="conversation" class="secondary clearfix boxFlex">
 
             <div class="message">
                 <div class="fullMsgHeader hbox">
@@ -299,13 +273,13 @@
                     </div>
                 </div>
             </div>
-        </page>
+        </div>
 
-        <page id="compose" class="popup secondary boxFlex">
+        <div data-role="page" id="compose" class="popup secondary boxFlex">
             <div class="popup-inner vbox">
-            <header>
+            <div data-role="header">
                 <h1>Compose</h1>
-            </header>
+            </div>
             <div class="compose-inner vbox">
             <form name="composeMessage">
                 <div class="hbox inputWrap">
@@ -329,10 +303,31 @@
             </form>
             </div>
             </div>
-        </page>
-        </pages>
+        </div>
+      </div>
     </div>
     
+    <div data-role="toolbar" id="apptoolbar">
+        <nav>
+            <ul class="clearfix">
+                <li class="labels" data-for="labels"></li>
+                <li class="messages selected" data-for="messages"></li>
+                <li class="settings" data-for="settings"></li>
+                <li class="compose" data-for="compose"></li>
+                <li class="search off" data-for="search"></li>
+            </ul>
+        </nav>
+    </div>
+
+    <div data-role="toolbar" id="msgtoolbar">
+        <nav>
+            <ul class="clearfix">
+                <li class="back active"></li>
+                <li class="search off" data-for="search"></li>
+            </ul>
+        </nav>
+    </div>
+
 </div>
 
 </body>

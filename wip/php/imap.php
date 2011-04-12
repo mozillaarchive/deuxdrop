@@ -86,7 +86,11 @@ class ImapBase {
         }
     }
     
-    public function list_messages($num_msgs=0) {
+    const MESSAGES_NEW = 1;
+    const MESSAGES_MORE = 2;
+    const MESSAGES_REFRESH = 3;
+    const PAGE_SIZE = 25;
+    public function list_messages($start=0, $num_msgs=25, $flags=0, $search=NULL) {
         $boxinfo = imap_check($this->conn);
         if ($boxinfo === False) {
             throw Exception(imap_last_error());
@@ -96,28 +100,43 @@ class ImapBase {
             $r[$k] = $v;
         }
         if ($num_msgs == 0)
-            $num_msgs = $boxinfo->Nmsgs;
+            $num_msgs = $this->PAGE_SIZE; //$boxinfo->Nmsgs;
+        $page = ceil($start / $num_msgs);
         
-        //$r['entries'] = imap_fetch_overview($imap,"1:{$boxinfo->Nmsgs}",0);
-        $this->orig_conn = $this->conn;
+        $criteria = "UNDELETED";
+        if ($search) {
+            $criteria = "UNDELETED TEXT \"$search\"";
+        }
+
         $sorted_mbox = imap_sort($this->conn, SORTARRIVAL, 1);
-        $totalrows = $boxinfo->Nmsgs;
-        if ($totalrows > 200) {
-            $totalrows = 200;
-        }
-        //echo json_encode($sorted_mbox);
-        //imap_headers($this->conn);
+        $found = imap_search($this->conn, $criteria);
+        $found_sorted = array_intersect($sorted_mbox, $found);
+        $msgs = array_chunk($found_sorted, $num_msgs);
+        $msgs = $msgs[$page];
+        
+        $r['mailbox'] = $this->mailbox;
         $r['entries'] = array();
-        for ($i=1; $i < $totalrows; $i++) {
-            try {
-                $headers = $this->decode_headers(imap_header($this->conn, $sorted_mbox[$i]));
-                //$headers['uid'] = imap_uid($this->conn, $sorted_mbox[$i]);
-                //assert($headers['uid'] != $headers['MsgNo']);
-                array_push($r['entries'], $headers);
-            } catch(Exception $e) {
-                continue;
+
+        $ml = array();
+        $entries = imap_fetch_overview($this->conn,implode($msgs, ','));
+        foreach ($entries as $e) {
+            $headers = $this->decode_headers($e);
+            if (array_key_exists('to', $headers)) {
+                $headers['toaddress'] = $headers['to'];
+                $headers['to'] = imap_rfc822_parse_adrlist($headers['to'],'');
             }
+            if (array_key_exists('from', $headers)) {
+                $headers['fromaddress'] = $headers['from'];
+                $headers['from'] = imap_rfc822_parse_adrlist($headers['from'],'');
+            }
+
+            $ml[$headers['msgno']] = $headers;
         }
+
+        foreach($msgs as $msgno) {
+            $r['entries'][] = $ml[$msgno];
+        }
+
         return $r;
     }
 
@@ -128,8 +147,8 @@ class ImapBase {
         // the message may in $htmlmsg, $plainmsg, or both
         $htmlmsg = $plainmsg = $charset = '';
         $attachments = array();
-        //$mid = imap_msgno($this->conn, $msguid);
-        $mid = $msguid;
+        $mid = imap_msgno($this->conn, $msguid);
+        //$mid = $msguid;
         $msg = array();
         // HEADER
         $msg['headers'] = $this->decode_headers(imap_header($this->conn ,$mid));

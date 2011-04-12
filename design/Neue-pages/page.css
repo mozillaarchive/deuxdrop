@@ -71,7 +71,7 @@ pre {
     white-space: pre-wrap; /* CSS 2.1 Addition */
 }
 
-page {
+div[data-role="page"] {
     left: -321px;
     height: 100%;
     width: 367px;
@@ -86,7 +86,7 @@ page {
         /*        transition: all 0.2s ease-out;*/
 }
 
-    page.selected {
+    div[data-role="page"].selected {
         display: block;
         left: 0px;
         padding-left: 48px;
@@ -97,7 +97,7 @@ page {
 
     }
     
-    page.secondary {
+    div[data-role="page"].secondary {
         left: 0px;
         width: 100%;
         padding: 0 0 0 368px;
@@ -105,11 +105,11 @@ page {
            -moz-transition: none;
                 transition: none;
     }
-    page.secondary.selected {
+    div[data-role="page"].secondary.selected {
         z-index: 40;
     }
 
-    page header {
+    div[data-role="page"] div[data-role="header"] {
         width: 100%;
         padding: 5px 10px;
         position: relative;
@@ -121,27 +121,27 @@ page {
                 box-shadow: 0 0 2px rgba(0,0,0,0.15);
     }
     
-    page header h1 {
+    div[data-role="page"] div[data-role="header"] h1 {
         font-size: 12px;
     }
 
 
-    page ul {
+    div[data-role="page"] ul {
         list-style-type: none;   
     }
     
-    page ul.default {
+    div[data-role="page"] ul.default {
         font-weight: bold;
         color: #2EA4FF;
     }
     
-    page ul.custom {
+    div[data-role="page"] ul.custom {
         margin-top: 5px;
         font-weight: bold;
         color: green;
     }
     
-    page ul li {
+    div[data-role="page"] ul li {
         background-color: #fff;
         padding: 10px;
         border-bottom: 1px solid #e6e6e6;
@@ -153,8 +153,8 @@ page {
         background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fff), color-stop(100%, #fafafa));
     }
 
-    page ul li:hover,
-    page ul li.selected {
+    div[data-role="page"] ul li:hover,
+    div[data-role="page"] ul li.selected {
         border-bottom: 1px solid #BFD5DE;
         border-top: 1px solid #BFD5DE;
         /*z-index: 100;*/
@@ -164,7 +164,7 @@ page {
         background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #EDF2F5), color-stop(100%, #E6EDF0));
     }
 
-#wrapper > toolbar {
+#wrapper > div[data-role="toolbar"] {
     background-color: #222;
     overflow: hidden;
     z-index: 102;
@@ -174,11 +174,11 @@ page {
     background-image: -webkit-gradient(linear, top left, top right, color-stop(0%, #222), color-stop(100%, #1f1f1f));
 }
 
-#msgtoolbar {
+div#msgtoolbar {
     display: none;
 }
 
-#apptoolbar {
+div#apptoolbar {
     top: 0;
     left: 0;
     width: 48px;
@@ -190,53 +190,53 @@ page {
             box-shadow: -10px 2px 3px 10px #000000;
 }
     
-    #apptoolbar ul {
+    div#apptoolbar ul {
         margin: 31px 0 0 0;
     }
 
-    toolbar li {
-        width: 48px;
-        height: 48px;
-        display: block;
-        float: left;
-        cursor: pointer;
-        background-position: left center;
-        background-repeat: no-repeat;
-    }
-    
-    toolbar li.selected,
-    toolbar li.on {
-        background-position: right center;
-    }
-    
-    toolbar li.messages {
-        background-image: url("i/sidebar_inbox.png");
-    }
-    
-    toolbar li.compose {
-        background-image: url("i/sidebar_compose.png");
-    }
-    
-    toolbar li.labels {
-        background-image: url("i/sidebar_labels.png");
-    }
-    
-    toolbar li.search {
-        background-image: url("i/sidebar_search.png");
-    }
+div[data-role="toolbar"] li {
+    width: 48px;
+    height: 48px;
+    display: block;
+    float: left;
+    cursor: pointer;
+    background-position: left center;
+    background-repeat: no-repeat;
+}
 
-    toolbar li.settings {
-        background-position: center center;
-        background-image: url("i/sidebar_settings.png");
-    }
-    
-    toolbar li.back {
-        background-position: center center;
-        background-image: url("i/back.png");
-    }
+div[data-role="toolbar"] li.selected,
+div[data-role="toolbar"] li.on {
+    background-position: right center;
+}
+
+div[data-role="toolbar"] li.messages {
+    background-image: url("i/sidebar_inbox.png");
+}
+
+div[data-role="toolbar"] li.compose {
+    background-image: url("i/sidebar_compose.png");
+}
+
+div[data-role="toolbar"] li.labels {
+    background-image: url("i/sidebar_labels.png");
+}
+
+div[data-role="toolbar"] li.search {
+    background-image: url("i/sidebar_search.png");
+}
+
+div[data-role="toolbar"] li.settings {
+    background-position: center center;
+    background-image: url("i/sidebar_settings.png");
+}
+
+div[data-role="toolbar"] li.back {
+    background-position: center center;
+    background-image: url("i/back.png");
+}
 
 
-toolbar#search {
+div#search[data-role="toolbar"] {
     display: block;
     width: 100%;
     height: auto;
@@ -250,15 +250,15 @@ toolbar#search {
             transition: all 0.2s ease-out;
 }
     
-    toolbar#search.visible {
+    div#search[data-role="toolbar"].visible {
         margin-top: 0;
     }
     
-    toolbar#search img {
+    div#search[data-role="toolbar"] img {
         vertical-align: middle;
     }
     
-    toolbar#search input {
+    div#search[data-role="toolbar"] input {
         font-size: 16px;
         padding: 5px;
         border-width: 1px;
@@ -272,7 +272,7 @@ toolbar#search {
                 border-radius: 2px 0 0 2px;
     }
     
-    toolbar#search input:focus {
+    div#search[data-role="toolbar"] input:focus {
         border-color: #2EA4FF;
     
         -webkit-box-shadow: 0 0 3px rgba(46,164,255,1) inset;
@@ -280,7 +280,7 @@ toolbar#search {
                 box-shadow: 0 0 3px rgba(46,164,255,1) inset;
     }
     
-    toolbar#search button {
+    div#search[data-role="toolbar"] button {
         -webkit-border-radius: 0 2px 2px 0;
            -moz-border-radius: 0 2px 2px 0;
                 border-radius: 0 2px 2px 0;
@@ -289,7 +289,7 @@ toolbar#search {
 #content {
     top: 0;
     left: 0;
-    width: 320px;
+    width: 100%;
     height: 100%;
     position: fixed;
     overflow: hidden;
@@ -323,9 +323,20 @@ toolbar#search {
     li.messagePrev .msgHeader .sender {
         color: #2EA4FF;
         display: block;
-        font-weight: bold;
+        /*font-weight: bold;*/
         margin-right: 5px;
     }
+
+    li.messagePrev .msgHeader .starred {
+        color: blue;
+        font-weight: bold;
+    }
+
+    div[data-role="page"] li.msg_unseen .sender,
+    div[data-role="page"] li.msg_unseen .subject {
+        font-weight: bold;
+    }
+
 
 
 #conversation {
@@ -409,7 +420,7 @@ toolbar#search {
             margin-bottom: 21px;
         }
 
-page.popup {
+div[data-role="page"].popup {
     left: 0px;
     position: fixed;
     width: 100%;
@@ -429,11 +440,11 @@ page.popup {
             transition: transform 0.2s, background-color 0.1s ease-out;
 }
 
-    page.popup.selected {
+    div[data-role="page"].popup.selected {
         z-index: 80;
     }
 
-    page.open {
+    div[data-role="page"].open {
         background-color: rgba(255,255,255,0.75);
     
         -webkit-transform: translate(0px, 0px);
@@ -445,7 +456,7 @@ page.popup {
                 transition: transform 0.2s, background-color 1s 0.5 ease-out;
     }
 
-    page.popup .popup-inner {
+    div[data-role="page"].popup .popup-inner {
         width: 100%;
         height: 100%;
         background-color: #fff;
@@ -506,6 +517,8 @@ page.popup {
 #settings label {
     margin-right: 10px;
 }
+
+
 
 /* hbox and vbox */
  

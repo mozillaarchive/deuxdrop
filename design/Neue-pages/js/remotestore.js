@@ -55,40 +55,76 @@ var mail = {
                 password: account.password
             },
             success: function(data, textStatus, jqXHR) {
-                dump("data: "+JSON.stringify(data)+"\n");
-                accounts.set('labels', data.result);
+                //dump("data: "+JSON.stringify(data)+"\n");
+                labels = [];
+                $.each(data.result, function(i) {
+                   var m = /^\{.+\}(.*)$/.exec(data.result[i]);
+                   if (m) {
+                    labels.push(m[1]);
+                   }
+                });
+                   
+                accounts.set('labels', labels);
                 if (ok)
-                    ok(data.result);
+                    ok(labels);
             },
             error: err
         });
     },
     
-
-    messages: function(label, refresh, ok, err) {
-        dump("get messages: "+label+"\n");
-        var account = accounts.current;
-        var messages = accounts.get('messages:'+label, []);
-        
-        if (messages && messages.length && !refresh) {
-            dump("got messages, use them\n");
-            if (ok)
-                ok(messages);
-            // get recent messages now
-            //label = label+"/recent"
+    
+    MESSAGES_NEW: 1,
+    MESSAGES_MORE: 2,
+    MESSAGES_REFRESH: 4,
+    PAGE_SIZE: 25,
+    messages: function(label, flags, index, search, ok, err) {
+        dump("get messages: ["+label+"] index "+index+" flags: "+flags+" search: ["+search+"]\n");
+        if (label === "") {
+            mail.labels(true, function(labels) {
+                mail.messages(labels[0], flags, index, search, ok, err);
+            })
             return;
         }
+        var account = accounts.current;
+        var messages = [];
+        if (typeof(flags) === 'undefined')
+            flags = 0;
+        
+        if (!(flags & this.MESSAGES_REFRESH)) {
+            messages = accounts.get('messages:'+label, []);
+        }
+        if (messages.length > 0 && flags === 0) {
+            if (ok)
+                ok(messages);
+            return;
+        }
+        
+        var data = {
+                username: account.username,
+                password: account.password,
+                flags: flags,
+                start: index,
+                num_msgs: this.PAGE_SIZE
+            };
+        if (search)
+            data.search = search;
 
         $.ajax({
             url: "/api/folder/"+label,
             type: "POST",
-            data: {
-                username: account.username,
-                password: account.password
-            },
+            data: data,
             success: function(data, textStatus, jqXHR) {
-                //dump("error: "+JSON.stringify(data)+"\n");
-                accounts.set('messages:'+label, data.result.entries);
+                dump("error: "+JSON.stringify(data)+"\n");
+                if (data.result === null)
+                    return;
+                dump("new messages: "+data.result.entries.length+"\n");
+                
+                if (flags & this.MESSAGES_NEW) {
+                    messages.unshift.apply(messages, data.result.entries);
+                } else {
+                    messages.push.apply(messages, data.result.entries);
+                }
+                accounts.set('messages:'+label, messages);
                 if (ok)
                     ok(messages);
             },
