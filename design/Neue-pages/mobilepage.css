@@ -15,13 +15,18 @@ body #wrapper > div[data-role="toolbar"] {
             box-shadow: 0 -10px 3px 10px #000000;
 }
 
+div[data-role="toolbar"] li.settings {
+    bottom: 0;
+    right: 0;
+}
+
 body #wrapper > div[data-role="toolbar"] ul {
     margin: 0;
     height: 100%;
 }
 
 body #content {
-    margin: 48px 0 0;
+    padding: 48px 0 0;
 }
 
 body div[data-role="pages"] {
@@ -70,7 +75,7 @@ body div[data-role="page"] {
     }
 
 body #conversation {
-    background: #fff;
+    background: #f2f2f2;
 }
 
 body #compose .compose-inner {

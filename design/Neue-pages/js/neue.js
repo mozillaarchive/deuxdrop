@@ -6,6 +6,7 @@
 $(document).ready(function($) {
 
     function goPage(hash) {
+        
         var data = hash.substr(1).split("/");
         var page = data.shift();
         var target = $('#'+page);
@@ -25,10 +26,10 @@ $(document).ready(function($) {
             $('body').removeClass('secondary');
 
         pages.show(page, data);
+        
+        // mo fuckin overflow
+        $('.overflow').textOverflow(null,true);
     }
-
-    // overflow
-    $('.overflow').textOverflow('...',true);
 
     // setup the toolbar links
     $("nav li").click(function() {
@@ -64,5 +65,6 @@ $(document).ready(function($) {
     // remove design elements we dont want
     $('#msgList').empty();
     goPage('#messages');
+    
 });
 

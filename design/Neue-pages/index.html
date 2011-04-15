@@ -25,18 +25,22 @@
 <script id="tmplHeaderList" type="text/x-jquery-tmpl">
   <li id="${uid}" class="${seen === 0 ? 'msg_unseen' : 'msg_seen'} messageItem messagePrev">
     <div class="msgHeader hbox">
+      <div class="meta">
+        <input type="checkbox">
+      </div>
       <div class="sender overflow boxFlex">
         ${from[0].personal || fromaddress || reply_toaddress}
       </div>
       <div class="meta">
-        <span class="msgCount">${typeof(references) !== 'undefined' ? references.split(/\s/).length : 1}</span>
         <span class="date">${date}</span>
-        <span class="${flagged ? 'starred':''}">&#9733;</span>
+        <span class="star ${flagged ? 'starred':''}"></span>
       </div>
     </div>
     <div class="subjectWrap hbox">
       <span class="subject boxFlex overflow">${subject}</span>
-      <input type="checkbox">
+      <div class="meta">
+          <span class="msgCount">${typeof(references) !== 'undefined' ? references.split(/\s/).length : 1}</span>
+      </div>
     </div>
   </li>
 
@@ -96,7 +100,7 @@
         <div data-role="page" id="labels" class="primary clearfix boxFlex">
             <div data-role="header" class="hbox">
                 <h1 class="boxFlex" >Labels</h1>
-                <button class="refresh">refresh</button>
+                <button class="refresh"></button>
             </div>
             
             <ul id="folderList" class="default">
@@ -114,9 +118,10 @@
         <div data-role="page" id="messages" class="primary clearfix boxFlex selected">
             <div data-role="header" class="hbox">
                 <h1 class="boxFlex" id="folderName">Inbox</h1>
-                <button class="refresh">refresh</button>
+                <button class="refresh"></button>
             </div>
             <ul id="msgList">
+<!--
                 <li class="messagePrev active">
                     <div class="msgHeader hbox">
                         <div class="sender overflow boxFlex">
@@ -184,46 +189,48 @@
                     </div>
                 </li>
                 
+-->
             </ul>
         </div>
 
 
 
         <div data-role="page" id="settings" class="primary clearfix boxFlex">
+<!--
             <div data-role="header" class="hbox">
                 <h1 class="boxFlex">Settings</h1>
-                <button id="discardSettings">discard</button>
-                <button id="saveSettings" class="save">save</button>
             </div>
+-->
 
-            <div>
-                <div class="hbox inputWrap">
+            <ul class="settingsList">
+                <li class="hbox inputWrap">
                     <label for="fullname">fullname:</label>
                     <input id="fullname" type="text" class="boxFlex">
-                </div>
-                <div class="hbox inputWrap">
+                </li>
+                <li class="hbox inputWrap">
                     <label for="email">email:</label>
                     <input id="email" type="text" class="boxFlex">
-                </div>
-                <div class="hbox inputWrap">
+                </li>
+                <li class="hbox inputWrap">
                     <label for="username">username:</label>
                     <input id="username" type="text" class="boxFlex">
-                </div>
+                </li>
     
-                <div class="hbox inputWrap">
+                <li class="hbox inputWrap">
                     <label for="password">password:</label>
                     <input id="password" type="password" class="boxFlex">
-                </div>
+                </li>
 
-                <div class="hbox inputWrap">
+                <li class="hbox inputWrap">
                     <label for="password2">password:</label>
                     <input id="password2" type="password" class="boxFlex">
-                </div>
-
-                <footer class="hbox">
-                    <div class="boxFlex"></div>
-                </footer>
-            </div>
+                </li>
+                <li class="hbox inputWrap">
+                    <span class="boxFlex"></span>
+                    <button id="saveSettings" class="save">save</button>
+                    <button id="discardSettings">discard</button>
+                </li>
+            </ul>
 
         </div>
 
@@ -276,32 +283,29 @@
         </div>
 
         <div data-role="page" id="compose" class="popup secondary boxFlex">
-            <div class="popup-inner vbox">
-            <div data-role="header">
-                <h1>Compose</h1>
-            </div>
-            <div class="compose-inner vbox">
-            <form name="composeMessage">
-                <div class="hbox inputWrap">
-                    <label for="to">to:</label>
-                    <input id="to" type="text" class="boxFlex">
+            <div class="popup-inner">
+                <div class="compose-inner">
+                    <form name="composeMessage" class="vbox">
+                        <div class="hbox inputWrap">
+                            <label for="to">to:</label>
+                            <input id="to" type="text" class="boxFlex">
+                        </div>
+                        
+                        <div class="hbox inputWrap">
+                            <label for="messageSubject">subject:</label>
+                            <input id="messageSubject" type="text" class="boxFlex">
+                        </div>
+                        
+                        <textarea id="messageBody" class="composeInput boxFlex" placeholder="message..."></textarea>
+        
+                        <footer class="hbox">
+                            <button id="discardMessage">discard</button>
+                            <div class="boxFlex"></div>
+                            <button id="saveDraftMessage" class="save">save</button>
+                            <button id="sendMessage" class="send">send</button>
+                        </footer>
+                    </form>
                 </div>
-                
-                <div class="hbox inputWrap">
-                    <label for="messageSubject">subject:</label>
-                    <input id="messageSubject" type="text" class="boxFlex">
-                </div>
-                
-                <textarea id="messageBody" class="composeInput boxFlex" placeholder="message..."></textarea>
-
-                <footer class="hbox">
-                    <button id="discardMessage">discard</button>
-                    <div class="boxFlex"></div>
-                    <button id="saveDraftMessage" class="save">save</button>
-                    <button id="sendMessage" class="send">send</button>
-                </footer>
-            </form>
-            </div>
             </div>
         </div>
       </div>
@@ -312,9 +316,9 @@
             <ul class="clearfix">
                 <li class="labels" data-for="labels"></li>
                 <li class="messages selected" data-for="messages"></li>
-                <li class="settings" data-for="settings"></li>
                 <li class="compose" data-for="compose"></li>
                 <li class="search off" data-for="search"></li>
+                <li class="settings" data-for="settings"></li>
             </ul>
         </nav>
     </div>

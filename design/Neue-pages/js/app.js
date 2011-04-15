@@ -1,4 +1,3 @@
-
 // pages are attached to a page in the dom, and handle all dom manipulation
 
 String.prototype.wordWrap = function(m, b, c){
@@ -223,6 +222,7 @@ pages.add({
             });
         
     }
+    
 });
 
 
