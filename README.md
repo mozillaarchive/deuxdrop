@@ -19,7 +19,7 @@ Then create the `email` user locking down its account so there is no login allow
 
     useradd email --gid 5000 --uid 5000 --shell /sbin/nologin
 
-**NOTE:** the use of `5000` for both our `gid` and `uid`, this number is referenced in the Postfix `main.cf`
+**NOTE:** the use of `5000` for both our `gid` and `uid`, any number could be chosen for this value.
 
 ## Postfix
 
@@ -35,21 +35,19 @@ The included [main.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/m
     mydestination = localhost
     local_recipient_maps =
 
+    # reset any virtual aliases to none, next line provides ones we want
     virtual_alias_domains =
+    # use mysql to provide our domain alias mapping for both forwards and users
     virtual_alias_maps = proxy:mysql:/etc/postfix/mysql-virtual_forwardings.cf, proxy:mysql:/etc/postfix/mysql-virtual_email2email.cf
+
+    # XXX not sure this is necessary anymore
     virtual_mailbox_domains = proxy:mysql:/etc/postfix/mysql-virtual_domains.cf
 
-    # references the transport specified in master.cf
-    virtual_transport = gutter
+    # Use the LMTP delivery method
+    virtual_transport = lmtp:inet:localhost:10025
 
     # services with proxy: allows postfix to use a single proxy connection to our database and must be listed here 
     proxy_read_maps = $virtual_alias_maps $virtual_mailbox_domains
-
-### [/etc/postfix/master.cf](https://github.com/mozilla/deuxdrop/blob/master/postfix/master.cf)
-
-    gutter     unix  -       n       n       -       -       pipe
-      directory=/var/www/email/ flags=hq user=email argv=/usr/local/bin/process.py --sender=${sender} --extension=${extension} --user=${user} --recipient=${recipient} --domain=${domain}
-
 
 ## Postfix-MySQL
 
@@ -177,55 +175,32 @@ We give the `node` user more privileges than `postfix` but only to the `users` t
 
 **NOTE:** after adding mysql users you'll need to run `mysqladmin reload` to use their accounts
 
-### MESSAGES TABLE
+### MESSAGES HBASE TABLE DESIGN
 
-This table handles the index of messages received and processed by the system.
+row id: `USERNAME@DOMAIN:ID`
 
-It is designed to be a single lightweight and fast table avoiding joins and other costly queries.
+column:`s` (summary)
+    s:subject
+    s:message-id
+    s:body
+    s:date
+    s:from
+    s:to
+    s:cc
+    s:bcc
 
-_see [messages.sql](https://github.com/mozilla/deuxdrop/blob/master/mysql/messages.sql)_
+## Python `RaindropLMTPServer.py`
 
-    create database messages;
-    use messages;
+LMTP is essentially ESMTP for local routing only.  We use this service to deliver messages sent to the Postfix service into our HBase storage.
 
-    CREATE TABLE `messages` (
-      `date` datetime NOT NULL,
-      `file` varchar(255) NOT NULL,
-      `domain` varchar(255) NOT NULL,
-      `username` varchar(255) NOT NULL,
-    ) ENGINE=MyISAM DEFAULT CHARSET=utf8
+    yum install python-dateutil
 
-_see [messages-grant.sql](https://github.com/mozilla/deuxdrop/blob/master/mysql/messages-grant.sql)_
+`RaindropLMTPServer.py` should be located in the `/usr/local/bin/` directory and owned by the `email` user.
 
-We grant `INSERT` only access to a `python` user for creating the message index as it processes messages.
+Run the LMTP service once your Postfix service is running `/usr/local/bin/RaindropLMTPServer.py`
 
-**NOTE:** the use of `PASSWORD` where our `python` user password should be
-
-    GRANT INSERT ON messages.* to 'python'@'localhost' IDENTIFIED BY 'PASSWORD';
-    GRANT INSERT ON messages.* to 'python'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
-
-We grant more privileges to our `node` user than our `python` user.
-
-**NOTE:** the use of `PASSWORD` where our `node` user password should be
-
-    GRANT SELECT,UPDATE,INSERT,DELETE ON messages.* to 'node'@'localhost' IDENTIFIED BY 'PASSWORD';
-    GRANT SELECT,UPDATE,INSERT,DELETE ON messages.* to 'node'@'localhost.localdomain' IDENTIFIED BY 'PASSWORD';
-
-**NOTE:** after adding mysql users you'll need to run `mysqladmin reload` to use their accounts
-
-## Python `process.py`
-
-    yum install MySQL-python python-simplejson python-dateutil python-argparse
-    mkdir /var/www/email
-
-The Python process should be located in the `/usr/local/bin/` directory and owned by the `email` user.
-
-_Pseudo code:_
-
-* Receive new messages as pipe input
-* For each new message convert into JSON format
-* For each new message write JSON format to files in `/var/www/email/`
-* For each new message create entry in MySQL `messsages.messsages`
+* Each new message is converted into JSON format and saved in HBase
+* Each new message is also saved in Maildir message format to `/home/email/` directory
 
 ## Node.js
 
