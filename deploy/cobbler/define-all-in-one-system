@@ -1,0 +1,15 @@
+#!/bin/sh
+# Define a new all-in-one system.  Arguments:
+#  <machine name> <dns name>
+#
+# Example: foo foo.local
+box_hostname=$1
+box_dnsname=$2
+
+box_bridge=virbr0
+
+box_profile=centos-5.6-x86_64
+
+cobbler system add --name=${box_hostname} --profile=${box_profile} --dns-name=${box_dnsname} --hostname=${box_hostname} --virt-bridge=${box_bridge}
+
+echo Created system ${box_hostname}
