@@ -1,0 +1,3 @@
+[submodule "deploy/puppet/module-bundles/puppet-npm"]
+	path = deploy/puppet/module-bundles/puppet-npm
+	url = git://github.com/sheknows/puppet-npm.git

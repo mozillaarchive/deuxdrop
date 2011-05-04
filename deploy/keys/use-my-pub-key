@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# Just use the current user's public key (and leave it up to the user to
+# add their own key to their agent or deal with auth prompts as required).
+
+cp ~/.ssh/id_rsa.pub deuxdrop-deploy-key.pub

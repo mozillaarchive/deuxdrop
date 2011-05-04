@@ -50,9 +50,10 @@ caching proxying instead of bulk mirroring.
 ## Customize the profile
 
 The profile we created above (centos-5.6-x86_64) will, by default, reference the
-sample.ks kickstart file.  We have our own that we want to use.
+sample.ks kickstart file.  We have our own that we want to use.  Also, we need
+to tell it the yum repos to use.
 
-    cobbler profile edit --name=centos-5.6-x86_64 --kickstart=\`pwd\`/basic.ks
+    cobbler profile edit --name=centos-5.6-x86_64 --kickstart=\`pwd\`/basic.ks --repos="centos-5.6-x86_64-updates epel-5-x86_64"
 
 # How To Provision Using Cobbler
 

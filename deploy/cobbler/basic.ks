@@ -31,7 +31,7 @@ selinux --disabled
 # Do not configure the X Window System
 skipx
 # System timezone
-timezone  America/New_York
+timezone  America/Los_Angeles
 # Install OS instead of upgrade
 install
 # Clear the Master Boot Record
@@ -49,6 +49,13 @@ $SNIPPET('pre_anamon')
 
 %packages
 $SNIPPET('func_install_if_enabled')
+-sendmail
+ruby
+ruby-libs
+puppet
+facter
+ruby-shadow
+rubygems
 
 %post
 $SNIPPET('log_ks_post')
@@ -60,10 +67,27 @@ $SNIPPET('post_install_network_config')
 $SNIPPET('func_register_if_enabled')
 $SNIPPET('download_config_files')
 $SNIPPET('koan_environment')
-$SNIPPET('redhat_register')
 $SNIPPET('cobbler_register')
 # Enable post-install boot notification
 $SNIPPET('post_anamon')
+# Turn on dhclient defaults so we get the hostname submitted
+echo 'send host-name "$hostname";' > /etc/dhclient.conf
+# ssh keys
+cd /root
+mkdir --mode=700 .ssh
+cat >> .ssh/authorized_keys << "PUBLIC_KEY"
+$sshpubkeyline
+PUBLIC_KEY
+chmod 600 .ssh/authorized_keys
+# only allow login via pubkeys
+cat >> /etc/ssh/sshd_config << "SSHCONFIG"
+Protocol 2
+SyslogFacility AUTHPRIV
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+SSHCONFIG
+# nuke all the non-cobbler yum repositories so we only use our mirrors
+rm -f /etc/yum/repos.d/*
 # Start final steps
 $kickstart_done
 # End final steps
