@@ -9,6 +9,12 @@ use the local apply mechanism.  The major difference is that all deuxdrop source
 code will be forced onto the target from our local checkout rather than pulled
 from the internet.
 
+## Directory Purposes
+
+Everything is best practices obeyin' save for:
+
+- module-bundles: All of its children are added as module-paths.  It exists
+   because puppet-npm's repo has the module itself in a subdir.
 
 ## Goals (Things not to lose when improving this)
 

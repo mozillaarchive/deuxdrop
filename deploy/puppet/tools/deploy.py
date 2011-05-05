@@ -1,10 +1,18 @@
 #!/usr/bin/env python
 
-import os
+# See README.md for more details, but basically, we want to ssh into the given
+#  server (using the key from deploy/keys), propagating the contents of our
+#  deploy/puppet sub-tree via a catted tarball, then run puppet on the server.
+
+import os, os.path
 import sys
 import subprocess
 
 MY_DIR = os.path.dirname(__file__)
+KEY_DIR = os.path.join(MY_DIR, '../keys')
+PRIV_KEY_FILE = os.path.join(KEY_DIR, 'deuxdrop-deploy-key')
+
+REMOTE_PUPPET_DIR = '/var/deuxdrop-puppet'
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -18,17 +26,24 @@ if __name__ == '__main__':
     # support OS X.
     tarfile = subprocess.Popen(
         ['tar', 'zcv', '--exclude', '.git*', '.'],
-        cwd=os.path.join(MY_DIR, '..'),
+        cwd=os.path.join(MY_DIR, '..'), # this just gets the puppet tree...
         stdout=subprocess.PIPE
         )
 
-    ssh_args = ['ssh', 'root@%s' % server]
+    ssh_args = ['ssh']
+    if os.path.isfile(PRIV_KEY_FILE):
+        ssh_args.extend(['-i', PRIV_KEY_FILE])
+    ssh_args.append('root@%s' % server)
+
+    # send the file
     subprocess.check_call(ssh_args +  ['cat > payload.tgz'],
                           stdin=tarfile.stdout)
+
+    # nuke old tree, extract, run puppet
     remote_cmds = [
-        'rm -rf /var/hackasaurus-puppet-data',
-        'mkdir /var/hackasaurus-puppet-data',
-        'cd /var/hackasaurus-puppet-data',
+        'rm -rf %s' % (REMOTE_PUPPET_DIR,),
+        'mkdir %s' % (REMOTE_PUPPET_DIR,),
+        'cd %s' % (REMOTE_PUPPET_DIR,),
         'tar -xvf /root/payload.tgz',
         'rm /root/payload.tgz',
         'python tools/setup_server.py'
