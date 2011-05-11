@@ -1,0 +1,9 @@
+{
+  "name": "rdservers",
+  "description": "Raindrop Servers",
+  "version": "0.0.1",
+  "dependencies": {
+    "websocket-client": ">= 1.0.0",
+    "websocket-server": ">= 0.0.1"
+  }
+}
