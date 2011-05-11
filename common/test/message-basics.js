@@ -52,7 +52,8 @@ var DUMMY_CONV_ID = "aaaaaaaa", DUMMY_TIMESTAMP = 1304980532222,
 
 /**
  * Create two identities, have one generate a message for the other and verify
- *  that the other can process the generated message.
+ *  that the other can process the generated message; no network traffic or
+ *  actual servers involved.
  */
 exports.testGenerateThenProcess = function(test) {
   var sender = makeFullIdent({name: "Alice"}),

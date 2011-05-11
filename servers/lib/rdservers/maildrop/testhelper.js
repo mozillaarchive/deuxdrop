@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive a `MaildropTransitEnvelope`
+ *
  **/
 
 define(
@@ -48,29 +48,11 @@ define(
   ) {
 
 /**
- * Stateful connection handler that authenticates and establishes an encrypted
- * connection with a sender, then receives one or more messages and processes
- * them.
- *
- * Encryption is used during communication primarily to constrain traffic
- * analysis to pairs of servers rather than pairs of identities (which are
- * explicitly named in cleartext by the `MaildropTransitEnvelope`).  For
- * efficiency and additional traffic analysis 
- *
- * General sequence goes like so:
- * @itemized[
- *   @item{
- *     Mailsender establishes a TCP connection to the maildrop.
- *   }
- *   @item{
- *     Mailsender opens with a packet identifying itself (key hash), who it
- *     thinks it is talking to (key hash),
- *   }
- * ]
+ * Instantiate an instrumented maildrop server.  This creates the identity
+ *  and spins up a server bound on a fresh port using the appropriate storage
+ *  setup.
  */
-function DropConnection() {
-}
-DropConnection.prototype = {
+exports.makeEntity = function makeMaildropEntity(name, config) {
 };
 
 }); // end define

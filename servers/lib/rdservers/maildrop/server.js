@@ -36,71 +36,74 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Private identity data structure definition and population.
+ * Maildrop message reception logic; receive a `MaildropTransitEnvelope`
  **/
 
 define(
   [
-    'nacl',
+    'net',
     'exports'
   ],
   function(
-    $nacl,
+    $net,
     exports
   ) {
 
-
 /**
- * Generate a signed self-identification blob that we can hand to someone else
- * and have them know how to talk to us.
+ * Stateful connection handler that authenticates and establishes an encrypted
+ * connection with a sender, then receives one or more messages and processes
+ * them.
  *
- * @args[
+ * Encryption is used during communication primarily to constrain traffic
+ * analysis to pairs of servers rather than pairs of identities (which are
+ * explicitly named in cleartext by the `MaildropTransitEnvelope`).  For
+ * efficiency and additional traffic analysis
+ *
+ * General sequence goes like so:
+ * @itemized[
+ *   @item{
+ *     Mailsender establishes a TCP connection to the maildrop.
+ *   }
+ *   @item{
+ *     Mailsender opens with a packet identifying itself (key hash), who it
+ *     thinks it is talking to (key hash),
+ *   }
  * ]
- * @return[PubPersonSelfIdent]
  */
-exports.generateSignedSelfIdent = function generateSignedSelfIdent(details) {
+function DropConnection(server, sock) {
+  this.server = server;
+  this._sock = sock;
+  this.logger = server.logger.newChild('connection', sock.remoteAddress);
+
+  sock.on('data', this._onData.bind(this));
+  sock.on('end', this._onEnd.bind(this));
+  sock.on('close', this._onClose.bind(this));
+  sock.on('error', this._onError.bind(this));
+}
+DropConnection.prototype = {
+  _onData: function(data) {
+  },
+  
+  _onEnd: function() {
+  },
+  _onClose: function() {
+    this.logger.close();
+  },
+
+  _onError: function() {
+  },
 };
 
 /**
- * @args[
- *   @param[details @dict[
- *     @key[name String]
- *     @key[suggestedNick #:optional String]
  *
- *     @key[maildrop MaildropAccountInfo]
- *     @key[mailsender MailsenderAccountInfo]
- *
- *   ]]
- * ]
  */
-exports.generateFullIdent = function generateFullIdent(details) {
-  var full = {pub: {}, secret: {}},
-      pub = full.pub, secret = full.secret;
-
-  pub.name = details.name;
-  pub.suggestedNick = details.hasOwnProperty("suggestedNick") ?
-                        details.suggestedNick : details.name;
-
-  var rootSignPair = $nacl.sign_keypair();
-  secret.rootSignSecKey = rootSignPair.sk;
-  pub.rootSignPubKey = rootSignPair.pk;
-
-  pub.issuedAt = secret.issuedAt = 0;
-
-  pub.maildropDNS = details.hasOwnProperty("maildropDNS") ?
-                      details.maildropDNS : null;
-
-
-  pub.issuedAt = secret.issuedAt = Date.now();
-};
-
-/**
- * Generate an attestation that we are willing to receive mail from the given
- *  identity.  The attestation may enclose additional metadata for routing /
- *  prioritization purposes (and a maildrop versus a mailstore may receive
- *  different attestations with different levels of metadata accordingly.)
- */
-exports.attestWriteMeMail = function attestWriteMeMail() {
+function DropServer() {
+  var server = this._netServer = new $net.createServer();
+  server.on('connection', this._onConnection.bind(this));
+}
+DropServer.prototype = {
+  _onConnection: function(socket) {
+  },
 };
 
 }); // end define
