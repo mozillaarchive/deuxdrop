@@ -36,7 +36,31 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive one or more `MaildropTransitEnvelope`
+ * Time-centric data views; storage and communication impact.
+ *
+ * Time is a very important dimension for messages and conversations.  As such,
+ *  all storage is aware of time.  Of course, we can't just have a single view
+ *  that is sorted by time and use that for everything; most of the time, it
+ *  would be absurdly wasteful to filter it down to what we actually want.  We
+ *  need to slice that all-seeing river-of-time view into more appropriate
+ *  smaller views ahead of time.
+ *
+ * We accept that there is no way for a single view to provide us what we need
+ *  for all use-cases, so we intentionally redundantly store data so that when
+ *  we do need to seek, there is high locality and minimal filtering performed.
+ *  We do, however, need to worry about too much redundancy having negative
+ *  write duplication side-effects.
+ *
+ * Breakout:
+ *
+ * One-on-one communication (still brainstorming/in flux):
+ * - Maintain per-queue catch-all message-centric time-views.
+ * - Maintain per-other-person conversation-centric time-views.
+ *
+ * Group communication (theorized, not yet even to the flux stage):
+ * - Maintain per-user indices to point at communication with specific users,
+ *    but do not store full messages on a per-user basis.
+ *
  **/
 
 define(
@@ -46,71 +70,5 @@ define(
   function(
     exports
   ) {
-
-/**
- * Delivery processing connection.
- */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
-}
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
-
-  _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
-  },
-};
-
-/**
- * Connection to let a mailstore/user tell us who they are willing to receive
- *  messsages from.
- */
-function ContactConnection(server, sock) {
-};
-ContactConnection.prototype = {
-  _msg_root_addContact: function(msg) {
-  },
-
-  _msg_root_delContact: function(msg) {
-  },
-};
-
-/**
- * Message retrieval (fetch) from a maildrop by a mailstore.
- *
- * Pickup connections have simple semantics.  Once you connect and authenticate,
- *  we start sending messages.  You need to acknowledge each message so we can
- *  purge it from our storage.  Once we run out of queued messages, we send a
- *  'realtime' notification to let you know that there are no more queued
- *  messages and that you are now subscribed for realtime notification of new
- *  messages.  You need to acknowledge realtime messages just like queued
- *  messages.  If you don't want realtime messages, disconnect.
- */
-function PickupConnection(server, sock) {
-};
-PickupConnection.prototype = {
-  _msg_wantAck_ack: function(msg) {
-  },
-};
-
-var DropServerDef = {
-  endpoints: {
-    'drop/deliver': {
-      implClass: DeliveryConnection,
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
-    },
-  },
-};
-
 
 }); // end define

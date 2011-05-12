@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive one or more `MaildropTransitEnvelope`
+ * The protocol by which the client talks to the message store.
  **/
 
 define(
@@ -47,70 +47,35 @@ define(
     exports
   ) {
 
-/**
- * Delivery processing connection.
- */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
+function StoreClientConnection() {
 }
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
-
-  _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
-  },
-};
-
-/**
- * Connection to let a mailstore/user tell us who they are willing to receive
- *  messsages from.
- */
-function ContactConnection(server, sock) {
-};
-ContactConnection.prototype = {
-  _msg_root_addContact: function(msg) {
+StoreClientConnection.prototype = {
+  _msg_checkin_closeEnough: function(msg) {
   },
 
-  _msg_root_delContact: function(msg) {
+  _msg_checkin_needResync: function(msg) {
+  },
+
+  /**
+   * Acknowledge message transmission has hit persistent storage and so should
+   *  reliably be delivered (eventually).  This has nothing to do with whether
+   *  it has made it to the recipient's maildrop, mailstore, device, or that the
+   *  user has actually read the message.
+   */
+  _msg_root_ackSend: function(msg) {
+  },
+
+  _msg_root_convIndexData: function(msg) {
+  },
+  
+  _msg_root_convMsgsData: function(msg) {
+  },
+
+  /**
+   * Acknowledge a mutation command has hit persistent storage.
+   */
+  _msg_root_ackMutation: function(msg) {
   },
 };
-
-/**
- * Message retrieval (fetch) from a maildrop by a mailstore.
- *
- * Pickup connections have simple semantics.  Once you connect and authenticate,
- *  we start sending messages.  You need to acknowledge each message so we can
- *  purge it from our storage.  Once we run out of queued messages, we send a
- *  'realtime' notification to let you know that there are no more queued
- *  messages and that you are now subscribed for realtime notification of new
- *  messages.  You need to acknowledge realtime messages just like queued
- *  messages.  If you don't want realtime messages, disconnect.
- */
-function PickupConnection(server, sock) {
-};
-PickupConnection.prototype = {
-  _msg_wantAck_ack: function(msg) {
-  },
-};
-
-var DropServerDef = {
-  endpoints: {
-    'drop/deliver': {
-      implClass: DeliveryConnection,
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
-    },
-  },
-};
-
 
 }); // end define

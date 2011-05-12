@@ -36,7 +36,9 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive one or more `MaildropTransitEnvelope`
+ * Message delivering transport used for message transmission to senders by
+ *  mailstores and by clients to mailstores.  The difference is that clients
+ *  tell mailstores extra meta-data.
  **/
 
 define(
@@ -47,70 +49,21 @@ define(
     exports
   ) {
 
-/**
- * Delivery processing connection.
- */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
+function DelivererConnection() {
 }
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
-
-  _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
-  },
-};
-
-/**
- * Connection to let a mailstore/user tell us who they are willing to receive
- *  messsages from.
- */
-function ContactConnection(server, sock) {
-};
-ContactConnection.prototype = {
-  _msg_root_addContact: function(msg) {
+DelivererConnection.prototype = {
+  /**
+   * The server acknowledges transmission and claims to have persisted the
+   *  message to reliable storage.
+   */
+  _msg_gaveMessage_ack: function(msg) {
   },
 
-  _msg_root_delContact: function(msg) {
+  /**
+   * The server server did not like our message.
+   */
+  _msg_gaveMessage_nak: function(msg) {
   },
 };
-
-/**
- * Message retrieval (fetch) from a maildrop by a mailstore.
- *
- * Pickup connections have simple semantics.  Once you connect and authenticate,
- *  we start sending messages.  You need to acknowledge each message so we can
- *  purge it from our storage.  Once we run out of queued messages, we send a
- *  'realtime' notification to let you know that there are no more queued
- *  messages and that you are now subscribed for realtime notification of new
- *  messages.  You need to acknowledge realtime messages just like queued
- *  messages.  If you don't want realtime messages, disconnect.
- */
-function PickupConnection(server, sock) {
-};
-PickupConnection.prototype = {
-  _msg_wantAck_ack: function(msg) {
-  },
-};
-
-var DropServerDef = {
-  endpoints: {
-    'drop/deliver': {
-      implClass: DeliveryConnection,
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
-    },
-  },
-};
-
 
 }); // end define

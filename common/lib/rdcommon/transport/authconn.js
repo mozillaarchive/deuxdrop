@@ -95,28 +95,118 @@
 define(
   [
     'nacl',
-    'websocket',
+    'websocket/WebSocketClient',
+    'websocket/WebSocketServer',
     'exports'
   ],
   function(
     $nacl,
-    $wsc,
+    WebSocketClient,
+    WebSocketServer,
     exports
   ) {
 
-var DEFAULT_ORIGIN_OPTS = {origin: 'http://none.such'};
+var PROTO_REV = 'deuxdrop-v1';
 
-function AuthClientConn(clientInfo, serverInfo, url) {
-  this._ws = new $wsc.WebSocket(url, null, DEFAULT_ORIGIN_OPTS);
+/**
+ * Common authenticated/encrypted connection abstraction logic.
+ *
+ * Provides state management.
+ */
+var AuthClientCommon = {
+};
 
+function AuthClientConn(clientIdent, serverIdent, url) {
+  this.clientIdent = clientIdent;
+  this.serverIdent = serverIdent;
+  this.url = url;
+
+  var wsc = this._wsClient = new WebSocketClient();
+  wsc.on('error', this._onConnectError.bind(this));
+  wsc.on('connect', this._onConnected.bind(this));
+
+  wsc.connect(url, [PROTO_REV]);
 }
 AuthClientConn.prototype = {
+  __proto__: AuthClientCommon,
+
+  _onConnectError: function(error) {
+  },
+  _onConnected: function(conn) {
+    this._conn = conn;
+    conn.on('error', this._onError.bind(this));
+    conn.on('close', this._onClose.bind(this));
+    conn.on('message', this._onMessage.bind(this));
+  },
+  _onError: function(error) {
+  },
+  _onClose: function() {
+    this._conn = null;
+  },
+  _onMessage: function(msg) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // State Message Handlers
+
+  _msg_wantServerNonce: function(msg) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 exports.AuthClientConn = AuthClientConn;
 
-function AuthServerConn() {
+function AuthServerConn(serverIdent) {
 }
 AuthServerConn.prototype = {
+  __proto__: AuthClientCommon,
+
+  //////////////////////////////////////////////////////////////////////////////
+  // State Message Handlers
+
+  _msg_wantClientIdent: function(msg) {
+  },
+
+  _msg_wantBoxedSecret: function(msg) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+};
+exports.AuthServerConn = AuthServerConn;
+
+/**
+ *
+ */
+function AuthorizingServer() {
+  this._endpoints = {};
+
+  var server = this._server = new WebSocketServer();
+
+  server.on('request', this._onRequest.bind(this));
+}
+AuthorizingServer.prototype = {
+  _onRequest: function _onRequest(request) {
+    if (this._endpoints.hasOwnProperty(request.resource)) {
+      var info = this._endpoints[request.resource];
+
+      var rawConn = request.accept(PROTO_REV, request.origin);
+      var authConn = new AuthServerConn(info.serverInfo, rawInfo);
+    }
+
+  },
+
+  /**
+   *
+   */
+  registerEndpoint: function registerEndpoint(path, serverInfo,
+                                              serverConnClass) {
+    this._endpoints[path] = {
+      serverInfo: serverInfo,
+      serverConnClass: serverConnClass,
+    };
+  },
+
+
 };
 
 }); // end define

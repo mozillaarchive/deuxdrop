@@ -47,4 +47,10 @@ define(
     exports
   ) {
 
+/**
+ *
+ */
+exports.receiveTransitMessage = function(authStorage, encMessage) {
+};
+
 }); // end define

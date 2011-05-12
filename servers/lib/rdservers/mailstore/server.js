@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive one or more `MaildropTransitEnvelope`
+ * Message store reception logic.
  **/
 
 define(
@@ -47,70 +47,74 @@ define(
     exports
   ) {
 
-/**
- * Delivery processing connection.
- */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
+function StoreServerConnection() {
 }
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
-
-  _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
+StoreServerConnection.prototype = {
+  /**
+   * The device tells us its device id, its current sequence id, and its
+   *  replication level so we know who it is, when its last update was, and
+   *  whether we need to force a re-sync.
+   */
+  _msg_init_deviceCheckin: function(msg) {
   },
-};
 
-/**
- * Connection to let a mailstore/user tell us who they are willing to receive
- *  messsages from.
- */
-function ContactConnection(server, sock) {
-};
-ContactConnection.prototype = {
+
+
+  /**
+   * Here's a composed message to send, perhaps with some meta-data.
+   */
+  _msg_root_send: function(msg) {
+  },
+
+  /**
+   * Request a conversation index, such as:
+   * - All conversations (by time).
+   * - Conversations with a specific content (by time).
+   *
+   * This will retrieve some bounded number of conversations, where, for each
+   *  conversation, we always provide:
+   * - The conversation id
+   * - Any user-set meta-data on the conversation or its messages.
+   * - The sanity-clamped timestamps of the messages in the conversation.
+   */
+  _msg_root_convGetIndex: function(msg) {
+  },
+
+  /**
+   * Fetch messages in a conversation.
+   */
+  _msg_root_convGetMsgs: function(msg) {
+  },
+
+  /**
+   * Set meta-data on a conversation/messages.
+   */
+  _msg_root_setMeta: function(msg) {
+  },
+
+  /**
+   * Delete messages in a conversation, possibly all of them.
+   */
+  _msg_root_delConvMsgs: function(msg) {
+  },
+
+  /**
+   * Add a new contact with related-metadata for prioritization, etc.
+   */
   _msg_root_addContact: function(msg) {
   },
 
+  /**
+   * Modify the metadata associated with a contact.
+   */
+  _msg_root_modContact: function(msg) {
+  },
+
+  /**
+   * Delete a contact.
+   */
   _msg_root_delContact: function(msg) {
   },
 };
-
-/**
- * Message retrieval (fetch) from a maildrop by a mailstore.
- *
- * Pickup connections have simple semantics.  Once you connect and authenticate,
- *  we start sending messages.  You need to acknowledge each message so we can
- *  purge it from our storage.  Once we run out of queued messages, we send a
- *  'realtime' notification to let you know that there are no more queued
- *  messages and that you are now subscribed for realtime notification of new
- *  messages.  You need to acknowledge realtime messages just like queued
- *  messages.  If you don't want realtime messages, disconnect.
- */
-function PickupConnection(server, sock) {
-};
-PickupConnection.prototype = {
-  _msg_wantAck_ack: function(msg) {
-  },
-};
-
-var DropServerDef = {
-  endpoints: {
-    'drop/deliver': {
-      implClass: DeliveryConnection,
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
-    },
-  },
-};
-
 
 }); // end define

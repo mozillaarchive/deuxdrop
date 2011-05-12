@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive one or more `MaildropTransitEnvelope`
+ *
  **/
 
 define(
@@ -48,69 +48,34 @@ define(
   ) {
 
 /**
- * Delivery processing connection.
- */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
-}
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
-
-  _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
-  },
-};
-
-/**
- * Connection to let a mailstore/user tell us who they are willing to receive
- *  messsages from.
- */
-function ContactConnection(server, sock) {
-};
-ContactConnection.prototype = {
-  _msg_root_addContact: function(msg) {
-  },
-
-  _msg_root_delContact: function(msg) {
-  },
-};
-
-/**
- * Message retrieval (fetch) from a maildrop by a mailstore.
+ * Allow a new user/identity to register itself with this server.  Registration
+ *  may potentially happen quickly in-band or require some out-of-band
+ *  verification.
  *
- * Pickup connections have simple semantics.  Once you connect and authenticate,
- *  we start sending messages.  You need to acknowledge each message so we can
- *  purge it from our storage.  Once we run out of queued messages, we send a
- *  'realtime' notification to let you know that there are no more queued
- *  messages and that you are now subscribed for realtime notification of new
- *  messages.  You need to acknowledge realtime messages just like queued
- *  messages.  If you don't want realtime messages, disconnect.
+ * General criteria for signup could be:
+ * - Open signup, all supplicants accepted, but lacking any fallback account
+ *    recovery stuff.
+ * - Out-of-band limited identify verification (+ for account recovery), ex:
+ *    send e-mail with confirmation URL, text message with confirmation URL.
+ * - In-band signed attestation from trusted source, such as a friend saying
+ *    they are cool (possibly throttled by invite caps) or a company
+ *    authority signing an attestation.
  */
-function PickupConnection(server, sock) {
-};
-PickupConnection.prototype = {
-  _msg_wantAck_ack: function(msg) {
+function SignupConnection(server, sock) {
+}
+SignupConnection.prototype = {
+  _msg_init_newSignup: function(msg) {
+  },
+  _msg_init_completeSignup: function(msg) {
   },
 };
 
-var DropServerDef = {
+var SignupServerDef = {
   endpoints: {
-    'drop/deliver': {
-      implClass: DeliveryConnection,
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
+    'signup/signup': {
+      implClass: SignupConnection,
     },
   },
 };
-
 
 }); // end define

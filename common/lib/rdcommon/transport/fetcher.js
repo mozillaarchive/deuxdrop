@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Maildrop message reception logic; receive one or more `MaildropTransitEnvelope`
+ * Fetches messages from maildrops.
  **/
 
 define(
@@ -48,69 +48,23 @@ define(
   ) {
 
 /**
- * Delivery processing connection.
+ * Talks to a maildrop to fetch the backlog of messages and potentially wait
+ *  for new messages as they come in.
  */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
+function FetchConnection() {
 }
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
-
-  _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
-  },
-};
-
-/**
- * Connection to let a mailstore/user tell us who they are willing to receive
- *  messsages from.
- */
-function ContactConnection(server, sock) {
-};
-ContactConnection.prototype = {
-  _msg_root_addContact: function(msg) {
+FetchConnection.prototype = {
+  /**
+   * A delivered message.
+   */
+  _msg_fetching_msg: function() {
   },
 
-  _msg_root_delContact: function(msg) {
+  /**
+   * Notification that we have transitioned from sending backlog to
+   */
+  _msg_fetching_realtime: function() {
   },
 };
-
-/**
- * Message retrieval (fetch) from a maildrop by a mailstore.
- *
- * Pickup connections have simple semantics.  Once you connect and authenticate,
- *  we start sending messages.  You need to acknowledge each message so we can
- *  purge it from our storage.  Once we run out of queued messages, we send a
- *  'realtime' notification to let you know that there are no more queued
- *  messages and that you are now subscribed for realtime notification of new
- *  messages.  You need to acknowledge realtime messages just like queued
- *  messages.  If you don't want realtime messages, disconnect.
- */
-function PickupConnection(server, sock) {
-};
-PickupConnection.prototype = {
-  _msg_wantAck_ack: function(msg) {
-  },
-};
-
-var DropServerDef = {
-  endpoints: {
-    'drop/deliver': {
-      implClass: DeliveryConnection,
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
-    },
-  },
-};
-
 
 }); // end define
