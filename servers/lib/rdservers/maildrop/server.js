@@ -60,7 +60,16 @@ DeliveryConnection.prototype = {
   _initialState: 'wantTransitEnvelope',
 
   _msg_root_deliver: function(msg) {
-    // retrieve the credentials associated with
+    // - retrieve the sender's credentials from the recipient's contacts
+    // (if they aren't there, they aren't an authorized sender.)
+
+    // verify the signature on the transit envelope
+
+    // hand off to the back-end for saving and/or forwarding:
+    // - in a standalone drop, we persist and notify any connected listeners
+    // - in a combo, we hand off to the mailstore
+
+    // ack once the back-end confirms it has hit persistent storage
   },
 };
 
@@ -72,6 +81,7 @@ function ContactConnection(server, sock) {
 };
 ContactConnection.prototype = {
   _msg_root_addContact: function(msg) {
+
   },
 
   _msg_root_delContact: function(msg) {
@@ -112,5 +122,16 @@ var DropServerDef = {
   },
 };
 
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  delivery: {
+    implClass: DeliveryConnection,
+  },
+  contact: {
+    implClass: ContactConnection,
+  },
+  pickup: {
+    implClass: PickupConnection,
+  },
+});
 
 }); // end define

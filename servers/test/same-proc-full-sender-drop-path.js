@@ -118,28 +118,36 @@ define(
 // create the entities (and corresponding keys, identities)
 
 J.describe('loopback message transmission', function() {
-  var client_a = DJ.client('A');
-  var client_b = DJ.client('B');
-  var drop_d = DJ.maildrop('D');
-  var sender_s = DJ.mailsender('S');
+  var client_a = JD.client('A');
+  var client_b = JD.client('B');
+  var drop_d = JD.drop('D');
+  var sender_s = JD.sender('S');
+  var msg;
 
   JD.action(client_a, 'creates sender account with', sender_s, function() {
+    client_a.signupWith(sender_s);
   });
 
   JD.action(client_b, 'creates drop account with', drop_d, function() {
+    client_b.signupWith(drop_d);
   });
 
   JD.action(client_b, 'tells the drop it is friends with A', drop_d,
             function() {
+    client_b.addContact(drop_d);
   });
 
   JD.action(client_a, 'sends message to sender and receives ack',
             sender_s, function() {
     JD.meanwhile(sender_s, 'forwards message to drop', drop_d);
+    msg = client_a.writeMessageTo(client_b);
+    client_a.sendMessageVia(sender_s);
   });
 
   JD.action(client_b, 'asks drop for messages and gets the message', drop_d,
             function() {
+    var received_msg = client_b.fetchMessage();
+
   });
 });
 

@@ -58,7 +58,7 @@
  *   @key[envelope EncStorageEnvelope]{
  *   }
  * ]]{
- *
+ *   This blob gets signed by the sender.
  * }
  *
  * @typedef[StorageEnvelope @dict[

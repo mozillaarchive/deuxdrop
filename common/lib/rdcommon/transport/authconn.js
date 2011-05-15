@@ -94,19 +94,31 @@
 
 define(
   [
+    'q',
     'nacl',
     'websocket/WebSocketClient',
     'websocket/WebSocketServer',
+    'rdcommon/log',
+    'module',
     'exports'
   ],
   function(
+    $Q,
     $nacl,
     WebSocketClient,
     WebSocketServer,
+    $log,
+    $module,
     exports
   ) {
 
 var PROTO_REV = 'deuxdrop-v1';
+
+/**
+ * Do not allow a backlog of more than this many messages; terminate the
+ *  connection should this number be reached.
+ */
+var MAX_QUEUED_MESSAGES = 2;
 
 /**
  * Common authenticated/encrypted connection abstraction logic.
@@ -114,12 +126,110 @@ var PROTO_REV = 'deuxdrop-v1';
  * Provides state management.
  */
 var AuthClientCommon = {
+  _initCommon: function(initialState) {
+    this.connState = initialState;
+    this.appConn = null;
+    this._pendingPromise = null;
+    /**
+     * Backlog of messages received while pending on a promise.
+     */
+    this._queuedMessages = null;
+
+    this._boundHandlerResolved = this._onHandlerResolved.bind(this);
+    this._boundHandlerRejected = this._onHandlerReject.bind(this);
+  },
+  _connected: function(conn) {
+    this._conn = conn;
+    conn.on('error', this._onError.bind(this));
+    conn.on('close', this._onClose.bind(this));
+    conn.on('message', this._onMessage.bind(this));
+  },
+
+  _onError: function(error) {
+  },
+  _onClose: function() {
+    this._conn = null;
+    this.log.close();
+  },
+  _onMessage: function(wsmsg) {
+    var msg;
+    if (wsmsg.type === 'utf8') {
+      msg = JSON.parse(wsmsg.utf8Data);
+    }
+    else {
+      throw new Error('AuthConn currently should not use binary frames');
+    }
+
+    this.log.receive(msg.type, msg);
+
+    if (this._pendingPromise) {
+      if (this._queuedMessages == null)
+        this._queuedMessages = [msg];
+      else if (this._queuedMessages.length >= MAX_QUEUED_MESSAGES) {
+        this.log.queueBacklogExceeded();
+        this.close();
+      }
+      else
+        this._queuedMessages.push(msg);
+    }
+    else {
+      this._handleMessage(msg);
+    }
+  },
+  _handleMessage: function(msg) {
+
+    var handlerObj, state;
+    if (this.connState !== 'app') {
+      handlerObj = this;
+      state = this.connState;
+    }
+    else {
+      handlerObj = this.appConn;
+      state = this.appState;
+    }
+
+    var handlerName = '_msg_' + state + '_' + msg.type;
+    if (!(handlerName in handlerObj)) {
+      this.log.badMessage(msg.type);
+      this.close(true);
+      return;
+    }
+
+    var rval = this.log.handleMsg(msg.type, handlerObj, handlerName, msg);
+
+    if ($Q.isPromise(rval)) {
+      this._pendingPromise = rval;
+      $Q.when(this._pendingPromise,
+              this._boundHandlerResolved,
+              this._boundHandlerRejected);
+    }
+    else if (typeof(rval) === "string") { // (good return)
+
+    }
+    else { // (exception thrown / illegal return case)
+      this.handlerFailure(rval);
+      this.close(true);
+    }
+  },
+  _onHandlerResolved: function(newstate) {
+  },
+  _onHandlerRejected: function(err) {
+  },
+
+  close: function(isBad) {
+    if (this._conn)
+      this._conn.close();
+  },
 };
 
 function AuthClientConn(clientIdent, serverIdent, url) {
   this.clientIdent = clientIdent;
   this.serverIdent = serverIdent;
   this.url = url;
+
+  this.log = LOGFAB.client();
+
+  this._initCommon('connect');
 
   var wsc = this._wsClient = new WebSocketClient();
   wsc.on('error', this._onConnectError.bind(this));
@@ -133,30 +243,25 @@ AuthClientConn.prototype = {
   _onConnectError: function(error) {
   },
   _onConnected: function(conn) {
-    this._conn = conn;
-    conn.on('error', this._onError.bind(this));
-    conn.on('close', this._onClose.bind(this));
-    conn.on('message', this._onMessage.bind(this));
-  },
-  _onError: function(error) {
-  },
-  _onClose: function() {
-    this._conn = null;
-  },
-  _onMessage: function(msg) {
+    this._connected(conn);
+    this.log.connState((this.state = 'authServerNonce'));
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // State Message Handlers
 
-  _msg_wantServerNonce: function(msg) {
+  _msg_authServerNonce_nonce: function(msg) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
 };
 exports.AuthClientConn = AuthClientConn;
 
-function AuthServerConn(serverIdent) {
+function AuthServerConn(serverIdent, rawConn) {
+  this.log = LOGFAB.server();
+
+  this._initCommon('authClientIdent');
+  this._connected(rawConn);
 }
 AuthServerConn.prototype = {
   __proto__: AuthClientCommon,
@@ -164,10 +269,10 @@ AuthServerConn.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // State Message Handlers
 
-  _msg_wantClientIdent: function(msg) {
+  _msg_authClientIdent_clientIdent: function(msg) {
   },
 
-  _msg_wantBoxedSecret: function(msg) {
+  _msg_authBoxedSecret_boxedSecret: function(msg) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -190,7 +295,7 @@ AuthorizingServer.prototype = {
       var info = this._endpoints[request.resource];
 
       var rawConn = request.accept(PROTO_REV, request.origin);
-      var authConn = new AuthServerConn(info.serverInfo, rawInfo);
+      var authConn = new AuthServerConn(info.serverInfo, rawConn);
     }
 
   },
@@ -198,15 +303,60 @@ AuthorizingServer.prototype = {
   /**
    *
    */
-  registerEndpoint: function registerEndpoint(path, serverInfo,
-                                              serverConnClass) {
-    this._endpoints[path] = {
-      serverInfo: serverInfo,
-      serverConnClass: serverConnClass,
-    };
+  registerEndpoint: function registerEndpoint(path, endpointDef) {
+    this._endpoints[path] = endpointDef;
   },
 
-
+  registerServer: function registerServer(serverDef) {
+  },
 };
+exports.AuthorizingServer = AuthorizingServer;
+
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  client: {
+    implClass: AuthClientConn,
+    type: $log.CONNECTION,
+    subtype: $log.CLIENT,
+    stateVars: {
+      connState: true,
+      appState: true,
+    },
+    events: {
+      send: {type: true},
+      receive: {type: true},
+      close: {},
+    },
+    calls: {
+      handleMsg: {type: true},
+    },
+    errors: {
+      badMessage: {type: true},
+      queueBacklogExceeded: {},
+    },
+  },
+  server: {
+    implClass: AuthServerConn,
+    type: $log.CONNECTION,
+    subtype: $log.SERVER,
+    stateVars: {
+      connState: true,
+      appState: true,
+    },
+    events: {
+      send: {type: true},
+      receive: {type: true},
+      close: {},
+    },
+    calls: {
+      handleMsg: {type: true},
+    },
+    errors: {
+      badMessage: {type: true},
+      queueBacklogExceeded: {},
+      handlerFailure: {err: true},
+    },
+  },
+});
 
 }); // end define
