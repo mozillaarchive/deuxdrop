@@ -53,7 +53,7 @@ define(
     exports
   ) {
 
-var LT = $tc.makeTestingContext($module, $authconn.LOGFAB);
+var TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
 
 function TestClientConnection() {
   this._wallowDeferred = null;
@@ -93,69 +93,84 @@ var TestServerDef = {
   },
 };
 
-LT.commonCase('working loopback authconn connection', function(T) {
-  var eClient = T.entity('client'), client;
+TD.commonCase('working loopback authconn connection', function(T) {
+  // The connections, somewhat incorrectly named (lacking 'conn')
+  var eClientConn = T.entity('clientConn'), clientConn;
+  var eServerConn = T.entity('serverConn'), serverConn;
   var eServer = T.entity('server'), server;
 
   T.action(eServer, 'performs setup and listens', function() {
+    eServer.expect_endpointRegistered('test/test');
+    eServer.expect_listening();
+
     server = new $authconn.AuthorizingServer();
+    server.registerServer(TestServerDef);
+    server.listen();
   });
 
-  T.action(eClient, 'connects to', eServer, function() {
-    client = new TestClientConnection(server.url);
+  T.action(eClientConn, 'connects to', eServerConn, function() {
+    eClientConn.expect_connect();
+    eClientConn.expect_connected();
+    eServer.expect_endpointConn('test/test');
+
+    var url = "http://" + server.address + ":" + server.port + "/test/test";
+    clientConn = new TestClientConnection(url);
 
   });
 
-  T.action(eServer, 'says be sad (transition)', eClient, function() {
-    eServer.expect_send('beSad');
-    eClient.expect_receive('beSad');
-    eClient.expect_handle('beSad');
-    eClient.expect_appState('sad');
+  T.action(eServerConn, 'says be sad (transition)', eClientConn, function() {
+    eServerConn.expect_send('beSad');
+    eClientConn.expect_receive('beSad');
+    eClientConn.expect_handle('beSad');
+    eClientConn.expect_appState('sad');
 
-    server.say('beSad');
+    serverConn.say('beSad');
   });
 
-  T.action(eServer, 'says wallow, be happy (async, queueing)', eClient,
+  T.action(eServerConn, 'says wallow, be happy (async, queueing)', eClientConn,
            function() {
-    eServer.expect_send('wallow');
-    eServer.expect_send('beHappy');
-    eClient.expect_receive('wallow');
-    eClient.expect_handle('wallow');
+    eServerConn.expect_send('wallow');
+    eServerConn.expect_send('beHappy');
+    eClientConn.expect_receive('wallow');
+    eClientConn.expect_handle('wallow');
     // (we won't handle it, but be sure that the event happens)
-    eClient.expect_receive('beHappy');
-    eClient.expect_appState('sad');
+    eClientConn.expect_receive('beHappy');
+    eClientConn.expect_appState('sad');
 
-    server.say('wallow');
-    server.say('beHappy');
+    serverConn.say('wallow');
+    serverConn.say('beHappy');
   });
 
-  T.action(eClient, 'processes be happy (async resolution, queue proc)',
+  T.action(eClientConn, 'processes be happy (async resolution, queue proc)',
            function() {
-    eClient.expect_handle('beHappy');
-    eClient.expect_appState('happy');
+    eClientConn.expect_handle('beHappy');
+    eClientConn.expect_appState('happy');
 
-    client.stopWallowing();
+    clientConn.stopWallowing();
   });
 
-  T.permutation([
-    T.action(eServer, 'closes the connection on', eClient, function() {
-      eServer.expect_close();
-      eClient.expect_close();
+  T.permutation('who closes the connection', [
+    T.action(eServerConn, 'closes the connection on', eClientConn, function() {
+      eServerConn.expect_close();
+      eClientConn.expect_close();
 
-      server.close();
+      serverConn.close();
     }),
-    T.action(eClient, 'closes the connection on', eServer, function() {
-      eClient.expect_close();
-      eServer.expect_close();
+    T.action(eClientConn, 'closes the connection on', eServerConn, function() {
+      eClientConn.expect_close();
+      eServerConn.expect_close();
 
-      client.close();
+      clientConn.close();
     }),
   ]);
 
+  T.cleanup('shutdown', eServerConn, function() {
+    server.shutdown();
+  });
 });
 
 /*
-LT.edgeCase('kill connection on queue backlog', function(T) {
+TD.edgeCase('kill connection on queue backlog', function(T) {
 });
 */
 

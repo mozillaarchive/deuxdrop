@@ -43,10 +43,129 @@
 
 define(
   [
+    './log',
     'exports'
   ],
   function(
+    $log,
     exports
   ) {
+
+function TestStep(descBits, entities, testFunc) {
+  this.descBits = descBits;
+  this.entities = entities;
+  this.testFunc = testFunc;
+}
+TestStep.prototype = {
+};
+
+/**
+ * TestContexts are used to create entities and define the actions that define
+ *  the steps of the test.
+ */
+function TestContext() {
+  this._permutations = 1;
+  this._steps = [];
+}
+TestContext.prototype = {
+  entity: function entity() {
+  },
+
+  /**
+   * Defines a test step/action.  Each action has a description that is made
+   *  up of strings and entities (defined via `entity`).  All entities
+   *  participating in/relevant to the test step must be named.  The last
+   *  argument is always the test function to run to initiate the step/action.
+   *
+   * The step/action is marked complete when all of the expectations have been
+   *  correctly satisfied.  The step fails and the test is aborted if unexpected
+   *  non-boring logging invocations occur for the entities involved in the
+   *  step.
+   *
+   * Entities defined in test-case that are not involved in the step/action
+   *  accumulate their entries which will be considered in the next step they
+   *  are involved in, save for any entries filtered to be boring during that
+   *  step.
+   */
+  action: function action() {
+    var entities = [], descBits = [];
+    // args[:-1] are entities/description intermixed, args[-1] is the testfunc
+    var iArg;
+    for (iArg = 0; iArg < arguments.length - 1; iArg++) {
+      var arg = arguments[iArg];
+      if (arg instanceof $log.TestEntityProtoBase)
+        entities.push(arg);
+      descBits.push(arg);
+    }
+    var testFunc = arguments[iArg];
+
+    var step = new TestStep(descBits, entities, testFunc);
+    this._steps.push(step);
+    return step;
+  },
+
+  /**
+   * Defines a step where two or more alternative actions should be run.
+   *  Implicitly results in the test case as a whole being run a sufficient
+   *  number of times to satisfy all contained permutations.
+   */
+  permutation: function permutation(variesDesc, variants) {
+    var numVariants = variants.length;
+    this._permutations *= numVariants;
+
+    // The last numVariants steps should be what is handed to us.  If this
+    //  is not the case, we are boned.
+    var baseStep = this._steps.length - numVariants;
+    for (var i = 0; i < numVariants.length; i++) {
+      if (variants[i] !== this._steps[baseStep])
+        throw new Error("Step sequence invariant violation");
+    }
+    // (use the splice retval rather than the passed in for extra safety)
+    var saferVariants = this._steps.splice(baseStep, numVariants);
+    this._steps.push(saferVariants);
+  },
+
+  /**
+   * Define a cleanup
+   */
+  cleanup: function() {
+  },
+};
+
+function TestCase(kind, desc, setupFunc) {
+  this.kind = kind;
+  this.desc = desc;
+  this.setupFunc = setupFunc;
+
+  this.context = null;
+}
+TestCase.prototype = {
+  _setupTest: function() {
+  },
+  /**
+   * Run the setup function to configure everything, then
+   */
+  runTest: function() {
+    this.context = new TestContext(this);
+
+  }
+};
+
+function TestDefiner(logfab) {
+  this._logfab = logfab;
+}
+TestDefiner.prototype = {
+  commonCase: function commonCase(desc, setupFunc) {
+  },
+
+  edgeCase: function edgeCase(desc, setupFunc) {
+  },
+};
+
+exports.defineTestsFor = function defineTestsFor(testModule, logfab) {
+  var localDefiner = new TestDefiner(logfab);
+
+  return localDefiner;
+};
 
 }); // end define

@@ -94,6 +94,7 @@
 
 define(
   [
+    'http',
     'q',
     'nacl',
     'websocket/WebSocketClient',
@@ -103,6 +104,7 @@ define(
     'exports'
   ],
   function(
+    $http,
     $Q,
     $nacl,
     WebSocketClient,
@@ -195,7 +197,8 @@ var AuthClientCommon = {
       return;
     }
 
-    var rval = this.log.handleMsg(msg.type, handlerObj, handlerName, msg);
+    var rval = this.log.handleMsg(msg.type,
+                                  handlerObj, handlerObj[handlerName], msg);
 
     if ($Q.isPromise(rval)) {
       this._pendingPromise = rval;
@@ -227,7 +230,7 @@ function AuthClientConn(clientIdent, serverIdent, url) {
   this.serverIdent = serverIdent;
   this.url = url;
 
-  this.log = LOGFAB.client();
+  this.log = LOGFAB.clientConn();
 
   this._initCommon('connect');
 
@@ -258,7 +261,7 @@ AuthClientConn.prototype = {
 exports.AuthClientConn = AuthClientConn;
 
 function AuthServerConn(serverIdent, rawConn) {
-  this.log = LOGFAB.server();
+  this.log = LOGFAB.serverConn();
 
   this._initCommon('authClientIdent');
   this._connected(rawConn);
@@ -279,15 +282,24 @@ AuthServerConn.prototype = {
 };
 exports.AuthServerConn = AuthServerConn;
 
+function serve404s(request, response) {
+  response.writeHead(404);
+  response.end();
+}
+
 /**
  *
  */
 function AuthorizingServer() {
   this._endpoints = {};
 
-  var server = this._server = new WebSocketServer();
+  // That which is not a websocket shall be severely disappointed currently.
+  var httpServer = this._httpServer = http.createServer(serve404s);
 
+  var server = this._wsServer = new WebSocketServer();
   server.on('request', this._onRequest.bind(this));
+
+  this.address = null;
 }
 AuthorizingServer.prototype = {
   _onRequest: function _onRequest(request) {
@@ -300,21 +312,39 @@ AuthorizingServer.prototype = {
 
   },
 
-  /**
-   *
-   */
-  registerEndpoint: function registerEndpoint(path, endpointDef) {
+  _registerEndpoint: function registerEndpoint(path, endpointDef) {
     this._endpoints[path] = endpointDef;
+    this.log.endpointRegistered(path);
   },
 
   registerServer: function registerServer(serverDef) {
+    if (!("endpoints" in serverDef))
+      throw new Error("A server definition must have endpoints.");
+    for (var endpointName in serverDef.endpoints) {
+      this._registerEndpoint(endpointName, serverDef.endpoints[endpointName]);
+    }
+  },
+
+  listen: function(usePort) {
+    var self = this;
+    function listening() {
+      self.address = self._httpServer.address();
+      self.log.listening(self.address.address, self.address.port);
+    }
+    if (usePort)
+      this._httpServer.listen(usePort, listening);
+    else
+      this._httpServer.listen(listening);
+  },
+
+  shutdown: function() {
   },
 };
 exports.AuthorizingServer = AuthorizingServer;
 
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
-  client: {
+  clientConn: {
     implClass: AuthClientConn,
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
@@ -323,6 +353,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       appState: true,
     },
     events: {
+      connect: {},
+      connected: {},
       send: {type: true},
       receive: {type: true},
       close: {},
@@ -335,7 +367,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       queueBacklogExceeded: {},
     },
   },
-  server: {
+  serverConn: {
     implClass: AuthServerConn,
     type: $log.CONNECTION,
     subtype: $log.SERVER,
@@ -355,6 +387,15 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       badMessage: {type: true},
       queueBacklogExceeded: {},
       handlerFailure: {err: true},
+    },
+  },
+  server: {
+    implClass: AuthorizingServer,
+    type: $log.SERVER,
+    events: {
+      endpointRegistered: {path: true},
+      listening: {address: false, port: false},
+      endpointConn: {path: true},
     },
   },
 });

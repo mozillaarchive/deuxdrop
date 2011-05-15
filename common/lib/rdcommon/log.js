@@ -41,7 +41,7 @@
  *  thing.
  *
  * There is a need for raindrop-specific logging logic because names tend to
- *  be application specific things, as well as the determination of what is
+ *  be application specific things as well as the determination of what is
  *  interesting.
  **/
 
@@ -61,7 +61,7 @@ var DummyLogProtoBase = {
 var LogProtoBase = {
 };
 
-var TestProtoBase = {
+var TestEntityProtoBase = {
   /**
    * Issue a promise that will be resolved when all expectations of this entity
    *  have been resolved.  If no expectations have been issued, just return
@@ -71,8 +71,17 @@ var TestProtoBase = {
   },
 
   __resetExpectations: function() {
+    this._expectations.splice(0, this._expectations.length);
+  },
+
+  assertExpectations: function() {
+
   },
 };
+exports.TestEntityProtoBase = TestEntityProtoBase;
+
+function NOP() {
+}
 
 /**
  * Builds the logging and testing helper classes for the `register` driver.
@@ -87,22 +96,170 @@ function LoggestClassMaker() {
   // full-logging logger
   this.logProto = {__proto__: LogProtoBase};
   // testing entity for expectations, etc.
-  this.testProto = {__proto__: TestProtoBase};
+  this.testEntityProto = {__proto__: TestEntityProtoBase};
+
+  this._definedAs = {};
 }
 LoggestClassMaker.prototype = {
+  /**
+   * Name collision detection helper; to be invoked prior to defining a name
+   *  with the type of name being defined so we can tell you both types that
+   *  are colliding.
+   */
+  _define: function(name, type) {
+    if (this._definedAs.hasOwnProperty(name)) {
+      throw new Error("Attempt to define '" + name + "' as a " + type +
+                      " when it is already defined as a " +
+                      this._definedAs[name] + "!");
+    }
+    this._definedAs[name] = type;
+  },
+
   addStateVar: function(name) {
+    this._define(name, 'state');
+
+    this.dummyProto[name] = NOP;
+
     this.logProto[name] = function(val) {
+      this._entries.push([name, val, Date.now()]);
     };
 
-    this.testProto['expect_' + name] = function(val) {
+    this.testEntityProto['expect_' + name] = function(val) {
+      this._expectations.push([name, val]);
     };
   },
   addEvent: function(name, args) {
+    this._define(name, 'event');
+
+    var numArgs = 0;
+    for (var key in args) {
+      numArgs++;
+    }
+
+    this.dummyProto[name] = function() {
+      this._eventMap[name]++;
+    };
+
+    this.logProto[name] = function() {
+      this._eventMap[name]++;
+      var entry = [name];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        entry.push(arguments[iArg]);
+      }
+      entry.push(Date.now());
+      this._entries.push(entry);
+    };
+
+    this.testEntityProto['expect_' + name] = function() {
+      var exp = [name];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        exp.push(arguments[iArg]);
+      }
+      this._expectations.push(exp);
+    };
   },
   addCall: function(name, logArgs) {
+    this._define(name, 'call');
+
+    var numLogArgs = 0;
+    for (var key in logArgs) {
+      numLogArgs++;
+    }
+
+    this.dummyProto[name] = function() {
+      var rval;
+      try {
+        rval = arguments[numLogArgs+1].apply(arguments[numLogArgs],
+                                       Array.slice.call(arguments, iArg+2));
+      }
+      catch(ex) {
+        // (call errors are events)
+        this._eventMap[name]++;
+        rval = ex;
+      }
+      return rval;
+    };
+
+    this.logProto[name] = function() {
+      var rval, iArg;
+      var entry = [name];
+      for (iArg = 0; iArg < numLogArgs; iArg++) {
+        entry.push(arguments[iArg]);
+      }
+      entry.push(Date.now());
+      try {
+        rval = arguments[numLogArgs+1].apply(arguments[numLogArgs],
+                                       Array.slice.call(arguments, iArg+2));
+        entry.push(Date.now());
+      }
+      catch(ex) {
+        entry.push(Date.now());
+        entry.push(ex);
+        // (call errors are events)
+        this._eventMap[name]++;
+        rval = ex;
+      }
+
+      return rval;
+    };
+
+    this.testEntityProto['expect_' + name] = function() {
+      var exp = [name];
+      for (var iArg = 0; iArg < arguments.length; iArg++) {
+        exp.push(arguments[iArg]);
+      }
+      this._expectations.push(exp);
+    };
   },
   addError: function(name, args) {
-  }
+    this._define(name, 'error');
+
+    this.dummyProto[name] = function() {
+      this._eventMap[name]++;
+    };
+
+    this.logProto[name] = function() {
+      this._eventMap[name]++;
+      var entry = [name];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        entry.push(arguments[iArg]);
+      }
+      entry.push(Date.now());
+      this._entries.push(entry);
+    };
+
+    this.testEntityProto['expect_' + name] = function() {
+      var exp = [name];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        exp.push(arguments[iArg]);
+      }
+      this._expectations.push(exp);
+    };
+  },
+
+  makeFabs: function() {
+    var dummyCon = function dummyConstructor() {
+    };
+    dummyCon.prototype = this.dummyProto;
+
+    var loggerCon = function loggerConstructor() {
+    };
+    loggerCon.prototype = this.logProto;
+
+    /**
+     * Determine whether to instantiate a dummy obj or a log obj.
+     */
+    var loggerDecisionFab = function loggerDecisionFab() {
+    };
+
+    /**
+     * Create an instance of the tester object.
+     */
+    var testerCon = function testerConstructor() {
+      this._expectations = [];
+    };
+    testerCon.prototype = this.testEntityProto;
+  },
 };
 
 exports.register = function register(mod, defs) {
@@ -111,7 +268,29 @@ exports.register = function register(mod, defs) {
 
   for (var defName in defs) {
     var loggerDef = defs[defName];
+    var maker = new LoggestClassMaker();
 
+    var key;
+    if ("stateVars" in loggerDef) {
+      for (key in loggerDef.stateVars) {
+        maker.addStateVar(key);
+      }
+    }
+    if ("events" in loggerDef) {
+      for (key in loggerDef.events) {
+        maker.addEvent(key, loggerDef.events[key]);
+      }
+    }
+    if ("calls" in loggerDef) {
+      for (key in loggerDef.calls) {
+        maker.addCall(key, loggerDef.calls[key]);
+      }
+    }
+    if ("errors" in loggerDef) {
+      for (key in loggerDef.errors) {
+        maker.addError(key, loggerDef.errors[key]);
+      }
+    }
   }
 
   return fab;
