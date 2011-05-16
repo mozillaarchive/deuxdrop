@@ -55,10 +55,34 @@ define(
     exports
   ) {
 
+/**
+ * Dummy logger prototype; instances gather statistics but do not generate
+ *  detailed log events.
+ */
 var DummyLogProtoBase = {
 };
 
+/**
+ * Full logger prototype; instances accumulate log details but are intended by
+ *  policy to not long anything considered user-private.  This differs from
+ *  `TestLogProtoBase` which, in the name of debugging and system understanding
+ *  can capture private data but which should accordingly be test data.
+ */
 var LogProtoBase = {
+};
+
+/**
+ * Test (full) logger prototype; instances generate notifications for entity
+ *  expectation checking on all calls and observe arguments that may contain
+ *  user-private data (but which should only contain definitively non-private
+ *  test data.)
+ *
+ * For simplicity of implementation, this class currently just takes the
+ *  functions implemented by LogProtoBase and wraps them with a parameterized
+ *  decorator.
+ */
+var TestLogProtoBase = {
+  __proto__: LogProtoBase,
 };
 
 var TestEntityProtoBase = {
@@ -95,6 +119,8 @@ function LoggestClassMaker() {
   this.dummyProto = {__proto__: DummyLogProtoBase};
   // full-logging logger
   this.logProto = {__proto__: LogProtoBase};
+  // testing full-logging logger
+  this.testLogProto = {__proto__: TestLogProtoBase};
   // testing entity for expectations, etc.
   this.testEntityProto = {__proto__: TestEntityProtoBase};
 
@@ -123,6 +149,8 @@ LoggestClassMaker.prototype = {
     this.logProto[name] = function(val) {
       this._entries.push([name, val, Date.now()]);
     };
+
+    this.testLogProto[name] =
 
     this.testEntityProto['expect_' + name] = function(val) {
       this._expectations.push([name, val]);
