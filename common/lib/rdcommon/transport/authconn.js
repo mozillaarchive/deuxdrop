@@ -141,6 +141,7 @@ var AuthClientCommon = {
     this._boundHandlerRejected = this._onHandlerReject.bind(this);
   },
   _connected: function(conn) {
+    this.log.connected();
     this._conn = conn;
     conn.on('error', this._onError.bind(this));
     conn.on('close', this._onClose.bind(this));
@@ -225,6 +226,12 @@ var AuthClientCommon = {
   },
 };
 
+/**
+ * The connection is locally uniquely named by the complex tuple of
+ *  ((local IP:local port), (remote IP:remote port)).  The other end of the
+ *  connection's log entry can be found by swapping the components of the tuple
+ *  (and applying the appropriate host prefix as needed).
+ */
 function AuthClientConn(clientIdent, serverIdent, url) {
   this.clientIdent = clientIdent;
   this.serverIdent = serverIdent;
@@ -260,6 +267,14 @@ AuthClientConn.prototype = {
 };
 exports.AuthClientConn = AuthClientConn;
 
+/**
+ * The connection is locally uniquely named by the complex tuple of
+ *  ((local IP:local port), (remote IP:remote port)).  The other end of the
+ *  connection's log entry can be found by swapping the components of the tuple
+ *  (and applying the appropriate host prefix as needed).
+ *
+ *
+ */
 function AuthServerConn(serverIdent, rawConn) {
   this.log = LOGFAB.serverConn();
 
@@ -288,7 +303,9 @@ function serve404s(request, response) {
 }
 
 /**
- *
+ * The server is locally uniquely named by the IP address and port it is
+ *  listening on.  It is globally uniquely named by prefixing the host
+ *  identifier (which is handled by the logging layer).
  */
 function AuthorizingServer() {
   this._endpoints = {};
@@ -376,6 +393,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       appState: true,
     },
     events: {
+      connected: {},
       send: {type: true},
       receive: {type: true},
       close: {},

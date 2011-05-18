@@ -94,12 +94,12 @@ var TestServerDef = {
 };
 
 TD.commonCase('working loopback authconn connection', function(T) {
-  // The connections, somewhat incorrectly named (lacking 'conn')
-  var eClientConn = T.entity('clientConn'), clientConn;
-  var eServerConn = T.entity('serverConn'), serverConn;
-  var eServer = T.entity('server'), server;
+  var eClientConn = T.entity('clientConn', 'C'), clientConn;
+  var eServerConn = T.entity('serverConn', 'S'), serverConn;
+  var eServer = T.entity('server', 'L'), server;
 
-  T.action(eServer, 'performs setup and listens', function() {
+  T.setup(eServer, 'performs setup and listens', function() {
+    // (it is implied that eServer is created this step)
     eServer.expect_endpointRegistered('test/test');
     eServer.expect_listening();
 
@@ -108,10 +108,13 @@ TD.commonCase('working loopback authconn connection', function(T) {
     server.listen();
   });
 
-  T.action(eClientConn, 'connects to', eServerConn, function() {
+  T.action(eClientConn, 'connects to', eServer, 'resulting in', eServerConn,
+           function() {
+    // (it is implied that eServer and eServerConn are created this step)
     eClientConn.expect_connect();
     eClientConn.expect_connected();
     eServer.expect_endpointConn('test/test');
+    eServerConn.expect_connected();
 
     var url = "http://" + server.address + ":" + server.port + "/test/test";
     clientConn = new TestClientConnection(url);

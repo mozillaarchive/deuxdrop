@@ -39,13 +39,42 @@
  * Create a fully formed message for transport.
  *
  * All of the below data types are currently implemented using JSON, but will
- * be converted into thrift representations (or other efficiently packed
+ * be converted into avro representations (or other efficiently packed
  * representations) eventually.
+ *
+ * @typedef[CryptoConversationAnchor @dict[
+ *   @key[rootAttestation ConvAttestation]{
+ *     The current self-attestation that defines the conversation public key and
+ *     fanout server contact info.
+ *   }
+ *   @key[membershipChain AliasingAuthorization]{
+ *     The authorization that loops us into the conversation.  This will
+ *     likely include the `rootAttestation` as the root of the authorization
+ *     chain.  The reason for the potential redundancy is future-fodder
+ *     endpoint change support.
+ *
+ *     The authorization is aliasing which is to say that part of each link
+ *     provides a human readable alias which will be used under the SDSI model
+ *     (bob's jim's tom) as fallback if the key is not already known.
+ *   }
+ *   @key[convEnvKey PubEncSecretKey]{
+ *     The shared secret key used for the envelope, encrypted with one of our
+ *     active identity envelope public keys.
+ *   }
+ *   @key[convBodyKey PubEncSecretKey]{
+ *     The shared secret key used for the conversation, encrypted with one of
+ *     our active identity body public keys.  Names key hashes.
+ *   }
+ * ]]{
+ *
+ * }
  *
  * @typedef[MaildropTransitEnvelope @dict[
  *   @key[senderHash]{
  *   }
  *   @key[recipHash]{
+ *   }
+ *   @key[convHash]{
  *   }
  *   @key[nonce]{
  *     The nonce used for all encryption for this message and sub-parts.

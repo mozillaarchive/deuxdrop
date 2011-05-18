@@ -43,10 +43,12 @@
 
 define(
   [
+    'q',
     './log',
     'exports'
   ],
   function(
+    $Q,
     $log,
     exports
   ) {
@@ -61,13 +63,26 @@ TestStep.prototype = {
 
 /**
  * TestContexts are used to create entities and define the actions that define
- *  the steps of the test.
+ *  the steps of the test.  Each context corresponds with a specific run of a
+ *  test case.  In a test case with only 1 permutation, there will be just one
+ *  `TestContext`, but in a case with N permutations, there will be N
+ *  `TestContext`s.
+ *
+ * There is some wastefulness to this approach since all of the steps are
+ *  re-defined and the step functions get new closures, etc.  This is done in
+ *  the name of safety (no accidental object re-use) and consistency with the
+ *  Jasmine idiom.
  */
-function TestContext() {
+function TestContext(testCase, permutationIndex) {
+  this._testCase = testCase;
+  this._permIdx = permutationIndex;
   this._permutations = 1;
   this._steps = [];
 }
 TestContext.prototype = {
+  /**
+   *
+   */
   entity: function entity() {
   },
 
@@ -82,10 +97,12 @@ TestContext.prototype = {
    *  non-boring logging invocations occur for the entities involved in the
    *  step.
    *
-   * Entities defined in test-case that are not involved in the step/action
+   * Entities defined in a test-case that are not involved in the step/action
    *  accumulate their entries which will be considered in the next step they
    *  are involved in, save for any entries filtered to be boring during that
-   *  step.
+   *  step.  This is intended to allow actions that have side-effects that
+   *  affect multiple entities to be decomposed into specific pairwise
+   *  interactions for clarity.
    */
   action: function action() {
     var entities = [], descBits = [];
@@ -130,9 +147,13 @@ TestContext.prototype = {
    */
   cleanup: function() {
   },
+
+  __setup: function() {
+  },
 };
 
-function TestCase(kind, desc, setupFunc) {
+function TestCase(definer, kind, desc, setupFunc) {
+  this.definer = definer;
   this.kind = kind;
   this.desc = desc;
   this.setupFunc = setupFunc;
@@ -146,26 +167,96 @@ TestCase.prototype = {
    * Run the setup function to configure everything, then
    */
   runTest: function() {
-    this.context = new TestContext(this);
+    var deferred = $Q.defer();
 
+    this.context = new TestContext(this, 0);
+    this.context.__setup();
+
+    return deferred.promise;
   }
 };
 
-function TestDefiner(logfab) {
-  this._logfab = logfab;
+function TestDefiner(logfabs) {
+  this.__logfabs = Array.isArray(logfabs) ? logfabs : [logfabs];
+
+  this.__testCases = [];
 }
 TestDefiner.prototype = {
-  commonCase: function commonCase(desc, setupFunc) {
+  _newCase: function(kind, desc, setupFunc) {
+    var testCase = new TestCase(this, kind, desc, setupFunc);
+    this._testCases.push(testCase);
   },
 
+  /**
+   * Something that does not happen outside of a unit testing environment but
+   *  serves as a useful functional test.
+   */
+  artificialCase: function artificialCase(desc, setupFunc) {
+    this._newCase('artificial', desc, setupFunc);
+  },
+
+  /**
+   * Something realistic that is expected to happen a lot.
+   */
+  commonCase: function commonCase(desc, setupFunc) {
+    this._newCase('common', desc, setupFunc);
+  },
+
+  /**
+   * Something realistic that is expected to happen rarely.
+   */
   edgeCase: function edgeCase(desc, setupFunc) {
+    this._newCase('edge', desc, setupFunc);
   },
 };
 
-exports.defineTestsFor = function defineTestsFor(testModule, logfab) {
-  var localDefiner = new TestDefiner(logfab);
+var pendingDefiners = [];
 
+exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
+  var localDefiner = new TestDefiner(logfabs);
+  pendingDefiners.push(localDefiner);
   return localDefiner;
 };
+
+var pendingTestsDeferred = null;
+function runNextPendingTest() {
+
+};
+
+exports.runPendingTests = function runPendingTests() {
+  if (!pendingTestsDeferred) {
+    pendingTestsDeferred = $Q.defer();
+
+    runNextPendingTest();
+  }
+  return pendingTestsDeferred.promise;
+};
+
+var LOGFAB = $log.register(null, {
+  testDefiner: {
+    implClass: TestDefiner,
+    type: $log.TEST_DRIVER,
+    subtype: $log.TEST_GROUP,
+    asyncJobs: {
+      runTests: {},
+    },
+  },
+  testCase: {
+    implClass: TestCase,
+    type: $log.TEST_DRIVER,
+    subtype: $log.TEST_CASE,
+    asyncJobs: {
+      runPermutation: {},
+    },
+  },
+  testStep: {
+    implClass: TestStep,
+    type: $log.TEST_DRIVER,
+    subtype: $log.TEST_STEP,
+    asyncJobs: {
+      run: {},
+    },
+  },
+});
 
 }); // end define

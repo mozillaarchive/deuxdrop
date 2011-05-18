@@ -43,6 +43,42 @@
  * There is a need for raindrop-specific logging logic because names tend to
  *  be application specific things as well as the determination of what is
  *  interesting.
+ *
+ * @typedef[HierLogFrag @dict[
+ *   @key[loggerIdent String]{
+ *
+ *   }
+ *   @key[semanticIdent String]{
+ *   }
+ *   @key[uniqueName String]{
+ *     A unique identifier not previously used in the effective namespace
+ *     of the root HierLogFrag for this tree and all its descendents.
+ *   }
+ *   @key[born #:optional TimestampMS]{
+ *     Timestamp of when this logger was instantiated.
+ *   }
+ *   @key[died #:optional TimestampMS]{
+ *     Timestamp of when this logger was marked dead.
+ *   }
+ *   @key[entries @listof[LogEntry]]{
+ *     The log entries for this logger this time-slice.
+ *   }
+ *   @key[kids #:optional @listof[HierLogFrag]]{
+ *     Log fragments of loggers deemed to be conceptually children of the logger
+ *     that produced this logger.  For example, an HTTP server would have a
+ *     logger and its connection workers would be loggers that are children of
+ *     the server.
+ *   }
+ * ]]{
+ *   Loggers are organized into hierarchies 
+ * }
+ * @typedef[HierLogTimeSlice @dict[
+ *   @key[begin TimestampMS]
+ *   @key[end TimestampMS]
+ *   @key[logFrag HierLogFrag]
+ * ]]{
+ *
+ * }
  **/
 
 define(
@@ -92,10 +128,26 @@ var TestEntityProtoBase = {
    *  null.
    */
   __waitForExpectations: function() {
+    if (!this._expectations.length)
+      return null;
+
+    if (!this._deferred)
+      this._deferred = $Q.defer();
+    return this._deferred.promise;
   },
 
   __resetExpectations: function() {
+    this._iNextExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
+    this._deferred = null;
+  },
+
+  /**
+   * Invoked by the test-logger associated with this entity to let us know that
+   *  something has been logged so that we can perform an expectation check and
+   *  fulfill our promise/reject our promise, as appropriate.
+   */
+  __loggerFired: function() {
   },
 
   assertExpectations: function() {
@@ -141,6 +193,20 @@ LoggestClassMaker.prototype = {
     this._definedAs[name] = type;
   },
 
+  /**
+   * Wrap a logProto method to be a testLogProto invocation that generates a
+   *  constraint checking thing.
+   */
+  _wrapLogProtoForTest: function(name) {
+    var logFunc = this.logProto[name];
+    this.testLogProto = function() {
+      logFunc.apply(this, arguments);
+      var testEntity = this._entity;
+      if (testEntity)
+        testEntity.__loggerFired();
+    };
+  },
+
   addStateVar: function(name) {
     this._define(name, 'state');
 
@@ -150,10 +216,13 @@ LoggestClassMaker.prototype = {
       this._entries.push([name, val, Date.now()]);
     };
 
-    this.testLogProto[name] =
+    this._wrapLogProtoForTest(name);
 
     this.testEntityProto['expect_' + name] = function(val) {
       this._expectations.push([name, val]);
+    };
+    this.testEntityProto['_verify_' + name] = function(tupe, entry) {
+      return tupe[1] === entry[1];
     };
   },
   addEvent: function(name, args) {
@@ -184,6 +253,14 @@ LoggestClassMaker.prototype = {
         exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+    };
+    this.testEntityProto['_verify_' + name] = function(tupe, entry) {
+      // only check arguments we had expectations for.
+      for (var iArg = 1; iArg < tupe.length; iArg++) {
+        if (tupe[iArg] !== entry[iArg])
+          return false;
+      }
+      return true;
     };
   },
   addCall: function(name, logArgs) {
@@ -328,5 +405,10 @@ exports.register = function register(mod, defs) {
 exports.CONNECTION = 'connection';
 exports.SERVER = 'server';
 exports.CLIENT = 'client';
+
+exports.TEST_DRIVER = 'testdriver';
+exports.TEST_GROUP = 'testgroup';
+exports.TEST_CASE = 'testcase';
+exports.TEST_STEP = 'teststep';
 
 }); // end define

@@ -47,4 +47,70 @@ define(
     exports
   ) {
 
+var ClientTestEntityMixins = {
+  signupWith: function(server) {
+    this._usingServer = server;
+  },
+
+  setup_useServer: function setup_useServer(server) {
+    this.T.convenienceSetup([this, 'creates account with', server], function() {
+      this.signupWith(server);
+    });
+  },
+
+  /**
+   * Create mutual friendship relationships between 'this' client and the
+   *  provided clients.
+   */
+  setup_superFriends: function(friends) {
+    var tofriend = friends.concat([this]);
+    this.T.convenienceSetup(
+      ['setup mutual friend relationships among:'].concat(tofriend),
+    function() {
+      // (the destructive mutation is fine)
+      while (tofriend.length >= 2) {
+        var focal = tofriend.pop();
+        for (var i = 0; i < tofriend.length; i++) {
+          var other = tofriend[i];
+          focal.addContact(other);
+          focal._usingServer.expect_XXX();
+          other.addContact(focal);
+        }
+      }
+    });
+  },
+
+  writeMessage: function(conv, outMsgThing, recipients) {
+  },
+
+  replyToMessageWith: function(msgReplyingTo, outMsgThing) {
+  },
+
+  expect_receiveMessages: function() {
+  },
+
+  inviteToConv: function(recipient, outConvThing) {
+    throw new Error("XXX NOT IMPLEMENTED");
+  },
+};
+
+var ComboTestEntityMixins = {
+};
+
+var MessageThingMixins = {
+  expect_receivedBy: function() {
+  },
+};
+
+exports.TESTHELPER = {
+  entityMixins: {
+    client: ClientTestEntityMixins,
+    combo: ComboTestEntityMixins,
+  },
+
+  thingMixins: {
+    message: MessageThingMixins,
+  },
+};
+
 }); // end define
