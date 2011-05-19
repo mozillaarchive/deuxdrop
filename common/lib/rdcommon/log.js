@@ -285,7 +285,7 @@ LoggestClassMaker.prototype = {
     this._define(name, 'latchedState');
     this.hasLatchedState = true;
 
-    test.testLogProto[name] = this.logProto[name] = this.dummyProto[name] =
+    this.testLogProto[name] = this.logProto[name] = this.dummyProto[name] =
         function(val) {
       this[name] = val;
     };
@@ -472,6 +472,7 @@ LoggestClassMaker.prototype = {
       }
       return logger;
     };
+    this.moduleFab[this.name] = loggerDecisionFab;
   },
 };
 

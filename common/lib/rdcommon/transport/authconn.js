@@ -135,8 +135,7 @@ define(
     'http',
     'q',
     'nacl',
-    'websocket/WebSocketClient',
-    'websocket/WebSocketServer',
+    'websocket',
     'rdcommon/log',
     'module',
     'exports'
@@ -145,8 +144,7 @@ define(
     $http,
     $Q,
     $nacl,
-    WebSocketClient,
-    WebSocketServer,
+    $ws,
     $log,
     $module,
     exports
@@ -283,7 +281,7 @@ function AuthClientConn(clientIdent, serverIdent, url) {
 
   this._initCommon('connect');
 
-  var wsc = this._wsClient = new WebSocketClient();
+  var wsc = this._wsClient = new $ws.WebSocketClient();
   wsc.on('error', this._onConnectError.bind(this));
   wsc.on('connect', this._onConnected.bind(this));
 
@@ -355,7 +353,7 @@ function AuthorizingServer() {
   // That which is not a websocket shall be severely disappointed currently.
   var httpServer = this._httpServer = http.createServer(serve404s);
 
-  var server = this._wsServer = new WebSocketServer();
+  var server = this._wsServer = new $ws.WebSocketServer();
   server.on('request', this._onRequest.bind(this));
 
   this.address = null;

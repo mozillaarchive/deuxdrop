@@ -229,7 +229,7 @@ function TestDefiner(logfabs) {
 TestDefiner.prototype = {
   _newCase: function(kind, desc, setupFunc) {
     var testCase = new TestCase(this, kind, desc, setupFunc);
-    this._testCases.push(testCase);
+    this.__testCases.push(testCase);
   },
 
   /**
