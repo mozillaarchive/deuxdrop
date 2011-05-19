@@ -39,6 +39,16 @@
  * Raindrop-specific testing setup, friends with log.js; right now holds parts
  *  of the 'loggest' implementation involving only testing (and which should
  *  end up in their own project initially.)
+ *
+ * All classes in this file are definition-support and data structures only;
+ *  they do not directly run the tests themselves, although some data-structures
+ *  are only populated as a byproduct of function execution.  Namely,
+ *  TestContexts are populated and fed to `TestCase` functions during the
+ *  execution phase, producing test step definitions as a byproduct.  The
+ *  actual run-logic lives in `testdriver.js`.
+ *
+ * Note, however, that the classes in this file do hold the loggers associated
+ *  with their runtime execution.
  **/
 
 define(
@@ -84,6 +94,8 @@ function TestContext(testCase, permutationIndex) {
   this._permIdx = permutationIndex;
   this._permutations = 1;
   this._steps = [];
+
+  this._log = LOGFAB.testCase(testCase.definer._log);
 
   this._actors = [];
 }
@@ -194,22 +206,6 @@ TestContext.prototype = {
   cleanup: function() {
     return this._newStep('cleanup', arguments);
   },
-
-  /**
-   * Initiate the execution of the test step, generating a promise.
-   */
-  __run: function() {
-    var self = this, iStep = 0, deferred = $Q.defer();
-    function runNextStep() {
-      if (iStep >= self._steps.length) {
-        deferred.resolve();
-      }
-
-      var step = self._steps[iStep++];
-
-    }
-
-  },
 };
 
 function TestCase(definer, kind, desc, setupFunc) {
@@ -218,13 +214,9 @@ function TestCase(definer, kind, desc, setupFunc) {
   this.desc = desc;
   this.setupFunc = setupFunc;
 
-  this._log = LOGFAB.testCase(definer._log);
-
   this.context = null;
 }
 TestCase.prototype = {
-  _setupTest: function() {
-  },
 };
 
 function TestDefiner(logfabs) {

@@ -129,7 +129,8 @@ var TestActorProtoBase = {
    *  the logger is created.
    */
   __prepForTestStep: function(testRuntimeContext) {
-
+    if (!this._logger)
+      testRuntimeContext.reportPendingActor(this);
   },
 
   /**
@@ -138,7 +139,7 @@ var TestActorProtoBase = {
    *  null.
    */
   __waitForExpectations: function() {
-    if (this._iExpectation >= this._expctations.length)
+    if (this._iExpectation >= this._expectations.length)
       return this._expectationsMet;
 
     if (!this._deferred)
@@ -170,7 +171,7 @@ var TestActorProtoBase = {
           !this['_verify_' + expy[0]](expy, entry)) {
         this._expectationsMet = false;
         if (this._deferred)
-          this._deferred.reject(expy, entry);
+          this._deferred.reject([expy, entry]);
         return;
       }
     }
@@ -197,14 +198,27 @@ function LoggestClassMaker(moduleFab, name) {
   this.name = name;
 
   // steady-state minimal logging logger (we always want statistics!)
-  this.dummyProto = {__proto__: DummyLogProtoBase};
+  this.dummyProto = {
+    __proto__: DummyLogProtoBase,
+    __defName: name,
+  };
   // full-logging logger
-  this.logProto = {__proto__: LogProtoBase};
+  this.logProto = {
+    __proto__: LogProtoBase,
+    __defName: name,
+  };
   // testing full-logging logger
-  this.testLogProto = {__proto__: TestLogProtoBase};
+  this.testLogProto = {
+    __proto__: TestLogProtoBase,
+    __defName: name,
+  };
   // testing actor for expectations, etc.
-  this.testActorProto = {__proto__: TestActorProtoBase};
+  this.testActorProto = {
+    __proto__: TestActorProtoBase,
+    __defName: name,
+  };
 
+  /** Maps helper names to their type for collision reporting by `_define`. */
   this._definedAs = {};
 }
 LoggestClassMaker.prototype = {
@@ -430,27 +444,30 @@ LoggestClassMaker.prototype = {
      * Determine what type of logger to create, whether to tell other things
      *  in the system about it, etc.
      */
-    var loggerDecisionFab = function loggerDecisionFab(parentConn) {
+    var loggerDecisionFab = function loggerDecisionFab(parentLogger) {
       var logger, tester;
+      // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
         logger = new testerCon();
-        tester.reportNewLogger(logger);
+        parentLogger = tester.reportNewLogger(logger, parentLogger);
       }
+      // - Logging
       else if (moduleFab._generalLog || testerCon._generalLog) {
         logger = new loggerCon();
       }
+      // - Statistics Only
       else {
         return new dummyCon();
       }
 
-      if (parentConn) {
-        if (parentConn._kids === undefined) {
+      if (parentLogger) {
+        if (parentLogger._kids === undefined) {
         }
-        else if (parentConn._kids === null) {
-          parentConn._kids = [logger];
+        else if (parentLogger._kids === null) {
+          parentLogger._kids = [logger];
         }
         else {
-          parentConn._kids.push(logger);
+          parentLogger._kids.push(logger);
         }
       }
       return logger;

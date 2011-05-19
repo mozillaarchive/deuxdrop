@@ -37,26 +37,24 @@
 
 require(
   {
-    baseUrl: "../../../",
+    baseUrl: "../../",
     packages: [
     ],
     paths: {
       rdservers: "servers/lib/rdservers",
       rdcommon: "common/lib/rdcommon",
-      rdstests: "servers/tests",
-      rdctests: "common/tests",
+      rdstests: "servers/test",
+      rdctests: "common/test",
     },
   },
   [
     "nomnom",
     "q",
-    "arbpl/hackjobs",
     "require"
   ],
   function(
     $nomnom,
     $Q,
-    $hackjobs,
     $require
   ) {
 var when = $Q.when;

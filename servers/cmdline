@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd lib
+node r.js rdservers/cmdline.js "$@"

@@ -1,3 +1,6 @@
 [submodule "deploy/puppet/module-bundles/puppet-npm"]
 	path = deploy/puppet/module-bundles/puppet-npm
 	url = git://github.com/sheknows/puppet-npm.git
+[submodule "servers/node_modules/nacl"]
+	path = servers/node_modules/nacl
+	url = git://github.com/asutherland/node-djb-nacl.git
