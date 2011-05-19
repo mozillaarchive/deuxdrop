@@ -53,16 +53,22 @@ define(
     exports
   ) {
 
-function TestStep(descBits, entities, testFunc) {
+/**
+ * Data-record class for test steps; no built-in logic.
+ */
+function TestStep(_log, kind, descBits, actors, testFunc) {
+  this.kind = kind;
   this.descBits = descBits;
-  this.entities = entities;
+  this.actors = actors;
   this.testFunc = testFunc;
+
+  this.log = LOGFAB.testStep(_log);
 }
 TestStep.prototype = {
 };
 
 /**
- * TestContexts are used to create entities and define the actions that define
+ * TestContexts are used to create actors and define the actions that define
  *  the steps of the test.  Each context corresponds with a specific run of a
  *  test case.  In a test case with only 1 permutation, there will be just one
  *  `TestContext`, but in a case with N permutations, there will be N
@@ -74,51 +80,70 @@ TestStep.prototype = {
  *  Jasmine idiom.
  */
 function TestContext(testCase, permutationIndex) {
-  this._testCase = testCase;
+  this.__testCase = testCase;
   this._permIdx = permutationIndex;
   this._permutations = 1;
   this._steps = [];
+
+  this._actors = [];
 }
 TestContext.prototype = {
   /**
-   *
+   * A player in the test that does stuff; for example, a client or a server.
+   *  An actor correlates with one or more loggers,
    */
-  entity: function entity() {
+  actor: function actor(type, name) {
+    // -- instantiate
+  },
+
+  /**
+   * An conceptual object in the test, usually represented as relatively inert
+   *  data structures that the actors create/modify/etc.  Things do not have
+   *  associated loggers but are sufficiently notable that they will be named by
+   *  (test) loggers and their movement throughout a distributed system can be
+   *  derived.  A thing may have multiple names/representations throughout its
+   *  life cycle.  Much of the point of the thing abstraction is to allow us to
+   *  tie all those representations together.
+   */
+  thing: function thing(type, name) {
+  },
+
+  _newStep: function(kind, args) {
+    var actors = [], descBits = [];
+    // args[:-1] are actors/description intermixed, args[-1] is the testfunc
+    var iArg;
+    for (iArg = 0; iArg < args.length - 1; iArg++) {
+      var arg = args[iArg];
+      if (arg instanceof $log.TestEntityProtoBase)
+        actors.push(arg);
+      descBits.push(arg);
+    }
+    var testFunc = args[iArg];
+    var step = new TestStep(this._log, kind, descBits, actors, testFunc);
+    this._steps.push(step);
+    return step;
   },
 
   /**
    * Defines a test step/action.  Each action has a description that is made
-   *  up of strings and entities (defined via `entity`).  All entities
+   *  up of strings and actors (defined via `entity`).  All actors
    *  participating in/relevant to the test step must be named.  The last
    *  argument is always the test function to run to initiate the step/action.
    *
    * The step/action is marked complete when all of the expectations have been
    *  correctly satisfied.  The step fails and the test is aborted if unexpected
-   *  non-boring logging invocations occur for the entities involved in the
+   *  non-boring logging invocations occur for the actors involved in the
    *  step.
    *
-   * Entities defined in a test-case that are not involved in the step/action
+   * Actors defined in a test-case that are not involved in the step/action
    *  accumulate their entries which will be considered in the next step they
    *  are involved in, save for any entries filtered to be boring during that
    *  step.  This is intended to allow actions that have side-effects that
-   *  affect multiple entities to be decomposed into specific pairwise
+   *  affect multiple actors to be decomposed into specific pairwise
    *  interactions for clarity.
    */
   action: function action() {
-    var entities = [], descBits = [];
-    // args[:-1] are entities/description intermixed, args[-1] is the testfunc
-    var iArg;
-    for (iArg = 0; iArg < arguments.length - 1; iArg++) {
-      var arg = arguments[iArg];
-      if (arg instanceof $log.TestEntityProtoBase)
-        entities.push(arg);
-      descBits.push(arg);
-    }
-    var testFunc = arguments[iArg];
-
-    var step = new TestStep(descBits, entities, testFunc);
-    this._steps.push(step);
-    return step;
+    return this._newStep('action', arguments);
   },
 
   /**
@@ -143,12 +168,47 @@ TestContext.prototype = {
   },
 
   /**
-   * Define a cleanup
+   * Define a setup test step.  While operationally the same as an action,
+   *  setup steps are treated specially for reporting and aggregation purposes.
+   *  Setup steps have less focus in the reporting UI, and a test that fails
+   *  during its setup steps is treated differently than a test that fails
+   *  during an action step.  The theory is that you should look at the tests
+   *  that are failing during an action step before tests failing during a setup
+   *  step because the setup failures are likely an outgrowth of the action
+   *  failures of lower level tests.
    */
-  cleanup: function() {
+  setup: function() {
+    return this._newStep('setup', arguments);
   },
 
-  __setup: function() {
+  /**
+   * Define a cleanup test step to perform any shutdown procedures to cleanup
+   *  after a test that garbage collection would not take care of on its own.
+   *  These steps should usually be automatically generated by testhelper
+   *  logic for entities to match automatically generated setup steps.  They
+   *  should also preferably be synchronous/fast.
+   *
+   * In the event that any step in a test fails, we still attempt to run all of
+   *  the cleanup steps, even though they may also experience failures.
+   */
+  cleanup: function() {
+    return this._newStep('cleanup', arguments);
+  },
+
+  /**
+   * Initiate the execution of the test step, generating a promise.
+   */
+  __run: function() {
+    var self = this, iStep = 0, deferred = $Q.defer();
+    function runNextStep() {
+      if (iStep >= self._steps.length) {
+        deferred.resolve();
+      }
+
+      var step = self._steps[iStep++];
+
+    }
+
   },
 };
 
@@ -158,26 +218,19 @@ function TestCase(definer, kind, desc, setupFunc) {
   this.desc = desc;
   this.setupFunc = setupFunc;
 
+  this._log = LOGFAB.testCase(definer._log);
+
   this.context = null;
 }
 TestCase.prototype = {
   _setupTest: function() {
   },
-  /**
-   * Run the setup function to configure everything, then
-   */
-  runTest: function() {
-    var deferred = $Q.defer();
-
-    this.context = new TestContext(this, 0);
-    this.context.__setup();
-
-    return deferred.promise;
-  }
 };
 
 function TestDefiner(logfabs) {
   this.__logfabs = Array.isArray(logfabs) ? logfabs : [logfabs];
+
+  this._log = LOGFAB.testDefiner(null);
 
   this.__testCases = [];
 }
@@ -210,26 +263,8 @@ TestDefiner.prototype = {
   },
 };
 
-var pendingDefiners = [];
-
 exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
-  var localDefiner = new TestDefiner(logfabs);
-  pendingDefiners.push(localDefiner);
-  return localDefiner;
-};
-
-var pendingTestsDeferred = null;
-function runNextPendingTest() {
-
-};
-
-exports.runPendingTests = function runPendingTests() {
-  if (!pendingTestsDeferred) {
-    pendingTestsDeferred = $Q.defer();
-
-    runNextPendingTest();
-  }
-  return pendingTestsDeferred.promise;
+  return new TestDefiner(logfabs);
 };
 
 var LOGFAB = $log.register(null, {
@@ -240,6 +275,9 @@ var LOGFAB = $log.register(null, {
     asyncJobs: {
       runTests: {},
     },
+    latchState: {
+      result: false,
+    }
   },
   testCase: {
     implClass: TestCase,
@@ -248,14 +286,24 @@ var LOGFAB = $log.register(null, {
     asyncJobs: {
       runPermutation: {},
     },
+    latchState: {
+      result: false,
+    }
   },
   testStep: {
     implClass: TestStep,
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_STEP,
+
     asyncJobs: {
       run: {},
     },
+    call: {
+      stepFunc: {},
+    },
+    latchState: {
+      result: false,
+    }
   },
 });
 

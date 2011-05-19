@@ -43,6 +43,8 @@ require(
     paths: {
       rdservers: "servers/lib/rdservers",
       rdcommon: "common/lib/rdcommon",
+      rdstests: "servers/tests",
+      rdctests: "common/tests",
     },
   },
   [
@@ -115,6 +117,14 @@ parser.command('test')
   .opts({
   })
   .callback(function(options) {
+    // XXX !!! obviously, we want this to find tests, not have them be hardcoded
+    $require(['rdcommon/testdriver', 'rdstests/auth-conn-loopback'],
+             function($driver, $tmod) {
+      when($driver.runTestsFromModule($tmod),
+        function(result) {
+          console.log(JSON.stringify(result, null, 2));
+        });
+    });
   });
 
 // We need to do our own argv slicing to compensate for RequireJS' r.js

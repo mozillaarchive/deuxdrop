@@ -53,7 +53,7 @@ define(
     exports
   ) {
 
-var TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
+var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
 
 function TestClientConnection() {
   this._wallowDeferred = null;
@@ -94,9 +94,9 @@ var TestServerDef = {
 };
 
 TD.commonCase('working loopback authconn connection', function(T) {
-  var eClientConn = T.entity('clientConn', 'C'), clientConn;
-  var eServerConn = T.entity('serverConn', 'S'), serverConn;
-  var eServer = T.entity('server', 'L'), server;
+  var eClientConn = T.actor('clientConn', 'C'), clientConn;
+  var eServerConn = T.actor('serverConn', 'S'), serverConn;
+  var eServer = T.actor('server', 'L'), server;
 
   T.setup(eServer, 'performs setup and listens', function() {
     // (it is implied that eServer is created this step)
@@ -152,20 +152,22 @@ TD.commonCase('working loopback authconn connection', function(T) {
     clientConn.stopWallowing();
   });
 
+  // XXX no permutations yet; baby steps!
+  /*
   T.permutation('who closes the connection', [
     T.action(eServerConn, 'closes the connection on', eClientConn, function() {
       eServerConn.expect_close();
       eClientConn.expect_close();
 
       serverConn.close();
-    }),
+    }),*/
     T.action(eClientConn, 'closes the connection on', eServerConn, function() {
       eClientConn.expect_close();
       eServerConn.expect_close();
 
       clientConn.close();
-    }),
-  ]);
+    })/*,
+  ])*/;
 
   T.cleanup('shutdown', eServerConn, function() {
     server.shutdown();

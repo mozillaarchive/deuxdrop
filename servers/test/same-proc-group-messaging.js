@@ -132,13 +132,13 @@ define(
 
 TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   // clients are test helper entities that have convenience functions.
-  var client_a = T.entity('client', 'A'),
-      client_b = T.entity('client', 'B'),
-      client_c = T.entity('client', 'C');
+  var client_a = T.actor('client', 'A'),
+      client_b = T.actor('client', 'B'),
+      client_c = T.actor('client', 'C');
   // servers have no helpers because they never originate actions.
-  var server_x = T.entity('combo', 'X'),
-      server_y = T.entity('combo', 'Y'),
-      server_z = T.entity('combo', 'Z');
+  var server_x = T.actor('combo', 'X'),
+      server_y = T.actor('combo', 'Y'),
+      server_z = T.actor('combo', 'Z');
   // (all of the above entities have their own initialization steps)
   // the messages in play...
   var conv = T.thing('conversation', 'conv'),

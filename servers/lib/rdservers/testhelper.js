@@ -103,7 +103,7 @@ var MessageThingMixins = {
 };
 
 exports.TESTHELPER = {
-  entityMixins: {
+  actorMixins: {
     client: ClientTestEntityMixins,
     combo: ComboTestEntityMixins,
   },

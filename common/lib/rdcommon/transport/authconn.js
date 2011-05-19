@@ -37,7 +37,8 @@
 
 /**
  * Authenticated/encrypted communication using nacl on top of non-TLS
- *  websockets.  The rationale is:
+ *  websockets and cribs the broad strokes used by CurveCP
+ *  (http://curvecp.org/packets.html). The rationale is:
  *
  * @itemize[
  *   @item{
@@ -58,35 +59,72 @@
  *     makes it easier to perform traffic analysis, we currently aren't fancy
  *     enough to meaningfully obscure what's going on under the covers anyways.
  *   }
+ *   @item{
+ *     CurveCP knows what it is doing (and uses the same crypto), but it is also
+ *     a TCP-replacement.  Since we are built on top of TCP, we do not need the
+ *     TCP-replacement bits.  We are maintaining the 3-message setup idiom
+ *     even though we might be able to get away with 2 (because we don't need
+ *     the server cookie protection) because it avoids ever exposing a message
+ *     encrypted from or to the client's public key on the wire.  (The
+ *     authenticating voucher is passed in a box.)  I honestly have no idea
+ *     right now if this is an important property, but if someone told me that
+ *     you could infer something about the keys involved in such an operation,
+ *     I would not make a shocked-looking face, and so it seems reasonable to
+ *     keep for now.  Also, it allows us to confirm everything is good once
+ *     the 3rd message is received, whereas we would need to verify the
+ *     integrity of the first actual content message (which would be the 3rd
+ *     message) under a shortened idiom.
+ *
+ *     The main deviation on our part is that we currently transmit fully random
+ *     24-byte nonces rather than 16-byte nonces with an implied prefix.  We do
+ *     this because we're not confident we can/ don't want to have to maintain
+ *     proper counter behaviour at this time.
+ *   }
  * ]
  *
- * The general
+ * The general protocol is below, using the CurveCP packet doc syntax:
  * @itemized[
  *   @item{
  *     We establish a websockets connection with a specific URL endpoint.
  *   }
  *   @item{
- *     The client sends a packet identifying itself (key hash), who it
- *     thinks it is talking to (key hash), and NONCELENGTH random bytes.
+ *     The client generates a new, temporary keypair.  The client sends: [S, C',
+ *     random 24-byte nonce, Box[64-bytes of zeroes](C'->S)].
+ *
+ *     The important thing here is that the client is not identifying itself in
+ *     the clear, although it is naming the server identity which we assume to
+ *     be known to any eavesdroppers anyways.  (In CurveCP the server identity
+ *     is implied by the address and endpoint meta-data.  We might move to
+ *     conflating the endpoint with the key at some point, too.)
  *   }
  *   @item{
- *     The server either closes the connection because the client is misguided,
- *     or sends a packet with NONCELENGTH random bytes.
+ *     The server either closes the connection OR it generates its own
+ *     temporary keypair and responds with responds with [random 24-byte nonce,
+ *     Box[S'](S->C')].
  *   }
  *   @item{
- *     The client boxes a randomly generated secret key using a nonce made up
- *     of the first-half of each of their nonce bytes (client + server).
+ *     The client either closes the connection OR it responds with
+ *     [Box[C, Box[C'](C->S)](C'->S')].  The nonce used for the message is a
+ *     'C' character followed by binary zero bytes, with each subsequent client
+ *     message incrementing the binary bytes in a little-endian fashion (aka
+ *     from the left).
+ *
+ *     Note that the nonce usage differs from CurveCP here.  We prefix a
+ *     letter because nonce-requirements demand different nonces whenever
+ *     the same set of keys is involved, regardless of the "direction" of the
+ *     message between the involved keys.  We don't need to disclose the nonces
+ *     in the plaintext because we are already built on top of a reliable
+ *     transport and so there is no need to re-order.  We don't need to
+ *     support arbitrary increments because there is no clear benefit to
+ *     doing so.  Because we have a much larger nonce-space (23 bytes versus 8),
+ *     we accordingly do not need to require that the connection be closed
+ *     when the nonce counter saturates; instead, we require that the universe
+ *     ends before this situation arises.
  *   }
  *   @item{
- *     The server unboxes the secret key, thereby authenticating the client
- *     since nacl boxes have authentication backed in.
- *   }
- *   @item{
- *     Both the client and server use the secret key for transmission.  The
- *     server uses a nonce made up of the second half of the nonce bytes from
- *     the server and client (in that order).  The client uses a nonce made up
- *     from the second half of the nonce bytes from the client and server (in
- *     that order).
+ *     All server messages from this point on look the same.
+ *     [Box[Message](S'->C')] using a strictly-incrementing little-endian
+ *     binary number starting from 0 and prefixed by a 'S' character.
  *   }
  * ]
  *
@@ -160,20 +198,24 @@ var AuthClientCommon = {
       msg = JSON.parse(wsmsg.utf8Data);
     }
     else {
-      throw new Error('AuthConn currently should not use binary frames');
+      this.log.badProto();
+      this._close();
+      return;
     }
 
     this.log.receive(msg.type, msg);
 
     if (this._pendingPromise) {
-      if (this._queuedMessages == null)
+      if (this._queuedMessages == null) {
         this._queuedMessages = [msg];
+      }
       else if (this._queuedMessages.length >= MAX_QUEUED_MESSAGES) {
         this.log.queueBacklogExceeded();
         this.close();
       }
-      else
+      else {
         this._queuedMessages.push(msg);
+      }
     }
     else {
       this._handleMessage(msg);
@@ -254,13 +296,13 @@ AuthClientConn.prototype = {
   },
   _onConnected: function(conn) {
     this._connected(conn);
-    this.log.connState((this.state = 'authServerNonce'));
+    this.log.connState((this.state = 'authServerKey'));
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // State Message Handlers
 
-  _msg_authServerNonce_nonce: function(msg) {
+  _msg_authServerKey_key: function(msg) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -278,7 +320,7 @@ exports.AuthClientConn = AuthClientConn;
 function AuthServerConn(serverIdent, rawConn) {
   this.log = LOGFAB.serverConn();
 
-  this._initCommon('authClientIdent');
+  this._initCommon('authClientKey');
   this._connected(rawConn);
 }
 AuthServerConn.prototype = {
@@ -287,10 +329,10 @@ AuthServerConn.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // State Message Handlers
 
-  _msg_authClientIdent_clientIdent: function(msg) {
+  _msg_authClientKey_key: function(msg) {
   },
 
-  _msg_authBoxedSecret_boxedSecret: function(msg) {
+  _msg_authClientVouch_vouch: function(msg) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -380,6 +422,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       handleMsg: {type: true},
     },
     errors: {
+      badProto: {},
       badMessage: {type: true},
       queueBacklogExceeded: {},
     },
@@ -402,6 +445,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       handleMsg: {type: true},
     },
     errors: {
+      badProto: {},
       badMessage: {type: true},
       queueBacklogExceeded: {},
       handlerFailure: {err: true},
