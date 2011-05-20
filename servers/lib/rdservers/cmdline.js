@@ -115,14 +115,20 @@ parser.command('test')
   .opts({
   })
   .callback(function(options) {
+    process.on('exit', function(code) {
+      debugger;
+      console.log("EXIT EVENT", code);
+    });
     // XXX !!! obviously, we want this to find tests, not have them be hardcoded
     $require(['rdcommon/testdriver', 'rdstests/auth-conn-loopback'],
              function($driver, $tmod) {
       debugger;
       when($driver.runTestsFromModule($tmod),
         function(result) {
-          console.log(JSON.stringify(result, null, 2));
+console.log("test run complete per promise");
+          $driver.dumpLogResultsToConsole(result);
         });
+console.log("cmdline callback complete");
     });
   });
 

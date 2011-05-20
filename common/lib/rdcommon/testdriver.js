@@ -287,14 +287,37 @@ TestRunner.prototype = {
       if (iTestCase >= definer.__testCases.length) {
         definer._log.run_end();
         deferred.resolve(definer._log);
+
+        process.removeEventListener('exit', earlyBailHandler);
         return;
       }
       var testCase = definer.__testCases[iTestCase++];
       when(self.runTestCase(testCase), runNextTestCase);
     }
     runNextTestCase();
+
+
+    // node.js will automatically terminate when the event loop says there is
+    //  nothing left to do.  We register a listener to detect this and promote
+    //  it to a last-dithc failure case.  Note that this is not a recoverable
+    //  state; there will be no more event loop ticks in an auto-termination
+    //  and so we can't depend on promises, etc.  Buffers will be flushed,
+    //  however.
+    function earlyBailHandler() {
+      console.error("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
+                    "DUMPING LOG.");
+      exports.dumpLogResultsToConsole(definer._log);
+    }
+    process.once('exit', earlyBailHandler);
+
     return deferred.promise;
   },
+};
+
+exports.dumpLogResultsToConsole = function(logger) {
+  console.log("##### LOGGEST-TEST-RUN-BEGIN #####");
+  console.log(JSON.stringify(logger, null, 2));
+  console.log("##### LOGGEST-TEST-RUN-END #####");
 };
 
 exports.runTestsFromModule = function runTestsFromModule(tmod) {
