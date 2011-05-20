@@ -42,10 +42,12 @@
 define(
   [
     'q', 'q-util',
+    './testcontext',
     'exports'
   ],
   function(
     $Q, $Qutil,
+    $testcontext,
     exports
   ) {
 var when = $Q.when, whenAll = $Q.whenAll;
@@ -219,7 +221,9 @@ TestRunner.prototype = {
     var deferred = $Q.defer(), self = this;
 
     // -- create / setup the context
-    var defContext = new TestContext(testCase, 0);
+    testCase.log.run_begin();
+    var defContext = new $testcontext.TestContext(testCase, 0);
+    defContext._log.run_begin();
 
     // - push the context's logger on the runtime logging stack
     // (We want all new logged objects to be associated with the context since
@@ -229,6 +233,15 @@ TestRunner.prototype = {
     //  the hierarchy would be extremely confusing.)
     self._runtimeContext.pushLogger(defContext._log);
 
+    // - execute the test-case definition function with the context
+    var rval = defContext._log.setupFunc({}, testCase.setupFunc, defContext);
+    if (rval instanceof Error) {
+      // in the event we threw during the case setup phase, it's a failure.
+      defContext._log.result('fail');
+      testCase.log.result('fail');
+      return false;
+    }
+
     // -- process the steps
     // In event of a setup/action failure, change to only running cleanup steps.
     var allPassed = true, iStep = 0;
@@ -236,23 +249,27 @@ TestRunner.prototype = {
       if (!passed)
         allPassed = false;
       // -- done case
-      if (iStep >= defContext._steps.length) {
+      if (iStep >= defContext.__steps.length) {
         // - pop the test-case logger from the logging context stack
         self._runtimeContext.popLogger(defContext._log);
 
         // - resolve!
+        defContext._log.result(allPassed ? 'pass' : 'fail');
+        defContext._log.run_end();
+        testCase.log.result(allPassed ? 'pass' : 'fail');
+        testCase.log.run_end();
         deferred.resolve(allPassed);
       }
 
       // -- yet another step case
-      var step = defContext._steps[iStep++];
+      var step = defContext.__steps[iStep++];
       var runIt = allPassed || (step.kind === 'cleanup');
       if (runIt)
         when(self.runTestStep(step), runNextStep);
       else // for stack simplicity, run the skip in a when, but not required.
         when(self.skipTestStep(step), runNextStep);
     }
-    runNextStep();
+    runNextStep(true);
 
     return deferred.promise;
   },
@@ -264,12 +281,15 @@ TestRunner.prototype = {
   runAll: function() {
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
+    definer._log.run_begin();
     function runNextTestCase() {
-      if (iTestCase >= definer._testCases.length) {
-        deferred.resolve();
+      console.log("runNextTestCase", iTestCase, definer.__testCases.length);
+      if (iTestCase >= definer.__testCases.length) {
+        definer._log.run_end();
+        deferred.resolve(definer._log);
         return;
       }
-      var testCase = definer._testCases[iTestCase++];
+      var testCase = definer.__testCases[iTestCase++];
       when(self.runTestCase(testCase), runNextTestCase);
     }
     runNextTestCase();

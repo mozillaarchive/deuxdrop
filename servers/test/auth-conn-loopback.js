@@ -94,6 +94,7 @@ var TestServerDef = {
 };
 
 TD.commonCase('working loopback authconn connection', function(T) {
+console.log("running loopback test context def thing");
   var eClientConn = T.actor('clientConn', 'C'), clientConn;
   var eServerConn = T.actor('serverConn', 'S'), serverConn;
   var eServer = T.actor('server', 'L'), server;
@@ -170,7 +171,10 @@ TD.commonCase('working loopback authconn connection', function(T) {
   ])*/;
 
   T.cleanup('shutdown', eServerConn, function() {
-    server.shutdown();
+    if (server) {
+      server.shutdown();
+      server = null;
+    }
   });
 });
 

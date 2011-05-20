@@ -106,6 +106,16 @@ var DummyLogProtoBase = {
  *  can capture private data but which should accordingly be test data.
  */
 var LogProtoBase = {
+  toJSON: function() {
+    return {
+      loggerIdent: this.__defName,
+      semanticIdent: this._ident,
+      born: this._born,
+      events: this._eventMap,
+      entries: this._entries,
+      kids: this._kids
+    };
+  },
 };
 
 /**
@@ -299,11 +309,11 @@ LoggestClassMaker.prototype = {
     }
 
     this.dummyProto[name] = function() {
-      this._eventMap[name]++;
+      this._eventMap[name] = (this._eventMap[name] || 0) + 1;
     };
 
     this.logProto[name] = function() {
-      this._eventMap[name]++;
+      this._eventMap[name] = (this._eventMap[name] || 0) + 1;
       var entry = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         entry.push(arguments[iArg]);
@@ -328,6 +338,62 @@ LoggestClassMaker.prototype = {
       return true;
     };
   },
+  addAsyncJob: function(name, args) {
+    var name_begin = name + '_begin', name_end = name + '_end';
+    this.dummyProto[name_begin] = NOP;
+    this.dummyProto[name_end] = NOP;
+
+    var numArgs = 0;
+    for (var key in args) {
+      numArgs++;
+    }
+
+    this.logProto[name_begin] = function() {
+      this._eventMap[name_begin] = (this._eventMap[name_begin] || 0) + 1;
+      var entry = [name_begin];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        entry.push(arguments[iArg]);
+      }
+      entry.push(Date.now());
+      this._entries.push(entry);
+    };
+    this.logProto[name_end] = function() {
+      this._eventMap[name_end] = (this._eventMap[name_end] || 0) + 1;
+      var entry = [name_end];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        entry.push(arguments[iArg]);
+      }
+      entry.push(Date.now());
+      this._entries.push(entry);
+    };
+
+    this._wrapLogProtoForTest(name_begin);
+    this._wrapLogProtoForTest(name_end);
+
+    this.testActorProto['expect_' + name_begin] = function() {
+      var exp = [name_begin];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        exp.push(arguments[iArg]);
+      }
+      this._expectations.push(exp);
+    };
+    this.testActorProto['expect_' + name_end] = function() {
+      var exp = [name_end];
+      for (var iArg = 0; iArg < numArgs; iArg++) {
+        exp.push(arguments[iArg]);
+      }
+      this._expectations.push(exp);
+    };
+    this.testActorProto['_verify_' + name_begin] =
+        this.testActorProto['_verify_' + name_end] = function(tupe, entry) {
+      // only check arguments we had expectations for.
+      for (var iArg = 1; iArg < tupe.length; iArg++) {
+        if (tupe[iArg] !== entry[iArg])
+          return false;
+      }
+      return true;
+    };
+  },
   addCall: function(name, logArgs) {
     this._define(name, 'call');
 
@@ -339,12 +405,12 @@ LoggestClassMaker.prototype = {
     this.dummyProto[name] = function() {
       var rval;
       try {
-        rval = arguments[numLogArgs+1].apply(arguments[numLogArgs],
-                                       Array.slice.call(arguments, iArg+2));
+        rval = arguments[numLogArgs+1].apply(
+          arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
       }
       catch(ex) {
         // (call errors are events)
-        this._eventMap[name]++;
+        this._eventMap[name] = (this._eventMap[name] || 0) + 1;
         rval = ex;
       }
       return rval;
@@ -358,15 +424,17 @@ LoggestClassMaker.prototype = {
       }
       entry.push(Date.now());
       try {
-        rval = arguments[numLogArgs+1].apply(arguments[numLogArgs],
-                                       Array.slice.call(arguments, iArg+2));
+        rval = arguments[numLogArgs+1].apply(
+          arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
         entry.push(Date.now());
+        this._entries.push(entry);
       }
       catch(ex) {
         entry.push(Date.now());
         entry.push(ex);
+        this._entries.push(entry);
         // (call errors are events)
-        this._eventMap[name]++;
+        this._eventMap[name] = (this._eventMap[name] || 0) + 1;
         rval = ex;
       }
 
@@ -385,11 +453,11 @@ LoggestClassMaker.prototype = {
     this._define(name, 'error');
 
     this.dummyProto[name] = function() {
-      this._eventMap[name]++;
+      this._eventMap[name] = (this._eventMap[name] || 0) + 1;
     };
 
     this.logProto[name] = function() {
-      this._eventMap[name]++;
+      this._eventMap[name] = (this._eventMap[name] || 0) + 1;
       var entry = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         entry.push(arguments[iArg]);
@@ -415,16 +483,20 @@ LoggestClassMaker.prototype = {
     };
     dummyCon.prototype = this.dummyProto;
 
-    var loggerCon = function loggerConstructor() {
+    var loggerCon = function loggerConstructor(ident) {
+      this._ident = ident;
       this._eventMap = {};
       this._entries = [];
+      this._born = Date.now();
       this._kids = null;
     };
     loggerCon.prototype = this.logProto;
 
-    var testerCon = function testerLoggerConstructor() {
+    var testerCon = function testerLoggerConstructor(ident) {
+      this._ident = ident;
       this._eventMap = {};
       this._entries = [];
+      this._born = Date.now();
       this._kids = null;
       this._actor = null;
       this._expectations = [];
@@ -433,27 +505,29 @@ LoggestClassMaker.prototype = {
     };
     testerCon.prototype = this.testActorProto;
 
-    var testActorCon = function testActorConstructor() {
+    var testActorCon = function testActorConstructor(name) {
+      this.__name = name;
       // initially undefined, goes null when we register for pairing, goes to
       //  the logger instance when paired.
       this._logger = undefined;
     };
     testActorCon.prototype = this.testActorProto;
+    this.moduleFab._actorCons[this.name] = testActorCon;
 
     /**
      * Determine what type of logger to create, whether to tell other things
      *  in the system about it, etc.
      */
-    var loggerDecisionFab = function loggerDecisionFab(parentLogger) {
+    var loggerDecisionFab = function loggerDecisionFab(parentLogger, ident) {
       var logger, tester;
       // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
-        logger = new testerCon();
+        logger = new testerCon(ident);
         parentLogger = tester.reportNewLogger(logger, parentLogger);
       }
       // - Logging
       else if (moduleFab._generalLog || testerCon._generalLog) {
-        logger = new loggerCon();
+        logger = new loggerCon(ident);
       }
       // - Statistics Only
       else {
@@ -476,15 +550,26 @@ LoggestClassMaker.prototype = {
   },
 };
 
+var LEGAL_FABDEF_KEYS = [
+  'implClass', 'type', 'subtype',
+  'stateVars', 'latchState', 'events', 'asyncJobs', 'calls', 'errors',
+];
+
 exports.register = function register(mod, defs) {
-  var fab = {_generalLog: true, _underTest: false, _actorFabs: {}};
+  var fab = {_generalLog: true, _underTest: false, _actorCons: {}};
   var testActors = fab._testActors;
 
   for (var defName in defs) {
-    var loggerDef = defs[defName];
+    var key, loggerDef = defs[defName];
+
+    for (key in loggerDef) {
+      if (LEGAL_FABDEF_KEYS.indexOf(key) === -1) {
+        throw new Error("key '" + key + "' is not a legal log def key");
+      }
+    }
+
     var maker = new LoggestClassMaker(fab, defName);
 
-    var key;
     if ("stateVars" in loggerDef) {
       for (key in loggerDef.stateVars) {
         maker.addStateVar(key);
@@ -498,6 +583,11 @@ exports.register = function register(mod, defs) {
     if ("events" in loggerDef) {
       for (key in loggerDef.events) {
         maker.addEvent(key, loggerDef.events[key]);
+      }
+    }
+    if ("asyncJobs" in loggerDef) {
+      for (key in loggerDef.asyncJobs) {
+        maker.addAsyncJob(key, loggerDef.asyncJobs[key]);
       }
     }
     if ("calls" in loggerDef) {
@@ -525,6 +615,7 @@ exports.CLIENT = 'client';
 exports.TEST_DRIVER = 'testdriver';
 exports.TEST_GROUP = 'testgroup';
 exports.TEST_CASE = 'testcase';
+exports.TEST_PERMUTATION = 'testperm';
 exports.TEST_STEP = 'teststep';
 
 }); // end define

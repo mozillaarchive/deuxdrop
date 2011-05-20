@@ -93,9 +93,10 @@ function TestContext(testCase, permutationIndex) {
   this.__testCase = testCase;
   this._permIdx = permutationIndex;
   this._permutations = 1;
-  this._steps = [];
+  this.__steps = [];
 
-  this._log = LOGFAB.testCase(testCase.definer._log);
+  this._log = LOGFAB.testCasePermutation(testCase.log,
+                                         permutationIndex);
 
   this._actors = [];
 }
@@ -105,7 +106,14 @@ TestContext.prototype = {
    *  An actor correlates with one or more loggers,
    */
   actor: function actor(type, name) {
-    // -- instantiate
+    var fabs = this.__testCase.definer.__logfabs;
+    for (var iFab = 0; iFab < fabs.length; iFab++) {
+      var actorDir = fabs[iFab]._actorCons;
+      if (actorDir.hasOwnProperty(type)) {
+        return new actorDir[type](name);
+      }
+    }
+    throw new Error("Unknown actor type '" + type + "'");
   },
 
   /**
@@ -118,6 +126,7 @@ TestContext.prototype = {
    *  tie all those representations together.
    */
   thing: function thing(type, name) {
+    return {__type: type, __name: name};
   },
 
   _newStep: function(kind, args) {
@@ -126,13 +135,13 @@ TestContext.prototype = {
     var iArg;
     for (iArg = 0; iArg < args.length - 1; iArg++) {
       var arg = args[iArg];
-      if (arg instanceof $log.TestEntityProtoBase)
+      if ($log.TestActorProtoBase.isPrototypeOf(arg))
         actors.push(arg);
       descBits.push(arg);
     }
     var testFunc = args[iArg];
     var step = new TestStep(this._log, kind, descBits, actors, testFunc);
-    this._steps.push(step);
+    this.__steps.push(step);
     return step;
   },
 
@@ -169,14 +178,14 @@ TestContext.prototype = {
 
     // The last numVariants steps should be what is handed to us.  If this
     //  is not the case, we are boned.
-    var baseStep = this._steps.length - numVariants;
+    var baseStep = this.__steps.length - numVariants;
     for (var i = 0; i < numVariants.length; i++) {
-      if (variants[i] !== this._steps[baseStep])
+      if (variants[i] !== this.__steps[baseStep])
         throw new Error("Step sequence invariant violation");
     }
     // (use the splice retval rather than the passed in for extra safety)
-    var saferVariants = this._steps.splice(baseStep, numVariants);
-    this._steps.push(saferVariants);
+    var saferVariants = this.__steps.splice(baseStep, numVariants);
+    this.__steps.push(saferVariants);
   },
 
   /**
@@ -207,6 +216,7 @@ TestContext.prototype = {
     return this._newStep('cleanup', arguments);
   },
 };
+exports.TestContext = TestContext;
 
 function TestCase(definer, kind, desc, setupFunc) {
   this.definer = definer;
@@ -214,15 +224,17 @@ function TestCase(definer, kind, desc, setupFunc) {
   this.desc = desc;
   this.setupFunc = setupFunc;
 
+  this.log = LOGFAB.testCase(definer._log, desc);
+
   this.context = null;
 }
 TestCase.prototype = {
 };
 
-function TestDefiner(logfabs) {
+function TestDefiner(modname, logfabs) {
   this.__logfabs = Array.isArray(logfabs) ? logfabs : [logfabs];
 
-  this._log = LOGFAB.testDefiner(null);
+  this._log = LOGFAB.testDefiner(null, modname);
 
   this.__testCases = [];
 }
@@ -256,7 +268,7 @@ TestDefiner.prototype = {
 };
 
 exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
-  return new TestDefiner(logfabs);
+  return new TestDefiner(testModule.id, logfabs);
 };
 
 var LOGFAB = $log.register(null, {
@@ -265,7 +277,7 @@ var LOGFAB = $log.register(null, {
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_GROUP,
     asyncJobs: {
-      runTests: {},
+      run: {},
     },
     latchState: {
       result: false,
@@ -276,7 +288,21 @@ var LOGFAB = $log.register(null, {
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_CASE,
     asyncJobs: {
-      runPermutation: {},
+      run: {},
+    },
+    latchState: {
+      result: false,
+    }
+  },
+  testCasePermutation: {
+    implClass: TestContext,
+    type: $log.TEST_DRIVER,
+    subtype: $log.TEST_PERMUTATION,
+    asyncJobs: {
+      run: {},
+    },
+    calls: {
+      setupFunc: {},
     },
     latchState: {
       result: false,
@@ -290,7 +316,7 @@ var LOGFAB = $log.register(null, {
     asyncJobs: {
       run: {},
     },
-    call: {
+    calls: {
       stepFunc: {},
     },
     latchState: {

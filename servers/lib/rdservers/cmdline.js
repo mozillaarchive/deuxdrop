@@ -118,6 +118,7 @@ parser.command('test')
     // XXX !!! obviously, we want this to find tests, not have them be hardcoded
     $require(['rdcommon/testdriver', 'rdstests/auth-conn-loopback'],
              function($driver, $tmod) {
+      debugger;
       when($driver.runTestsFromModule($tmod),
         function(result) {
           console.log(JSON.stringify(result, null, 2));
