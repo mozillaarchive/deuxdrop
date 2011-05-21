@@ -124,9 +124,9 @@ parser.command('test')
              function($driver, $tmod) {
       debugger;
       when($driver.runTestsFromModule($tmod),
-        function(result) {
+        function(runner) {
 console.log("test run complete per promise");
-          $driver.dumpLogResultsToConsole(result);
+          runner.dumpLogResultsToConsole();
         });
 console.log("cmdline callback complete");
     });

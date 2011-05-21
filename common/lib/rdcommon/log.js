@@ -107,7 +107,7 @@ var DummyLogProtoBase = {
  */
 var LogProtoBase = {
   toJSON: function() {
-    return {
+    var jo = {
       loggerIdent: this.__defName,
       semanticIdent: this._ident,
       born: this._born,
@@ -115,6 +115,14 @@ var LogProtoBase = {
       entries: this._entries,
       kids: this._kids
     };
+    if (this.__latchedVars.length) {
+      var latchedVars = this.__latchedVars, olv = {};
+      for (var i = 0; i < latchedVars.length; i++) {
+        olv[latchedVars[i]] = this[':' + latchedVars[i]];
+      }
+      jo.latched = olv;
+    }
+    return jo;
   },
 };
 
@@ -207,20 +215,25 @@ function LoggestClassMaker(moduleFab, name) {
   this.moduleFab = moduleFab;
   this.name = name;
 
+  this._latchedVars = [];
+
   // steady-state minimal logging logger (we always want statistics!)
   this.dummyProto = {
     __proto__: DummyLogProtoBase,
     __defName: name,
+    __latchedVars: this._latchedVars,
   };
   // full-logging logger
   this.logProto = {
     __proto__: LogProtoBase,
     __defName: name,
+    __latchedVars: this._latchedVars,
   };
   // testing full-logging logger
   this.testLogProto = {
     __proto__: TestLogProtoBase,
     __defName: name,
+    __latchedVars: this._latchedVars,
   };
   // testing actor for expectations, etc.
   this.testActorProto = {
@@ -293,11 +306,12 @@ LoggestClassMaker.prototype = {
    */
   addLatchedState: function(name) {
     this._define(name, 'latchedState');
-    this.hasLatchedState = true;
+    this._latchedVars.push(name);
+    var latchedName = ':' + name;
 
     this.testLogProto[name] = this.logProto[name] = this.dummyProto[name] =
         function(val) {
-      this[name] = val;
+      this[latchedName] = val;
     };
   },
   addEvent: function(name, args) {
@@ -556,7 +570,8 @@ var LEGAL_FABDEF_KEYS = [
 ];
 
 exports.register = function register(mod, defs) {
-  var fab = {_generalLog: true, _underTest: false, _actorCons: {}};
+  var fab = {_generalLog: true, _underTest: false, _actorCons: {},
+             _rawDefs: defs};
   var testActors = fab._testActors;
 
   for (var defName in defs) {

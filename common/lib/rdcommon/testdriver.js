@@ -286,7 +286,7 @@ TestRunner.prototype = {
       console.log("runNextTestCase", iTestCase, definer.__testCases.length);
       if (iTestCase >= definer.__testCases.length) {
         definer._log.run_end();
-        deferred.resolve(definer._log);
+        deferred.resolve(runner);
 
         process.removeEventListener('exit', earlyBailHandler);
         return;
@@ -304,20 +304,41 @@ TestRunner.prototype = {
     //  and so we can't depend on promises, etc.  Buffers will be flushed,
     //  however.
     function earlyBailHandler() {
-      console.error("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
+      console.log("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
                     "DUMPING LOG.");
-      exports.dumpLogResultsToConsole(definer._log);
+      self.dumpLogResultsToConsole();
+      // Because the handler gets invoked during shutdown and the atexit handler
+      //  is apparently not getting fired or is a jerk, our output is
+      //  disappearing when redirected to disk...
+      // XXX still not dealt with; perhaps cause our exit hook to be invoked
+      //  at module start time so we end up ahead of the flushing handler?  we
+      //  will sensitize ourself using a global rather than controlling
+      //  registration...
     }
     process.once('exit', earlyBailHandler);
 
     return deferred.promise;
   },
-};
 
-exports.dumpLogResultsToConsole = function(logger) {
-  console.log("##### LOGGEST-TEST-RUN-BEGIN #####");
-  console.log(JSON.stringify(logger, null, 2));
-  console.log("##### LOGGEST-TEST-RUN-END #####");
+  dumpLogResultsToConsole: function() {
+    var definer = this._testDefiner;
+    // accumulate the schemas of all the (potentially) involved schema dudes.
+    var schema = {};
+    for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
+      var rawDef = definer.__logfabs[iFab]._rawDefs;
+      for (var key in rawDef) {
+        schema[key] = rawDef[key];
+      }
+    }
+
+    console.log("##### LOGGEST-TEST-RUN-BEGIN #####");
+    var dumpObj = {
+      schema:schema,
+      log: definer._log,
+    };
+    console.log(JSON.stringify(dumpObj, null, 2));
+    console.log("##### LOGGEST-TEST-RUN-END #####");
+  }
 };
 
 exports.runTestsFromModule = function runTestsFromModule(tmod) {
