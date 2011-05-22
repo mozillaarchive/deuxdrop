@@ -307,19 +307,19 @@ TestRunner.prototype = {
       console.log("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
                     "DUMPING LOG.");
       self.dumpLogResultsToConsole();
-      // Because the handler gets invoked during shutdown and the atexit handler
-      //  is apparently not getting fired or is a jerk, our output is
-      //  disappearing when redirected to disk...
-      // XXX still not dealt with; perhaps cause our exit hook to be invoked
-      //  at module start time so we end up ahead of the flushing handler?  we
-      //  will sensitize ourself using a global rather than controlling
-      //  registration...
     }
     process.once('exit', earlyBailHandler);
 
     return deferred.promise;
   },
 
+  /**
+   * We use console.error because stderr is never buffered while stdout is.  In
+   *  the event of event loop shutdown due to lack of events stdout reliably
+   *  (in the node 0.4.8 time-frame) fails to output our data before dying.
+   *  As a result, it's really important to make sure stderr gets into the
+   *  output file too.  I suggest using &> for redirection.
+   */
   dumpLogResultsToConsole: function() {
     var definer = this._testDefiner;
     // accumulate the schemas of all the (potentially) involved schema dudes.
@@ -331,13 +331,13 @@ TestRunner.prototype = {
       }
     }
 
-    console.log("##### LOGGEST-TEST-RUN-BEGIN #####");
+    console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
     var dumpObj = {
       schema:schema,
       log: definer._log,
     };
-    console.log(JSON.stringify(dumpObj, null, 2));
-    console.log("##### LOGGEST-TEST-RUN-END #####");
+    console.error(JSON.stringify(dumpObj));
+    console.error("##### LOGGEST-TEST-RUN-END #####");
   }
 };
 

@@ -84,12 +84,16 @@
 define(
   [
     'q',
+    'microtime',
     'exports'
   ],
   function(
     $Q,
+    $microtime,
     exports
   ) {
+
+var gSeq = 0;
 
 /**
  * Dummy logger prototype; instances gather statistics but do not generate
@@ -279,7 +283,7 @@ LoggestClassMaker.prototype = {
     this.dummyProto[name] = NOP;
 
     this.logProto[name] = function(val) {
-      this._entries.push([name, val, Date.now()]);
+      this._entries.push([name, val, $microtime.now(), gSeq++]);
     };
 
     this._wrapLogProtoForTest(name);
@@ -332,7 +336,8 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         entry.push(arguments[iArg]);
       }
-      entry.push(Date.now());
+      entry.push($microtime.now());
+      entry.push(gSeq++);
       this._entries.push(entry);
     };
 
@@ -368,7 +373,8 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         entry.push(arguments[iArg]);
       }
-      entry.push(Date.now());
+      entry.push($microtime.now());
+      entry.push(gSeq++);
       this._entries.push(entry);
     };
     this.logProto[name_end] = function() {
@@ -377,7 +383,8 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         entry.push(arguments[iArg]);
       }
-      entry.push(Date.now());
+      entry.push($microtime.now());
+      entry.push(gSeq++);
       this._entries.push(entry);
     };
 
@@ -436,15 +443,18 @@ LoggestClassMaker.prototype = {
       for (iArg = 0; iArg < numLogArgs; iArg++) {
         entry.push(arguments[iArg]);
       }
-      entry.push(Date.now());
+      entry.push($microtime.now());
+      entry.push(gSeq++);
       try {
         rval = arguments[numLogArgs+1].apply(
           arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
-        entry.push(Date.now());
+        entry.push($microtime.now());
+        entry.push(gSeq++);
         this._entries.push(entry);
       }
       catch(ex) {
-        entry.push(Date.now());
+        entry.push($microtime.now());
+        entry.push(gSeq++);
         entry.push(ex);
         this._entries.push(entry);
         // (call errors are events)
@@ -476,7 +486,8 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         entry.push(arguments[iArg]);
       }
-      entry.push(Date.now());
+      entry.push($microtime.now());
+      entry.push(gSeq++);
       this._entries.push(entry);
     };
 
@@ -501,7 +512,7 @@ LoggestClassMaker.prototype = {
       this._ident = ident;
       this._eventMap = {};
       this._entries = [];
-      this._born = Date.now();
+      this._born = $microtime.now();
       this._kids = null;
     };
     loggerCon.prototype = this.logProto;
@@ -510,7 +521,7 @@ LoggestClassMaker.prototype = {
       this._ident = ident;
       this._eventMap = {};
       this._entries = [];
-      this._born = Date.now();
+      this._born = $microtime.now();
       this._kids = null;
       this._actor = null;
       this._expectations = [];
