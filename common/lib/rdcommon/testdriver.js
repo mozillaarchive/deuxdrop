@@ -322,18 +322,26 @@ TestRunner.prototype = {
    */
   dumpLogResultsToConsole: function() {
     var definer = this._testDefiner;
-    // accumulate the schemas of all the (potentially) involved schema dudes.
-    var schema = {};
+    // - accumulate the schemas of all the (potentially) involved schema dudes.
+    var schema = {}, key, rawDef;
+    // populate the schema with the test logger schemas
+    rawDef = $testcontext.LOGFAB._rawDefs;
+    for (key in rawDef) {
+      schema[key] = rawDef[key];
+    }
+
+    // and now add in the schemas used by the test
     for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
-      var rawDef = definer.__logfabs[iFab]._rawDefs;
-      for (var key in rawDef) {
+      rawDef = definer.__logfabs[iFab]._rawDefs;
+      for (key in rawDef) {
         schema[key] = rawDef[key];
       }
     }
 
+    // - dump
     console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
     var dumpObj = {
-      schema:schema,
+      schema: schema,
       log: definer._log,
     };
     console.error(JSON.stringify(dumpObj));

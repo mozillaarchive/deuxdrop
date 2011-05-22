@@ -271,7 +271,7 @@ exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
   return new TestDefiner(testModule.id, logfabs);
 };
 
-var LOGFAB = $log.register(null, {
+var LOGFAB = exports.LOGFAB = $log.register(null, {
   testDefiner: {
     implClass: TestDefiner,
     type: $log.TEST_DRIVER,
