@@ -44,6 +44,20 @@
  *  be application specific things as well as the determination of what is
  *  interesting.
  *
+ * @typedef[ListyLogEntry @list[
+ *   @param[eventName String]
+ *   @rest[Object]
+ * ]]{
+ *   The current format is meant to be generally human-readable.  We put the
+ *   name of the event at the front because it most concisely expresses what
+ *   is happening.  We put the details of the event after that, with the
+ *   timestamp second from last and the global sequence number last.  The timing
+ *   information goes last because the timestamp (uS) is going to tend to be a
+ *   big number that is hard for a human to process, but serves as a nice visual
+ *   delimiter for the sequence id that comes after that humans can understand.
+ *   It is not useful to have it earlier because it would offset the details of
+ *   the event too far from the event name.
+ * }
  * @typedef[HierLogFrag @dict[
  *   @key[loggerIdent String]{
  *
@@ -54,13 +68,13 @@
  *     A unique identifier not previously used in the effective namespace
  *     of the root HierLogFrag for this tree and all its descendents.
  *   }
- *   @key[born #:optional TimestampMS]{
+ *   @key[born #:optional TimestampUS]{
  *     Timestamp of when this logger was instantiated.
  *   }
- *   @key[died #:optional TimestampMS]{
+ *   @key[died #:optional TimestampUS]{
  *     Timestamp of when this logger was marked dead.
  *   }
- *   @key[entries @listof[LogEntry]]{
+ *   @key[entries @listof[ListyLogEntry]]{
  *     The log entries for this logger this time-slice.
  *   }
  *   @key[kids #:optional @listof[HierLogFrag]]{
@@ -73,8 +87,8 @@
  *   Loggers are organized into hierarchies
  * }
  * @typedef[HierLogTimeSlice @dict[
- *   @key[begin TimestampMS]
- *   @key[end TimestampMS]
+ *   @key[begin TimestampUS]
+ *   @key[end TimestampUS]
  *   @key[logFrag HierLogFrag]
  * ]]{
  *
