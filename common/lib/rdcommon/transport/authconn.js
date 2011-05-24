@@ -272,12 +272,16 @@ var AuthClientCommon = {
  *  connection's log entry can be found by swapping the components of the tuple
  *  (and applying the appropriate host prefix as needed).
  */
-function AuthClientConn(clientIdent, serverIdent, url) {
+function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
+  this.appConn = appConn;
   this.clientIdent = clientIdent;
   this.serverIdent = serverIdent;
   this.url = url;
+  this.endpoint = endpoint;
 
-  this.log = LOGFAB.clientConn();
+  this.log = LOGFAB.clientConn(this, null,
+                               [clientIdent, 'to', serverIdent,
+                                'at endpoint', endpoint]);
 
   this._initCommon('connect');
 
@@ -315,8 +319,9 @@ exports.AuthClientConn = AuthClientConn;
  *
  *
  */
-function AuthServerConn(serverIdent, rawConn) {
-  this.log = LOGFAB.serverConn();
+function AuthServerConn(serverIdent, endpoint, rawConn, _parentLogger) {
+  this.log = LOGFAB.serverConn(this, _parentLogger,
+                               [serverIdent, 'on endpoint', endpoint]);
 
   this._initCommon('authClientKey');
   this._connected(rawConn);
@@ -331,6 +336,9 @@ AuthServerConn.prototype = {
   },
 
   _msg_authClientVouch_vouch: function(msg) {
+    this.log.__updateIdent([serverIdent, 'on endpoint', endpoint, 'with client',
+                            this.clientIdent]);
+
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -350,6 +358,8 @@ function serve404s(request, response) {
 function AuthorizingServer() {
   this._endpoints = {};
 
+  this.log = LOGFAB.server(this, null);
+
   // That which is not a websocket shall be severely disappointed currently.
   var httpServer = this._httpServer = http.createServer(serve404s);
 
@@ -364,7 +374,7 @@ AuthorizingServer.prototype = {
       var info = this._endpoints[request.resource];
 
       var rawConn = request.accept(PROTO_REV, request.origin);
-      var authConn = new AuthServerConn(info.serverInfo, rawConn);
+      var authConn = new AuthServerConn(info.serverInfo, rawConn, this.log);
     }
 
   },
@@ -405,6 +415,13 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     implClass: AuthClientConn,
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
+    semanticIdent: {
+      clientIdent: 'key',
+      _l1: null,
+      serverIdent: 'key',
+      _l2: null,
+      endpoint: 'endpoint',
+    },
     stateVars: {
       connState: true,
       appState: true,
@@ -429,6 +446,13 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     implClass: AuthServerConn,
     type: $log.CONNECTION,
     subtype: $log.SERVER,
+    semanticIdent: {
+      serverIdent: 'key',
+      _l1: null,
+      endpoint: 'endpoint',
+      _l2: null,
+      clientIdent: 'key',
+    },
     stateVars: {
       connState: true,
       appState: true,

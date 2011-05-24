@@ -58,13 +58,56 @@
  *   It is not useful to have it earlier because it would offset the details of
  *   the event too far from the event name.
  * }
+ * @typedef[ActorUniqueName Number]{
+ *   A positive (> 0) unique value for the effective namespace.
+ * }
+ * @typedef[ThingUniqueName Number]{
+ *   A negative (< 0) unique value for the effective namespace.
+ * }
+ * @typedef[UniqueName @oneof[ActorUniqueName ThingUniqueName]]{
+ *   Actor/logger names are positive, thing names are negative.  We do this so
+ *   that even without resolving the identifiers we can present a human
+ *   comprehensible understanding of semantic identifiers.
+ * }
+ * @typedef[SemanticIdent @oneof[
+ *   @case[String]{
+ *     A human readable string with no special significance.
+ *   }
+ *   @case[@listof[@oneof[UniqueName String]]]{
+ *     A list containing human-readable strings with interspersed references to
+ *     loggers/actors and things.  When displayed, the unique name references
+ *     should be replaced with custom display objects (possibly just hyperlinks)
+ *     which should include a human-understandable representation of what the
+ *     name is referencing.  Entries in the list should be joined so that
+ *     whitespace is inserted if the adjacent object is not a string or the
+ *     string does not already contain whitespace or punctuation that does not
+ *     require whitespace at the given point.  More specifically, the "inside"
+ *     of parentheses/brackets/braces and the left side of
+ *     colons/semicolons/commas do not require whitespace.  We also
+ *     automatically insert commas-with-whitespace between consecutive named
+ *     references.
+ *
+ *     String literals must not be adjacent to other string literals; you must
+ *     coalesce them.  The whitespace logic can optimize based on this
+ *     assumption.
+ *   }
+ * ]]
  * @typedef[HierLogFrag @dict[
  *   @key[loggerIdent String]{
+ *     The schema name that defines this logger; the key in the dictionary
+ *     passed to `register`.
+ *   }
+ *   @key[semanticIdent SemanticIdent]{
+ *     Explains to humans what this logger is about.  It is not required to be
+ *     unique, but if code always passes in the same constant string, it's
+ *     probably not being super helpful.
  *
+ *     Examples include:
+ *     - Test case names.
+ *     - Parameterized test steps. (Client A sending a message to Client B.)
+ *     - Parameterized connections. (Server A talking to Server B.)
  *   }
- *   @key[semanticIdent String]{
- *   }
- *   @key[uniqueName String]{
+ *   @key[uniqueName UniqueName]{
  *     A unique identifier not previously used in the effective namespace
  *     of the root HierLogFrag for this tree and all its descendents.
  *   }
@@ -107,7 +150,56 @@ define(
     exports
   ) {
 
+/**
+ * Per-thread/process sequence identifier to provide unambiguous ordering of
+ *  logging events in the hopeful event we go faster than the timestamps can
+ *  track.
+ *
+ * The long-term idea is that this gets periodically reset in an unambiguous
+ *  fashion.  Because we also package timestamps in the logs, right now we
+ *  can get away with just making sure not to reset the sequence more than
+ *  once in a given timestamp unit (currently 1 microsecond).  This seems
+ *  quite do-able.
+ *
+ * Note: Timestamp granularity was initially millisecond level, which was when
+ *  this really was important.
+ */
 var gSeq = 0;
+
+/**
+ * Per-thread/process next unique actor/logger name to allocate.
+ */
+var gUniqueActorName = 1;
+/**
+ * Per-thread/process next unique thing name to allocate.
+ */
+var gUniqueThingName = -1;
+
+var ThingProto = exports.ThingProto = {
+};
+
+/**
+ * Create a thing with the given type, name, and prototype hierarchy and which
+ *  is allocated with a unique name.
+ *
+ * This should not be called directly by user code; it is being surfaced for use
+ *  by `testcontext.js` in order to define things with names drawn from a
+ *  over-arching global namespace.  The caller needs to take on the
+ *  responsibility of exposing the thing via a logger or the like.
+ */
+exports.makeThing = function makeThing(type, name, proto) {
+  if (proto === undefined)
+    proto = ThingProto;
+  return {
+    __proto__: proto,
+    __type: type,
+    __name: name,
+    _uniqueName: gUniqueThingName--,
+  };
+};
+
+function NOP() {
+}
 
 /**
  * Dummy logger prototype; instances gather statistics but do not generate
@@ -115,6 +207,11 @@ var gSeq = 0;
  */
 var DummyLogProtoBase = {
   _kids: undefined,
+  toJSON: function() {
+    // will this actually break JSON.stringify or just cause it to not use us?
+    throw new Error("I WAS NOT PLANNING ON BEING SERIALIZED");
+  },
+  __updateIdent: NOP,
 };
 
 /**
@@ -124,10 +221,19 @@ var DummyLogProtoBase = {
  *  can capture private data but which should accordingly be test data.
  */
 var LogProtoBase = {
+  /**
+   * For use by `TestContext` to poke things' names in.  Actors'/loggers' names
+   *  are derived from the list of kids.  An alternate mechanism might be in
+   *  order for this, since it is so extremely specialized.  This was
+   *  determined better than adding yet another generic logger mechanism until
+   *  a need is shown or doing monkeypatching; at least for the time-being.
+   */
+  _named: null,
   toJSON: function() {
     var jo = {
       loggerIdent: this.__defName,
       semanticIdent: this._ident,
+      uniqueName: this._uniqueName,
       born: this._born,
       events: this._eventMap,
       entries: this._entries,
@@ -140,7 +246,25 @@ var LogProtoBase = {
       }
       jo.latched = olv;
     }
+    if (this._named)
+      jo.named = this._named;
     return jo;
+  },
+  __updateIdent: function(ident) {
+    // NOTE: you need to update useSemanticIdent if you change this.
+    // normalize all object references to unique name references.
+    if (typeof(ident) !== "string") {
+      var normIdent = [];
+      for (var i = 0; i < ident.length; ident++) {
+        var identBit = ident[i];
+        if (typeof(identBit) === "string")
+          normIdent.push(identBit);
+        else
+          normIdent.push(identBit._uniqueName);
+      }
+      ident = normIdent;
+    }
+    this._ident = ident;
   },
 };
 
@@ -218,9 +342,6 @@ var TestActorProtoBase = {
   },
 };
 exports.TestActorProtoBase = TestActorProtoBase;
-
-function NOP() {
-}
 
 /**
  * Builds the logging and testing helper classes for the `register` driver.
@@ -355,6 +476,8 @@ LoggestClassMaker.prototype = {
       this._entries.push(entry);
     };
 
+    this._wrapLogProtoForTest(name);
+
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
@@ -479,6 +602,8 @@ LoggestClassMaker.prototype = {
       return rval;
     };
 
+    this._wrapLogProtoForTest(name);
+
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < arguments.length; iArg++) {
@@ -505,6 +630,8 @@ LoggestClassMaker.prototype = {
       this._entries.push(entry);
     };
 
+    this._wrapLogProtoForTest(name);
+
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
@@ -512,6 +639,13 @@ LoggestClassMaker.prototype = {
       }
       this._expectations.push(exp);
     };
+  },
+  /**
+   * Process the description of how to map the semantic ident list.  Currently
+   *  we do absolutely nothing with this on the generation side, but the blob
+   *  is used by log processing logic to stitch stuff together in the UI.
+   */
+  useSemanticIdent: function(args) {
   },
 
   makeFabs: function() {
@@ -523,7 +657,9 @@ LoggestClassMaker.prototype = {
     dummyCon.prototype = this.dummyProto;
 
     var loggerCon = function loggerConstructor(ident) {
-      this._ident = ident;
+      // NOTE: everything in here gets copied and pasted to testerCon!
+      this.__updateIdent(ident);
+      this._uniqueName = gUniqueActorName++;
       this._eventMap = {};
       this._entries = [];
       this._born = $microtime.now();
@@ -532,17 +668,20 @@ LoggestClassMaker.prototype = {
     loggerCon.prototype = this.logProto;
 
     var testerCon = function testerLoggerConstructor(ident) {
-      this._ident = ident;
+      // ### copied and pasted from above ###
+      this.__updateIdent(ident);
+      this._uniqueName = gUniqueActorName++;
       this._eventMap = {};
       this._entries = [];
       this._born = $microtime.now();
       this._kids = null;
+      // ### end copied and pasted from above ###
       this._actor = null;
       this._expectations = [];
       this._expectationsMet = true;
       this._iEntry = this._iExpectation = 0;
     };
-    testerCon.prototype = this.testActorProto;
+    testerCon.prototype = this.testLogProto;
 
     var testActorCon = function testActorConstructor(name) {
       this.__name = name;
@@ -557,7 +696,8 @@ LoggestClassMaker.prototype = {
      * Determine what type of logger to create, whether to tell other things
      *  in the system about it, etc.
      */
-    var loggerDecisionFab = function loggerDecisionFab(parentLogger, ident) {
+    var loggerDecisionFab = function loggerDecisionFab(implInstance,
+                                                       parentLogger, ident) {
       var logger, tester;
       // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
@@ -610,6 +750,9 @@ exports.register = function register(mod, defs) {
 
     var maker = new LoggestClassMaker(fab, defName);
 
+    if ("semanticIdent" in loggerDef) {
+      maker.useSemanticIdent(loggerDef.semanticIdent);
+    }
     if ("stateVars" in loggerDef) {
       for (key in loggerDef.stateVars) {
         maker.addStateVar(key);

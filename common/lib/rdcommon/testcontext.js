@@ -72,7 +72,7 @@ function TestStep(_log, kind, descBits, actors, testFunc) {
   this.actors = actors;
   this.testFunc = testFunc;
 
-  this.log = LOGFAB.testStep(_log);
+  this.log = LOGFAB.testStep(this, _log, descBits);
 }
 TestStep.prototype = {
 };
@@ -95,15 +95,29 @@ function TestContext(testCase, permutationIndex) {
   this._permutations = 1;
   this.__steps = [];
 
-  this._log = LOGFAB.testCasePermutation(testCase.log,
+  this._log = LOGFAB.testCasePermutation(this, testCase.log,
                                          permutationIndex);
+  // this is a known-but-null-by-default thing that gets copied to the JSON
+  //  blob when present.
+  this._log._named = {};
 
   this._actors = [];
 }
 TestContext.prototype = {
   /**
-   * A player in the test that does stuff; for example, a client or a server.
-   *  An actor correlates with one or more loggers,
+   * A testing stand-in for a player in the test that does stuff; for example, a
+   *  client or a server.  An actor correlates with and is associated with
+   *  exactly one logger.  You use the actor to specify expectations about
+   *  what that logger will log for the implementing class that is driving it.
+   *  Actors may also expose convenience functions that directly manipulate the
+   *  underlying implementation class.  The convenience functions may
+   *  automatically generate expectations.
+   *
+   * Actors are paired with their logger at logger creation time.  You define
+   *  the actor to the testing framework using this method AND name it in a test
+   *  step in order to get it pushed on the watch-list prior to causing the
+   *  associated logger to be created.  Convenience functions can automate this
+   *  process but still need to abide by it.
    */
   actor: function actor(type, name) {
     var fabs = this.__testCase.definer.__logfabs;
@@ -124,9 +138,25 @@ TestContext.prototype = {
    *  derived.  A thing may have multiple names/representations throughout its
    *  life cycle.  Much of the point of the thing abstraction is to allow us to
    *  tie all those representations together.
+   *
+   * Thing naming and reconstruction is accomplished by using consistent
+   *  argument names across logging layers that are made known to the
+   *  reconstruction layer.  Message layering/containment is accomplished
+   *  by logging an event when the encapsulation/decapsulation occurs that
+   *  contains both identifiers.
+   *
+   * Because things can be exist and need to be named prior to the true name
+   *  they will eventually know, they are given unique identifiers within
+   *  their containing namespaces.
+   *
+   * Things, like actors, can have convenience functions placed onto their
+   *  prototype chain.  Their convenience functions
    */
   thing: function thing(type, name) {
-    return {__type: type, __name: name};
+    var thang = $log.makeThing(type, name);
+    // poke it into our logger for reporting.
+    this._log._named[thang._uniqueName] = thang;
+    return thang;
   },
 
   _newStep: function(kind, args) {
@@ -224,7 +254,7 @@ function TestCase(definer, kind, desc, setupFunc) {
   this.desc = desc;
   this.setupFunc = setupFunc;
 
-  this.log = LOGFAB.testCase(definer._log, desc);
+  this.log = LOGFAB.testCase(this, definer._log, desc);
 
   this.context = null;
 }
@@ -234,7 +264,7 @@ TestCase.prototype = {
 function TestDefiner(modname, logfabs) {
   this.__logfabs = Array.isArray(logfabs) ? logfabs : [logfabs];
 
-  this._log = LOGFAB.testDefiner(null, modname);
+  this._log = LOGFAB.testDefiner(this, null, modname);
 
   this.__testCases = [];
 }

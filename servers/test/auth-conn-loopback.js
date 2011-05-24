@@ -55,8 +55,17 @@ define(
 
 var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
 
-function TestClientConnection() {
+/**
+ * Test connection implementation with no logging layer of its own because
+ *  this implementation is not under test.
+ */
+function TestClientConnection(clientIdent, serverIdent, url, endpoint) {
   this._wallowDeferred = null;
+
+  this.conn = new $authconn.AuthClientConn(this, clientIdent, serverIdent,
+                                           url, endpoint);
+  // a real impl class would insantiate its logger at this point using a
+  //  parent logger of "this.conn.log"
 }
 TestClientConnection.prototype = {
   _initialState: 'root',
@@ -80,7 +89,8 @@ TestClientConnection.prototype = {
   },
 };
 
-function TestServerConnection() {
+function TestServerConnection(conn) {
+  this.conn = conn;
 }
 TestServerConnection.prototype = {
 };
@@ -117,8 +127,9 @@ console.log("running loopback test context def thing");
     eServer.expect_endpointConn('test/test');
     eServerConn.expect_connected();
 
-    var url = "http://" + server.address + ":" + server.port + "/test/test";
-    clientConn = new TestClientConnection(url);
+    var url = "http://" + server.address + ":" + server.port + "/";
+    var endpoint = "test/test";
+    clientConn = new TestClientConnection(url, endpoint);
 
   });
 
