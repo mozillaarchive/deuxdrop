@@ -644,6 +644,13 @@ LoggestClassMaker.prototype = {
    * Process the description of how to map the semantic ident list.  Currently
    *  we do absolutely nothing with this on the generation side, but the blob
    *  is used by log processing logic to stitch stuff together in the UI.
+   *
+   * We might end up using this on the generation side when under test so
+   *  that we can better link loggers with actors in the face of potential
+   *  ambiguity about who goes with which actor.  The counter-argument to that
+   *  idea is that during functional testing we don't want that much activity
+   *  going on.  When performance testing, we would want that, but in that
+   *  case we won't be running with actors anyways.
    */
   useSemanticIdent: function(args) {
   },
