@@ -737,7 +737,7 @@ LoggestClassMaker.prototype = {
 };
 
 var LEGAL_FABDEF_KEYS = [
-  'implClass', 'type', 'subtype',
+  'implClass', 'type', 'subtype', 'semanticIdent',
   'stateVars', 'latchState', 'events', 'asyncJobs', 'calls', 'errors',
 ];
 
