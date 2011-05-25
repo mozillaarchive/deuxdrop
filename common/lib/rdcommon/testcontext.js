@@ -118,13 +118,20 @@ TestContext.prototype = {
    *  step in order to get it pushed on the watch-list prior to causing the
    *  associated logger to be created.  Convenience functions can automate this
    *  process but still need to abide by it.
+   *
+   * At this time, an actor itself is not a logger and does not contain a secret
+   *  internal logger, but we're going to leave that door open and pretend like
+   *  an actor is itself a (potentially cross-cutting) logger.
    */
   actor: function actor(type, name) {
     var fabs = this.__testCase.definer.__logfabs;
     for (var iFab = 0; iFab < fabs.length; iFab++) {
       var actorDir = fabs[iFab]._actorCons;
       if (actorDir.hasOwnProperty(type)) {
-        return new actorDir[type](name);
+        var actor = new actorDir[type](name);
+        // poke it into our logger for reporting.
+        this._log._named[actor._uniqueName] = actor;
+        return actor;
       }
     }
     throw new Error("Unknown actor type '" + type + "'");

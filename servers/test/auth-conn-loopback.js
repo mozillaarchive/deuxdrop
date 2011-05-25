@@ -133,7 +133,7 @@ console.log("running loopback test context def thing");
 
   });
 
-  T.action(eServerConn, 'says be sad (transition)', eClientConn, function() {
+  T.action(eServerConn, 'says be sad (transition) to', eClientConn, function() {
     eServerConn.expect_send('beSad');
     eClientConn.expect_receive('beSad');
     eClientConn.expect_handle('beSad');
@@ -142,8 +142,8 @@ console.log("running loopback test context def thing");
     serverConn.say('beSad');
   });
 
-  T.action(eServerConn, 'says wallow, be happy (async, queueing)', eClientConn,
-           function() {
+  T.action(eServerConn, 'says wallow, be happy (async, queueing) to',
+           eClientConn, function() {
     eServerConn.expect_send('wallow');
     eServerConn.expect_send('beHappy');
     eClientConn.expect_receive('wallow');

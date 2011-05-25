@@ -176,6 +176,13 @@ var gUniqueActorName = 1;
 var gUniqueThingName = -1;
 
 var ThingProto = exports.ThingProto = {
+  toJSON: function() {
+    return {
+      type: this.__type,
+      name: this.__name,
+      uniqueName: this._uniqueName,
+    };
+  },
 };
 
 /**
@@ -255,7 +262,7 @@ var LogProtoBase = {
     // normalize all object references to unique name references.
     if (typeof(ident) !== "string") {
       var normIdent = [];
-      for (var i = 0; i < ident.length; ident++) {
+      for (var i = 0; i < ident.length; i++) {
         var identBit = ident[i];
         if (typeof(identBit) === "string")
           normIdent.push(identBit);
@@ -283,6 +290,15 @@ var TestLogProtoBase = {
 };
 
 var TestActorProtoBase = {
+  toJSON: function() {
+    return {
+      actorIdent: this.__defName,
+      semanticIdent: this.__name,
+      uniqueName: this._uniqueName,
+      loggerUniqueName: this._logger ? this._logger._uniqueName : null,
+    };
+  },
+
   /**
    * Prepare for activity in a test step.  If we do not already have a paired
    *  logger, this will push us onto the tracking list so we will be paired when
@@ -692,6 +708,7 @@ LoggestClassMaker.prototype = {
 
     var testActorCon = function testActorConstructor(name) {
       this.__name = name;
+      this._uniqueName = gUniqueActorName++;
       // initially undefined, goes null when we register for pairing, goes to
       //  the logger instance when paired.
       this._logger = undefined;
