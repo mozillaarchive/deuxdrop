@@ -41,16 +41,18 @@
 
 define(
   [
+    'util',
     'q', 'q-util',
     './testcontext',
     'exports'
   ],
   function(
+    $util,
     $Q, $Qutil,
     $testcontext,
     exports
   ) {
-var when = $Q.when, whenAll = $Q.whenAll;
+var when = $Q.when, whenAll = $Qutil.whenAll;
 
 /**
  * The runtime context interacts with the log fab subsystem to indicate that we
@@ -129,6 +131,8 @@ TestRuntimeContext.prototype = {
   },
 };
 
+var STEP_TIMEOUT_MS = 1000;
+
 /**
  * Consolidates the logic to run tests.
  */
@@ -182,16 +186,29 @@ TestRunner.prototype = {
       return allGood;
     }
     else {
-      return whenAll(promises, function passed() {
+      // create a deferred so we can generate a timeout.
+      var deferred = $Q.defer();
+      var countdownTimer = setTimeout(function() {
+        step.log.timeout();
+        step.log.result('fail');
+        deferred.resolve(false);
+        deferred = null;
+      }, STEP_TIMEOUT_MS);
+      whenAll(promises, function passed() {
+        if (!deferred) return;
+        clearTimeout(countdownTimer);
         step.log.run_end();
         step.log.result('pass');
-        return allGood;
+        deferred.resolve(allGood);
       }, function failed(expPair) {
+        if (!deferred) return;
         // XXX we should do something with the failed expectation pair...
+        clearTimeout(countdownTimer);
         step.log.run_end();
         step.log.result('fail');
-        return false;
+        deferred.resolve(false);
       });
+      return deferred.promise;
     }
   },
 
@@ -278,17 +295,35 @@ TestRunner.prototype = {
     return this.runTestCasePermutation(testCase, 0);
   },
 
+  _markDefinerUnderTest: function(definer) {
+    for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
+      definer.__logfabs[iFab]._underTest = this;
+    }
+  },
+
+  _clearDefinerUnderTest: function(definer) {
+    for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
+      definer.__logfabs[iFab]._underTest = null;
+    }
+  },
+
   runAll: function() {
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
+    this._markDefinerUnderTest(definer);
     definer._log.run_begin();
     function runNextTestCase() {
-      console.log("runNextTestCase", iTestCase, definer.__testCases.length);
+console.log("runNextTestCase", iTestCase, definer.__testCases.length);
       if (iTestCase >= definer.__testCases.length) {
-        definer._log.run_end();
-        deferred.resolve(runner);
+        process.removeListener('exit', earlyBailHandler);
 
-        process.removeEventListener('exit', earlyBailHandler);
+console.log("marking run end; resolving.");
+        definer._log.run_end();
+try {
+        self._clearDefinerUnderTest(definer);
+  } catch (ex) { console.error("frick:", ex); }
+        deferred.resolve(self);
+console.log("resolved");
         return;
       }
       var testCase = definer.__testCases[iTestCase++];
@@ -340,11 +375,17 @@ TestRunner.prototype = {
 
     // - dump
     console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
-    var dumpObj = {
-      schema: schema,
-      log: definer._log,
-    };
-    console.error(JSON.stringify(dumpObj));
+    try {
+      var dumpObj = {
+        schema: schema,
+        log: definer._log,
+      };
+      console.error(JSON.stringify(dumpObj));
+    }
+    catch (ex) {
+      console.error("JSON problem:", ex.message, ex.stack, ex);
+      console.error($util.inspect(dumpObj, false, 12));
+    }
     console.error("##### LOGGEST-TEST-RUN-END #####");
   }
 };

@@ -260,7 +260,7 @@ var LogProtoBase = {
   __updateIdent: function(ident) {
     // NOTE: you need to update useSemanticIdent if you change this.
     // normalize all object references to unique name references.
-    if (typeof(ident) !== "string") {
+    if (Array.isArray(ident)) {
       var normIdent = [];
       for (var i = 0; i < ident.length; i++) {
         var identBit = ident[i];
@@ -337,10 +337,11 @@ var TestActorProtoBase = {
    */
   __loggerFired: function() {
     // we can't do anything if we don't have an actor.
+    var entries = this._logger._entries;
     while (this._iExpectation < this._expectations.length &&
-           this._iEntry < this._entries.length) {
+           this._iEntry < entries.length) {
       var expy = this._expectations[this._iExpectation++];
-      var entry = this._entries[this._iEntry++];
+      var entry = entries[this._iEntry++];
       // Currently, require exact pairwise matching between entries and
       //  expectations.
       if (expy[0] !== entry[0] ||
@@ -631,6 +632,11 @@ LoggestClassMaker.prototype = {
   addError: function(name, args) {
     this._define(name, 'error');
 
+    var numArgs = 0;
+    for (var key in args) {
+      numArgs++;
+    }
+
     this.dummyProto[name] = function() {
       this._eventMap[name] = (this._eventMap[name] || 0) + 1;
     };
@@ -680,7 +686,6 @@ LoggestClassMaker.prototype = {
     dummyCon.prototype = this.dummyProto;
 
     var loggerCon = function loggerConstructor(ident) {
-      // NOTE: everything in here gets copied and pasted to testerCon!
       this.__updateIdent(ident);
       this._uniqueName = gUniqueActorName++;
       this._eventMap = {};
@@ -691,18 +696,8 @@ LoggestClassMaker.prototype = {
     loggerCon.prototype = this.logProto;
 
     var testerCon = function testerLoggerConstructor(ident) {
-      // ### copied and pasted from above ###
-      this.__updateIdent(ident);
-      this._uniqueName = gUniqueActorName++;
-      this._eventMap = {};
-      this._entries = [];
-      this._born = $microtime.now();
-      this._kids = null;
-      // ### end copied and pasted from above ###
+      loggerCon.call(this, ident);
       this._actor = null;
-      this._expectations = [];
-      this._expectationsMet = true;
-      this._iEntry = this._iExpectation = 0;
     };
     testerCon.prototype = this.testLogProto;
 
@@ -712,6 +707,9 @@ LoggestClassMaker.prototype = {
       // initially undefined, goes null when we register for pairing, goes to
       //  the logger instance when paired.
       this._logger = undefined;
+      this._expectations = [];
+      this._expectationsMet = true;
+      this._iEntry = this._iExpectation = 0;
     };
     testActorCon.prototype = this.testActorProto;
     this.moduleFab._actorCons[this.name] = testActorCon;
@@ -725,15 +723,18 @@ LoggestClassMaker.prototype = {
       var logger, tester;
       // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
+console.log("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
         logger = new testerCon(ident);
         parentLogger = tester.reportNewLogger(logger, parentLogger);
       }
       // - Logging
       else if (moduleFab._generalLog || testerCon._generalLog) {
+console.log("general logger for: " + testerCon.prototype.__defName);
         logger = new loggerCon(ident);
       }
       // - Statistics Only
       else {
+console.log("statistics only for: " + testerCon.prototype.__defName);
         return new dummyCon();
       }
 

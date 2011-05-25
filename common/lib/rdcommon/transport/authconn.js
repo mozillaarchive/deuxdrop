@@ -220,7 +220,6 @@ var AuthClientCommon = {
     }
   },
   _handleMessage: function(msg) {
-
     var handlerObj, state;
     if (this.connState !== 'app') {
       handlerObj = this;
@@ -356,17 +355,19 @@ function serve404s(request, response) {
  *  identifier (which is handled by the logging layer).
  */
 function AuthorizingServer() {
+console.log("instantiating server");
   this._endpoints = {};
 
-  this.log = LOGFAB.server(this, null);
+  this.log = LOGFAB.server(this, null, []);
 
   // That which is not a websocket shall be severely disappointed currently.
-  var httpServer = this._httpServer = http.createServer(serve404s);
+  var httpServer = this._httpServer = $http.createServer(serve404s);
 
   var server = this._wsServer = new $ws.WebSocketServer();
   server.on('request', this._onRequest.bind(this));
 
   this.address = null;
+console.log("constructor completed.");
 }
 AuthorizingServer.prototype = {
   _onRequest: function _onRequest(request) {
@@ -396,7 +397,9 @@ AuthorizingServer.prototype = {
     var self = this;
     function listening() {
       self.address = self._httpServer.address();
-      self.log.listening(self.address.address, self.address.port);
+      self.log.__updateIdent(["server on",
+                              self.address.address + ":" + self.address.port]);
+      self.log.listening();
     }
     if (usePort)
       this._httpServer.listen(usePort, listening);
@@ -412,7 +415,7 @@ exports.AuthorizingServer = AuthorizingServer;
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   clientConn: {
-    implClass: AuthClientConn,
+    //implClass: AuthClientConn,
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
     semanticIdent: {
@@ -443,7 +446,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
   },
   serverConn: {
-    implClass: AuthServerConn,
+    //implClass: AuthServerConn,
     type: $log.CONNECTION,
     subtype: $log.SERVER,
     semanticIdent: {
@@ -474,11 +477,11 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
   },
   server: {
-    implClass: AuthorizingServer,
+    //implClass: AuthorizingServer,
     type: $log.SERVER,
     events: {
       endpointRegistered: {path: true},
-      listening: {address: false, port: false},
+      listening: {},
       endpointConn: {path: true},
     },
   },

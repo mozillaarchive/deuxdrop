@@ -122,13 +122,13 @@ parser.command('test')
     // XXX !!! obviously, we want this to find tests, not have them be hardcoded
     $require(['rdcommon/testdriver', 'rdstests/auth-conn-loopback'],
              function($driver, $tmod) {
-      debugger;
       when($driver.runTestsFromModule($tmod),
         function(runner) {
-console.log("test run complete per promise");
+console.error("test run complete per promise");
           runner.dumpLogResultsToConsole();
+          process.exit(0);
         });
-console.log("cmdline callback complete");
+console.error("cmdline callback complete");
     });
   });
 

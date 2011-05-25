@@ -310,7 +310,7 @@ exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
 
 var LOGFAB = exports.LOGFAB = $log.register(null, {
   testDefiner: {
-    implClass: TestDefiner,
+    //implClass: TestDefiner,
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_GROUP,
     asyncJobs: {
@@ -321,7 +321,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     }
   },
   testCase: {
-    implClass: TestCase,
+    //implClass: TestCase,
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_CASE,
     asyncJobs: {
@@ -329,10 +329,10 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
     latchState: {
       result: false,
-    }
+    },
   },
   testCasePermutation: {
-    implClass: TestContext,
+    //implClass: TestContext,
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_PERMUTATION,
     asyncJobs: {
@@ -346,7 +346,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     }
   },
   testStep: {
-    implClass: TestStep,
+    //implClass: TestStep,
     type: $log.TEST_DRIVER,
     subtype: $log.TEST_STEP,
 
@@ -358,7 +358,10 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
     latchState: {
       result: false,
-    }
+    },
+    errors: {
+      timeout: {},
+    },
   },
 });
 
