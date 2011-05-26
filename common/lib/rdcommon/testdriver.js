@@ -297,7 +297,7 @@ TestRunner.prototype = {
 
   _markDefinerUnderTest: function(definer) {
     for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
-      definer.__logfabs[iFab]._underTest = this;
+      definer.__logfabs[iFab]._underTest = this._runtimeContext;
     }
   },
 

@@ -174,7 +174,7 @@ var AuthClientCommon = {
     this._queuedMessages = null;
 
     this._boundHandlerResolved = this._onHandlerResolved.bind(this);
-    this._boundHandlerRejected = this._onHandlerReject.bind(this);
+    this._boundHandlerRejected = this._onHandlerRejected.bind(this);
   },
   _connected: function(conn) {
     this.log.connected();

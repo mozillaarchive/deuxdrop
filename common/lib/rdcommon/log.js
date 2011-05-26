@@ -264,7 +264,7 @@ var LogProtoBase = {
       var normIdent = [];
       for (var i = 0; i < ident.length; i++) {
         var identBit = ident[i];
-        if (typeof(identBit) === "string")
+        if (typeof(identBit) === "string" || identBit == null)
           normIdent.push(identBit);
         else
           normIdent.push(identBit._uniqueName);
@@ -609,7 +609,13 @@ LoggestClassMaker.prototype = {
       catch(ex) {
         entry.push($microtime.now());
         entry.push(gSeq++);
-        entry.push(ex);
+        // We can't push the exception directly because its "arguments" payload
+        //  can have rich object references that will cause issues during JSON
+        //  serialization.  We most care that it can create circular references,
+        //  but also are not crazy about serializing potentially huge object
+        //  graphs.  This might be a great place to perform some logHelper
+        //  style transformations.
+        entry.push({message: ex.message, stack: ex.stack, type: ex.type});
         this._entries.push(entry);
         // (call errors are events)
         this._eventMap[name] = (this._eventMap[name] || 0) + 1;
