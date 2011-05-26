@@ -103,4 +103,12 @@ exports.generateFullIdent = function generateFullIdent(details) {
 exports.attestWriteMeMail = function attestWriteMeMail() {
 };
 
+exports.generateServerKeyPair = function() {
+  var rawPair = $nacl.box_keypair();
+  return {
+    secretKey: rawPair.sk,
+    publicKey: rawPair.pk,
+  };
+};
+
 }); // end define

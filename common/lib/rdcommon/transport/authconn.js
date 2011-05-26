@@ -279,7 +279,8 @@ function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
   this.endpoint = endpoint;
 
   this.log = LOGFAB.clientConn(this, null,
-                               [clientIdent, 'to', serverIdent,
+                               [clientIdent.publicKey, 'to',
+                                serverIdent.publicKey,
                                 'at endpoint', endpoint]);
 
   this._initCommon('connect');
@@ -320,7 +321,8 @@ exports.AuthClientConn = AuthClientConn;
  */
 function AuthServerConn(serverIdent, endpoint, rawConn, _parentLogger) {
   this.log = LOGFAB.serverConn(this, _parentLogger,
-                               [serverIdent, 'on endpoint', endpoint]);
+                               [serverIdent.publicKey,
+                                'on endpoint', endpoint]);
 
   this._initCommon('authClientKey');
   this._connected(rawConn);
@@ -335,8 +337,9 @@ AuthServerConn.prototype = {
   },
 
   _msg_authClientVouch_vouch: function(msg) {
-    this.log.__updateIdent([serverIdent, 'on endpoint', endpoint, 'with client',
-                            this.clientIdent]);
+    this.log.__updateIdent([this.serverIdent.publicKey,
+                            'on endpoint', endpoint,
+                            'with client', this.clientIdent.publicKey]);
 
   },
 

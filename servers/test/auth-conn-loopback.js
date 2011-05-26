@@ -43,12 +43,14 @@ define(
   [
     'rdcommon/transport/authconn',
     'rdcommon/testcontext',
+    'rdcommon/identities/privident',
     'module',
     'exports'
   ],
   function(
     $authconn,
     $tc,
+    $privident,
     $module,
     exports
   ) {
@@ -109,10 +111,15 @@ console.log("running loopback test context def thing");
   var eServerConn = T.actor('serverConn', 'S'), serverConn;
   var eServer = T.actor('server', 'L'), server;
 
+  var serverIdent, clientIdent;
+
   T.setup(eServer, 'performs setup and listens', function() {
     // (it is implied that eServer is created this step)
     eServer.expect_endpointRegistered('test/test');
     eServer.expect_listening();
+
+    serverIdent = $privident.generateServerKeyPair();
+    clientIdent = $privident.generateServerKeyPair();
 
     server = new $authconn.AuthorizingServer();
     server.registerServer(TestServerDef);
@@ -129,7 +136,8 @@ console.log("running loopback test context def thing");
 
     var url = "http://" + server.address + ":" + server.port + "/";
     var endpoint = "test/test";
-    clientConn = new TestClientConnection(url, endpoint);
+    clientConn = new TestClientConnection(clientIdent, serverIdent,
+                                          url, endpoint);
 
   });
 
