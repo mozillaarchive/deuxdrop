@@ -289,7 +289,9 @@ function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
   wsc.on('error', this._onConnectError.bind(this));
   wsc.on('connect', this._onConnected.bind(this));
 
-  wsc.connect(url, [PROTO_REV]);
+  var fullUrl = url + endpoint;
+  this.log.connecting(fullUrl);
+  wsc.connect(fullUrl, [PROTO_REV]);
 }
 AuthClientConn.prototype = {
   __proto__: AuthClientCommon,
@@ -396,7 +398,11 @@ AuthorizingServer.prototype = {
     }
   },
 
-  listen: function(usePort) {
+  listen: function(useIP, usePort) {
+    if (useIP === undefined)
+      useIP = '127.0.0.1';
+    if (usePort === undefined)
+      usePort = 0;
     var self = this;
     function listening() {
       self.address = self._httpServer.address();
@@ -404,10 +410,7 @@ AuthorizingServer.prototype = {
                               self.address.address + ":" + self.address.port]);
       self.log.listening();
     }
-    if (usePort)
-      this._httpServer.listen(usePort, listening);
-    else
-      this._httpServer.listen(listening);
+    this._httpServer.listen(usePort, useIP, listening);
   },
 
   shutdown: function() {
@@ -433,7 +436,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       appState: true,
     },
     events: {
-      connect: {},
+      connecting: {fullUrl: false},
       connected: {},
       send: {type: true},
       receive: {type: true},

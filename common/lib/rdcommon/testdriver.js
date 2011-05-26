@@ -188,12 +188,20 @@ TestRunner.prototype = {
     else {
       // create a deferred so we can generate a timeout.
       var deferred = $Q.defer();
+      // -- timeout handler
       var countdownTimer = setTimeout(function() {
+        // - tell the actors to fail any remaining expectations
+        for (var iActor = 0; iActor < step.actors.length; iActor++) {
+          actor = step.actors[iActor];
+          actor.__failUnmetExpectations();
+        }
+
         step.log.timeout();
         step.log.result('fail');
         deferred.resolve(false);
         deferred = null;
       }, STEP_TIMEOUT_MS);
+      // -- promise resolution/rejection handler
       whenAll(promises, function passed() {
         if (!deferred) return;
         clearTimeout(countdownTimer);

@@ -287,6 +287,11 @@ var LogProtoBase = {
  */
 var TestLogProtoBase = {
   __proto__: LogProtoBase,
+
+  __failedExpectation: function(exp) {
+    var entry = ['!failedexp', exp, $microtime.now(), gSeq++];
+    this._entries.push(entry);
+  },
 };
 
 var TestActorProtoBase = {
@@ -307,6 +312,8 @@ var TestActorProtoBase = {
   __prepForTestStep: function(testRuntimeContext) {
     if (!this._logger)
       testRuntimeContext.reportPendingActor(this);
+    // we should have no expectations going into a test step.
+    this.__resetExpectations();
   },
 
   /**
@@ -330,22 +337,33 @@ var TestActorProtoBase = {
     this._deferred = null;
   },
 
+  __failUnmetExpectations: function() {
+    if (this._iExpectation < this._expectations.length && this._logger) {
+      for (var i = this._iExpectation; i < this._expectations.length; i++) {
+        this._logger.__failedExpectation(this._expectations[i]);
+      }
+    }
+  },
+
   /**
    * Invoked by the test-logger associated with this actor to let us know that
    *  something has been logged so that we can perform an expectation check and
    *  fulfill our promise/reject our promise, as appropriate.
    */
   __loggerFired: function() {
+console.log("  LOGGER FIRED!");
     // we can't do anything if we don't have an actor.
     var entries = this._logger._entries;
     while (this._iExpectation < this._expectations.length &&
            this._iEntry < entries.length) {
       var expy = this._expectations[this._iExpectation++];
       var entry = entries[this._iEntry++];
+console.log("    compare", expy, entry);
       // Currently, require exact pairwise matching between entries and
       //  expectations.
       if (expy[0] !== entry[0] ||
           !this['_verify_' + expy[0]](expy, entry)) {
+console.log("   NO!");
         this._expectationsMet = false;
         if (this._deferred)
           this._deferred.reject([expy, entry]);
@@ -354,8 +372,10 @@ var TestActorProtoBase = {
     }
     // XXX explode on logs without expectations?
 
-    if ((this._iExpectation >= this._expectations.length) && this._deferred)
+    if ((this._iExpectation >= this._expectations.length) && this._deferred) {
+console.log("   YES!");
       this._deferred.resolve();
+    }
   },
 };
 exports.TestActorProtoBase = TestActorProtoBase;
@@ -473,9 +493,10 @@ LoggestClassMaker.prototype = {
   addEvent: function(name, args) {
     this._define(name, 'event');
 
-    var numArgs = 0;
+    var numArgs = 0, useArgs = [];
     for (var key in args) {
       numArgs++;
+      useArgs.push(args[key]);
     }
 
     this.dummyProto[name] = function() {
@@ -498,7 +519,8 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        exp.push(arguments[iArg]);
+        if (useArgs[iArg])
+          exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
     };
@@ -516,9 +538,10 @@ LoggestClassMaker.prototype = {
     this.dummyProto[name_begin] = NOP;
     this.dummyProto[name_end] = NOP;
 
-    var numArgs = 0;
+    var numArgs = 0, useArgs = [];
     for (var key in args) {
       numArgs++;
+      useArgs.push(args[key]);
     }
 
     this.logProto[name_begin] = function() {
@@ -548,14 +571,16 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name_begin] = function() {
       var exp = [name_begin];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        exp.push(arguments[iArg]);
+        if (useArgs[iArg])
+          exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
     };
     this.testActorProto['expect_' + name_end] = function() {
       var exp = [name_end];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        exp.push(arguments[iArg]);
+        if (useArgs[iArg])
+          exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
     };
@@ -572,9 +597,10 @@ LoggestClassMaker.prototype = {
   addCall: function(name, logArgs) {
     this._define(name, 'call');
 
-    var numLogArgs = 0;
+    var numLogArgs = 0, useArgs = [];
     for (var key in logArgs) {
       numLogArgs++;
+      useArgs.push(args[key]);
     }
 
     this.dummyProto[name] = function() {
@@ -627,20 +653,36 @@ LoggestClassMaker.prototype = {
 
     this._wrapLogProtoForTest(name);
 
+    // XXX we have no way to indicate we expect/desire an assertion
+    //  (we will just explode on any logged exception)
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < arguments.length; iArg++) {
-        exp.push(arguments[iArg]);
+        if (useArgs[iArg])
+          exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+    };
+    this.testActorProto['_verify_' + name] = function(tupe, entry) {
+      // report failure if an exception was returned!
+      if (entry.length > numLogArgs + 5) {
+        return false;
+      }
+      // only check arguments we had expectations for.
+      for (var iArg = 1; iArg < tupe.length; iArg++) {
+        if (tupe[iArg] !== entry[iArg])
+          return false;
+      }
+      return true;
     };
   },
   addError: function(name, args) {
     this._define(name, 'error');
 
-    var numArgs = 0;
+    var numArgs = 0, useArgs = [];
     for (var key in args) {
       numArgs++;
+      useArgs.push(args[key]);
     }
 
     this.dummyProto[name] = function() {
@@ -663,9 +705,18 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        exp.push(arguments[iArg]);
+        if (useArgs[iArg])
+          exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+    };
+    this.testActorProto['_verify_' + name] = function(tupe, entry) {
+      // only check arguments we had expectations for.
+      for (var iArg = 1; iArg < tupe.length; iArg++) {
+        if (tupe[iArg] !== entry[iArg])
+          return false;
+      }
+      return true;
     };
   },
   /**

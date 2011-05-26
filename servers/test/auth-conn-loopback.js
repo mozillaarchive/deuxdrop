@@ -129,12 +129,12 @@ console.log("running loopback test context def thing");
   T.action(eClientConn, 'connects to', eServer, 'resulting in', eServerConn,
            function() {
     // (it is implied that eServer and eServerConn are created this step)
-    eClientConn.expect_connect();
+    eClientConn.expect_connecting();
     eClientConn.expect_connected();
     eServer.expect_endpointConn('test/test');
     eServerConn.expect_connected();
 
-    var url = "http://" + server.address + ":" + server.port + "/";
+    var url = "ws://" + server.address.address + ":" + server.address.port + "/";
     var endpoint = "test/test";
     clientConn = new TestClientConnection(clientIdent, serverIdent,
                                           url, endpoint);
