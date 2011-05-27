@@ -104,10 +104,10 @@
  *   }
  *   @item{
  *     The client either closes the connection OR it responds with
- *     [Box[C, Box[C'](C->S)](C'->S')].  The nonce used for the message is a
- *     'C' character followed by binary zero bytes, with each subsequent client
- *     message incrementing the binary bytes in a little-endian fashion (aka
- *     from the left).
+ *     [Box[C, vouchNonce, Box[C'](C->S)](C'->S')].  The nonce used for the
+ *     message is a 'C' character followed by binary zero bytes, with each
+ *     subsequent client message incrementing the binary bytes in a
+ *     little-endian fashion (aka from the left).
  *
  *     Note that the nonce usage differs from CurveCP here.  We prefix a
  *     letter because nonce-requirements demand different nonces whenever
@@ -158,16 +158,59 @@ var PROTO_REV = 'deuxdrop-v1';
  */
 var MAX_QUEUED_MESSAGES = 2;
 
+var ZEROES_8 = '\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
+var ZEROES_16 = ZEROES_8 + ZEROES_8;
+var ZEROES_64 = ZEROES_16 + ZEROES_16 + ZEROES_16 + ZEROES_16;
+
+var ZEROES_23 = ZEROES_8 + ZEROES_8 + ZEROES_8.substring(0, 7);
+var INITIAL_CLIENT_NONCE = 'C' + ZEROES_23;
+var INITIAL_SERVER_NONCE = 'S' + ZEROES_23;
+
+var ZERO = '\u0000';
+
+/**
+ * Increment our increasing nonces.
+ *
+ * This would really like to using mutable data structures like a buffer or
+ *  JS typed arrays, but we're punting on that for now.
+ */
+function incNonce(old) {
+  var nonce = old.substring(0, 1);
+  for(var i=1; i < 24; i++) {
+    var bval = old.charAt(i), nval;
+    if (bval == 255) {
+      nval += ZERO;
+      continue;
+    }
+    else {
+      nval = bval + 1;
+      nonce += String.fromCharCode(nval);
+      break;
+    }
+  }
+  if (i < 24)
+    nonce += old.substring(i);
+  return nonce;
+}
+
+var MAGIC_CLOSE_MARKER = {};
+
 /**
  * Common authenticated/encrypted connection abstraction logic.
  *
  * Provides state management.
  */
 var AuthClientCommon = {
-  _initCommon: function(initialState) {
+  _initCommon: function(initialState, myNextNonce, otherNextNonce) {
     this.connState = initialState;
     this.appConn = null;
     this._pendingPromise = null;
+    this._ephemKeyPair = null;
+    this._otherPublicKey = null;
+
+    this._myNextNonce = myNextNonce;
+    this._otherNextNonce = otherNextNonce;
+
     /**
      * Backlog of messages received while pending on a promise.
      */
@@ -182,6 +225,8 @@ var AuthClientCommon = {
     conn.on('error', this._onError.bind(this));
     conn.on('close', this._onClose.bind(this));
     conn.on('message', this._onMessage.bind(this));
+
+    this._ephemKeyPair = $nacl.box_keypair();
   },
 
   _onError: function(error) {
@@ -193,12 +238,24 @@ var AuthClientCommon = {
   _onMessage: function(wsmsg) {
     var msg;
     if (wsmsg.type === 'utf8') {
+      // app frames and the vouch frame are binary.
+      if (this.connState === 'app' && this.connState !== 'authClientVouch') {
+        this.log.badProto();
+        this.close();
+        return;
+      }
       msg = JSON.parse(wsmsg.utf8Data);
     }
     else {
-      this.log.badProto();
-      this._close();
-      return;
+      var expNonce = this._otherNextNonce;
+      msg = $nacl.box_open(wsmsg.binaryData, expNonce,
+                           this._otherPublicKey, this._ephemKeyPair.sk);
+      if (msg == null) {
+        this.log.corruptBox();
+        this.close();
+        return;
+      }
+      this._otherNextNonce = incNonce(this._otherNextNonce);
     }
 
     this.log.receive(msg.type, msg);
@@ -240,6 +297,9 @@ var AuthClientCommon = {
     var rval = this.log.handleMsg(msg.type,
                                   handlerObj, handlerObj[handlerName], msg);
 
+    if (rval === MAGIC_CLOSE_MARKER) {
+      // good, nothing to do.
+    }
     if ($Q.isPromise(rval)) {
       this._pendingPromise = rval;
       $Q.when(this._pendingPromise,
@@ -247,21 +307,47 @@ var AuthClientCommon = {
               this._boundHandlerRejected);
     }
     else if (typeof(rval) === "string") { // (good return)
-
+      this.appState = rval;
     }
     else { // (exception thrown / illegal return case)
-      this.handlerFailure(rval);
+      this.log.handlerFailure(rval);
       this.close(true);
     }
   },
   _onHandlerResolved: function(newstate) {
+    if (newstate === MAGIC_CLOSE_MARKER) {
+      return;
+    }
+    else if (typeof(newstate) !== "string") {
+      this._onHandlerRejected(newstate);
+      return;
+    }
+
+    this.appState = newstate;
   },
   _onHandlerRejected: function(err) {
+    this.log.handlerFailure(err);
+    this.close(true);
   },
 
   close: function(isBad) {
     if (this._conn)
       this._conn.close();
+    return MAGIC_CLOSE_MARKER;
+  },
+
+  _writeRaw: function(obj) {
+    this._conn.sendUTF(JSON.stringify(obj));
+  },
+
+  writeMessage: function(obj) {
+    var jsonMsg = JSON.stringify(obj);
+    var nonce = this._myNextNonce;
+    var boxedJsonMsg = $nacl.box(jsonMsg, nonce, this._otherPublicKey,
+                                 this._ephemKeyPair.sk);
+    this._conn.sendBytes(boxedJsonMsg);
+
+    this._myNextNonce = incNonce(this._myNextNonce);
   },
 };
 
@@ -283,7 +369,8 @@ function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
                                 serverIdent.publicKey,
                                 'at endpoint', endpoint]);
 
-  this._initCommon('connect');
+  this._initCommon('connect',
+                   INITIAL_CLIENT_NONCE, INITIAL_SERVER_NONCE);
 
   var wsc = this._wsClient = new $ws.WebSocketClient();
   wsc.on('error', this._onConnectError.bind(this));
@@ -305,12 +392,45 @@ AuthClientConn.prototype = {
   _onConnected: function(conn) {
     this._connected(conn);
     this.log.connState((this.state = 'authServerKey'));
+
+    // send [S, C', nonce, Box[64-bytes of zeroes](C'->S)]
+    var nonce = $nacl.box_random_nonce();
+    var boxedZeroes = $nacl.box(ZEROES_64, nonce, this.serverIdent.publicKey,
+                                this._ephemKeyPair.sk);
+    this._writeRaw({
+      type: "key",
+      serverKey: this.serverIdent.publicKey,
+      clientEphemeralKey: this._ephemKeyPair.pk,
+      nonce: nonce,
+      boxedZeroes: boxedZeroes
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // State Message Handlers
 
   _msg_authServerKey_key: function(msg) {
+    var ephemKey = $nacl.box_open(msg.boxedEphemeralKey, msg.nonce,
+                                  this.serverIdent.publicKey,
+                                  this._ephemKeyPair.sk);
+    if (!ephemKey) {
+      this.log.corruptServerEphemeralKey();
+      return this.close();
+    }
+    this._otherPublicKey = msg.ephemKey;
+
+    // -- send [Box[C, vouchNonce, Box[C'](C->S)](C'->S')]
+    var nonce = $nacl.box_random_nonce();
+    var boxedVoucher = $nacl.box(this._ephemKeyPair.pk, nonce,
+                                 this._otherPublicKey,
+                                 this.clientIdent.secretKey);
+    this.writeMessage({
+      type: "vouch",
+      clientKey: this.clientIdent.publicKey,
+      nonce: nonce,
+      boxedVoucher: boxedVoucher
+    });
+    return 'app';
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -325,12 +445,20 @@ exports.AuthClientConn = AuthClientConn;
  *
  *
  */
-function AuthServerConn(serverIdent, endpoint, rawConn, _parentLogger) {
+function AuthServerConn(serverIdent, endpoint, rawConn, authVerifier,
+                        _parentLogger) {
+  this.appConn = null;
+  this.serverIdent = serverIdent;
+  this.clientIdent = null;
+  this.endpoint = endpoint;
+
   this.log = LOGFAB.serverConn(this, _parentLogger,
                                [serverIdent.publicKey,
                                 'on endpoint', endpoint]);
+  this._authVerifier = authVerifier;
 
-  this._initCommon('authClientKey');
+  this._initCommon('authClientKey',
+                   INITIAL_SERVER_NONCE, INITIAL_CLIENT_NONCE);
   this._connected(rawConn);
 }
 AuthServerConn.prototype = {
@@ -340,13 +468,55 @@ AuthServerConn.prototype = {
   // State Message Handlers
 
   _msg_authClientKey_key: function(msg) {
+    if (msg.serverKey !== this.serverIdent.publicKey) {
+      this.log.wrongServer();
+      return this.close();
+    }
+    // We just care that the boxed zeroes authenticate with the key, not that
+    //  what's inside is zeroes...
+    if (!$nacl.box_open(msg.boxedZeroes, msg.nonce, msg.clientEphemeralKey,
+                        this.serverIdent.privateKey)) {
+      this.log.corruptClientEphemeralKey();
+      this.close();
+      return this.close();
+    }
+    this._otherPublicKey = msg.clientEphemeralKey;
+
+    // -- send [nonce, Box[S'](S->C')].
+    var nonce = $nacl.box_random_nonce();
+    var boxedEphemeralKey = $nacl.box(this._ephemKeyPair.pk, nonce,
+                                      this._otherPublicKey,
+                                      this.serverIdent.privateKey);
+    this._writeRaw({
+      type: "key",
+      nonce: nonce,
+      boxedEphemeralKey: boxedEphemeralKey,
+    });
+
+    return 'authClientVouch';
   },
 
   _msg_authClientVouch_vouch: function(msg) {
-    this.log.__updateIdent([this.serverIdent.publicKey,
-                            'on endpoint', endpoint,
-                            'with client', this.clientIdent.publicKey]);
+    var ephemCheck = $nacl.box_open(msg.boxedVoucher, msg.nonce,
+                                    msg.clientKey, this.serverIdent.secretKey);
+    if (ephemCheck !== this._otherPublicKey) {
+      this.log.badVoucher();
+      return this.close();
+    }
+    this.clientIdent = {publicKey: msg.clientKey};
 
+    var self = this;
+    return when(this._authVerifier(endpoint, this.clientIdent.publicKey),
+                function(isgood) {
+      if (!isgood) {
+        return self.close();
+      }
+      self.log.__updateIdent([self.serverIdent.publicKey,
+                              'on endpoint', self.endpoint,
+                              'with client', self.clientIdent.publicKey]);
+      self.log.endpointConn(self.endpoint);
+      return 'app';
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -393,8 +563,9 @@ AuthorizingServer.prototype = {
     if (this._endpoints.hasOwnProperty(protocol)) {
       var info = this._endpoints[protocol];
 
-      var rawConn = request.accept(PROTO_REV, request.origin);
-      var authConn = new AuthServerConn(info.serverInfo, rawConn, this.log);
+      var rawConn = request.accept(protocol, request.origin);
+      var authConn = new AuthServerConn(info.serverIdent, protocol, rawConn,
+                                        info.authVerifier, this.log);
       return;
     }
     this.log.badRequest("['" + protocol + "']");
@@ -464,9 +635,15 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     errors: {
       connectError: {error: false},
       connectFailed: {error: false},
+
+      corruptServerEphemeralKey: {},
+
       badProto: {},
+      corruptBox: {},
+
       badMessage: {type: true},
       queueBacklogExceeded: {},
+      handlerFailure: {err: $log.EXCEPTION},
     },
   },
   serverConn: {
@@ -494,10 +671,19 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       handleMsg: {type: true},
     },
     errors: {
+      // semantic failures in connection establishment
+      wrongServer: {},
+      corruptClientEphemeralKey: {},
+      badVoucher: {},
+      authFailed: {},
+
+      // low level protocol failures: wrong frame type
       badProto: {},
+      corruptBox: {},
+
       badMessage: {type: true},
       queueBacklogExceeded: {},
-      handlerFailure: {err: true},
+      handlerFailure: {err: $log.EXCEPTION},
     },
   },
   server: {

@@ -97,14 +97,6 @@ function TestServerConnection(conn) {
 TestServerConnection.prototype = {
 };
 
-var TestServerDef = {
-  endpoints: {
-    'test/test': {
-      implClass: TestServerConnection,
-    },
-  },
-};
-
 TD.commonCase('working loopback authconn connection', function(T) {
 console.log("running loopback test context def thing");
   var eClientConn = T.actor('clientConn', 'C'), clientConn;
@@ -121,6 +113,18 @@ console.log("running loopback test context def thing");
     serverIdent = $privident.generateServerKeyPair();
     clientIdent = $privident.generateServerKeyPair();
 
+    var TestServerDef = {
+      endpoints: {
+        'test/test': {
+          implClass: TestServerConnection,
+          serverIdent: serverIdent,
+          authVerifier: function(endpoint, clientKey) {
+            return (clientKey === clientIdent.publicKey);
+          }
+        },
+      },
+    };
+
     server = new $authconn.AuthorizingServer();
     server.registerServer(TestServerDef);
     server.listen();
@@ -131,6 +135,7 @@ console.log("running loopback test context def thing");
     // (it is implied that eServer and eServerConn are created this step)
     eClientConn.expect_connecting();
     eClientConn.expect_connected();
+    eServer.expect_request('test/test');
     eServer.expect_endpointConn('test/test');
     eServerConn.expect_connected();
 

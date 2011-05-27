@@ -731,7 +731,11 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] === EXCEPTION) {
           var arg = arguments[iArg];
-          entry.push({m: arg.message, s: arg.stack});
+          // only try and magic up actual errors
+          if (arg instanceof Error)
+            entry.push({m: arg.message, s: arg.stack});
+          else
+            entry.push({m: "" + arg, s: ""});
         }
         else {
           entry.push(arguments[iArg]);
