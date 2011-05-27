@@ -139,6 +139,8 @@ var STEP_TIMEOUT_MS = 1000;
 function TestRunner(testDefiner) {
   this._testDefiner = testDefiner;
   this._runtimeContext = new TestRuntimeContext();
+
+  this._logBadThingsToLogger = null;
 }
 TestRunner.prototype = {
   /**
@@ -150,6 +152,8 @@ TestRunner.prototype = {
    */
   runTestStep: function(step) {
     var iActor, actor;
+
+    this._logBadThingsToLogger = step.log;
 
     // -- notify the actors about their imminent use in a step
     for (iActor = 0; iActor < step.actors.length; iActor++) {
@@ -334,18 +338,16 @@ TestRunner.prototype = {
         self = this;
     this._markDefinerUnderTest(definer);
     definer._log.run_begin();
+    // -- next case
     function runNextTestCase() {
-console.log("runNextTestCase", iTestCase, definer.__testCases.length);
+      // - all done
       if (iTestCase >= definer.__testCases.length) {
         process.removeListener('exit', earlyBailHandler);
+        process.removeListener('uncaughtException', uncaughtExceptionHandler);
 
-console.log("marking run end; resolving.");
         definer._log.run_end();
-try {
         self._clearDefinerUnderTest(definer);
-  } catch (ex) { console.error("frick:", ex); }
         deferred.resolve(self);
-console.log("resolved");
         return;
       }
       var testCase = definer.__testCases[iTestCase++];
@@ -366,6 +368,15 @@ console.log("resolved");
       self.dumpLogResultsToConsole();
     }
     process.once('exit', earlyBailHandler);
+
+    /**
+     * Log uncaught exceptions to the currently active test step.
+     */
+    function uncaughtExceptionHandler(ex) {
+      if (self._logBadThingsToLogger)
+        self._logBadThingsToLogger.uncaughtException(ex.message, ex.stack);
+    }
+    process.on('uncaughtException', uncaughtExceptionHandler);
 
     return deferred.promise;
   },

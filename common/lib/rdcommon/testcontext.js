@@ -361,6 +361,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
     errors: {
       timeout: {},
+      uncaughtException: {message: false, stack: false},
     },
   },
 });
