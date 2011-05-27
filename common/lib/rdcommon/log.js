@@ -288,6 +288,11 @@ var LogProtoBase = {
 var TestLogProtoBase = {
   __proto__: LogProtoBase,
 
+  __unexpectedEntry: function(iEntry, unexpEntry) {
+    var entry = ['!unexpected', unexpEntry];
+    this._entries[iEntry] = entry;
+  },
+
   __failedExpectation: function(exp) {
     var entry = ['!failedexp', exp, $microtime.now(), gSeq++];
     this._entries.push(entry);
@@ -332,6 +337,9 @@ var TestActorProtoBase = {
 
   __resetExpectations: function() {
     this._expectationsMet = true;
+    // kill all processed entries.
+    if (this._logger)
+      this._logger._entries.splice(0, this._iEntry);
     this._iEntry = this._iExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
     this._deferred = null;
@@ -356,19 +364,31 @@ console.log("  LOGGER FIRED!");
     var entries = this._logger._entries;
     while (this._iExpectation < this._expectations.length &&
            this._iEntry < entries.length) {
-      var expy = this._expectations[this._iExpectation++];
+      var expy = this._expectations[this._iExpectation];
       var entry = entries[this._iEntry++];
+
+      // ignore meta-entries (which are prefixed with a '!')
+      if (entry[0][0] === "!")
+        continue;
+
 console.log("    compare", expy, entry);
       // Currently, require exact pairwise matching between entries and
       //  expectations.
-      if (expy[0] !== entry[0] ||
-          !this['_verify_' + expy[0]](expy, entry)) {
-console.log("   NO!");
-        this._expectationsMet = false;
-        if (this._deferred)
-          this._deferred.reject([expy, entry]);
-        return;
+      if (expy[0] !== entry[0]) {
+        this._logger.__unexpectedEntry(this._iEntry - 1, entry);
       }
+      else if(!this['_verify_' + expy[0]](expy, entry)) {
+      }
+      else {
+        this._iExpectation++;
+        continue;
+      }
+      // (only bad cases fall out without hitting a continue)
+console.log("   NO!");
+      this._expectationsMet = false;
+      if (this._deferred)
+        this._deferred.reject([expy, entry]);
+      return;
     }
     // XXX explode on logs without expectations?
 

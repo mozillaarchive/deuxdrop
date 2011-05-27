@@ -287,6 +287,7 @@ function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
 
   var wsc = this._wsClient = new $ws.WebSocketClient();
   wsc.on('error', this._onConnectError.bind(this));
+  wsc.on('connectFailed', this._onConnectFailed.bind(this));
   wsc.on('connect', this._onConnected.bind(this));
 
   var fullUrl = url + endpoint;
@@ -297,6 +298,10 @@ AuthClientConn.prototype = {
   __proto__: AuthClientCommon,
 
   _onConnectError: function(error) {
+    this.log.connectError(error);
+  },
+  _onConnectFailed: function(error) {
+    this.log.connectFailed(error);
   },
   _onConnected: function(conn) {
     this._connected(conn);
@@ -368,7 +373,9 @@ console.log("instantiating server");
   // That which is not a websocket shall be severely disappointed currently.
   var httpServer = this._httpServer = $http.createServer(serve404s);
 
-  var server = this._wsServer = new $ws.WebSocketServer();
+  var server = this._wsServer = new $ws.WebSocketServer({
+    httpServer: httpServer,
+  });
   server.on('request', this._onRequest.bind(this));
 
   this.address = null;
@@ -376,13 +383,16 @@ console.log("constructor completed.");
 }
 AuthorizingServer.prototype = {
   _onRequest: function _onRequest(request) {
+    this.log.request(request.resource);
     if (this._endpoints.hasOwnProperty(request.resource)) {
       var info = this._endpoints[request.resource];
 
       var rawConn = request.accept(PROTO_REV, request.origin);
       var authConn = new AuthServerConn(info.serverInfo, rawConn, this.log);
+      return;
     }
-
+    this.log.badRequest(request.resource);
+    request.reject(404, "NO SUCH ENDPOINT.");
   },
 
   _registerEndpoint: function registerEndpoint(path, endpointDef) {
@@ -446,6 +456,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       handleMsg: {type: true},
     },
     errors: {
+      connectError: {error: false},
+      connectFailed: {error: false},
       badProto: {},
       badMessage: {type: true},
       queueBacklogExceeded: {},
@@ -488,7 +500,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     events: {
       endpointRegistered: {path: true},
       listening: {},
+
+      request: {resource: true},
       endpointConn: {path: true},
+    },
+    errors: {
+      badRequest: {resource: true},
     },
   },
 });

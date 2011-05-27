@@ -205,6 +205,13 @@ TestRunner.prototype = {
       whenAll(promises, function passed() {
         if (!deferred) return;
         clearTimeout(countdownTimer);
+
+        // - tell the actors we are done with this round
+        for (var iActor = 0; iActor < step.actors.length; iActor++) {
+          actor = step.actors[iActor];
+          actor.__resetExpectations();
+        }
+
         step.log.run_end();
         step.log.result('pass');
         deferred.resolve(allGood);
@@ -212,6 +219,13 @@ TestRunner.prototype = {
         if (!deferred) return;
         // XXX we should do something with the failed expectation pair...
         clearTimeout(countdownTimer);
+
+        // - tell the actors we are done with this round
+        for (var iActor = 0; iActor < step.actors.length; iActor++) {
+          actor = step.actors[iActor];
+          actor.__resetExpectations();
+        }
+
         step.log.run_end();
         step.log.result('fail');
         deferred.resolve(false);
