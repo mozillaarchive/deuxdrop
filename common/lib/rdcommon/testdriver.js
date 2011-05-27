@@ -302,6 +302,7 @@ TestRunner.prototype = {
         testCase.log.result(allPassed ? 'pass' : 'fail');
         testCase.log.run_end();
         deferred.resolve(allPassed);
+        return;
       }
 
       // -- yet another step case
