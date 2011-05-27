@@ -290,9 +290,8 @@ function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
   wsc.on('connectFailed', this._onConnectFailed.bind(this));
   wsc.on('connect', this._onConnected.bind(this));
 
-  var fullUrl = url + endpoint;
-  this.log.connecting(fullUrl);
-  wsc.connect(fullUrl, [PROTO_REV]);
+  this.log.connecting(url);
+  wsc.connect(url, [endpoint]);
 }
 AuthClientConn.prototype = {
   __proto__: AuthClientCommon,
@@ -383,15 +382,22 @@ console.log("constructor completed.");
 }
 AuthorizingServer.prototype = {
   _onRequest: function _onRequest(request) {
-    this.log.request(request.resource);
-    if (this._endpoints.hasOwnProperty(request.resource)) {
-      var info = this._endpoints[request.resource];
+    if (request.requestedProtocols.length != 1) {
+      this.log.badRequest("['" + request.requestedProtocols.join("', '") + "']");
+      request.reject(500, "USE EXACTLY ONE PROTOCOL!");
+      return;
+    }
+    var protocol = request.requestedProtocols[0];
+
+    this.log.request(protocol);
+    if (this._endpoints.hasOwnProperty(protocol)) {
+      var info = this._endpoints[protocol];
 
       var rawConn = request.accept(PROTO_REV, request.origin);
       var authConn = new AuthServerConn(info.serverInfo, rawConn, this.log);
       return;
     }
-    this.log.badRequest(request.resource);
+    this.log.badRequest("['" + protocol + "']");
     request.reject(404, "NO SUCH ENDPOINT.");
   },
 
@@ -501,7 +507,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       endpointRegistered: {path: true},
       listening: {},
 
-      request: {resource: true},
+      request: {protocol: true},
       endpointConn: {path: true},
     },
     errors: {

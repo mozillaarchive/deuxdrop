@@ -375,7 +375,7 @@ TestRunner.prototype = {
      */
     function uncaughtExceptionHandler(ex) {
       if (self._logBadThingsToLogger)
-        self._logBadThingsToLogger.uncaughtException(ex.message, ex.stack);
+        self._logBadThingsToLogger.uncaughtException(ex);
     }
     process.on('uncaughtException', uncaughtExceptionHandler);
 

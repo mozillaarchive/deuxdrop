@@ -525,7 +525,13 @@ LoggestClassMaker.prototype = {
       this._eventMap[name] = (this._eventMap[name] || 0) + 1;
       var entry = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        entry.push(arguments[iArg]);
+        if (useArgs[iArg] === EXCEPTION) {
+          var arg = arguments[iArg];
+          entry.push({m: arg.message, s: arg.stack});
+        }
+        else {
+          entry.push(arguments[iArg]);
+        }
       }
       entry.push($microtime.now());
       entry.push(gSeq++);
@@ -537,7 +543,7 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        if (useArgs[iArg])
+        if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
@@ -566,7 +572,13 @@ LoggestClassMaker.prototype = {
       this._eventMap[name_begin] = (this._eventMap[name_begin] || 0) + 1;
       var entry = [name_begin];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        entry.push(arguments[iArg]);
+        if (useArgs[iArg] === EXCEPTION) {
+          var arg = arguments[iArg];
+          entry.push({m: arg.message, s: arg.stack});
+        }
+        else {
+          entry.push(arguments[iArg]);
+        }
       }
       entry.push($microtime.now());
       entry.push(gSeq++);
@@ -576,7 +588,13 @@ LoggestClassMaker.prototype = {
       this._eventMap[name_end] = (this._eventMap[name_end] || 0) + 1;
       var entry = [name_end];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        entry.push(arguments[iArg]);
+        if (useArgs[iArg] === EXCEPTION) {
+          var arg = arguments[iArg];
+          entry.push({m: arg.message, s: arg.stack});
+        }
+        else {
+          entry.push(arguments[iArg]);
+        }
       }
       entry.push($microtime.now());
       entry.push(gSeq++);
@@ -589,7 +607,7 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name_begin] = function() {
       var exp = [name_begin];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        if (useArgs[iArg])
+        if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
@@ -597,7 +615,7 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name_end] = function() {
       var exp = [name_end];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        if (useArgs[iArg])
+        if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
@@ -711,7 +729,13 @@ LoggestClassMaker.prototype = {
       this._eventMap[name] = (this._eventMap[name] || 0) + 1;
       var entry = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        entry.push(arguments[iArg]);
+        if (useArgs[iArg] === EXCEPTION) {
+          var arg = arguments[iArg];
+          entry.push({m: arg.message, s: arg.stack});
+        }
+        else {
+          entry.push(arguments[iArg]);
+        }
       }
       entry.push($microtime.now());
       entry.push(gSeq++);
@@ -723,7 +747,7 @@ LoggestClassMaker.prototype = {
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        if (useArgs[iArg])
+        if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
@@ -900,5 +924,8 @@ exports.TEST_GROUP = 'testgroup';
 exports.TEST_CASE = 'testcase';
 exports.TEST_PERMUTATION = 'testperm';
 exports.TEST_STEP = 'teststep';
+
+// argument information
+var EXCEPTION = exports.EXCEPTION = 'exception';
 
 }); // end define
