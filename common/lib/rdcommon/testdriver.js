@@ -421,6 +421,8 @@ TestRunner.prototype = {
       console.error($util.inspect(dumpObj, false, 12));
     }
     console.error("##### LOGGEST-TEST-RUN-END #####");
+    console.error("AND FOR THE HUMANS...");
+    console.error(JSON.stringify(dumpObj, false, 2));
   }
 };
 

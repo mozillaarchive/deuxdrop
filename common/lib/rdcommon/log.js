@@ -338,9 +338,7 @@ var TestActorProtoBase = {
   __resetExpectations: function() {
     this._expectationsMet = true;
     // kill all processed entries.
-    if (this._logger)
-      this._logger._entries.splice(0, this._iEntry);
-    this._iEntry = this._iExpectation = 0;
+    this._iExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
     this._deferred = null;
   },
@@ -800,18 +798,18 @@ LoggestClassMaker.prototype = {
       var logger, tester;
       // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
-console.log("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
+console.error("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
         logger = new testerCon(ident);
         parentLogger = tester.reportNewLogger(logger, parentLogger);
       }
       // - Logging
       else if (moduleFab._generalLog || testerCon._generalLog) {
-console.log("general logger for: " + testerCon.prototype.__defName);
+console.error("general logger for: " + testerCon.prototype.__defName);
         logger = new loggerCon(ident);
       }
       // - Statistics Only
       else {
-console.log("statistics only for: " + testerCon.prototype.__defName);
+console.error("statistics only for: " + testerCon.prototype.__defName);
         return new dummyCon();
       }
 
