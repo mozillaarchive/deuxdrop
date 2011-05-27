@@ -65,6 +65,15 @@ var parser = $nomnom.globalOpts({
 function run_server(options, sclass) {
 }
 
+var DEATH_PRONE = false;
+process.on("uncaughtException",
+  function(err) {
+    console.error("==== UNCAUGHT ====");
+    console.error(err.stack);
+    if (DEATH_PRONE)
+      process.exit(1);
+  });
+
 parser.command('maildrop')
   .help("Run a maildrop node")
   .opts({
