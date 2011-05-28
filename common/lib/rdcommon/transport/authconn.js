@@ -639,6 +639,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     calls: {
       handleMsg: {type: true},
     },
+    TEST_ONLY_calls: {
+      handleMsg: {msg: $log.JSONABLE},
+    },
     errors: {
       connectError: {error: false},
       connectFailed: {error: false},
@@ -678,6 +681,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     calls: {
       handleMsg: {type: true},
+    },
+    TEST_ONLY_calls: {
+      handleMsg: {msg: $log.JSONABLE},
     },
     errors: {
       // semantic failures in connection establishment

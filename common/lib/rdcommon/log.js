@@ -631,7 +631,7 @@ LoggestClassMaker.prototype = {
       return true;
     };
   },
-  addCall: function(name, logArgs) {
+  addCall: function(name, logArgs, testOnlyLogArgs) {
     this._define(name, 'call');
 
     var numLogArgs = 0, useArgs = [];
@@ -667,6 +667,7 @@ LoggestClassMaker.prototype = {
           arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
         entry.push($microtime.now());
         entry.push(gSeq++);
+        entry.push(null);
         this._entries.push(entry);
       }
       catch(ex) {
@@ -688,7 +689,62 @@ LoggestClassMaker.prototype = {
       return rval;
     };
 
-    this._wrapLogProtoForTest(name);
+    if (!testOnlyLogArgs) {
+      this._wrapLogProtoForTest(name);
+    }
+    else {
+      var numTestOnlyArgs = 0;
+      for (key in testOnlyLogArgs) {
+        numTestOnlyArgs++;
+      }
+      // cut-paste-modify of the above...
+      this.testLogProto[name] = function() {
+        var rval, iArg;
+        var entry = [name];
+        for (iArg = 0; iArg < numLogArgs; iArg++) {
+          entry.push(arguments[iArg]);
+        }
+        entry.push($microtime.now());
+        entry.push(gSeq++);
+        try {
+          rval = arguments[numLogArgs+1].apply(
+            arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
+          entry.push($microtime.now());
+          entry.push(gSeq++);
+          entry.push(null);
+          // ++ new bit
+          var toEat = numTestOnlyArgs;
+          for (iArg += 2; toEat; toEat--, iArg++) {
+            entry.push(arguments[iArg]);
+          }
+          // -- end new bit
+          this._entries.push(entry);
+        }
+        catch(ex) {
+          entry.push($microtime.now());
+          entry.push(gSeq++);
+          // We can't push the exception directly because its "arguments" payload
+          //  can have rich object references that will cause issues during JSON
+          //  serialization.  We most care that it can create circular references,
+          //  but also are not crazy about serializing potentially huge object
+          //  graphs.  This might be a great place to perform some logHelper
+          //  style transformations.
+          entry.push({message: ex.message, stack: ex.stack, type: ex.type});
+          // ++ new bit
+          var toEat = numTestOnlyArgs;
+          for (iArg += 2; toEat; toEat--, iArg++) {
+            entry.push(arguments[iArg]);
+          }
+          // -- end new bit
+          this._entries.push(entry);
+          // (call errors are events)
+          this._eventMap[name] = (this._eventMap[name] || 0) + 1;
+          rval = ex;
+        }
+
+        return rval;
+      };
+    }
 
     // XXX we have no way to indicate we expect/desire an assertion
     //  (we will just explode on any logged exception)
@@ -861,6 +917,7 @@ console.error("statistics only for: " + testerCon.prototype.__defName);
 var LEGAL_FABDEF_KEYS = [
   'implClass', 'type', 'subtype', 'semanticIdent',
   'stateVars', 'latchState', 'events', 'asyncJobs', 'calls', 'errors',
+  'TEST_ONLY_calls',
 ];
 
 exports.register = function register(mod, defs) {
@@ -903,8 +960,14 @@ exports.register = function register(mod, defs) {
       }
     }
     if ("calls" in loggerDef) {
+      var testOnlyCallsDef = null;
+      if ("TEST_ONLY_calls" in loggerDef)
+        testOnlyCallsDef = loggerDef.TEST_ONLY_calls;
       for (key in loggerDef.calls) {
-        maker.addCall(key, loggerDef.calls[key]);
+        var testOnlyMeta = null;
+        if (testOnlyCallsDef && testOnlyCallsDef.hasOwnProperty(key))
+          testOnlyMeta = testOnlyCallsDef[key];
+        maker.addCall(key, loggerDef.calls[key], testOnlyMeta);
       }
     }
     if ("errors" in loggerDef) {
@@ -932,5 +995,6 @@ exports.TEST_STEP = 'teststep';
 
 // argument information
 var EXCEPTION = exports.EXCEPTION = 'exception';
+var JSONABLE = exports.JSONABLE = 'jsonable';
 
 }); // end define
