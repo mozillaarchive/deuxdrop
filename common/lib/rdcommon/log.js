@@ -40,6 +40,15 @@
  *  implementation details that should get refactored out into their own
  *  thing.
  *
+ * The permutations of logger logic is getting a bit ugly and may be burning
+ *  more cycles than is strictly necessary.  The long-term plan is some kind
+ *  of simple (runtime) code generation.  The biggest win for that is considered
+ *  that it will simplify our code in here and generate an obvious byproduct
+ *  that is easily understood.  In cases where startup time is a concern, the
+ *  generated code can also be persisted (like via RequireJS optimizer stage).
+ *  This is not happening yet.
+ *
+ *
  * There is a need for raindrop-specific logging logic because names tend to
  *  be application specific things as well as the determination of what is
  *  interesting.
@@ -219,6 +228,7 @@ var DummyLogProtoBase = {
     throw new Error("I WAS NOT PLANNING ON BEING SERIALIZED");
   },
   __updateIdent: NOP,
+  __die: NOP,
 };
 
 /**
@@ -242,6 +252,7 @@ var LogProtoBase = {
       semanticIdent: this._ident,
       uniqueName: this._uniqueName,
       born: this._born,
+      died: this._died,
       events: this._eventMap,
       entries: this._entries,
       kids: this._kids
@@ -256,6 +267,9 @@ var LogProtoBase = {
     if (this._named)
       jo.named = this._named;
     return jo;
+  },
+  __die: function() {
+    this._died = $microtime.now();
   },
   __updateIdent: function(ident) {
     // NOTE: you need to update useSemanticIdent if you change this.
@@ -357,7 +371,6 @@ var TestActorProtoBase = {
    *  fulfill our promise/reject our promise, as appropriate.
    */
   __loggerFired: function() {
-console.log("  LOGGER FIRED!");
     // we can't do anything if we don't have an actor.
     var entries = this._logger._entries;
     while (this._iExpectation < this._expectations.length &&
@@ -369,7 +382,6 @@ console.log("  LOGGER FIRED!");
       if (entry[0][0] === "!")
         continue;
 
-console.log("    compare", expy, entry);
       // Currently, require exact pairwise matching between entries and
       //  expectations.
       if (expy[0] !== entry[0]) {
@@ -382,16 +394,15 @@ console.log("    compare", expy, entry);
         continue;
       }
       // (only bad cases fall out without hitting a continue)
-console.log("   NO!");
-      this._expectationsMet = false;
-      if (this._deferred)
-        this._deferred.reject([expy, entry]);
+      if (this._expectationsMet && this._deferred) {
+        this._expectationsMet = false;
+        this._deferred.reject([this.__defName, expy, entry]);
+      }
       return;
     }
     // XXX explode on logs without expectations?
 
     if ((this._iExpectation >= this._expectations.length) && this._deferred) {
-console.log("   YES!");
       this._deferred.resolve();
     }
   },
@@ -509,7 +520,7 @@ LoggestClassMaker.prototype = {
       this[latchedName] = val;
     };
   },
-  addEvent: function(name, args) {
+  addEvent: function(name, args, testOnlyLogArgs) {
     this._define(name, 'event');
 
     var numArgs = 0, useArgs = [];
@@ -539,13 +550,48 @@ LoggestClassMaker.prototype = {
       this._entries.push(entry);
     };
 
-    this._wrapLogProtoForTest(name);
+    if (!testOnlyLogArgs) {
+      this._wrapLogProtoForTest(name);
+    }
+    else {
+      var numTestOnlyArgs = 0;
+      for (key in testOnlyLogArgs) {
+        numTestOnlyArgs++;
+      }
+      this.testLogProto[name] = function() {
+        this._eventMap[name] = (this._eventMap[name] || 0) + 1;
+        var entry = [name], iArg;
+        for (iArg = 0; iArg < numArgs; iArg++) {
+          if (useArgs[iArg] === EXCEPTION) {
+            var arg = arguments[iArg];
+            entry.push({m: arg.message, s: arg.stack});
+          }
+          else {
+            entry.push(arguments[iArg]);
+          }
+        }
+        entry.push($microtime.now());
+        entry.push(gSeq++);
+        // ++ new bit
+        var toEat = numTestOnlyArgs;
+        for (; toEat; toEat--, iArg++) {
+          entry.push(arguments[iArg]);
+        }
+        // -- end new bit
+        this._entries.push(entry);
+        // ++ firing bit...
+        var testActor = this._actor;
+        if (testActor)
+          testActor.__loggerFired();
+      };
+    }
 
     this.testActorProto['expect_' + name] = function() {
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
-        if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
+        if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION) {
           exp.push(arguments[iArg]);
+        }
       }
       this._expectations.push(exp);
     };
@@ -634,10 +680,10 @@ LoggestClassMaker.prototype = {
   addCall: function(name, logArgs, testOnlyLogArgs) {
     this._define(name, 'call');
 
-    var numLogArgs = 0, useArgs = [];
+    var numLogArgs = 0, numTestOnlyArgs = 0, useArgs = [];
     for (var key in logArgs) {
       numLogArgs++;
-      useArgs.push(args[key]);
+      useArgs.push(logArgs[key]);
     }
 
     this.dummyProto[name] = function() {
@@ -662,13 +708,15 @@ LoggestClassMaker.prototype = {
       }
       entry.push($microtime.now());
       entry.push(gSeq++);
+      // push this prior to the call for ordering reasons (the call can log
+      //  entries too!)
+      this._entries.push(entry);
       try {
         rval = arguments[numLogArgs+1].apply(
           arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
         entry.push($microtime.now());
         entry.push(gSeq++);
         entry.push(null);
-        this._entries.push(entry);
       }
       catch(ex) {
         entry.push($microtime.now());
@@ -680,7 +728,6 @@ LoggestClassMaker.prototype = {
         //  graphs.  This might be a great place to perform some logHelper
         //  style transformations.
         entry.push({message: ex.message, stack: ex.stack, type: ex.type});
-        this._entries.push(entry);
         // (call errors are events)
         this._eventMap[name] = (this._eventMap[name] || 0) + 1;
         rval = ex;
@@ -693,7 +740,6 @@ LoggestClassMaker.prototype = {
       this._wrapLogProtoForTest(name);
     }
     else {
-      var numTestOnlyArgs = 0;
       for (key in testOnlyLogArgs) {
         numTestOnlyArgs++;
       }
@@ -706,6 +752,9 @@ LoggestClassMaker.prototype = {
         }
         entry.push($microtime.now());
         entry.push(gSeq++);
+        // push this prior to the call for ordering reasons (the call can log
+        //  entries too!)
+        this._entries.push(entry);
         try {
           rval = arguments[numLogArgs+1].apply(
             arguments[numLogArgs], Array.prototype.slice.call(arguments, iArg+2));
@@ -718,7 +767,6 @@ LoggestClassMaker.prototype = {
             entry.push(arguments[iArg]);
           }
           // -- end new bit
-          this._entries.push(entry);
         }
         catch(ex) {
           entry.push($microtime.now());
@@ -736,12 +784,15 @@ LoggestClassMaker.prototype = {
             entry.push(arguments[iArg]);
           }
           // -- end new bit
-          this._entries.push(entry);
           // (call errors are events)
           this._eventMap[name] = (this._eventMap[name] || 0) + 1;
           rval = ex;
         }
 
+        // ++ firing bit...
+        var testActor = this._actor;
+        if (testActor)
+          testActor.__loggerFired();
         return rval;
       };
     }
@@ -758,7 +809,7 @@ LoggestClassMaker.prototype = {
     };
     this.testActorProto['_verify_' + name] = function(tupe, entry) {
       // report failure if an exception was returned!
-      if (entry.length > numLogArgs + 5) {
+      if (entry.length > numLogArgs + numTestOnlyArgs + 6) {
         return false;
       }
       // only check arguments we had expectations for.
@@ -851,6 +902,7 @@ LoggestClassMaker.prototype = {
       this._eventMap = {};
       this._entries = [];
       this._born = $microtime.now();
+      this._died = null;
       this._kids = null;
     };
     loggerCon.prototype = this.logProto;
@@ -917,7 +969,7 @@ console.error("statistics only for: " + testerCon.prototype.__defName);
 var LEGAL_FABDEF_KEYS = [
   'implClass', 'type', 'subtype', 'semanticIdent',
   'stateVars', 'latchState', 'events', 'asyncJobs', 'calls', 'errors',
-  'TEST_ONLY_calls',
+  'TEST_ONLY_calls', 'TEST_ONLY_events',
 ];
 
 exports.register = function register(mod, defs) {
@@ -926,7 +978,7 @@ exports.register = function register(mod, defs) {
   var testActors = fab._testActors;
 
   for (var defName in defs) {
-    var key, loggerDef = defs[defName];
+    var key, loggerDef = defs[defName], testOnlyMeta;
 
     for (key in loggerDef) {
       if (LEGAL_FABDEF_KEYS.indexOf(key) === -1) {
@@ -950,8 +1002,14 @@ exports.register = function register(mod, defs) {
       }
     }
     if ("events" in loggerDef) {
+      var testOnlyEventsDef = null;
+      if ("TEST_ONLY_events" in loggerDef)
+        testOnlyEventsDef = loggerDef.TEST_ONLY_events;
       for (key in loggerDef.events) {
-        maker.addEvent(key, loggerDef.events[key]);
+        testOnlyMeta = null;
+        if (testOnlyEventsDef && testOnlyEventsDef.hasOwnProperty(key))
+          testOnlyMeta = testOnlyEventsDef[key];
+        maker.addEvent(key, loggerDef.events[key], testOnlyMeta);
       }
     }
     if ("asyncJobs" in loggerDef) {
@@ -964,7 +1022,7 @@ exports.register = function register(mod, defs) {
       if ("TEST_ONLY_calls" in loggerDef)
         testOnlyCallsDef = loggerDef.TEST_ONLY_calls;
       for (key in loggerDef.calls) {
-        var testOnlyMeta = null;
+        testOnlyMeta = null;
         if (testOnlyCallsDef && testOnlyCallsDef.hasOwnProperty(key))
           testOnlyMeta = testOnlyCallsDef[key];
         maker.addCall(key, loggerDef.calls[key], testOnlyMeta);

@@ -169,6 +169,7 @@ TestRunner.prototype = {
     if (rval instanceof Error) {
       step.log.run_end();
       step.log.result('fail');
+console.error("XXX XXX stepFunc returned an error");
       return false;
     }
 
@@ -180,8 +181,10 @@ TestRunner.prototype = {
       if ($Q.isPromise(waitVal))
         promises.push(waitVal);
       // if it's not a promise, it must be a boolean
-      else if (!waitVal)
+      else if (!waitVal) {
+console.error("XXX XXX __waitForExepctations returned falsey");
         allGood = false;
+      }
     }
 
     if (!promises.length) {
@@ -202,6 +205,7 @@ TestRunner.prototype = {
 
         step.log.timeout();
         step.log.result('fail');
+console.error("XXX XXX timeout");
         deferred.resolve(false);
         deferred = null;
       }, STEP_TIMEOUT_MS);
@@ -232,6 +236,7 @@ TestRunner.prototype = {
 
         step.log.run_end();
         step.log.result('fail');
+console.error("XXX XXX rejection", expPair);
         deferred.resolve(false);
       });
       return deferred.promise;

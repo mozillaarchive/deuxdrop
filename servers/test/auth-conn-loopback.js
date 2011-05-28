@@ -44,6 +44,7 @@ define(
     'rdcommon/transport/authconn',
     'rdcommon/testcontext',
     'rdcommon/identities/privident',
+    'q',
     'module',
     'exports'
   ],
@@ -51,6 +52,7 @@ define(
     $authconn,
     $tc,
     $privident,
+    $Q,
     $module,
     exports
   ) {
@@ -70,12 +72,15 @@ function TestClientConnection(clientIdent, serverIdent, url, endpoint) {
   //  parent logger of "this.conn.log"
 }
 TestClientConnection.prototype = {
-  _initialState: 'root',
+  INITIAL_STATE: 'root',
   _msg_root_beHappy: function(msg) {
+    return 'happy';
   },
   _msg_root_beSad: function(msg) {
+    return 'sad';
   },
   _msg_happy_beSad: function(msg) {
+    return 'sad';
   },
   _msg_sad_wallow: function(msg) {
     // wallowing is an asynchronous process!
@@ -83,6 +88,7 @@ TestClientConnection.prototype = {
     return this._wallowDeferred.promise;
   },
   _msg_sad_beHappy: function(msg) {
+    return 'happy';
   },
 
   stopWallowing: function() {
@@ -91,10 +97,18 @@ TestClientConnection.prototype = {
   },
 };
 
+var TEST_SERVER_CONN = null;
 function TestServerConnection(conn) {
   this.conn = conn;
+
+  // XXX make this less horrible when we grow the test framework
+  TEST_SERVER_CONN = this;
 }
 TestServerConnection.prototype = {
+  INITIAL_STATE: 'root',
+  say: function(what) {
+    this.conn.writeMessage({type: what});
+  }
 };
 
 TD.commonCase('working loopback authconn connection', function(T) {
@@ -134,10 +148,29 @@ console.log("running loopback test context def thing");
            function() {
     // (it is implied that eServer and eServerConn are created this step)
     eClientConn.expect_connecting();
-    eClientConn.expect_connected();
     eServer.expect_request('test/test');
-    eServer.expect_endpointConn('test/test');
     eServerConn.expect_connected();
+
+    eClientConn.expect_connected();
+    eClientConn.expect_connState('authServerKey');
+    eClientConn.expect_send('key');
+
+    eServerConn.expect_receive('key');
+    eServerConn.expect_handleMsg('key');
+    eServerConn.expect_send('key');
+    eServerConn.expect_connState('authClientVouch');
+
+    eClientConn.expect_receive('key');
+    eClientConn.expect_handleMsg('key');
+    eClientConn.expect_send('vouch');
+    eClientConn.expect_connState('app');
+
+    eServerConn.expect_receive('vouch');
+    eServerConn.expect_handleMsg('vouch');
+
+    eServer.expect_endpointConn('test/test');
+
+    eServerConn.expect_connState('app');
 
     var url = "ws://" + server.address.address + ":" + server.address.port + "/";
     var endpoint = "test/test";
@@ -148,10 +181,13 @@ console.log("running loopback test context def thing");
 
   T.action(eServerConn, 'says be sad (transition) to', eClientConn, function() {
     eServerConn.expect_send('beSad');
+
     eClientConn.expect_receive('beSad');
-    eClientConn.expect_handle('beSad');
+    eClientConn.expect_handleMsg('beSad');
     eClientConn.expect_appState('sad');
 
+    // XXX this is safe but horrible; fix when we grow the framework
+    serverConn = TEST_SERVER_CONN;
     serverConn.say('beSad');
   });
 
@@ -160,10 +196,9 @@ console.log("running loopback test context def thing");
     eServerConn.expect_send('wallow');
     eServerConn.expect_send('beHappy');
     eClientConn.expect_receive('wallow');
-    eClientConn.expect_handle('wallow');
+    eClientConn.expect_handleMsg('wallow');
     // (we won't handle it, but be sure that the event happens)
     eClientConn.expect_receive('beHappy');
-    eClientConn.expect_appState('sad');
 
     serverConn.say('wallow');
     serverConn.say('beHappy');
@@ -171,7 +206,10 @@ console.log("running loopback test context def thing");
 
   T.action(eClientConn, 'processes be happy (async resolution, queue proc)',
            function() {
-    eClientConn.expect_handle('beHappy');
+    // when wallowing is completed, the sad state will be set again
+    eClientConn.expect_appState('sad');
+    // and then beHappy will be dequeued
+    eClientConn.expect_handleMsg('beHappy');
     eClientConn.expect_appState('happy');
 
     clientConn.stopWallowing();
@@ -187,10 +225,14 @@ console.log("running loopback test context def thing");
       serverConn.close();
     }),*/
     T.action(eClientConn, 'closes the connection on', eServerConn, function() {
-      eClientConn.expect_close();
-      eServerConn.expect_close();
+      // the side we are invoking close on sees a 'closing' event
+      eClientConn.expect_closing();
+      eClientConn.expect_closed();
 
-      clientConn.close();
+      // whereas the other side just gets a surprise (aka no closing)
+      eServerConn.expect_closed();
+
+      clientConn.conn.close();
     })/*,
   ])*/;
 
