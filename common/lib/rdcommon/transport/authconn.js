@@ -230,10 +230,11 @@ var AuthClientCommon = {
   },
 
   _onError: function(error) {
+    this.log.websocketError(error);
   },
   _onClose: function() {
     this._conn = null;
-    this.log.close();
+    this.log.closed();
   },
   _onMessage: function(wsmsg) {
     var msg;
@@ -300,7 +301,7 @@ var AuthClientCommon = {
     if (rval === MAGIC_CLOSE_MARKER) {
       // good, nothing to do.
     }
-    if ($Q.isPromise(rval)) {
+    else if ($Q.isPromise(rval)) {
       this._pendingPromise = rval;
       $Q.when(this._pendingPromise,
               this._boundHandlerResolved,
@@ -315,6 +316,7 @@ var AuthClientCommon = {
     }
   },
   _onHandlerResolved: function(newstate) {
+    this._pendingPromise = null;
     if (newstate === MAGIC_CLOSE_MARKER) {
       return;
     }
@@ -326,21 +328,25 @@ var AuthClientCommon = {
     this.appState = newstate;
   },
   _onHandlerRejected: function(err) {
+    this._pendingPromise = null;
     this.log.handlerFailure(err);
     this.close(true);
   },
 
   close: function(isBad) {
+    this.log.closing(Boolean(isBad));
     if (this._conn)
       this._conn.close();
     return MAGIC_CLOSE_MARKER;
   },
 
   _writeRaw: function(obj) {
+    this.log.send("raw:" + obj.type);
     this._conn.sendUTF(JSON.stringify(obj));
   },
 
   writeMessage: function(obj) {
+    this.log.send(obj.type);
     var jsonMsg = JSON.stringify(obj);
     var nonce = this._myNextNonce;
     var boxedJsonMsg = $nacl.box(jsonMsg, nonce, this._otherPublicKey,
@@ -475,9 +481,8 @@ AuthServerConn.prototype = {
     // We just care that the boxed zeroes authenticate with the key, not that
     //  what's inside is zeroes...
     if (!$nacl.box_open(msg.boxedZeroes, msg.nonce, msg.clientEphemeralKey,
-                        this.serverIdent.privateKey)) {
+                        this.serverIdent.secretKey)) {
       this.log.corruptClientEphemeralKey();
-      this.close();
       return this.close();
     }
     this._otherPublicKey = msg.clientEphemeralKey;
@@ -486,7 +491,7 @@ AuthServerConn.prototype = {
     var nonce = $nacl.box_random_nonce();
     var boxedEphemeralKey = $nacl.box(this._ephemKeyPair.pk, nonce,
                                       this._otherPublicKey,
-                                      this.serverIdent.privateKey);
+                                      this.serverIdent.secretKey);
     this._writeRaw({
       type: "key",
       nonce: nonce,
@@ -509,6 +514,7 @@ AuthServerConn.prototype = {
     return when(this._authVerifier(endpoint, this.clientIdent.publicKey),
                 function(isgood) {
       if (!isgood) {
+        self.log.authFailed();
         return self.close();
       }
       self.log.__updateIdent([self.serverIdent.publicKey,
@@ -627,7 +633,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       connected: {},
       send: {type: true},
       receive: {type: true},
-      close: {},
+      closing: {},
+      closed: {},
     },
     calls: {
       handleMsg: {type: true},
@@ -643,6 +650,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       badMessage: {type: true},
       queueBacklogExceeded: {},
+      websocketError: {err: false},
       handlerFailure: {err: $log.EXCEPTION},
     },
   },
@@ -665,7 +673,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       connected: {},
       send: {type: true},
       receive: {type: true},
-      close: {},
+      closing: {isBad: true},
+      closed: {},
     },
     calls: {
       handleMsg: {type: true},
@@ -683,6 +692,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       badMessage: {type: true},
       queueBacklogExceeded: {},
+      websocketError: {err: false},
       handlerFailure: {err: $log.EXCEPTION},
     },
   },

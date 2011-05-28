@@ -460,10 +460,11 @@ LoggestClassMaker.prototype = {
   _wrapLogProtoForTest: function(name) {
     var logFunc = this.logProto[name];
     this.testLogProto[name] = function() {
-      logFunc.apply(this, arguments);
+      var rval = logFunc.apply(this, arguments);
       var testActor = this._actor;
       if (testActor)
         testActor.__loggerFired();
+      return rval;
     };
   },
 
