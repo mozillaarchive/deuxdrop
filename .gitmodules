@@ -4,3 +4,6 @@
 [submodule "servers/node_modules/nacl"]
 	path = servers/node_modules/nacl
 	url = git://github.com/asutherland/node-djb-nacl.git
+[submodule "servers/node_modules/websocket"]
+	path = servers/node_modules/websocket
+	url = git://github.com/asutherland/WebSocket-Node.git

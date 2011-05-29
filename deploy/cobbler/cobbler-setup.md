@@ -9,7 +9,17 @@ instance.  Easier options are:
 
 ## Install cobbler
 
-* yum install cobbler cobbler-web
+Install cobbler:
+
+    yum install cobbler cobbler-web
+
+Start the cobbler daemon
+
+    service cobblerd start
+    
+You may need to start httpd if it isn't already started...
+
+    service httpd start
 
 
 ## Modify /etc/cobbler/settings
@@ -22,6 +32,35 @@ Change:
 
 After changing the settings, you will want to run "cobbler sync" and restart the
 cobblerd daemon ("service cobblerd restart").
+
+## Replicate from another server
+
+If you already have a cobbler server setup where you have completed the distro,
+repo, and profile configuration, then you can simply mirror that server.  To
+do this...
+
+Make sure that the server you are replicating from has rsync enabled by:
+
+* changing 'disable' to 'no' in /etc/xinetd.d/rsync (as "cobbler check" tells
+   you to do) and restarting xinetd ("service xinetd restart")
+* making sure the firewall has a hole in it for rsync (port 873) using
+   either: system-config-firewall-tui, system-config-firewall, or some other
+   command line tool that I have forgotten.
+
+The rsync daemon's /etc/rsyncd.conf file should be under management by cobbler
+and only contain cobbler paths (plus anything you add to
+/etc/cobbler/rsyncd.template) and so should be safe as long as there are no
+flaws in the implementation of the rsync daemon before it drops privileges.
+
+You may need to chmod the files involved so that if/when rsyncd changes its uid
+it can still read the files.
+
+    chmod a+r -R /var/www/cobbler/*_mirror
+
+
+Then, on the server to replicate to, you can run:
+
+    cobbler replicate --master=HOSTNAME --distros=* --profiles=* --repos=* --image=*
 
 
 ## Grab your distro, configure repo's.

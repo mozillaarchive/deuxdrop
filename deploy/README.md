@@ -42,3 +42,15 @@ new keypair or use your existing RSA public key, respectively.
 
 [cobbler]: https://fedorahosted.org/cobbler/
 [puppet]: http://docs.puppetlabs.com/
+
+
+## Virtualization
+
+If you want to do virtual stuff on fedora, like for testing, you should:
+
+    yum install @virtualization
+    service libvirtd start
+
+
+note: I'm not really sure how virtualization fits into the narrative of the
+deployment subtree; this block might be best moved elsewhere.
