@@ -11,7 +11,7 @@ instance.  Easier options are:
 
 Install cobbler:
 
-    yum install cobbler cobbler-web
+    yum install cobbler cobbler-web koan
 
 Start the cobbler daemon
 
@@ -32,6 +32,7 @@ Change:
 
 After changing the settings, you will want to run "cobbler sync" and restart the
 cobblerd daemon ("service cobblerd restart").
+
 
 ## Replicate from another server
 
@@ -61,6 +62,14 @@ it can still read the files.
 Then, on the server to replicate to, you can run:
 
     cobbler replicate --master=HOSTNAME --distros=* --profiles=* --repos=* --image=*
+
+One super important thing to keep in mind is that you may still need to customize
+the profile as seen below if your deuxdrop directory lives someplace different
+than it did on the master.  If this is the case, then if you perform any
+subsequent replications, you may want to leave off the profile syncing unless
+you want to re-apply that change:
+
+    cobbler replicate --master=HOSTNAME --distros=* --repos=* --image=*
 
 
 ## Grab your distro, configure repo's.
@@ -94,9 +103,29 @@ to tell it the yum repos to use.
 
     cobbler profile edit --name=centos-5.6-x86_64 --kickstart=\`pwd\`/basic.ks --repos="centos-5.6-x86_64-updates epel-5-x86_64"
 
-# How To Provision Using Cobbler
+
+# Virtualization
+
+## Install Stuff
+
+If you want to do virtual stuff on fedora, like for testing, you should:
+
+    yum install @virtualization
+    service libvirtd start
+
+Additionally, you will probably want to configure your firewall to trust the
+"virbr0" device used by libvirt.  Use system-config-firewall-tui or
+system-config-firewall to add "virbr0" as a "trusted interface".  It is not in
+the default list of options, so you will need to "add" it yourself and then
+mark it as trusted.  Be sure to apply the changes once done.
+
+
+## Provisioning Using Cobbler
 
 This should go elsewhere or become obvious, but for now...
+
+Make sure you setup your SSH keeys in the deploy/keys directory already!  See
+deploy/README.md for more info if this does not sound familiar to you.
 
 Define the system:
 
@@ -107,3 +136,18 @@ Define the system:
 Cause the VM to be populated:
 
     sudo koan --server=localhost --virt --virt-name $VHOSTNAME --system=$VHOSTNAME
+
+If you want to watch the installation happen, you can use "virt-manager" to find
+the system and look at its display.
+
+
+## Destroying VMs
+
+If you are tired of the VM, you can nuke it from existence by doing:
+
+    sudo virsh destroy $VHOSTNAME
+    sudo virsh undefine $VHOSTNAME
+
+You may also want to kill the cobbler system definition:
+    
+    cobbler system remove --name $VHOSTNAME
