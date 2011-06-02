@@ -1,0 +1,121 @@
+* {
+  margin: 0;
+  padding: 0;
+
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+}
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, Sans-serif;
+  font-size: 12px;
+  line-height: 21px;
+  color: #222;
+  overflow: hidden;
+  min-width: 320px;
+}
+
+a {
+  color: #2EA4FF;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  height: 24px;
+  padding: 0 10px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #e6e6e6 #bbb #bbb #e6e6e6;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  cursor: pointer;
+
+  -webkit-border-radius: 2px;
+     -moz-border-radius: 2px;
+          border-radius: 2px;
+
+  background-image: -moz-linear-gradient(top, #fafafa 0%, #f2f2f2 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fafafa), color-stop(100%, #f2f2f2));
+}
+
+.hidden {
+  display: none;
+}
+
+#header {
+  display: block;
+  position: relative;
+  height: 41px;
+  overflow: hidden;
+  background-color: #fff;
+  padding: 10px;
+  border-bottom: 1px solid #e6e6e6;
+  border-top: 1px solid #e6e6e6;
+  margin-top: -1px;
+  cursor: pointer;
+  color: white;
+  text-align: center;
+  font-size: 20px;
+  background-color: #222;
+  background-image: -moz-linear-gradient(left, #222 0%, #1f1f1f 100%);
+  background-image: -webkit-gradient(linear, top left, top right, color-stop(0%, #222), color-stop(100%, #1f1f1f));
+}
+
+.mblArrowButtonHead {
+  position: absolute;
+  left: 0;
+}
+.mblArrowButtonBody {
+  position: absolute;
+  left: 10px;
+}
+
+.mblArrowButtonNeck {
+  position: absolute;
+  left: 0;
+}
+
+
+#cardContainer {
+  overflow: hidden;
+  position: relative;
+}
+
+#cards {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.card {
+  float: left;
+}
+
+.card a {
+  display: block;
+  background-color: #fff;
+  padding: 10px;
+  border-bottom: 1px solid #e6e6e6;
+  border-top: 1px solid #e6e6e6;
+  margin-top: -1px;
+  cursor: pointer;
+  font-size: 20px;
+
+  background-image: -moz-linear-gradient(top, #fff 0%, #fafafa 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fff), color-stop(100%, #fafafa));
+}
+
+.card a:hover,
+.card a.selected {
+  border-bottom: 1px solid #BFD5DE;
+  border-top: 1px solid #BFD5DE;
+  z-index: 100;
+  position: relative;
+
+  background-image: -moz-linear-gradient(top, #EDF2F5 0%, #E6EDF0 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #EDF2F5), color-stop(100%, #E6EDF0));
+}

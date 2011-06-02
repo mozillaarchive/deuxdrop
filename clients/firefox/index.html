@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script>
+      var console;
+      if (!console)
+        console = {
+          log: function() {},
+          error: function() {},
+          info: function() {},
+          warn: function() {},
+      };
+      function dump(aMsgWithNewline) {
+        console.log(aMsgWithNewline.replace("\n", "", "g"));
+      }
+    </script>
+    <script src="../deps/require.js"></script>
+    <script>
+      require(
+        {
+          baseUrl: '../deps',
+          paths: {
+            main: '../firefox/js/main',
+            Q: 'q-0.4.0.min'
+          }
+        },
+        ['main']
+      );
+    </script>
+  </head>
+  <body>
+
+    <div id="cardContainer">
+      <div id="cards">
+        <div id="top" title="Deuxdrop" class="card">
+          <a href="#peeps">Peeps</a>
+          <a href="#compose">Compose</a>
+          <a href="#">Pinned Peeps</a>
+          <a href="#">Pinned Conversations</a>
+        </div>
+        <div id="peeps" title="Peeps" class="card" data-childclass="personLink">
+        </div>
+        <div id="peep" class="card">
+          <div id="peepInfo">
+            <img id="peepInfoPic" src="i/face2.png">
+            <span id="peepInfoName">David</span>
+          </div>
+          <form data-class="compose"></form>
+          <div id="peepConversations">
+            <a href="#conversation">Hello</a>
+            <a href="#conversation">Hi</a>
+          </div>
+        </div>
+        <div id="conversation" title="Conversation" class="card">
+          <form data-class="compose"></form>
+          <ul class="messages">
+            <li class="message">
+              <img class="peepPic" src="i/face2.png">
+              <span class="peepMessage">Hi there. What's going on?</span>
+            </li>
+            <li class="message">
+              <img class="peepPic" src="i/face2.png">
+              <span class="peepMessage">Just chillin. What's up with you?</span>
+            </li>
+          </ul>
+        </div>
+        <div id="compose" title="Compose" class="card">
+          <form data-class="compose"></form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start standard UI elements -->
+    <div id="common" class="hidden">
+      <form data-classimpl="compose" class="compose">
+        <textarea class="composeText"></textarea>
+        <button>Send</button>
+      </form>
+
+      <a data-classimpl="personLink" href="#peep"></a>
+    </div>
+    <!-- End standard UI elements -->
+  </body>
+</html>
