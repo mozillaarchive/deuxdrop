@@ -1,0 +1,3 @@
+#!/bin/sh
+
+ssh-keygen -q -t rsa -b 2048 -N "" -C "deuxdrop-deploy" -f deuxdrop-deploy-key
