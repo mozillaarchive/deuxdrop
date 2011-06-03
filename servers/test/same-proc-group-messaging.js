@@ -43,7 +43,9 @@
  *
  * - Conversation creation.  The sender of the first message creates a new
  *    signing keypair whose public key serves as the identifier for the
- *    conversation.  A self-attestation is generated that specifies:
+ *    conversation.  A self-attestation is generated that specifies the
+ *    following and is sent to the fanout server who will re-transmit it to
+ *    all invitees:
  *   - The maildrop/mailsender information to use to contact the fanout node
  *      (much like for contacting a person).
  *   - The criteria used to define eligible membership in the group.  This would
@@ -63,13 +65,18 @@
  *      send a message to the list that the user will (eventually) see so that
  *      everyone can know why the user is being added.  I have no UX sign-off
  *      on this though, so no assumptions.
- *   - The inviter formulates a message with two or more notable parts:
+ *   - The inviter formulates a message with two or more notable parts and sends
+ *      it to the fanout server to re-transmit once it has authorized the user
+ *      to participate in the conversation.
  *     - The secret key for the conversation, encrypted with message body-level
  *        encryption so that the recipient and only the recipient can decrypt
  *        the messages.
  *     - The signed attestation chain, encrypted with envelope-level encryption
  *        so that the user's mailstore can automatically subscribe to the
  *        conversation on their behalf.
+ *
+ * - Fanout server invite request servicing.
+ *   -
  *
  * - Invitation receipt / joining (assuming immediate mailstore action).
  *   - The invited person's mailstore receives the invitation message.  A

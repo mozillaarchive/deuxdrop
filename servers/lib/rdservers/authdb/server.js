@@ -36,7 +36,37 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Message store reception logic.
+ * Responsible for setting / clearing authorizations for inter-server and
+ *  inter-user communication.
+ *
+ * ## hbase data model: incoming inter-server auths
+ * - row: [server key]
+ * - column family: "c": for fast checking; can be rebuilt as needed from "d"
+ *   - "primary": the current tally for authorizations by local users for
+ *      receipt of messages from that server.
+ *   - "secondary": the current tally for authorizations by the authorized
+ *      contacts of local users.  So if my friend is on another server and is
+ *      adding me to a conversation on a third server, he can proffer a
+ *      secondary authorization.
+ * - column family: "p": for primary details
+ *   - "k:#...": the public id of our user => the attestation
+ * - column family: "s": for secondary details
+ *   - "k:#...:#...": the public id of the local user, the public id of their
+ *      friend who is requesting the auth => the attestation which also
+ *      includes the local user the attestation is dependent upon.
+ *
+ * ## hbase data model: inverted incoming inter-server auths:
+ * - row: [user key]
+ * - column family: "p": primary auths they have made.
+ *   - "k:#...": server key they attested for => attestation
+ * - column family: "s": secondary auths made on their behalf
+ *   - "k:#...:#...": the public id of the server, the public id of the friend
+ *       who is requesting the auth => the attestation.
+ *
+ * ## hbase data model: incoming user auths
+ * - row [user key, friend key]
+ * - column family: "a"
+ *   - "a": The attestation.
  **/
 
 define(
@@ -46,75 +76,5 @@ define(
   function(
     exports
   ) {
-
-function ClientServicingConnection() {
-}
-ClientServicingConnection.prototype = {
-  /**
-   * The device tells us its device id, its current sequence id, and its
-   *  replication level so we know who it is, when its last update was, and
-   *  whether we need to force a re-sync.
-   */
-  _msg_init_deviceCheckin: function(msg) {
-  },
-
-
-
-  /**
-   * Here's a composed message to send, perhaps with some meta-data.
-   */
-  _msg_root_send: function(msg) {
-  },
-
-  /**
-   * Request a conversation index, such as:
-   * - All conversations (by time).
-   * - Conversations with a specific content (by time).
-   *
-   * This will retrieve some bounded number of conversations, where, for each
-   *  conversation, we always provide:
-   * - The conversation id
-   * - Any user-set meta-data on the conversation or its messages.
-   * - The sanity-clamped timestamps of the messages in the conversation.
-   */
-  _msg_root_convGetIndex: function(msg) {
-  },
-
-  /**
-   * Fetch messages in a conversation.
-   */
-  _msg_root_convGetMsgs: function(msg) {
-  },
-
-  /**
-   * Set meta-data on a conversation/messages.
-   */
-  _msg_root_setMeta: function(msg) {
-  },
-
-  /**
-   * Delete messages in a conversation, possibly all of them.
-   */
-  _msg_root_delConvMsgs: function(msg) {
-  },
-
-  /**
-   * Add a new contact with related-metadata for prioritization, etc.
-   */
-  _msg_root_addContact: function(msg) {
-  },
-
-  /**
-   * Modify the metadata associated with a contact.
-   */
-  _msg_root_modContact: function(msg) {
-  },
-
-  /**
-   * Delete a contact.
-   */
-  _msg_root_delContact: function(msg) {
-  },
-};
 
 }); // end define

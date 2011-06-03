@@ -34,4 +34,4 @@ list the commands it understands.
 
 * fullpub: Combines maildrop, mailsender, fanout, and mailstore roles.
 * halfpub: Combines maildrop, mailsender, and fanout roles.
-* halfpriv: Just the mailstore role.
+* halfpriv: Just the mailstore role.  (Could run on a client device.)
