@@ -34,7 +34,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-/*jslint indent: 2, strict: false */
+/*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false */
 
 /**
@@ -42,54 +42,296 @@
  */
 
 define(function (require) {
-  var Q = require('Q'),
-      moda, peepData;
+  var q = require('q'),
+      listeners = {},
+      listenerCounter = 0,
+      peeps = [],
 
+      moda, peepData, prop;
+
+  /**
+   * Trigger listeners on an object an any global listeners.
+   */
+  function trigger(obj, name, args) {
+    var prop, cb;
+    if (obj.on[name]) {
+      obj.on[name].apply(obj, args);
+    }
+
+    for (prop in listeners) {
+      if (listeners.hasOwnProperty(prop)) {
+        cb = listeners[prop][name];
+        if (cb) {
+          cb.apply(listeners[prop], args);
+        }
+      }
+    }
+  }
+
+/*
+Peeps
+* query: {
+  by: 'recency|alphabet|pinned'
+  filter: ''
+}
+* onPeepsComplete: function(), event
+* onAddPeep: function(item), event
+* addPeep: function(item)
+* onremovePeep: function(item), event
+* remove: function(item)
+* peeps: Array, the array of items.
+* onChangePeep: function(item) when a peep changes.
+* byId: function(id) ?
+* destroy()
+*/
+  function Peeps(query, on) {
+    this.peeps = [];
+    this.isComplete = false;
+    this.query = query;
+    this.on = on;
+
+    var d = q.defer();
+    q.when(d.promise, function (peeps) {
+      this.peeps = peeps;
+      trigger(this, 'peepsComplete', [peeps]);
+    }.bind(this));
+
+    //Ignore the query for now, use
+    //dummy data.
+    d.resolve(peeps);
+  }
+
+  Peeps.prototype = {
+    /**
+     * Adds a peep to the peeps.
+     * @param {moda.peep} peep
+     *
+     */
+    addPeep: function (peep) {
+      if (this.peeps.indexOf(peep) === -1) {
+        this.peeps.push(peep);
+      }
+      trigger('addPeep', this, arguments);
+    },
+
+    removePeep: function (peep) {
+      this.peeps.splice(this.peeps.indexOf(peep), 1);
+      trigger('removePeep', this, arguments);
+    },
+
+    destroy: function () {
+
+    }
+  };
+
+/*
+
+Peep
+* id
+* name
+* pic
+* onChange
+* pinned
+* pin()
+* frecency
+* conversations []
+* onConvAdd  for conversation add
+* onConvChange
+* areConversationsLoaded
+* loadConversations()
+* onPeepChange
+* destroy()
+* remove()
+* connect()
+* reject()
+* connected
+* rejected
+*/
+
+  function Peep(obj) {
+    this.id = obj.id;
+    this.name = obj.name;
+    this.pic = obj.pic;
+    this.pinned = false;
+    this.frecency = 0;
+
+    this.areConversationsLoaded = false;
+
+    //TODO: this should start as false
+    this.connected = true;
+
+    this.rejected = false;
+  }
+
+  Peep.prototype = {
+    loadConversations: function () {
+
+    }
+  };
+
+  /**
+   * Define the moda object and API.
+   */
+  moda = {
+
+/*
+moda.on({
+  message: ''
+  peepChange
+  peepsComplete
+  peepConnectRequest
+  networkProblem
+  networkResolved
+  badProgrammer
+  peepConnectError
+
+});
+*/
+    /**
+     * Listen to events.
+     *
+     * @param {Object|String} listener if an object, the properties of the
+     * object should be string names of events, and the values should be
+     * the functions to call on that event. If a string, an event name
+     * that should trigger the cb function
+     *
+     * @param {Function} [cb] If listener is a string, this is the function
+     * callback to call for that event listener name.
+     *
+     * @returns {String} a listener ID. Use it to call removeOn to remove
+     * this listener.
+     */
+    on: function (listener, cb) {
+      var obj, listenerId;
+      if (typeof listener === 'string') {
+        obj = {};
+        obj[listener] = cb;
+      } else {
+        obj = listener;
+      }
+      listenerId = 'listen' + (listenerCounter++);
+      listeners[listenerId] = obj;
+      return listenerId;
+    },
+
+    /**
+     * Removes an event listener for the given listenerId
+     *
+     * @param {String} listenerId, the ID of the listener to remove.
+     */
+    removeOn: function (listenerId) {
+      delete listeners[listenerId];
+    },
+
+    Peeps: Peeps,
+
+
+
+    /**
+     * Gets the data on the peep with the given ID.
+     * @param {String} id the peep ID.
+     */
+    peep: function (id, cb, err) {
+      var d = q.defer();
+
+      d.resolve(peepData);
+
+      return d.promise;
+    }
+  };
+
+  /**
+   * Fake data to use for UI mockups.
+   */
   peepData = {
-    'james@raindrop.it': {
+    'james@raindrop.it': new Peep({
       name: 'James',
       id: 'james@raindrop.it',
       pic: 'i/face2.png'
-    },
-    'bryan@raindrop.it': {
+    }),
+    'bryan@raindrop.it': new Peep({
       name: 'Bryan',
       id: 'bryan@raindrop.it',
       pic: 'i/face2.png'
-    },
-    'andrew@raindrop.it': {
+    }),
+    'andrew@raindrop.it': new Peep({
       name: 'Andrew',
       id: 'andrew@raindrop.it',
       pic: 'i/face2.png'
-    }
+    })
   };
 
-  moda = {
-    peeps: function (cb) {
-      cb([
-        {
-          name: 'James',
-          id: 'james@raindrop.it'
-        },
-        {
-          name: 'Bryan',
-          id: 'bryan@raindrop.it'
-        },
-        {
-          name: 'Andrew',
-          id: 'andrew@raindrop.it'
-        }
-      ]);
-    },
-
-    peep: function (id, cb) {
-      cb(peepData);
+  /**
+   * Fake peeps data.
+   */
+  peeps = [];
+  for (prop in peepData) {
+    if (peepData.hasOwnProperty(prop)) {
+      peeps.push(peepData[prop]);
     }
-  };
+  }
 
   return moda;
 });
 
+/*
 
+
+Requests
+* onComplete
+* peeps
+
+
+Conversation
+* id
+* seen {
+  'peepId': 'messageId'
+}
+* received: {
+  'peepId', 'messageId'
+}
+* onSeenUpdated
+* onReceivedUpdated
+* peeps: Array
+* onPeepAdd()
+* addPeep()
+*
+* messages: Array
+* onMessage: function for when message is added.
+* onMessagesLoaded: called when conversation is in a completed state.
+* areMesssagesLoaded
+* loadMessages()
+* addMessage()
+*
+* pin()
+* markSeen(msgId)
+* destroy()
+* remove()
+*
+
+Message
+* id
+* from
+* text
+* location
+* time
+
+
+var obj = moda.peeps({
+  query: 'recency',
+  onComplete: function () {
+    this.items
+  },
+  onAdd: function () {
+
+  },
+  add: function() {
+
+  }
+})
+
+}
+*/
 
 
 /*

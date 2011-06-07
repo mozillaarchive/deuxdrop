@@ -47,6 +47,7 @@ define(function (require) {
       moda = require('moda'),
 
       commonNodes = {},
+      peeps,
       update;
 
   /**
@@ -73,35 +74,40 @@ define(function (require) {
       //Get the node to use for each peep.
       clonable = commonNodes[dom.attr('data-childclass')];
 
-      moda.peeps(function (peeps) {
-        var frag = document.createDocumentFragment();
+      peeps = new moda.Peeps({}, {
+        'peepsComplete': function (peeps) {
+          var frag = document.createDocumentFragment();
 
-        //Generate nodes for each person.
-        peeps.forEach(function (peep) {
-          var node = clonable.cloneNode(true);
-          node.setAttribute('data-id', peep.id);
-          node.appendChild(document.createTextNode(peep.name));
-          frag.appendChild(node);
-        });
+          //Generate nodes for each person.
+          peeps.forEach(function (peep) {
+            var node = clonable.cloneNode(true);
+            node.setAttribute('data-id', peep.id);
+            node.appendChild(document.createTextNode(peep.name));
+            frag.appendChild(node);
+          });
 
-        //Update the card.
-        dom.append(frag);
+          //Update the card.
+          dom.append(frag);
 
-        //Refresh card sizes.
-        cards.adjustCardSizes();
+          //Refresh card sizes.
+          cards.adjustCardSizes();
+        }
       });
     },
 
     'peep': function (refNode, id, dom) {
       //Grab the peep's ID from the refNode
-      var peepId = refNode.getAttribute('data-id');
+      var peepId = refNode.getAttribute('data-id'),
+        peep = peeps.peeps.filter(function (peep) {
+          if (peep.id === peepId) {
+            return peep;
+          } else {
+            return undefined;
+          }
+        })[0];
 
-      moda.peep(peepId, function (peep) {
-        
-
-        //Refresh the card sizes
-        cards.adjustCardSizes();
-      });
+      //Refresh the card sizes
+      cards.adjustCardSizes();
     }
   };
 
