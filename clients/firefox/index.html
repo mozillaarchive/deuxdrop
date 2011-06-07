@@ -44,26 +44,18 @@
         </div>
         <div id="peep" class="card">
           <div id="peepInfo">
-            <img id="peepInfoPic" src="i/face2.png">
-            <span id="peepInfoName">David</span>
+            <img id="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+            <span data-bind="name" id="peepInfoName">David</span>
           </div>
           <form data-class="compose"></form>
-          <div id="peepConversations">
+          <div id="peepConversations" data-childclass="convListItem">
             <a href="#conversation">Hello</a>
             <a href="#conversation">Hi</a>
           </div>
         </div>
         <div id="conversation" title="Conversation" class="card">
           <form data-class="compose"></form>
-          <ul class="messages">
-            <li class="message">
-              <img class="peepPic" src="i/face2.png">
-              <span class="peepMessage">Hi there. What's going on?</span>
-            </li>
-            <li class="message">
-              <img class="peepPic" src="i/face2.png">
-              <span class="peepMessage">Just chillin. What's up with you?</span>
-            </li>
+          <ul id="conversationMessages" class="messages" data-childclass="message">
           </ul>
         </div>
         <div id="compose" title="Compose" class="card">
@@ -74,12 +66,26 @@
 
     <!-- Start standard UI elements -->
     <div id="common" class="hidden">
+
       <form data-classimpl="compose" class="compose">
         <textarea class="composeText"></textarea>
         <button>Send</button>
       </form>
 
       <a data-classimpl="personLink" href="#peep"></a>
+
+      <a data-classimpl="convListItem" href="#conversation"></a>
+
+      <li data-classimpl="message" class="message hbox">
+        <div class="messageFrom">
+          <img class="messageFromPic" data-bind="from.pic" data-attr="src" src="i/face2.png">
+        </div>
+        <div class="messageBubble boxFlex">
+          <span class="messageFromName" data-bind="from.name"></span>
+          <span data-bind="text" class="messageText"></span>
+        </div>
+      </li>
+
     </div>
     <!-- End standard UI elements -->
   </body>

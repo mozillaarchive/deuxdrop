@@ -45,9 +45,13 @@ define(function (require) {
   var q = require('q'),
       listeners = {},
       listenerCounter = 0,
-      peeps = [],
+      messageIdCounter = 0,
 
-      moda, peepData, prop;
+      moda, prop,
+
+      // fake data stuff
+      peeps = [],
+      peepData, convData, conv1, conv2, conversations;
 
   /**
    * Trigger listeners on an object an any global listeners.
@@ -85,14 +89,14 @@ Peeps
 * destroy()
 */
   function Peeps(query, on) {
-    this.peeps = [];
+    this.items = [];
     this.isComplete = false;
     this.query = query;
     this.on = on;
 
     var d = q.defer();
     q.when(d.promise, function (peeps) {
-      this.peeps = peeps;
+      this.items = peeps;
       trigger(this, 'peepsComplete', [peeps]);
     }.bind(this));
 
@@ -164,10 +168,87 @@ Peep
   }
 
   Peep.prototype = {
-    loadConversations: function () {
+    /**
+     * Gets the conversations for this user.
+     * @param {Function} callback a callback to call when the conversations
+     * are retrieved. The callback will receive an array of Conversation
+     * objects.
+     */
+    getConversations: function (callback) {
+      var d = q.defer();
 
+      if (this.conversationsPromise) {
+        q.when(this.conversationsPromise, callback);
+      } else {
+        // fake the data for now
+        this.conversationsPromise = d.promise;
+        q.when(this.conversationsPromise, callback);
+        this.conversations = conversations[this.id];
+        d.resolve(this.conversations);
+      }
     }
   };
+
+/*
+Message
+* id
+* from
+* text
+* location
+* time
+*/
+
+  function Message(from, text, time, location) {
+    this.id = 'msg' + (messageIdCounter++);
+    this.from = peepData[from];
+    this.text = text;
+    this.time = time || (new Date()).getTime();
+    this.location = location;
+  }
+
+/*
+Conversation
+* id
+* seen {
+  'peepId': 'messageId'
+}
+* received: {
+  'peepId', 'messageId'
+}
+* onSeenUpdated
+* onReceivedUpdated
+* peeps: Array
+* onPeepAdd()
+* addPeep()
+*
+* messages: Array
+* onMessage: function for when message is added.
+* onMessagesLoaded: called when conversation is in a completed state.
+* areMesssagesLoaded
+* loadMessages()
+* addMessage()
+*
+* pin()
+* markSeen(msgId)
+* destroy()
+* remove()
+*
+*/
+
+  function Conversation(id, peeps) {
+    this.id = id;
+    this.peeps = peeps;
+    this.messages = [];
+    this.on = {};
+  }
+
+  Conversation.prototype = {
+    addMessage: function (message) {
+      this.messages.push(message);
+      trigger(this, 'message', arguments);
+    }
+  };
+
 
   /**
    * Define the moda object and API.
@@ -223,20 +304,40 @@ moda.on({
       delete listeners[listenerId];
     },
 
-    Peeps: Peeps,
-
-
+    /**
+     * Grabs a list of Peeps based on a query value.
+     *
+     * @param {Object} query the query to used for data selection.
+     * @param {Object} on an object whose properties are event names
+     * and values are event handlers for events that can be triggered
+     * for the return object.
+     *
+     * @returns {Peeps}
+     */
+    peeps: function (query, on) {
+      return new Peeps(query, on);
+    },
 
     /**
-     * Gets the data on the peep with the given ID.
-     * @param {String} id the peep ID.
+     * Grabs a list of Peeps based on a query value.
+     *
+     * @param {Object} query the query to used for data selection.
+     * @param {Object} on an object whose properties are event names
+     * and values are event handlers for events that can be triggered
+     * for the return object.
+     *
+     * @returns {Peeps}
      */
-    peep: function (id, cb, err) {
-      var d = q.defer();
+    // TODO: on assignment does not work right now.
+    conversation: function (query, on) {
+      // only support by ID filtering
+      var conv;
 
-      d.resolve(peepData);
+      if (query.by === 'id') {
+        conv = convData[query.filter];
+      }
 
-      return d.promise;
+      return conv;
     }
   };
 
@@ -244,6 +345,11 @@ moda.on({
    * Fake data to use for UI mockups.
    */
   peepData = {
+    'me@raindrop.it': new Peep({
+      name: 'Me',
+      id: 'me@raindrop.it',
+      pic: 'i/face2.png'
+    }),
     'james@raindrop.it': new Peep({
       name: 'James',
       id: 'james@raindrop.it',
@@ -266,10 +372,49 @@ moda.on({
    */
   peeps = [];
   for (prop in peepData) {
-    if (peepData.hasOwnProperty(prop)) {
+    if (peepData.hasOwnProperty(prop) && prop !== 'me@raindrop.it') {
       peeps.push(peepData[prop]);
     }
   }
+
+  /**
+   * Fake conversations
+   */
+  conv1 = new Conversation('conv1', [
+    peepData['james@raindrop.it'], peepData['bryan@raindrop.it']
+  ]);
+  conv1.addMessage(new Message('me@raindrop.it', 'what\'s for lunch?'));
+  conv1.addMessage(new Message('james@raindrop.it', 'fatburger'));
+  conv1.addMessage(new Message('bryan@raindrop.it', 'what about acme?'));
+  conv1.addMessage(new Message('me@raindrop.it', 'i like acme'));
+  conv1.addMessage(new Message('james@raindrop.it', 'sounds good, let\'s do it!'));
+
+  conv2 = new Conversation('conv2', [
+    peepData['james@raindrop.it']
+  ]);
+  conv2.addMessage(new Message('james@raindrop.it', 'yt?'));
+  conv2.addMessage(new Message('me@raindrop.it', 'yup'));
+  conv2.addMessage(new Message('james@raindrop.it', 'What is that new game coming out?'));
+  conv2.addMessage(new Message('me@raindrop.it', 'Mass Effect 3! I can\'t wait for it!'));
+  conv2.addMessage(new Message('james@raindrop.it', 'Where are you going to get it?'));
+  conv2.addMessage(new Message('me@raindrop.it', 'I will just order it online.'));
+  conv2.addMessage(new Message('james@raindrop.it', 'OK. I\'ll wait for the reviews.'));
+
+  convData = {
+    conv1: conv1,
+    conv2: conv2
+  };
+
+  conversations = {
+    'james@raindrop.it': [
+      conv1,
+      conv2
+    ],
+
+    'bryan@raindrop.it' : [
+      conv1
+    ]
+  };
 
   return moda;
 });
@@ -281,56 +426,6 @@ Requests
 * onComplete
 * peeps
 
-
-Conversation
-* id
-* seen {
-  'peepId': 'messageId'
-}
-* received: {
-  'peepId', 'messageId'
-}
-* onSeenUpdated
-* onReceivedUpdated
-* peeps: Array
-* onPeepAdd()
-* addPeep()
-*
-* messages: Array
-* onMessage: function for when message is added.
-* onMessagesLoaded: called when conversation is in a completed state.
-* areMesssagesLoaded
-* loadMessages()
-* addMessage()
-*
-* pin()
-* markSeen(msgId)
-* destroy()
-* remove()
-*
-
-Message
-* id
-* from
-* text
-* location
-* time
-
-
-var obj = moda.peeps({
-  query: 'recency',
-  onComplete: function () {
-    this.items
-  },
-  onAdd: function () {
-
-  },
-  add: function() {
-
-  }
-})
-
-}
 */
 
 

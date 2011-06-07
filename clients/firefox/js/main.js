@@ -34,7 +34,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-/*jslint indent: 2, strict: false */
+/*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false, document: false */
 
 /**
@@ -60,25 +60,54 @@ define(function (require) {
     return cards.moveTo(id);
   }
 
-  //Set up card update actions.
+  function getChildCloneNode(node) {
+    return commonNodes[node.getAttribute('data-childclass')];
+  }
+
+  function updateDom(rootDom, model) {
+    // update the data bound nodes.
+    rootDom.find('[data-bind]').each(function (i, node) {
+      var bindName = node.getAttribute('data-bind'),
+          attrName = node.getAttribute('data-attr'),
+          value = model[bindName],
+          parts;
+
+      // allow for dot names in the bindName
+      if (bindName.indexOf('.') !== -1) {
+        parts = bindName.split('.');
+        value = model;
+        parts.forEach(function (part) {
+          value = value[part];
+        });
+      }
+
+      if (attrName) {
+        node.setAttribute(attrName, value);
+      } else {
+        $(node).text(value);
+      }
+    });
+  }
+
+  // set up card update actions.
   update = {
     'peeps': function (refNode, id, dom) {
       var clonable;
 
-      //Do not bother if it is already updated.
+      // do not bother if it is already updated.
       if (dom[0].hasAttribute("updated")) {
         return;
       }
       dom.attr('updated', 'updated');
 
-      //Get the node to use for each peep.
+      // get the node to use for each peep.
       clonable = commonNodes[dom.attr('data-childclass')];
 
-      peeps = new moda.Peeps({}, {
+      peeps = moda.peeps({}, {
         'peepsComplete': function (peeps) {
           var frag = document.createDocumentFragment();
 
-          //Generate nodes for each person.
+          // generate nodes for each person.
           peeps.forEach(function (peep) {
             var node = clonable.cloneNode(true);
             node.setAttribute('data-id', peep.id);
@@ -86,41 +115,102 @@ define(function (require) {
             frag.appendChild(node);
           });
 
-          //Update the card.
+          // update the card.
           dom.append(frag);
 
-          //Refresh card sizes.
+          // refresh card sizes.
           cards.adjustCardSizes();
         }
       });
     },
 
     'peep': function (refNode, id, dom) {
-      //Grab the peep's ID from the refNode
+      // update the peep's ID from the refNode
       var peepId = refNode.getAttribute('data-id'),
-        peep = peeps.peeps.filter(function (peep) {
-          if (peep.id === peepId) {
-            return peep;
-          } else {
-            return undefined;
-          }
-        })[0];
+          conversationsNode = document.getElementById('peepConversations'),
+          convCloneNode = getChildCloneNode(conversationsNode),
+          frag = document.createDocumentFragment(),
+          peep = peeps.items.filter(function (peep) {
+            if (peep.id === peepId) {
+              return peep;
+            } else {
+              return undefined;
+            }
+          })[0];
 
-      //Refresh the card sizes
+      // clear out old conversations
+      conversationsNode.innerHTML = '';
+
+      updateDom(dom, peep);
+
+      // fill in list of conversations.
+      peep.getConversations(function (conversations) {
+        conversations.forEach(function (conv) {
+          var node = convCloneNode.cloneNode(true),
+              messages = conv.messages,
+              msg, lastMsg, i;
+
+          for (i = messages.length - 1; i > -1 && (msg = messages[i]); i--) {
+            if (msg.from.id === peep.id) {
+              lastMsg = msg;
+              break;
+            }
+          }
+          if (!lastMsg) {
+            lastMsg = messages[messages.length - 1];
+          }
+
+          $(node).text(lastMsg.text);
+          node.setAttribute('data-id', conv.id);
+
+          frag.appendChild(node);
+
+          conversationsNode.appendChild(frag);
+
+          // refresh the card sizes
+          cards.adjustCardSizes();
+        });
+      });
+    },
+    'conversation': function (refNode, id, dom) {
+      var convId = refNode.getAttribute('data-id'),
+          messagesNode = document.getElementById('conversationMessages'),
+          messageCloneNode = getChildCloneNode(messagesNode),
+          frag = document.createDocumentFragment(),
+          conversation;
+
+      // TODO: this should be an async setup.
+      conversation = moda.conversation({
+        by: 'id',
+        filter: convId
+      });
+
+      // clear out old messages
+      messagesNode.innerHTML = '';
+
+      conversation.messages.forEach(function (message) {
+        var node = messageCloneNode.cloneNode(true);
+        updateDom($(node), message);
+        frag.appendChild(node);
+      });
+
+      messagesNode.appendChild(frag);
+
+      // refresh the card sizes
       cards.adjustCardSizes();
     }
   };
 
-  //Wait for DOM ready to do some DOM work.
+  // wait for DOM ready to do some DOM work.
   $(function () {
 
-    //Hold on to common nodes for use later.
+    // hold on to common nodes for use later.
     $('#common').children().each(function (i, node) {
       commonNodes[node.getAttribute('data-classimpl')] = node;
       node.parentNode.removeChild(node);
     });
 
-    //Now insert commonly used nodes in any declarative cases.
+    // now insert commonly used nodes in any declarative cases.
     $('[data-class]').each(function (i, origNode) {
       var classImpl = origNode.getAttribute('data-class'),
           node = commonNodes[classImpl].cloneNode(true);
@@ -140,7 +230,7 @@ define(function (require) {
         }
       });
 
-    //Initialize the cards
+    // initialize the cards
     cards($('#cardContainer'));
 
   });
