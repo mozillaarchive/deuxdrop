@@ -121,7 +121,13 @@ button {
 }
 
 
-#conversationMessages {
+.peepInfoPic {
+  width: 48px;
+  height: 48px;
+}
+
+
+.conversationMessages {
   list-style: none;
 }
 

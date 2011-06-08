@@ -37,10 +37,32 @@
 /*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false */
 
+// from https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
+// bootstrap the JS env in some browsers that do not have full ES5
+if (!Function.prototype.bind) {
+
+  Function.prototype.bind = function (obj) {
+    var slice = [].slice,
+        args = slice.call(arguments, 1),
+        self = this,
+        Nop = function () {},
+        bound = function () {
+          return self.apply(this instanceof Nop ? this : (obj || {}),
+                            args.concat(slice.call(arguments)));
+        };
+
+    Nop.prototype = self.prototype;
+
+    bound.prototype = new Nop();
+
+    return bound;
+  };
+}
+
+
 /**
  * The data store layer.
  */
-
 define(function (require) {
   var q = require('q'),
       listeners = {},
@@ -348,22 +370,22 @@ moda.on({
     'me@raindrop.it': new Peep({
       name: 'Me',
       id: 'me@raindrop.it',
-      pic: 'i/face2.png'
+      pic: 'i/fake/me.png'
     }),
     'james@raindrop.it': new Peep({
       name: 'James',
       id: 'james@raindrop.it',
-      pic: 'i/face2.png'
+      pic: 'i/fake/james.jpg'
     }),
     'bryan@raindrop.it': new Peep({
       name: 'Bryan',
       id: 'bryan@raindrop.it',
-      pic: 'i/face2.png'
+      pic: 'i/fake/bryan.jpg'
     }),
     'andrew@raindrop.it': new Peep({
       name: 'Andrew',
       id: 'andrew@raindrop.it',
-      pic: 'i/face2.png'
+      pic: 'i/fake/andrew.jpg'
     })
   };
 

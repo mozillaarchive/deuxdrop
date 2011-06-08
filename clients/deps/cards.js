@@ -22,12 +22,13 @@
  * */
 
 /*jslint indent: 2, regexp: false */
-/*global require: false, define: false, window: false, document: false, cards: true */
+/*global define: false, window: false, document: false,
+  location: false, history: false, setTimeout: false */
 'use strict';
 
-define([ 'jquery', 'text!./cardsHeader.html'],
-function ($,    headerTemplate) {
-  var header, display, back, nlCards,
+define([ 'jquery', 'blade/url', 'blade/array', 'text!./cardsHeader.html'],
+function ($,        url,         array,         headerTemplate) {
+  var cards, header, display, back, nlCards,
     cardPosition = 0,
     headerText = '',
     cardTitles = [];
@@ -57,17 +58,48 @@ function ($,    headerTemplate) {
     cards.scroll();
   }
 
-  function cards(nl, options) {
+  function onNavClick(evt, skipPush) {
+    var href = evt.target.href,
+        fragId = href && href.split('#')[1],
+        cardId, data;
+    if (fragId) {
+      fragId = fragId.split('?');
+      cardId = fragId[0];
+      data = fragId[1] || '';
+
+      if (cards.templates[cardId]) {
+        // Convert the data into an object
+        data = url.queryToObject(data);
+
+        cards.onNav(cardId, data);
+
+        if (!skipPush) {
+          history.pushState({}, cards.getTitle(), href);
+        }
+
+        // Stop the event.
+        evt.stopPropagation();
+      }
+    }
+  }
+
+  cards = function (nl, options) {
     nl = nl.jquery ? nl : $(nl);
 
+    cards.options = options || {};
+
     $(function () {
-      //Insert the header before the cards
+      var cardNodes, href;
+
+      // insert the header before the cards
       header = $(headerTemplate).insertBefore(nl);
       headerText = $('#headerText');
 
       back = $('#back');
       back.css('display', 'none');
-      back.click((options && options.onBack) || cards.back);
+      back.click(function (evt) {
+        history.back();
+      });
 
       display = nl;
       nlCards = display.find('#cards');
@@ -75,44 +107,80 @@ function ($,    headerTemplate) {
       adjustCardSizes();
       cards.setTitle(options && options.title);
 
-      //Detect orientation changes and size the card container size accordingly.
+      // grab the cards for use later
+      cardNodes = array.to(nl.find('[data-cardid]'));
+
+      // store the cards by data-cardid value, and take them out of
+      // the DOM and only add them as needed
+      cardNodes.forEach(function (node) {
+        var id = node.getAttribute('data-cardid');
+        if (cards.templates[id]) {
+          throw new Error('Duplicate card data-cardid: ' + id);
+        } else {
+          cards.templates[id] = node;
+        }
+
+        node.parentNode.removeChild(node);
+      });
+
+      // detect orientation changes and size the card container
+      // size accordingly
       if ('onorientationchange' in window) {
         window.addEventListener('orientationchange', adjustCardSizes, false);
       }
       window.addEventListener('resize', adjustCardSizes, false);
 
+      // Listen for clicks. Using clicks instead of hashchange since
+      // pushState API does not trigger hashchange events.
+      // Only listen for clicks that are on a tags and for # URLs, whose
+      // format matches #cardId?name=value&name=value
+      $('body').delegate('a', 'click', onNavClick);
+
+      // Listen for popstate to do the back navigation.
+      window.addEventListener('popstate', function (evt) {
+        cards.back();
+
+        // Remove the last panel
+        // TODO: do this in a less hacky way, listen for transitionend for
+        // example, if that now works in everywhere we want, and we are
+        // using CSS3 transitions.
+        setTimeout(function () {
+          nlCards.find('.card').last().remove();
+        }, 300);
+      }, false);
+
+      // Set up initial state via simulation of a nav click
+      href = location.href.split('#')[1] || cards.startCardId;
+
+      onNavClick({
+        target: {
+          href: '#' + href
+        },
+        stopPropagation: function () {}
+      }, true);
     });
-  }
+  };
+
+  cards.startCardId = 'start';
+
+  cards.templates = {};
 
   cards.adjustCardSizes = adjustCardSizes;
 
   /**
-   * Adds a new card to the list of cards, at the end of the cards.
-   * Only adds the card, does not navigate to it. Only adds the card
-   * if a DOM element with the info.id does not already exist in the page.
-   *
-   * @param {Object} info the info about the card. It must have the following
-   * properties:
-   * @param {String} info.id the ID to use for the new card's DOM element.
-   * @param {String} info.title the text title to use for the card.
-   * @param {String} info.content a string of HTML to use for the content.
+   * Triggered on card navigation that goes forward. Back navigation is
+   * handled automatically. Override in an app to provide navigation behavior.
    */
-  cards.add = function (info) {
-    var existing = $('#' + info.id),
-      title = info.title;
+  cards.onNav = function (templateId, data) {
+    throw new Error('Need to implement cards.onNav');
+  };
 
-    if (!title) {
-      title = info.content.match(/<h1>([^<]+)<\/h1>/);
-      title = (title && title[1]) || '';
-    }
-
-    if (!existing.length) {
-      existing = $('<div id="' + info.id + '" class="card" title="' + title + '">' + info.content + '</div>')
-        .appendTo('#cards');
-      cards.adjustCardSizes();
-    }
-
-    return existing[0];
+  /**
+   * Adds a card node to the list.
+   */
+  cards.add = function (node) {
+    nlCards.append(node);
+    adjustCardSizes();
   };
 
   cards.back = function () {
@@ -162,6 +230,10 @@ function ($,    headerTemplate) {
 */
     //Hide/Show back button as appropriate
     back.css('display', !cardPosition ? 'none' : '');
+  };
+
+  cards.getTitle = function () {
+    return nlCards.find('.card').last().attr('title') || '';
   };
 
   cards.setTitle = function (title) {

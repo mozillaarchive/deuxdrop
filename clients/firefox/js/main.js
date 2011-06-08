@@ -50,16 +50,6 @@ define(function (require) {
       peeps,
       update;
 
-  /**
-   * Sets up a new card's data and moves the cards.
-   */
-  function changeCard(refNode, id) {
-    if (update[id]) {
-      update[id](refNode, id, $('#' + id));
-    }
-    return cards.moveTo(id);
-  }
-
   function getChildCloneNode(node) {
     return commonNodes[node.getAttribute('data-childclass')];
   }
@@ -91,7 +81,7 @@ define(function (require) {
 
   // set up card update actions.
   update = {
-    'peeps': function (refNode, id, dom) {
+    'peeps': function (data, dom) {
       var clonable;
 
       // do not bother if it is already updated.
@@ -110,7 +100,7 @@ define(function (require) {
           // generate nodes for each person.
           peeps.forEach(function (peep) {
             var node = clonable.cloneNode(true);
-            node.setAttribute('data-id', peep.id);
+            node.href += '?id=' + encodeURIComponent(peep.id);
             node.appendChild(document.createTextNode(peep.name));
             frag.appendChild(node);
           });
@@ -124,10 +114,9 @@ define(function (require) {
       });
     },
 
-    'peep': function (refNode, id, dom) {
-      // update the peep's ID from the refNode
-      var peepId = refNode.getAttribute('data-id'),
-          conversationsNode = document.getElementById('peepConversations'),
+    'peep': function (data, dom) {
+      var peepId = data.id,
+          conversationsNode = dom.find('.peepConversations')[0],
           convCloneNode = getChildCloneNode(conversationsNode),
           frag = document.createDocumentFragment(),
           peep = peeps.items.filter(function (peep) {
@@ -161,7 +150,7 @@ define(function (require) {
           }
 
           $(node).text(lastMsg.text);
-          node.setAttribute('data-id', conv.id);
+          node.href +=  '?id=' + encodeURIComponent(conv.id);
 
           frag.appendChild(node);
 
@@ -172,9 +161,9 @@ define(function (require) {
         });
       });
     },
-    'conversation': function (refNode, id, dom) {
-      var convId = refNode.getAttribute('data-id'),
-          messagesNode = document.getElementById('conversationMessages'),
+    'conversation': function (data, dom) {
+      var convId = data.id,
+          messagesNode = dom.find('.conversationMessages')[0],
           messageCloneNode = getChildCloneNode(messagesNode),
           frag = document.createDocumentFragment(),
           conversation;
@@ -218,20 +207,22 @@ define(function (require) {
       origNode.parentNode.replaceChild(node, origNode);
     });
 
-    $('body')
-      .delegate('a', 'click', function (evt) {
-        var a = evt.target,
-            cardId;
-
-        if (a.href && a.href.indexOf('#') !== -1) {
-          cardId = a.href.split('#')[1];
-          changeCard(a, cardId);
-          evt.preventDefault();
-        }
-      });
-
     // initialize the cards
     cards($('#cardContainer'));
 
+    // listen for nav items.
+    cards.onNav = function (templateId, data) {
+      var cardNode = $(cards.templates[templateId].cloneNode(true));
+
+      if (update[templateId]) {
+        update[templateId](data, $(cardNode));
+      }
+
+      cards.add(cardNode);
+
+      if (templateId !== 'start') {
+        cards.forward();
+      }
+    };
   });
 });
