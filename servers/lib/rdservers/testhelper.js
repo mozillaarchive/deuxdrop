@@ -41,13 +41,39 @@
 
 define(
   [
+    'rdcommon/identities/privident',
+    'rdcommon/rawclient/api',
+    'rdcommon/transport/authconn',
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
+    $privident,
+    $rawclient_api,
+    $authconn,
+    $keyops,
     exports
   ) {
 
-var ClientTestEntityMixins = {
+var ClientTestActorMixins = {
+  /**
+   * Automatically create an identity; a client is not much use without one.
+   *  (In the future we may look at the argument bundle provided to the actor
+   *  instantiation in order to use an existing one too.)
+   */
+  __constructor: function(self) {
+    self.T.convenienceSetup([self, 'creates identity'], function() {
+      // -- create our identity
+      // - create our root key
+      // - create our long term key
+      // - create our self-attestation (this is where our name comes into it)
+      self._identity = $privident.generateHumanFullIdent({
+        name: self.__name,
+        suggestedNick: self.__name,
+      });
+    });
+  },
+
   signupWith: function(server) {
     this._usingServer = server;
   },
@@ -94,7 +120,41 @@ var ClientTestEntityMixins = {
   },
 };
 
-var ComboTestEntityMixins = {
+var MailstoreActorMixins = {
+  __constructor: function(self) {
+    self.T.convenienceSetup([self, 'creates self to get port'], function() {
+      self.expect_listening();
+
+      self._server = new $authconn.AuthorizingServer();
+      self._server.listen();
+    });
+    self.T.convenienceSetup(
+      [self, 'creates its identity and registers implementations'], function() {
+      // -- create our identity
+      // - create our root key
+      var rootKeypair = $keyops.generateRootKeypair();
+      // - create our long term key
+      var now = Date.now();
+      var longtermBundle = $keyops.generateAndAuthorizeLongtermKeypair(
+                             rootKeypair, 'box',
+                             now, now + $keyops.MAX_AUTH_TIMESPAN);
+      // - create our self-attestation (this is where our name comes into it)
+      var selfIdent = $privident.generateServerSelfIdent(
+        rootKeypair,
+        longtermBundle,
+        {
+          tag: "server:mailstore",
+          host: '127.0.0.1',
+          port: self._server.address.port,
+          publicKey: longtermBundle.keypair.publicKey
+        });
+
+      // -- bind the server definitions
+    });
+  },
+};
+
+var ComboTestActorMixins = {
 };
 
 var MessageThingMixins = {
@@ -104,8 +164,8 @@ var MessageThingMixins = {
 
 exports.TESTHELPER = {
   actorMixins: {
-    client: ClientTestEntityMixins,
-    combo: ComboTestEntityMixins,
+    client: ClientTestActorMixins,
+    combo: ComboTestActorMixins,
   },
 
   thingMixins: {

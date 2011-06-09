@@ -41,7 +41,11 @@
  * Note that all keys are either signing or boxing (signcryption) keys and they
  * are never used for both.
  *
- * @typedef[PubPersonSelfIdent @dict[
+ * @typedef[ServerSelfIdentPayload @dict[
+ *   
+ * ]]
+ *
+ * @typedef[PersonSelfIdentPayload @dict[
  *   @key[name String]{
  *     Identity's claimed name.
  *   }
@@ -50,27 +54,32 @@
  *   }
  *
  *   @key[rootSignPubKey]{
- *     The root public key for this identity which must be the same used to sign
- *     the `PubPersonSelfIdent` blob.  The identity may use different keys for
- *     all other tasks.
+ *     The root public key for this identity.
  *
  *     The idea is that the identity's root secret key may be protected with
  *     a much greater degree of security (ex: written in disappearing ink in pig
  *     latin on a piece of highly flammable paper that lives in a safe deposit
  *     box) than the other keys whose day-to-day usage necessarily results in a
  *     greater risk of compromise.
- *
- *     Of course, since we have no key life-cycle management, validity ranges,
- *     multiple supported keys, etc., this is more of a stepping stone that
- *     helps us avoid writing code that assumes a single key than an actual
- *     end-game solution.  It is fine to use this key as the value of other
- *     entries in this structure.
+ *   }
+ *   @key[longtermSignPubKey]{
+ *     The long term public key for this identity which must be the same used to
+ *     sign the `PersonSelfIdentPayload` blob.  The identity may use different
+ *     keys for all other tasks.
+ *   }
+ *   @key[longetermSignPubAuth]{
+ *     The authorization by the `rootSignPubKey` that authorizes the
+ *     `longtermSignPubKey` to act on its behalf.
  *   }
  *
  *   @key[issuedAt DateMS]{
  *     The timestamp when this identity was created / asserted valid / etc.  We
  *     are currently not dealing with validity ranges and such; this is merely
  *     a debugging stop-gap measure.
+ *   }
+ *
+ *   @key[serverIdent ServerSelfIdent]{
+ *     The (current) self-ident of the server we are using.
  *   }
  *
  *   @key[maildropDNS String]{
@@ -117,10 +126,48 @@
 
 define(
   [
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
+    $keyops,
     exports
   ) {
+
+/**
+ * Generate a server self-ident blob.
+ */
+exports.generateServerSelfIdent = function(rootKeypair, longtermBoxBundle,
+                                           details) {
+};
+
+/**
+ * @args[
+ *   @param[details @dict[
+ *     @key[name String]
+ *     @key[suggestedNick #:optional String]
+ *   ]]
+ * ]
+ */
+exports.generatePersonSelfIdent = function(details) {
+  var full = {pub: {}, secret: {}},
+      pub = full.pub, secret = full.secret;
+
+  pub.name = details.name;
+  pub.suggestedNick = details.hasOwnProperty("suggestedNick") ?
+                        details.suggestedNick : details.name;
+
+  var rootSignPair = $nacl.sign_keypair();
+  secret.rootSignSecKey = rootSignPair.sk;
+  pub.rootSignPubKey = rootSignPair.pk;
+
+  pub.issuedAt = secret.issuedAt = 0;
+
+  pub.maildropDNS = details.hasOwnProperty("maildropDNS") ?
+                      details.maildropDNS : null;
+
+
+  pub.issuedAt = secret.issuedAt = Date.now();
+};
 
 }); // end define

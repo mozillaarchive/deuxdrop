@@ -43,7 +43,7 @@ define(
   [
     'rdcommon/transport/authconn',
     'rdcommon/testcontext',
-    'rdcommon/identities/privident',
+    'rdcommon/crypto/keyops',
     'q',
     'module',
     'exports'
@@ -51,7 +51,7 @@ define(
   function(
     $authconn,
     $tc,
-    $privident,
+    $keyops,
     $Q,
     $module,
     exports
@@ -124,8 +124,8 @@ console.log("running loopback test context def thing");
     eServer.expect_endpointRegistered('test/test');
     eServer.expect_listening();
 
-    serverIdent = $privident.generateServerKeyPair();
-    clientIdent = $privident.generateServerKeyPair();
+    serverIdent = $keyops.generateServerKeyPair();
+    clientIdent = $keyops.generateServerKeyPair();
 
     var TestServerDef = {
       endpoints: {

@@ -59,12 +59,6 @@ require(
   ) {
 var when = $Q.when;
 
-var parser = $nomnom.globalOpts({
-});
-
-function run_server(options, sclass) {
-}
-
 var DEATH_PRONE = false;
 process.on("uncaughtException",
   function(err) {
@@ -74,50 +68,66 @@ process.on("uncaughtException",
       process.exit(1);
   });
 
-parser.command('maildrop')
-  .help("Run a maildrop node")
+
+var parser = $nomnom.globalOpts({
+});
+
+var OPT_CONFIG_DIR = {
+  position: 1,
+  help: "The directory that holds/should hold server (configuration) data"
+};
+var OPT_SERVER_TYPE = {
+  string: "--server-type",
+  default: "fullpub",
+  help: "One of: fullpub, halfpub, halfpriv"
+};
+var OPT_HBASE_PREFIX = {
+  string: "--hbase-prefix",
+  default: "",
+  help: "Optional namespacing prefix for the hbase table names",
+};
+var OPT_LISTEN_PORT = {
+  string: "--listen-port",
+  required: true,
+  help: "The port the server should listen on.",
+};
+
+parser.command('define-server')
+  .help("Define a server configuration to run.")
   .opts({
+    configDir: OPT_CONFIG_DIR,
+    serverType: OPT_SERVER_TYPE,
+    hbasePrefix: OPT_HBASE_PREFIX,
+    listenPort: OPT_LISTEN_PORT,
   })
   .callback(function(options) {
-    $require(['rdservers/maildrop/server'], function($dropserver) {
-      run_server(options, $dropserver.DropServer);
+    $require(['rdservers/configurer'], function($configurer) {
+      $configurer.createConfig(ops.configDir, opts);
     });
   });
 
-parser.command('mailsender')
-  .help("Run a mailsender node")
+parser.command('run-server')
+  .help("Run an already defined server configuration.")
   .opts({
+    configDir: OPT_CONFIG_DIR,
   })
   .callback(function(options) {
-    $require(['rdservers/mailsender/server'], function($sendserver) {
-      run_server(options, $sendserver.SendServer);
+    $require(['rdservers/configurer'], function($configurer) {
+      $configurer.runConfig(opts.configDir);
     });
   });
 
-parser.command('mailstore')
-  .help("Run a mailstore node ONLY (no maildrop, no mailsender)")
+parser.command('nuke-server')
+  .help("Cleanup a previously defined server (hbase and file-system)")
   .opts({
+    configDir: OPT_CONFIG_DIR,
   })
   .callback(function(options) {
-    $require(['rdservers/mailstore/server'], function($storeserver) {
-      run_server(options, $storeserver.StoreServer);
+    $require(['rdservers/configurer'], function($configurer) {
+      $configurer.nukeConfig(opts.configDir);
     });
   });
 
-parser.command('mailcombo')
-  .help("Run a maildrop/mailsender/mailstore combo node")
-  .opts({
-  })
-  .callback(function(options) {
-    $require(['rdservers/mailsender/server',
-              'rdservers/maildrop/server',
-              'rdservers/mailstore/server'],
-             function($dropserver, $sendserver, $storeserver) {
-      run_server(options, $dropserver.DropServer);
-      run_server(options, $sendserver.SendServer);
-      run_server(options, $storeserver.StoreServer);
-    });
-  });
 
 parser.command('test')
   .help("Run tests!")

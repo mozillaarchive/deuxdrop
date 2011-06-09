@@ -70,6 +70,7 @@ SignupConnection.prototype = {
   },
 };
 
+exports.makeServerDefs
 var SignupServerDef = {
   endpoints: {
     'signup/signup': {

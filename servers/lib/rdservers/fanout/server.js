@@ -77,7 +77,7 @@
  * - Send invite request for another person to join.
  *
  * From non-participants:
- * - Join conversation using attestation.
+ * X Join conversation using attestation.
  *
  * ## Messages Sent
  * To initial participants:
@@ -115,6 +115,26 @@ define(
   function(
     exports
   ) {
+
+var CreateConversationTask = taskMaster.defineTask({
+  name: "createConversation",
+  steps: {
+  }
+});
+
+/**
+ * Add a human or machine-message to the conversation.  Machine-messages, such
+ *  as per-user metadata blobs, may replace previous messages of the same type.
+ */
+var AddMessageToConversationTask = taskMaster.defineTask({
+  name: "addMessageToConversation",
+  steps: {
+  }
+});
+
+var ProcessInviteTask = taskMaster.defineTask({
+  name: "processInvite",
+});
 
 
 

@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Message store reception logic.
+ *
  **/
 
 define(
@@ -47,75 +47,16 @@ define(
     exports
   ) {
 
-function ClientServicingConnection() {
+function SendDeliveryConnection() {
 }
-ClientServicingConnection.prototype = {
-  /**
-   * The device tells us its device id, its current sequence id, and its
-   *  replication level so we know who it is, when its last update was, and
-   *  whether we need to force a re-sync.
-   */
-  _msg_init_deviceCheckin: function(msg) {
+SendDeliveryConnection.prototype = {
+  INITIAL_STATE: 'deliver',
+
+  _msg_deliver_ack: function(msg) {
   },
 
-
-
-  /**
-   * Here's a composed message to send, perhaps with some meta-data.
-   */
-  _msg_root_send: function(msg) {
-  },
-
-  /**
-   * Request a conversation index, such as:
-   * - All conversations (by time).
-   * - Conversations with a specific content (by time).
-   *
-   * This will retrieve some bounded number of conversations, where, for each
-   *  conversation, we always provide:
-   * - The conversation id
-   * - Any user-set meta-data on the conversation or its messages.
-   * - The sanity-clamped timestamps of the messages in the conversation.
-   */
-  _msg_root_convGetIndex: function(msg) {
-  },
-
-  /**
-   * Fetch messages in a conversation.
-   */
-  _msg_root_convGetMsgs: function(msg) {
-  },
-
-  /**
-   * Set meta-data on a conversation/messages.
-   */
-  _msg_root_setMeta: function(msg) {
-  },
-
-  /**
-   * Delete messages in a conversation, possibly all of them.
-   */
-  _msg_root_delConvMsgs: function(msg) {
-  },
-
-  /**
-   * Add a new contact with related-metadata for prioritization, etc.
-   */
-  _msg_root_addContact: function(msg) {
-  },
-
-  /**
-   * Modify the metadata associated with a contact.
-   */
-  _msg_root_modContact: function(msg) {
-  },
-
-  /**
-   * Delete a contact.
-   */
-  _msg_root_delContact: function(msg) {
+  _msg_deliver_nak: function(msg) {
   },
 };
-exports.ClientServicingConnection = ClientServicingConnection;
 
 }); // end define

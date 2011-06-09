@@ -36,86 +36,68 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Message store reception logic.
+ * Configuration handling.  All file I/O is synchronous because the system is,
+ *  by definition, not doing anything interesting before we load the
+ *  configuration.
+ *
+ * XXX not fully implemented; this is being written piecemeal with the unit tests
+ *  to make sure we don't get too unit test specific.
  **/
 
 define(
   [
+    'fs', 'path',
     'exports'
   ],
   function(
+    $fs, $path,
     exports
   ) {
 
-function ClientServicingConnection() {
+const CONFIG_DIR_MODE = parseInt("700", 8);
+const CONFIG_FILE_NAME = 'config.json';
+
+function saveConfig(config, configDir) {
+  var jsonConfig = JSON.stringify(config, null, 2);
+  var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
+  $fs.writeFileSync(configFilePath, jsonConfig);
 }
-ClientServicingConnection.prototype = {
-  /**
-   * The device tells us its device id, its current sequence id, and its
-   *  replication level so we know who it is, when its last update was, and
-   *  whether we need to force a re-sync.
-   */
-  _msg_init_deviceCheckin: function(msg) {
-  },
 
+function loadConfig(configDir) {
+  var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
+  if (!$path.existsSync(configFilePath))
+    throw new Error("The configuration file '" + configFilePath +
+                    "' does not exist!");
 
+  var jsonConfig = $fs.readFileSync(configFilePath);
+  return JSON.parse(jsonConfig);
+}
 
-  /**
-   * Here's a composed message to send, perhaps with some meta-data.
-   */
-  _msg_root_send: function(msg) {
-  },
+exports.createConfig = function createConfig(configDir, opts) {
+  // -- explode if the directory already exists
+  if ($path.existsSync(configDir))
+    throw new Error("configuration directory '" + configDir +
+                    "' already exists!");
 
-  /**
-   * Request a conversation index, such as:
-   * - All conversations (by time).
-   * - Conversations with a specific content (by time).
-   *
-   * This will retrieve some bounded number of conversations, where, for each
-   *  conversation, we always provide:
-   * - The conversation id
-   * - Any user-set meta-data on the conversation or its messages.
-   * - The sanity-clamped timestamps of the messages in the conversation.
-   */
-  _msg_root_convGetIndex: function(msg) {
-  },
+  // - create the directory
+  $fs.mkdirSync(configDir, CONFIG_DIR_MODE);
 
-  /**
-   * Fetch messages in a conversation.
-   */
-  _msg_root_convGetMsgs: function(msg) {
-  },
+  // - create the keys / identity
 
-  /**
-   * Set meta-data on a conversation/messages.
-   */
-  _msg_root_setMeta: function(msg) {
-  },
-
-  /**
-   * Delete messages in a conversation, possibly all of them.
-   */
-  _msg_root_delConvMsgs: function(msg) {
-  },
-
-  /**
-   * Add a new contact with related-metadata for prioritization, etc.
-   */
-  _msg_root_addContact: function(msg) {
-  },
-
-  /**
-   * Modify the metadata associated with a contact.
-   */
-  _msg_root_modContact: function(msg) {
-  },
-
-  /**
-   * Delete a contact.
-   */
-  _msg_root_delContact: function(msg) {
-  },
+  saveConfig(config, configDir);
 };
-exports.ClientServicingConnection = ClientServicingConnection;
+
+exports.runConfig = function runConfig(configDir) {
+  var config = loadConfig(configDir);
+
+  // -- instantiate the server
+  // -- bundle up the endpoints for the server def
+};
+
+exports.nukeConfig = function nukeConfig(configDir) {
+  var config = loadConfig(configDir);
+
+  // -- perform hbase cleanup
+};
 
 }); // end define

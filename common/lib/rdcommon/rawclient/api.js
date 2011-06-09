@@ -36,86 +36,69 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Message store reception logic.
+ * The raw client provides reliable low level interaction with a mailstore
+ *  server while abstracting away key management concerns.
+ *
+ * "Reliable" in this sense means that the consumer of the API does not need to
+ *  build its own layer to make sure we do the things it asks.  At the current
+ *  time, we in fact do not bother persisting anything, but at some point we
+ *  will.
  **/
 
 define(
   [
+    'rdcommon/log',
+    '../conversations/generator',
+    'module',
     'exports'
   ],
   function(
+    $log,
+    $conv_generator,
+    $module,
     exports
   ) {
 
-function ClientServicingConnection() {
+function RawClientAPI(myFullIdent, serverSelfIdent) {
+  this._fullIdent = myFullIdent;
+  this._serverSelfIdent = serverSelfIdent;
+
+  this.log = LOGFAB.rawClient(this, null,
+                              []);
 }
-ClientServicingConnection.prototype = {
-  /**
-   * The device tells us its device id, its current sequence id, and its
-   *  replication level so we know who it is, when its last update was, and
-   *  whether we need to force a re-sync.
-   */
-  _msg_init_deviceCheckin: function(msg) {
+RawClientAPI.prototype = {
+  createConversation: function() {
+  },
+  replyToConversation: function() {
+  },
+  inviteToConversation: function() {
   },
 
-
-
-  /**
-   * Here's a composed message to send, perhaps with some meta-data.
-   */
-  _msg_root_send: function(msg) {
+  pinConversation: function() {
+  },
+  updateWatermarkForConversation: function() {
   },
 
-  /**
-   * Request a conversation index, such as:
-   * - All conversations (by time).
-   * - Conversations with a specific content (by time).
-   *
-   * This will retrieve some bounded number of conversations, where, for each
-   *  conversation, we always provide:
-   * - The conversation id
-   * - Any user-set meta-data on the conversation or its messages.
-   * - The sanity-clamped timestamps of the messages in the conversation.
-   */
-  _msg_root_convGetIndex: function(msg) {
+  deleteConversation: function() {
   },
 
-  /**
-   * Fetch messages in a conversation.
-   */
-  _msg_root_convGetMsgs: function(msg) {
-  },
-
-  /**
-   * Set meta-data on a conversation/messages.
-   */
-  _msg_root_setMeta: function(msg) {
-  },
-
-  /**
-   * Delete messages in a conversation, possibly all of them.
-   */
-  _msg_root_delConvMsgs: function(msg) {
-  },
-
-  /**
-   * Add a new contact with related-metadata for prioritization, etc.
-   */
-  _msg_root_addContact: function(msg) {
-  },
-
-  /**
-   * Modify the metadata associated with a contact.
-   */
-  _msg_root_modContact: function(msg) {
-  },
-
-  /**
-   * Delete a contact.
-   */
-  _msg_root_delContact: function(msg) {
-  },
 };
-exports.ClientServicingConnection = ClientServicingConnection;
+exports.RawClientAPI = RawClientAPI;
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  rawClient: {
+    // we are a client/server client, even if we are smart for one
+    type: $log.CONNECTION,
+    subtype: $log.CLIENT,
+    semanticIdent: {
+      clientIdent: 'key',
+      _l1: null,
+      serverIdent: 'key',
+    },
+    stateVars: {
+      haveConnection: true,
+    },
+  }
+});
 
 }); // end define

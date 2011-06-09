@@ -36,79 +36,25 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Private identity data structure definition and population.
+ * Private identity data structure definition and population, where private
+ *  means "the private keys are in these data structures so don't just go
+ *  flashing them about."
+ *
+ * There are a number of major variations of things we can do in this file, and
+ *  we do them for both "Person"s and Servers.  A person must be affiliated with
+ *  servers, but a server is not affiliated with anything.  The things we do:
+ *
+ * -
  **/
 
 define(
   [
-    'nacl',
     'exports'
   ],
   function(
-    $nacl,
+    $keyops,
     exports
   ) {
 
-
-/**
- * Generate a signed self-identification blob that we can hand to someone else
- * and have them know how to talk to us.
- *
- * @args[
- * ]
- * @return[PubPersonSelfIdent]
- */
-exports.generateSignedSelfIdent = function generateSignedSelfIdent(details) {
-};
-
-/**
- * @args[
- *   @param[details @dict[
- *     @key[name String]
- *     @key[suggestedNick #:optional String]
- *
- *     @key[maildrop MaildropAccountInfo]
- *     @key[mailsender MailsenderAccountInfo]
- *
- *   ]]
- * ]
- */
-exports.generateFullIdent = function generateFullIdent(details) {
-  var full = {pub: {}, secret: {}},
-      pub = full.pub, secret = full.secret;
-
-  pub.name = details.name;
-  pub.suggestedNick = details.hasOwnProperty("suggestedNick") ?
-                        details.suggestedNick : details.name;
-
-  var rootSignPair = $nacl.sign_keypair();
-  secret.rootSignSecKey = rootSignPair.sk;
-  pub.rootSignPubKey = rootSignPair.pk;
-
-  pub.issuedAt = secret.issuedAt = 0;
-
-  pub.maildropDNS = details.hasOwnProperty("maildropDNS") ?
-                      details.maildropDNS : null;
-
-
-  pub.issuedAt = secret.issuedAt = Date.now();
-};
-
-/**
- * Generate an attestation that we are willing to receive mail from the given
- *  identity.  The attestation may enclose additional metadata for routing /
- *  prioritization purposes (and a maildrop versus a mailstore may receive
- *  different attestations with different levels of metadata accordingly.)
- */
-exports.attestWriteMeMail = function attestWriteMeMail() {
-};
-
-exports.generateServerKeyPair = function() {
-  var rawPair = $nacl.box_keypair();
-  return {
-    secretKey: rawPair.sk,
-    publicKey: rawPair.pk,
-  };
-};
 
 }); // end define

@@ -82,7 +82,9 @@
  *   }
  * ]
  *
- * The general protocol is below, using the CurveCP packet doc syntax:
+ * The general protocol is below, using the CurveCP packet doc syntax.  Keep in
+ * mind that all keys are (signcryption) boxing keys and not signing keys.
+ *
  * @itemized[
  *   @item{
  *     We establish a websockets connection with a specific URL endpoint.

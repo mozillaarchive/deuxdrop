@@ -39,18 +39,25 @@
  * Responsible for setting / clearing authorizations for inter-server and
  *  inter-user communication.
  *
- * ## hbase data model: incoming inter-server auths
+ * ## hbase data model: incoming inter-server auths fast-checking
+ * This is to check whether we should accept connections from the server at all.
  * - row: [server key]
- * - column family: "c": for fast checking; can be rebuilt as needed from "d"
+ * - column family: "a": for fast checking; can be rebuilt as needed from p/c
  *   - "primary": the current tally for authorizations by local users for
  *      receipt of messages from that server.
- *   - "secondary": the current tally for authorizations by the authorized
+ *   - "conversation": the current tally for authorizations by the authorized
  *      contacts of local users.  So if my friend is on another server and is
  *      adding me to a conversation on a third server, he can proffer a
  *      secondary authorization.
+ *
+ * ## base data model: incoming inter-server auths details
+ *
+ * - row: [server key, user key]
+ *
+ *
  * - column family: "p": for primary details
  *   - "k:#...": the public id of our user => the attestation
- * - column family: "s": for secondary details
+ * - column family: "c": for conversation auth details
  *   - "k:#...:#...": the public id of the local user, the public id of their
  *      friend who is requesting the auth => the attestation which also
  *      includes the local user the attestation is dependent upon.

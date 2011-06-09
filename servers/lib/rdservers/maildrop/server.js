@@ -41,41 +41,56 @@
 
 define(
   [
+    '../authdb/api',
     'exports'
   ],
   function(
+    $auth_api,
     exports
   ) {
+
+var AuthAPI = $auth_api;
 
 /**
  * Delivery processing connection.
  */
-function DeliveryConnection(server, sock) {
-  this.server = server;
-  this._sock = sock;
-  this.logger = server.logger.newChild('connection', sock.remoteAddress);
-
+function ReceiveDeliveryConnection(conn) {
+  this.conn = conn;
 }
-DeliveryConnection.prototype = {
-  _initialState: 'wantTransitEnvelope',
+ReceiveDeliveryConnection.prototype = {
+  INITIAL_STATE: 'root',
 
   _msg_root_deliver: function(msg) {
-    // -- retrieve the sender's credentials from the recipient's contacts
-    // (if they aren't there, they aren't an authorized sender.)
-
-    // -- verify the signature on the transit envelope
-
-    // -- hand off to the back-end for saving and/or forwarding:
-    // (in a standalone drop, we persist and notify any connected listeners)
-    // (in a combo, we hand off to the mailstore)
-
-    // -- ack once the back-end confirms it has hit persistent storage
+    return new DeliverTask(msg, this.conn.log);
   },
 };
+
+var DeliverTask = taskMaster.defineTask({
+  name: "deliver",
+  steps: {
+    retrieve_sender_credentials: function() {
+      // -- retrieve the sender's credentials from the recipient's contacts
+      // (if they aren't there, they aren't an authorized sender.)
+      return checkUserPrivilege
+    },
+    verify_transit_envelope_signature: function() {
+    },
+    back_end_hand_off: function() {
+      // -- hand off to the back-end for saving and/or forwarding:
+      // (in a standalone drop, we persist and notify any connected listeners)
+      // (in a combo, we hand off to the mailstore)
+
+    },
+    ack_now_that_the_message_is_persisted: function() {
+    }
+  },
+});
 
 /**
  * Connection to let a mailstore/user tell us who they are willing to receive
  *  messsages from.
+ *
+ * XXX notyet, mailstore can handle direct
  */
 function ContactConnection(server, sock) {
 };
@@ -98,6 +113,8 @@ ContactConnection.prototype = {
  *  messages and that you are now subscribed for realtime notification of new
  *  messages.  You need to acknowledge realtime messages just like queued
  *  messages.  If you don't want realtime messages, disconnect.
+ *
+ * XXX notyet, mailstore can handle direct
  */
 function PickupConnection(server, sock) {
 };
@@ -109,7 +126,11 @@ PickupConnection.prototype = {
 var DropServerDef = {
   endpoints: {
     'drop/deliver': {
-      implClass: DeliveryConnection,
+      implClass: ReceiveDeliveryConnection,
+      authVerifier: function(endpoint, clientKey) {
+        // we are just checking that they are allowed to talk to us at all
+        return $auth_api.checkServerAuth(clientKey);
+      }
     },
 
     'drop/contacts': {
@@ -124,7 +145,7 @@ var DropServerDef = {
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   delivery: {
-    implClass: DeliveryConnection,
+    implClass: ReceiveDeliveryConnection,
   },
   contact: {
     implClass: ContactConnection,
