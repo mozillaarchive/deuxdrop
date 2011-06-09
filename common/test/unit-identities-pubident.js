@@ -36,68 +36,55 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Test message generation and processing without any communication involved.
+ * Unit tests for `rdcommon/identities/pubident.js`.
  **/
 
 define(
   [
     'assert',
     'rdcommon/testcontext',
+    'rdcommon/crypto/keyops',
+    'rdcommon/identities/pubident',
     'module',
     'exports'
   ],
   function(
     assert,
     $tc,
+    $keyops,
+    $pubident,
     $module,
     exports
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module);
 
+TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
+  // - create our root key
+  var rootKeypair = $keyops.generateRootSigningKeypair();
+  // - create our long term key
+  var now = Date.now();
+  var longtermBoxBundle = $keyops.generateAndAuthorizeLongtermKeypair(
+                            rootKeypair, 'box',
+                            now, now + $keyops.MAX_AUTH_TIMESPAN);
 
-var DUMMY_CONV_ID = "aaaaaaaa", DUMMY_TIMESTAMP = 1304980532222,
-    DUMMY_SUBJECT = "Whaaaaat?", DUMMY_BODY = "Abcdefghijklmnop";
-
-/**
- * Create two identities, have one generate a message for the other and verify
- *  that the other can process the generated message; no network traffic or
- *  actual servers involved.
- */
-TD.DISABLED_commonSimple('generate message then process', function() {
-  var sender = makeFullIdent({name: "Alice"}),
-      recip  = makeFullIdent({name: "Bob"});
-
-  var rawEnvelope = {
-    convId: DUMMY_CONV_ID,
-    composedAt: DUMMY_TIMESTAMP,
+  var details = {
+    tag: 'server:dummy',
+    host: '127.0.0.1',
+    port: 80,
   };
-  var rawPayload = {
-    subject: DUMMY_SUBJECT,
-    body: DUMMY_BODY,
-  };
+  var signedSelfIdent = $pubident.generateServerSelfIdent(
+                          rootKeypair, longtermBoxBundle, details);
+  var payload = $pubident.assertGetServerSelfIdent(signedSelfIdent);
 
-  var signedTransitMessage = $gen.encryptTransitMessage(
-                               sender, rawEnvelope, rawPayload, recip.pub);
+  // make sure the spec'ed details all got in there correctly.
+  assert.equal(details.tag, payload.tag);
+  assert.equal(details.host, payload.host);
+  assert.equal(details.port, payload.port);
 
-  var verifiedTransitMessage = $proc.verifyTransitMessage(
-                                 signedTransitMessage);
-  if (!verifiedTransitMessage)
-    throw new Error("Transit message failed verification.");
-
-  var decEnvelope = $proc.decryptEnvelope(verifiedTransitMessage.envelope);
-  if (decEnvelope == null)
-    throw new Error("Envelope failed to decrypt.");
-
-  assert.equal(decEnvelope.convId,     rawEnvelope.convId,     "convId");
-  assert.equal(decEnvelope.composedAt, rawEnvelope.composedAt, "composedAt");
-
-  var decPayload = $proc.decryptPayload(decEnvelope.payload);
-  if (decPayload == null)
-    throw new Error("Payload failed to decrypt.");
-
-  assert.equal(decPayload.subject, rawPayload.subject, "subject");
-  assert.equal(decPayload.body,    rawPayload.body,    "body");
+  // make sure the keys got in there correctly
+  assert.equal(payload.publicKey, longtermBoxBundle.keypair.publicKey);
+  assert.equal(payload.rootPubKey, rootKeypair.publicKey);
 });
 
 }); // end define

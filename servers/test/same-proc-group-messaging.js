@@ -131,13 +131,19 @@
 
 define(
   [
+    'rdcommon/testcontext',
+    'module',
     'exports'
   ],
   function(
+    $tc,
+    $module,
     exports
   ) {
 
-TD.commonCase('group messaging upgrade from one-on-one', function(T) {
+var TD = exports.TD = $tc.defineTestsFor($module);
+
+TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
   // clients are test helper entities that have convenience functions.
   var client_a = T.actor('client', 'A'),
       client_b = T.actor('client', 'B'),

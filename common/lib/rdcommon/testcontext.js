@@ -277,7 +277,7 @@ TestCase.prototype = {
 };
 
 function TestDefiner(modname, logfabs) {
-  this.__logfabs = Array.isArray(logfabs) ? logfabs : [logfabs];
+  this.__logfabs = logfabs;
 
   this._log = LOGFAB.testDefiner(this, null, modname);
 
@@ -286,6 +286,13 @@ function TestDefiner(modname, logfabs) {
 TestDefiner.prototype = {
   _newCase: function(kind, desc, setupFunc) {
     var testCase = new TestCase(this, kind, desc, setupFunc);
+    this.__testCases.push(testCase);
+  },
+
+  _newSimpleCase: function(kind, desc, testFunc) {
+    var testCase = new TestCase(this, kind, desc, function(T) {
+      T.action(desc, testFunc);
+    });
     this.__testCases.push(testCase);
   },
 
@@ -310,9 +317,29 @@ TestDefiner.prototype = {
   edgeCase: function edgeCase(desc, setupFunc) {
     this._newCase('edge', desc, setupFunc);
   },
+
+  /**
+   * A single-step test case; appropriate for simple unit tests.
+   */
+  commonSimple: function commonSimple(desc, testFunc) {
+    this._newSimpleCase('common', desc, testFunc);
+  },
+
+  DISABLED_artificialCase: function() {
+  },
+  DISABLED_commonCase: function() {
+  },
+  DISABLED_edgeCase: function() {
+  },
+  DISABLED_commonSimple: function() {
+  },
 };
 
 exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
+  if (logfabs == null)
+    logfabs = [];
+  else if (!Array.isArray(logfabs))
+    logfabs = [logfabs];
   return new TestDefiner(testModule.id, logfabs);
 };
 

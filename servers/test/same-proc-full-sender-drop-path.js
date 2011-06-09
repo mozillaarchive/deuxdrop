@@ -109,15 +109,21 @@
 
 define(
   [
+    'rdcommon/testcontext',
+    'module',
     'exports'
   ],
   function(
+    $tc,
+    $module,
     exports
   ) {
 
+var TD = exports.TD = $tc.defineTestsFor($module);
+
 // create the entities (and corresponding keys, identities)
 
-J.artificialCase('loopback message transmission', function(T) {
+TD.DISABLED_artificialCase('loopback message transmission', function(T) {
   var client_a = T.entity('client', 'A');
   var client_b = T.entity('client', 'B');
   var drop_d = T.entity('drop', 'D');

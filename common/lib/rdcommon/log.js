@@ -151,11 +151,13 @@ define(
   [
     'q',
     'microtime',
+    './extransform',
     'exports'
   ],
   function(
     $Q,
     $microtime,
+    $extransform,
     exports
   ) {
 
@@ -539,7 +541,7 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] === EXCEPTION) {
           var arg = arguments[iArg];
-          entry.push({m: arg.message, s: arg.stack});
+          entry.push($extransform.transformException(arg));
         }
         else {
           entry.push(arguments[iArg]);
@@ -564,7 +566,7 @@ LoggestClassMaker.prototype = {
         for (iArg = 0; iArg < numArgs; iArg++) {
           if (useArgs[iArg] === EXCEPTION) {
             var arg = arguments[iArg];
-            entry.push({m: arg.message, s: arg.stack});
+            entry.push($extransform.transformException(arg));
           }
           else {
             entry.push(arguments[iArg]);
@@ -621,7 +623,7 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] === EXCEPTION) {
           var arg = arguments[iArg];
-          entry.push({m: arg.message, s: arg.stack});
+          entry.push($extransform.transformException(arg));
         }
         else {
           entry.push(arguments[iArg]);
@@ -637,7 +639,7 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] === EXCEPTION) {
           var arg = arguments[iArg];
-          entry.push({m: arg.message, s: arg.stack});
+          entry.push($extransform.transformException(arg));
         }
         else {
           entry.push(arguments[iArg]);
@@ -727,7 +729,7 @@ LoggestClassMaker.prototype = {
         //  but also are not crazy about serializing potentially huge object
         //  graphs.  This might be a great place to perform some logHelper
         //  style transformations.
-        entry.push({message: ex.message, stack: ex.stack, type: ex.type});
+        entry.push($extransform.transformException(ex));
         // (call errors are events)
         this._eventMap[name] = (this._eventMap[name] || 0) + 1;
         rval = ex;
@@ -777,7 +779,7 @@ LoggestClassMaker.prototype = {
           //  but also are not crazy about serializing potentially huge object
           //  graphs.  This might be a great place to perform some logHelper
           //  style transformations.
-          entry.push({message: ex.message, stack: ex.stack, type: ex.type});
+          entry.push($extransform.transformException(ex));
           // ++ new bit
           var toEat = numTestOnlyArgs;
           for (iArg += 2; toEat; toEat--, iArg++) {
@@ -839,11 +841,7 @@ LoggestClassMaker.prototype = {
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] === EXCEPTION) {
           var arg = arguments[iArg];
-          // only try and magic up actual errors
-          if (arg instanceof Error)
-            entry.push({m: arg.message, s: arg.stack});
-          else
-            entry.push({m: "" + arg, s: ""});
+          entry.push($extransform.transformException(arg));
         }
         else {
           entry.push(arguments[iArg]);

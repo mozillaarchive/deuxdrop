@@ -68,6 +68,16 @@ process.on("uncaughtException",
       process.exit(1);
   });
 
+var DEFAULT_WATCHDOG_TIMEOUT = 3 * 60 * 1000;
+function deathClock(timeout) {
+  if (timeout === undefined)
+    timeout = DEFAULT_WATCHDOG_TIMEOUT;
+  DEATH_PRONE = true;
+  setTimeout(function() {
+    console.log("WATCHDOG KILLIN");
+    process.exit(10);
+  }, timeout);
+}
 
 var parser = $nomnom.globalOpts({
 });
@@ -138,13 +148,20 @@ parser.command('test')
       debugger;
       console.log("EXIT EVENT", code);
     });
+
+    deathClock(30 * 1000);
+    // Ideally we could slurp this from requirejs... and maybe we can, but for
+    //  now...
+    var testPrefixToPathMap = {
+      'rdstests/': '../../servers/test',
+      'rdctests/': '../../common/test',
+    };
     // XXX !!! obviously, we want this to find tests, not have them be hardcoded
-    $require(['rdcommon/testdriver', 'rdstests/auth-conn-loopback'],
-             function($driver, $tmod) {
-      when($driver.runTestsFromModule($tmod),
-        function(runner) {
-console.error("test run complete per promise");
-          runner.dumpLogResultsToConsole();
+    $require(['rdcommon/testdriver'],
+             function($driver) {
+      when($driver.runTestsFromDirectories(testPrefixToPathMap),
+        function() {
+console.error("all test runs complete per promise");
           process.exit(0);
         });
 console.error("cmdline callback complete");

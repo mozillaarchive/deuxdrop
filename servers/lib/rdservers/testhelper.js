@@ -132,12 +132,12 @@ var MailstoreActorMixins = {
       [self, 'creates its identity and registers implementations'], function() {
       // -- create our identity
       // - create our root key
-      var rootKeypair = $keyops.generateRootKeypair();
+      var rootKeypair = $keyops.generateRootSigningKeypair();
       // - create our long term key
       var now = Date.now();
-      var longtermBundle = $keyops.generateAndAuthorizeLongtermKeypair(
-                             rootKeypair, 'box',
-                             now, now + $keyops.MAX_AUTH_TIMESPAN);
+      var longtermBoxBundle = $keyops.generateAndAuthorizeLongtermKeypair(
+                                rootKeypair, 'box',
+                                now, now + $keyops.MAX_AUTH_TIMESPAN);
       // - create our self-attestation (this is where our name comes into it)
       var selfIdent = $privident.generateServerSelfIdent(
         rootKeypair,
@@ -146,7 +146,6 @@ var MailstoreActorMixins = {
           tag: "server:mailstore",
           host: '127.0.0.1',
           port: self._server.address.port,
-          publicKey: longtermBundle.keypair.publicKey
         });
 
       // -- bind the server definitions

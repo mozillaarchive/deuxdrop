@@ -124,8 +124,8 @@ console.log("running loopback test context def thing");
     eServer.expect_endpointRegistered('test/test');
     eServer.expect_listening();
 
-    serverIdent = $keyops.generateServerKeyPair();
-    clientIdent = $keyops.generateServerKeyPair();
+    serverIdent = $keyops.generateServerKeypair();
+    clientIdent = $keyops.generateServerKeypair();
 
     var TestServerDef = {
       endpoints: {

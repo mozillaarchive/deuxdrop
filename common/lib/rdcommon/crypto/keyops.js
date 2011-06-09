@@ -94,7 +94,7 @@ var AUTH_TAG_LONGTERM_SIGN = "longterm:sign",
  * Generate a root signing keypair.
  */
 exports.generateRootSigningKeypair = function() {
-  var rawPair = $nacl.box_keypair();
+  var rawPair = $nacl.sign_keypair();
   return {
     tag: TAG_ROOT_SIGN,
     secretKey: rawPair.sk,
@@ -159,7 +159,7 @@ exports.generateAndAuthorizeLongtermKeypair = function(rootKeypair,
     authorizedKey: rawPair.pk,
     canDelegate: false,
   };
-  var jsonAuth = JSON.encode(rawAuth);
+  var jsonAuth = JSON.stringify(rawAuth);
   var signedAuth = $nacl.sign_utf8(jsonAuth, rootKeypair.secretKey);
 
   return {
@@ -197,12 +197,36 @@ exports.assertLongtermKeypairIsAuthorized = function(longtermPublicKey,
     throw new Error("Timestamp is later than the authorized time range.");
 };
 
-exports.generateServerKeyPair = function() {
+/**
+ * Deprecated test-only keypair generation.
+ */
+exports.generateServerKeypair = function() {
   var rawPair = $nacl.box_keypair();
   return {
     secretKey: rawPair.sk,
     publicKey: rawPair.pk,
   };
+};
+
+exports.signJsonWithRootKeypair = function(obj) {
+  var jsonObj = JSON.stringify(obj);
+  return $nacl.sign_utf8(jsonObj, rootKeypair);
+};
+
+/**
+ * Verify that a JSON blob is signed by the key found in its 'rootPubKey'
+ *  attribute.  This function should *only* be used for cases where you do not
+ *  already know the root/identity key contained in the blob and this serves
+ *  as your introduction to it OR you do not care what the identity is (because
+ *  this is a self-ident that is contained by a greater attestation.)
+ */
+exports.assertGetRootSelfSignedPayload = function(signedStr) {
+  var peekedJsonStr = $nacl.sign_peek_utf8(signedStr); // (throws)
+  var peekedObj = JSON.parse(peekedJsonStr); // (throws)
+  var rootPubKey = peekedObj.rootPubKey;
+
+  var validJsonStr = $nacl.sign_open_utf8(signedStr, rootPubKey); // (throws)
+  return peekedObj;
 };
 
 }); // end define

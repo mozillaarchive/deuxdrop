@@ -41,15 +41,17 @@
 
 define(
   [
-    'util',
+    'util', 'fs',
     'q', 'q-util',
     './testcontext',
+    'require',
     'exports'
   ],
   function(
-    $util,
+    $util, $fs,
     $Q, $Qutil,
     $testcontext,
+    $require,
     exports
   ) {
 var when = $Q.when, whenAll = $Qutil.whenAll;
@@ -136,13 +138,15 @@ var STEP_TIMEOUT_MS = 1000;
 /**
  * Consolidates the logic to run tests.
  */
-function TestRunner(testDefiner) {
+function TestDefinerRunner(testDefiner) {
+  if (!testDefiner)
+    throw new Error("No test definer provided!");
   this._testDefiner = testDefiner;
   this._runtimeContext = new TestRuntimeContext();
 
   this._logBadThingsToLogger = null;
 }
-TestRunner.prototype = {
+TestDefinerRunner.prototype = {
   /**
    * Asynchronously run a test step, non-rejecting promise-style.
    *
@@ -282,12 +286,15 @@ console.error("XXX XXX rejection", expPair);
     self._runtimeContext.pushLogger(defContext._log);
 
     // - execute the test-case definition function with the context
-    var rval = defContext._log.setupFunc({}, testCase.setupFunc, defContext);
-    if (rval instanceof Error) {
-      // in the event we threw during the case setup phase, it's a failure.
-      defContext._log.result('fail');
-      testCase.log.result('fail');
-      return false;
+    // (simple cases may not have a setup func; just a single step)
+    if (testCase.setupFunc) {
+      var rval = defContext._log.setupFunc({}, testCase.setupFunc, defContext);
+      if (rval instanceof Error) {
+        // in the event we threw during the case setup phase, it's a failure.
+        defContext._log.result('fail');
+        testCase.log.result('fail');
+        return false;
+      }
     }
 
     // -- process the steps
@@ -426,14 +433,88 @@ console.error("XXX XXX rejection", expPair);
       console.error($util.inspect(dumpObj, false, 12));
     }
     console.error("##### LOGGEST-TEST-RUN-END #####");
-    console.error("AND FOR THE HUMANS...");
-    console.error(JSON.stringify(dumpObj, false, 2));
+    //console.error("AND FOR THE HUMANS...");
+    //console.error(JSON.stringify(dumpObj, false, 2));
   }
 };
 
+/**
+ * Run the tests defined in a single, already-require()d module.
+ */
 exports.runTestsFromModule = function runTestsFromModule(tmod) {
-  var runner = new TestRunner(tmod.TD);
+  var runner = new TestDefinerRunner(tmod.TD);
   return runner.runAll();
+};
+
+/**
+ * Runs multiple test files given their module names; we require and run each
+ *  test in succession.  In the future, this may operate by forking a new node
+ *  runtime, but for now, everything runs in the same process.
+ */
+function MultiTestFileRunner(moduleNames) {
+  this._moduleNames = moduleNames;
+  this._iNextModule = 0;
+}
+MultiTestFileRunner.prototype = {
+  runAll: function() {
+    var self = this;
+    var deferred = $Q.defer();
+
+    function runNextFile(wasRunner) {
+      // dump the results (if this is not the first file)
+      if (wasRunner) {
+        wasRunner.dumpLogResultsToConsole();
+      }
+
+      // finish if there's no more work to do
+      if (self._iNextModule >= self._moduleNames.length) {
+        deferred.resolve();
+        return;
+      }
+
+      // require the module to test
+      var testModuleName = self._moduleNames[self._iNextModule++];
+      require([testModuleName], function(tmod) {
+        if (!tmod.TD)
+          throw new Error("Test module: '" + testModuleName +
+                          "' does not export a 'TD' symbol!");
+        // now that it is loaded, run it
+        var runner = new TestDefinerRunner(tmod.TD);
+        when(runner.runAll(), runNextFile);
+      });
+    }
+
+    runNextFile();
+
+    return deferred.promise;
+  },
+};
+
+const RE_TEST = /^(.+)\.js$/;
+
+/**
+ * Synchronously scan a list of directories for test files, and feed them to
+ *  the TestDefinerRunner which will then (require and) execute them asynchronously.
+ *
+ * XXX this should ideally be migrated to a cross-platform API like jstut's
+ *  unifile abstraction or something more universally adopted.
+ */
+exports.runTestsFromDirectories = function(namespacePathMap) {
+  var testModules = [];
+  for (var namespacePrefix in namespacePathMap) {
+    var path = namespacePathMap[namespacePrefix];
+    var names = $fs.readdirSync(path);
+    for (var iName = 0; iName < names.length; iName++) {
+      var name = names[iName];
+
+      var match = RE_TEST.exec(name);
+      if (match)
+        testModules.push(namespacePrefix + match[1]);
+    }
+  }
+
+  var multiRunner = new MultiTestFileRunner(testModules);
+  return multiRunner.runAll();
 };
 
 }); // end define

@@ -42,8 +42,23 @@
  * are never used for both.
  *
  * @typedef[ServerSelfIdentPayload @dict[
- *   
- * ]]
+ *   @key[tag]
+ *   @key[host]
+ *   @key[port]
+ *   @key[boxPubKey]
+ * ]]{
+ *   Server self-idents differ from person self-idents in that the root key
+ *   signs the self-ident which names the long-term boxing public key.  (Person
+ *   self-idents sign the self-ident with their long-term and include the
+ *   authorization for the long-term key as proof they are authorized to do so.)
+ *
+ *   XXX additionally, there is no validity period or generation number for the
+ *   server key because we have no defense plan, attack model, or recovery plan
+ *   in the event of compromise at this time.  (We are using a long-term key
+ *   instead of the root key because it does seem obvious that for any recovery
+ *   plan that does not involve nuking the server, we need a root key that is
+ *   air-gapped from all net-accessible machines.)
+ * }
  *
  * @typedef[PersonSelfIdentPayload @dict[
  *   @key[name String]{
@@ -78,44 +93,27 @@
  *     a debugging stop-gap measure.
  *   }
  *
- *   @key[serverIdent ServerSelfIdent]{
- *     The (current) self-ident of the server we are using.
- *   }
- *
- *   @key[maildropDNS String]{
- *     The DNS name used to identify the maildrop server(s) authorized to
- *     receive mail for the identity.
- *   }
- *   @key[maildropPubKey]{
- *     The public key of the server/identity authorized to receive mails.
- *   }
- *
- *   @key[mailsenderDNS String]{
- *     The DNS name used to identify the mailsender server(s) authorized to send
- *     mail for the identity.  This is speculative and intended to allow for IP
- *     or other filtering before we even receive our first byte.
- *   }
- *   @key[mailsenderPubKey]{
- *     The public key of the server authorized to send mails.
+ *   @key[transitServerIdent ServerSelfIdent]{
+ *     The (current) self-ident of the transit server we are using.
  *   }
  *
  *   @key[envelopePubKey]{
- *     The public key to use to encrypt the envelope of messages.  This is
- *     different from the payload key so that a user can authorize their
+ *     The public key to use to encrypt the envelope of messages to this person.
+ *     This is different from the payload key so that a user can authorize their
  *     mailstore to be able to read the envelope for processing but not let it
  *     see the payload.
  *   }
  *   @key[payloadPubKey]{
- *     The public key to use to encrypt the payload of messages.
+ *     The public key to use to encrypt the payload of messages to this person.
  *   }
  *
  *   @key[authorshipSignPubKey]{
- *     The public key that will be used to sign messages authored by this
- *     identity.
+ *     The public key corresponding to the secret key that will be used to sign
+ *     messages authored by this identity.
  *   }
  *   @key[authorshipBoxPubKey]{
- *     The public key that will be used to encrypt messages authored by this
- *     identity.
+ *     The public key corresponding to the secret key that will be used to
+ *     encrypt messages authored by this identity.
  *   }
  * ]]{
  *   Data structure to be self-signed by an identity that provides their
@@ -138,8 +136,25 @@ define(
  * Generate a server self-ident blob.
  */
 exports.generateServerSelfIdent = function(rootKeypair, longtermBoxBundle,
-                                           details) {
+                                           detailsObj) {
+  // XXX schema-check the detailsObj
+  var payloadObj = {
+    tag: detailsObj.tag,
+    host: detailsObj.host,
+    port: detailsObj.port,
+    publicKey: longtermBoxBundle.keypair.publicKey,
+    rootPubKey: rootKeypair.publicKey,
+  };
+  return $keyops.signJsonWithRootKeypair(payloadObj, rootKeypair);
 };
+
+/**
+ * Verify and return the given server self-ident if valid, throw if invalid.
+ */
+exports.assertGetServerSelfIdent = function(serverSelfIdent) {
+
+};
+
 
 /**
  * @args[
