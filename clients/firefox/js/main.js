@@ -128,10 +128,17 @@ define(function (require) {
 
       moda.users({}, {
         'usersComplete': function (users) {
-          var me = moda.me();
-          // Filter out me from users.
+          var me = moda.me(),
+              known = {};
+
+          // Filter out already known users.
+          known[me.id] = true;
+          peeps.items.forEach(function (peep) {
+            known[peep.id] = true;
+          });
+
           users = users.filter(function (user) {
-            if (user.id !== me.id) {
+            if (!known[user.id]) {
               return true;
             }
             return false;
