@@ -67,19 +67,18 @@ function ($,        url,         array,         headerTemplate) {
       cardId = fragId[0];
       data = fragId[1] || '';
 
-      if (cards.templates[cardId]) {
-        // Convert the data into an object
-        data = url.queryToObject(data);
+      // Convert the data into an object
+      data = url.queryToObject(data);
 
-        cards.onNav(cardId, data);
+      cards.onNav(cardId, data);
 
-        if (!skipPush) {
-          history.pushState({}, cards.getTitle(), href);
-        }
-
-        // Stop the event.
-        evt.stopPropagation();
+      if (!skipPush && cardId !== 'back') {
+        history.pushState({}, cards.getTitle(), href);
       }
+
+      // Stop the event.
+      evt.stopPropagation();
+      evt.preventDefault();
     }
   }
 
@@ -156,7 +155,8 @@ function ($,        url,         array,         headerTemplate) {
         target: {
           href: '#' + href
         },
-        stopPropagation: function () {}
+        stopPropagation: function () {},
+        preventDefault: function () {}
       }, true);
     });
   };

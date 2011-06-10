@@ -35,7 +35,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*jslint indent: 2, strict: false, plusplus: false */
-/*global define: false, document: false */
+/*global define: false, document: false, setTimeout: false, history: false */
 
 /**
  * Main JS file, bootstraps the logic.
@@ -55,14 +55,14 @@ define(function (require) {
   }
 
   function updateDom(rootDom, model) {
-    // update the data bound nodes.
+    // Update the data bound nodes.
     rootDom.find('[data-bind]').each(function (i, node) {
       var bindName = node.getAttribute('data-bind'),
           attrName = node.getAttribute('data-attr'),
           value = model[bindName],
           parts;
 
-      // allow for dot names in the bindName
+      // Allow for dot names in the bindName
       if (bindName.indexOf('.') !== -1) {
         parts = bindName.split('.');
         value = model;
@@ -79,38 +79,96 @@ define(function (require) {
     });
   }
 
-  // set up card update actions.
+  // Set up card update actions.
   update = {
+    'start': function (data, dom) {
+      dom[0].title = moda.me().id;
+    },
+
     'peeps': function (data, dom) {
-      var clonable;
+      // Get the node to use for each peep.
+      var clonable = commonNodes[dom.attr('data-childclass')];
 
-      // do not bother if it is already updated.
-      if (dom[0].hasAttribute("updated")) {
-        return;
+      //Hmm, think of a better way to do this: do same action after
+      // loading all peeps or when peeps are already available.
+      function onPeepsComplete() {
+        var frag = document.createDocumentFragment();
+
+        // Put in the Add button.
+        frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
+
+        // Generate nodes for each person.
+        peeps.items.forEach(function (peep) {
+          var node = clonable.cloneNode(true);
+          node.href += '?id=' + encodeURIComponent(peep.id);
+          node.appendChild(document.createTextNode(peep.name));
+          frag.appendChild(node);
+        });
+
+        // Update the card.
+        dom.append(frag);
+
+        // Refresh card sizes.
+        cards.adjustCardSizes();
       }
-      dom.attr('updated', 'updated');
 
-      // get the node to use for each peep.
-      clonable = commonNodes[dom.attr('data-childclass')];
+      if (peeps) {
+        onPeepsComplete();
+      } else {
+        peeps = moda.peeps({}, {
+          'peepsComplete': onPeepsComplete
+        });
+      }
+    },
 
-      peeps = moda.peeps({}, {
-        'peepsComplete': function (peeps) {
-          var frag = document.createDocumentFragment();
+    'listUsersForAddPeep': function (data, dom) {
+      // Get the node to use for each peep.
+      var clonable = commonNodes[dom.attr('data-childclass')],
+          frag = document.createDocumentFragment();
 
-          // generate nodes for each person.
-          peeps.forEach(function (peep) {
+      moda.users({}, {
+        'usersComplete': function (users) {
+          var me = moda.me();
+          // Filter out me from users.
+          users = users.filter(function (user) {
+            if (user.id !== me.id) {
+              return true;
+            }
+            return false;
+          });
+
+          users.forEach(function (user) {
             var node = clonable.cloneNode(true);
-            node.href += '?id=' + encodeURIComponent(peep.id);
-            node.appendChild(document.createTextNode(peep.name));
+            node.href += '&id=' + encodeURIComponent(user.id);
+            node.appendChild(document.createTextNode(user.name));
             frag.appendChild(node);
           });
 
-          // update the card.
+          // Update the card.
           dom.append(frag);
 
-          // refresh card sizes.
+          // Refresh card sizes.
           cards.adjustCardSizes();
         }
+      });
+    },
+
+    'addPeep': function (data) {
+      var peepId = data.id;
+
+      peeps.addPeep(peepId, function (peep) {
+        // Update the peeps card.
+        $('[data-cardid="peeps"]').each(function (i, node) {
+          // Replace the old peeps card with a new one.
+          var cardNode = cards.templates.peeps.cloneNode(true);
+          node.parentNode.replaceChild(cardNode, node);
+          update.peeps({}, $(cardNode));
+        });
+
+        // Go back one in the navigation.
+        setTimeout(function () {
+          history.back();
+        }, 30);
       });
     },
 
@@ -127,12 +185,12 @@ define(function (require) {
             }
           })[0];
 
-      // clear out old conversations
+      // Clear out old conversations
       conversationsNode.innerHTML = '';
 
       updateDom(dom, peep);
 
-      // fill in list of conversations.
+      // Fill in list of conversations.
       peep.getConversations(function (conversations) {
         conversations.forEach(function (conv) {
           var node = convCloneNode.cloneNode(true),
@@ -174,7 +232,7 @@ define(function (require) {
         filter: convId
       });
 
-      // clear out old messages
+      // Clear out old messages
       messagesNode.innerHTML = '';
 
       conversation.messages.forEach(function (message) {
@@ -185,21 +243,21 @@ define(function (require) {
 
       messagesNode.appendChild(frag);
 
-      // refresh the card sizes
+      // Refresh the card sizes
       cards.adjustCardSizes();
     }
   };
 
-  // wait for DOM ready to do some DOM work.
+  // Wait for DOM ready to do some DOM work.
   $(function () {
 
-    // hold on to common nodes for use later.
+    // Hold on to common nodes for use later.
     $('#common').children().each(function (i, node) {
       commonNodes[node.getAttribute('data-classimpl')] = node;
       node.parentNode.removeChild(node);
     });
 
-    // now insert commonly used nodes in any declarative cases.
+    // Now insert commonly used nodes in any declarative cases.
     $('[data-class]').each(function (i, origNode) {
       var classImpl = origNode.getAttribute('data-class'),
           node = commonNodes[classImpl].cloneNode(true);
@@ -207,26 +265,35 @@ define(function (require) {
       origNode.parentNode.replaceChild(node, origNode);
     });
 
-    // if user is not logged in, then set the start card to signin.
+    // If user is not logged in, then set the start card to signin.
     if (!moda.me()) {
       cards.startCardId = 'signIn';
     }
 
-    // initialize the cards
+    // Initialize the cards
     cards($('#cardContainer'));
 
-    // listen for nav items.
+    // Listen for nav items.
     cards.onNav = function (templateId, data) {
-      var cardNode = $(cards.templates[templateId].cloneNode(true));
+      var cardNode;
+      if (templateId === 'back') {
+        // A "back" action that could modify the data in a previous card.
+        if (data.action && update[data.action]) {
+          update[data.action](data);
+        }
+      } else {
+        // A new action that will generate a new card.
+        cardNode = $(cards.templates[templateId].cloneNode(true));
 
-      if (update[templateId]) {
-        update[templateId](data, $(cardNode));
-      }
+        if (update[templateId]) {
+          update[templateId](data, $(cardNode));
+        }
 
-      cards.add(cardNode);
+        cards.add(cardNode);
 
-      if (templateId !== 'start' && templateId !== 'signIn') {
-        cards.forward();
+        if (templateId !== 'start' && templateId !== 'signIn') {
+          cards.forward();
+        }
       }
     };
 
@@ -240,8 +307,12 @@ define(function (require) {
             name = formDom.find('[name="name"]').val();
 
         moda.signIn(id, name, function (me) {
-          alert('Go ME: ' + JSON.stringify(me));
-        })
+          // Remove the sign in card
+          $('[data-cardid="signIn"]', '#cardContainer').remove();
+
+          // Show the start card
+          cards.onNav('start', {});
+        });
       });
   });
 });

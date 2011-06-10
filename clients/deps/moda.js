@@ -95,6 +95,16 @@ define(function (require, exports) {
     }
   }
 
+  function peepSort(a, b) {
+    if (a.name > b.name) {
+      return 1;
+    } else if (a.name < b.name) {
+      return -1;
+    } else {
+      return 0;
+    }
+  }
+
 /*
 Peeps
 * query: {
@@ -119,37 +129,75 @@ Peeps
 
     var d = q.defer();
     q.when(d.promise, function (peeps) {
+      // Convert peeps into instance of peep objects
+      peeps = peeps.map(function (peep) {
+        return new Peep(peep);
+      });
+
       this.items = peeps;
       trigger(this, 'peepsComplete', [peeps]);
     }.bind(this));
 
     //Ignore the query for now, use
     //dummy data.
-    d.resolve(peeps);
+
+    transport.peeps(query, function (peeps) {
+      d.resolve(peeps);
+    });
   }
 
   Peeps.prototype = {
     /**
      * Adds a peep to the peeps.
-     * @param {moda.peep} peep
-     *
+     * @param {String} peepId
      */
-    addPeep: function (peep) {
-      if (this.peeps.indexOf(peep) === -1) {
-        this.peeps.push(peep);
-      }
-      trigger('addPeep', this, arguments);
+    addPeep: function (peepId, callback) {
+      transport.addPeep(peepId, function (peep) {
+        this.items.push(new Peep(peep));
+        this.items.sort(peepSort);
+
+        if (callback) {
+          callback(peep);
+        }
+        trigger(this, 'addPeep', arguments);
+      }.bind(this));
     },
 
     removePeep: function (peep) {
-      this.peeps.splice(this.peeps.indexOf(peep), 1);
-      trigger('removePeep', this, arguments);
+
     },
 
     destroy: function () {
 
     }
   };
+
+
+
+  function Users(query, on) {
+    this.items = [];
+    this.isComplete = false;
+    this.query = query;
+    this.on = on;
+
+    var d = q.defer();
+    q.when(d.promise, function (users) {
+
+      // Convert users into instance of peep objects
+      users = users.map(function (user) {
+        return new Peep(user);
+      });
+
+      this.items = users;
+      trigger(this, 'usersComplete', [users]);
+    }.bind(this));
+
+    //Ignore the query for now, use
+    //dummy data.
+    transport.users(query, function (users) {
+      d.resolve(users);
+    });
+  }
 
 /*
 
@@ -358,6 +406,10 @@ moda.on({
     return new Peeps(query, on);
   };
 
+  moda.users = function (query, on) {
+    return new Users(query, on);
+  };
+
   /**
    * Grabs a list of Peeps based on a query value.
    *
@@ -392,10 +444,9 @@ moda.on({
     return transport.me;
   };
 
+/*
   //**********************************************************************
-  /**
-   * Fake data to use for UI mockups.
-   */
+  //Fake data to use for UI mockups.
   peepData = {
     'me@raindrop.it': new Peep({
       name: 'Me',
@@ -419,9 +470,7 @@ moda.on({
     })
   };
 
-  /**
-   * Fake peeps data.
-   */
+  // Fake peeps data.
   peeps = [];
   for (prop in peepData) {
     if (peepData.hasOwnProperty(prop) && prop !== 'me@raindrop.it') {
@@ -429,9 +478,7 @@ moda.on({
     }
   }
 
-  /**
-   * Fake conversations
-   */
+  //Fake conversations
   conv1 = new Conversation('conv1', [
     peepData['james@raindrop.it'], peepData['bryan@raindrop.it']
   ]);
@@ -467,6 +514,8 @@ moda.on({
       conv1
     ]
   };
+  */
+
 });
 
 /*

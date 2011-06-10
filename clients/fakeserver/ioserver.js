@@ -31,6 +31,16 @@ function multiBulkToStringArray(data) {
   });
 }
 
+function peepSort(a, b) {
+  if (a.name > b.name) {
+    return 1;
+  } else if (a.name < b.name) {
+    return -1;
+  } else {
+    return 0;
+  }
+}
+
 redis.on('error', function (err) {
   console.log('Redis error: ' + err);
 });
@@ -50,7 +60,7 @@ actions = {
     redis.sadd('users', id);
 
     //Add the user to the store
-    redis.hmset(id, 'name', name, 'pic', pic);
+    redis.hmset(id, 'id', id, 'name', name, 'pic', pic);
 
     clientList.push(client);
 
@@ -82,13 +92,13 @@ actions = {
     }
   },
 
-  'listUsers': function (data, client) {
+  'users': function (data, client) {
     //Pull a list of users from redis.
     redis.smembers('users', function (err, list) {
       var multi;
       if (list) {
         list = multiBulkToStringArray(list);
-        list.sort();
+        list.sort(peepSort);
 
         //Fetch individual user records.
         multi = redis.multi();
@@ -97,14 +107,14 @@ actions = {
         });
         multi.exec(function (err, hashes) {
           client.send(JSON.stringify({
-            action: 'listUserResponse',
-            users: hashes
+            action: 'usersResponse',
+            items: hashes
           }));
         });
       } else {
         client.send(JSON.stringify({
-          action: 'listUserResponse',
-          users: []
+          action: 'usersResponse',
+          items: []
         }));
       }
     });
@@ -118,7 +128,7 @@ actions = {
 
       if (list) {
         list = multiBulkToStringArray(list);
-        list.sort();
+        list.sort(peepSort);
 
         //Fetch individual user records.
         multi = redis.multi();
@@ -128,13 +138,13 @@ actions = {
         multi.exec(function (err, hashes) {
           client.send(JSON.stringify({
             action: 'peepsResponse',
-            users: hashes
+            items: hashes
           }));
         });
       } else {
         client.send(JSON.stringify({
           action: 'peepsResponse',
-          peeps: []
+          items: []
         }));
       }
     });
@@ -144,7 +154,18 @@ actions = {
     var peepId = data.peepId,
         userId = client._deuxUserId;
 
+    // Add the list to the data store
     redis.sadd('peeps:' + userId, peepId);
+
+    // Get the peep ID and return it.
+    var multi = redis.multi()
+                  .hgetall(peepId)
+                  multi.exec(function (err, items) {
+                    client.send(JSON.stringify({
+                      action: 'addPeepResponse',
+                      peep: items[0]
+                    }));
+                  });
   },
 
   'removePeep': function (data, client) {

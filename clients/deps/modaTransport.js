@@ -42,10 +42,57 @@ define(function (require, exports) {
       io = require('socket.io'),
       transport = exports,
       meDeferred = q.defer(),
+      deferreds = {},
       actions, socket;
 
   function send(obj) {
     socket.send(JSON.stringify(obj));
+  }
+
+  /**
+   * Factory machinery to creating an API that just calls back to the
+   * server. Uses a deferred to only do the call once, so subsequent
+   * calls just get the same response. Rely on event notifications
+   * to catch data changes (moda layer should do this)
+   * @param {String} action the name of the API
+   * @param {String} [responseProp] optional name of the server's
+   * response object property to use as the return data.
+   */
+  function makePassThroughApi(action, argNames, responseProp) {
+    // add a response handler
+
+    actions[action + 'Response'] = function (data) {
+      deferreds[action].resolve(responseProp ? data[responseProp] : data);
+    };
+
+    // set up the public API method
+    transport[action] = function () {
+      var args = arguments,
+          // The callback should be after the named args, so
+          // grabbing the argNames.length should give us the callback location.
+          callback = args[argNames.length],
+          payload;
+
+      if (!deferreds[action]) {
+        deferreds[action] = q.defer();
+
+        payload = {
+          action: action
+        };
+
+        if (argNames) {
+          argNames.forEach(function (name, i) {
+            payload[name] = args[i];
+          });
+        }
+
+        send(payload);
+      }
+
+      if (callback) {
+        q.when(deferreds[action].promise, callback);
+      }
+    };
   }
 
   actions = {
@@ -53,8 +100,7 @@ define(function (require, exports) {
       if (!transport.me) {
         transport.me = data.user;
 
-        //TODO: Uncomment once testing is done.
-        //localStorage.me = JSON.stringify(me);
+        localStorage.me = JSON.stringify(transport.me);
 
         meDeferred.resolve(transport.me);
       }
@@ -77,6 +123,10 @@ define(function (require, exports) {
   socket.connect();
 
   socket.on('message', function (data) {
+    if (data) {
+      data = JSON.parse(data);
+    }
+
     if (actions[data.action]) {
       actions[data.action](data);
     } else {
@@ -129,5 +179,9 @@ define(function (require, exports) {
       q.when(meDeferred.promise, callback);
     }
   };
+
+  makePassThroughApi('peeps', ['query'], 'items');
+  makePassThroughApi('users', ['query'], 'items');
+  makePassThroughApi('addPeep', ['peepId'], 'peep');
 
 });

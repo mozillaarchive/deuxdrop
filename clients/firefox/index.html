@@ -45,12 +45,12 @@
         <div data-cardid="start" title="Deuxdrop" class="card">
           <a href="#peeps">Peeps</a>
           <a href="#compose">Compose</a>
-          <a href="#">Pinned Peeps</a>
-          <a href="#">Pinned Conversations</a>
         </div>
         <div data-cardid="peeps" title="Peeps" class="card" data-childclass="personLink">
         </div>
-        <div data-cardid="peep" class="card">
+        <div data-cardid="listUsersForAddPeep" title="Add Peep" class="card" data-childclass="addPeepLink">
+        </div>
+       <div data-cardid="peep" class="card">
           <div class="peepInfo">
             <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
             <span data-bind="name" class="peepInfoName">David</span>
@@ -79,6 +79,10 @@
       </form>
 
       <a data-classimpl="personLink" href="#peep"></a>
+
+      <a data-classimpl="addPeepLink" href="#back?action=addPeep"></a>
+
+      <a data-classimpl="addPersonLink" href="#listUsersForAddPeep">+ Add Peep</a>
 
       <a data-classimpl="convListItem" href="#conversation"></a>
 
