@@ -152,7 +152,7 @@ exports.generateServerSelfIdent = function(rootKeypair, longtermBoxBundle,
  * Verify and return the given server self-ident if valid, throw if invalid.
  */
 exports.assertGetServerSelfIdent = function(serverSelfIdent) {
-
+  return $keyops.assertGetRootSelfSignedPayload(serverSelfIdent);
 };
 
 

@@ -208,9 +208,9 @@ exports.generateServerKeypair = function() {
   };
 };
 
-exports.signJsonWithRootKeypair = function(obj) {
+exports.signJsonWithRootKeypair = function(obj, rootKeypair) {
   var jsonObj = JSON.stringify(obj);
-  return $nacl.sign_utf8(jsonObj, rootKeypair);
+  return $nacl.sign_utf8(jsonObj, rootKeypair.secretKey);
 };
 
 /**
@@ -222,6 +222,7 @@ exports.signJsonWithRootKeypair = function(obj) {
  */
 exports.assertGetRootSelfSignedPayload = function(signedStr) {
   var peekedJsonStr = $nacl.sign_peek_utf8(signedStr); // (throws)
+console.log("PEEKED: ", peekedJsonStr);
   var peekedObj = JSON.parse(peekedJsonStr); // (throws)
   var rootPubKey = peekedObj.rootPubKey;
 

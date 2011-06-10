@@ -77,6 +77,9 @@ TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
                           rootKeypair, longtermBoxBundle, details);
   var payload = $pubident.assertGetServerSelfIdent(signedSelfIdent);
 
+  // make sure we get any payload
+  assert.notEqual(payload, null);
+
   // make sure the spec'ed details all got in there correctly.
   assert.equal(details.tag, payload.tag);
   assert.equal(details.host, payload.host);
