@@ -35,7 +35,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*jslint indent: 2, strict: false, plusplus: false */
-/*global define: false */
+/*global define: false, console: false */
 
 // from https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
 // bootstrap the JS env in some browsers that do not have full ES5
@@ -63,13 +63,14 @@ if (!Function.prototype.bind) {
 /**
  * The data store layer.
  */
-define(function (require) {
+define(function (require, exports) {
   var q = require('q'),
+      transport = require('modaTransport'),
       listeners = {},
       listenerCounter = 0,
       messageIdCounter = 0,
-
-      moda, prop,
+      moda = exports,
+      prop,
 
       // fake data stuff
       peeps = [],
@@ -273,9 +274,8 @@ Conversation
 
 
   /**
-   * Define the moda object and API.
+   * Define moda.
    */
-  moda = {
 
 /*
 moda.on({
@@ -283,86 +283,116 @@ moda.on({
   peepChange
   peepsComplete
   peepConnectRequest
-  networkProblem
-  networkResolved
+  networkConnected
+  networkDisconnect
+  networkReconnect
+  networkReconnecting
   badProgrammer
   peepConnectError
 
 });
 */
-    /**
-     * Listen to events.
-     *
-     * @param {Object|String} listener if an object, the properties of the
-     * object should be string names of events, and the values should be
-     * the functions to call on that event. If a string, an event name
-     * that should trigger the cb function
-     *
-     * @param {Function} [cb] If listener is a string, this is the function
-     * callback to call for that event listener name.
-     *
-     * @returns {String} a listener ID. Use it to call removeOn to remove
-     * this listener.
-     */
-    on: function (listener, cb) {
-      var obj, listenerId;
-      if (typeof listener === 'string') {
-        obj = {};
-        obj[listener] = cb;
-      } else {
-        obj = listener;
+  /**
+   * Listen to events.
+   *
+   * @param {Object|String} listener if an object, the properties of the
+   * object should be string names of events, and the values should be
+   * the functions to call on that event. If a string, an event name
+   * that should trigger the cb function
+   *
+   * @param {Function} [cb] If listener is a string, this is the function
+   * callback to call for that event listener name.
+   *
+   * @returns {String} a listener ID. Use it to call removeOn to remove
+   * this listener.
+   */
+  moda.on = function (listener, cb) {
+    var obj, listenerId;
+    if (typeof listener === 'string') {
+      obj = {};
+      obj[listener] = cb;
+    } else {
+      obj = listener;
+    }
+    listenerId = 'listen' + (listenerCounter++);
+    listeners[listenerId] = obj;
+    return listenerId;
+  };
+
+  /**
+   * Removes an event listener for the given listenerId
+   *
+   * @param {String} listenerId, the ID of the listener to remove.
+   */
+  moda.removeOn = function (listenerId) {
+    delete listeners[listenerId];
+  };
+
+  /**
+   * Triggers an on event.
+   */
+  moda.trigger = function (name, data) {
+    var prop, triggered = false;
+    for (prop in listeners) {
+      if (listeners.hasOwnProperty(prop) && listeners[prop][name]) {
+        listeners[prop][name](data);
       }
-      listenerId = 'listen' + (listenerCounter++);
-      listeners[listenerId] = obj;
-      return listenerId;
-    },
+    }
 
-    /**
-     * Removes an event listener for the given listenerId
-     *
-     * @param {String} listenerId, the ID of the listener to remove.
-     */
-    removeOn: function (listenerId) {
-      delete listeners[listenerId];
-    },
-
-    /**
-     * Grabs a list of Peeps based on a query value.
-     *
-     * @param {Object} query the query to used for data selection.
-     * @param {Object} on an object whose properties are event names
-     * and values are event handlers for events that can be triggered
-     * for the return object.
-     *
-     * @returns {Peeps}
-     */
-    peeps: function (query, on) {
-      return new Peeps(query, on);
-    },
-
-    /**
-     * Grabs a list of Peeps based on a query value.
-     *
-     * @param {Object} query the query to used for data selection.
-     * @param {Object} on an object whose properties are event names
-     * and values are event handlers for events that can be triggered
-     * for the return object.
-     *
-     * @returns {Peeps}
-     */
-    // TODO: on assignment does not work right now.
-    conversation: function (query, on) {
-      // only support by ID filtering
-      var conv;
-
-      if (query.by === 'id') {
-        conv = convData[query.filter];
-      }
-
-      return conv;
+    if (!triggered) {
+      console.log('moda event [' + name + ']: ' + JSON.stringify(data));
     }
   };
 
+  /**
+   * Grabs a list of Peeps based on a query value.
+   *
+   * @param {Object} query the query to used for data selection.
+   * @param {Object} on an object whose properties are event names
+   * and values are event handlers for events that can be triggered
+   * for the return object.
+   *
+   * @returns {Peeps}
+   */
+  moda.peeps = function (query, on) {
+    return new Peeps(query, on);
+  };
+
+  /**
+   * Grabs a list of Peeps based on a query value.
+   *
+   * @param {Object} query the query to used for data selection.
+   * @param {Object} on an object whose properties are event names
+   * and values are event handlers for events that can be triggered
+   * for the return object.
+   *
+   * @returns {Peeps}
+   */
+  // TODO: on assignment does not work right now.
+  moda.conversation = function (query, on) {
+    // only support by ID filtering
+    var conv;
+
+    if (query.by === 'id') {
+      conv = convData[query.filter];
+    }
+
+    return conv;
+  };
+
+  moda.signIn = function (id, name, callback) {
+    return transport.signIn(id, name, callback);
+  };
+
+  /**
+   * Returns the user object for the signed in user. If not an object,
+   * then it means the user is not signed in, and signIn should be called.
+   */
+  moda.me = function () {
+    return transport.me;
+  };
+
+  //**********************************************************************
   /**
    * Fake data to use for UI mockups.
    */
@@ -437,8 +467,6 @@ moda.on({
       conv1
     ]
   };
-
-  return moda;
 });
 
 /*

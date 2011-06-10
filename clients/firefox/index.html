@@ -22,7 +22,10 @@
     <script>
       require(
         {
-          baseUrl: '../deps'
+          baseUrl: '../deps',
+          paths: {
+            'socket.io': '../fakeserver/node_modules/socket.io/support/socket.io-client/socket.io'
+          }
         },
         ['../firefox/js/main']
       );
@@ -32,6 +35,13 @@
 
     <div id="cardContainer">
       <div id="cards">
+        <div data-cardid="signIn" title="Sign In" class="card">
+          <form class="signInForm">
+            <div>Email: <input name="id" type="email" required></div>
+            <div>Name: <input name="name" type="text" required></div>
+            <button name="submit">Sign In</button>
+          </form>
+        </div>
         <div data-cardid="start" title="Deuxdrop" class="card">
           <a href="#peeps">Peeps</a>
           <a href="#compose">Compose</a>

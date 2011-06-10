@@ -207,6 +207,11 @@ define(function (require) {
       origNode.parentNode.replaceChild(node, origNode);
     });
 
+    // if user is not logged in, then set the start card to signin.
+    if (!moda.me()) {
+      cards.startCardId = 'signIn';
+    }
+
     // initialize the cards
     cards($('#cardContainer'));
 
@@ -220,9 +225,23 @@ define(function (require) {
 
       cards.add(cardNode);
 
-      if (templateId !== 'start') {
+      if (templateId !== 'start' && templateId !== 'signIn') {
         cards.forward();
       }
     };
+
+    $('body')
+      // Handle sign in form
+      .delegate('.signInForm', 'submit', function (evt) {
+        evt.preventDefault();
+
+        var formDom = $(evt.target),
+            id = formDom.find('[name="id"]').val(),
+            name = formDom.find('[name="name"]').val();
+
+        moda.signIn(id, name, function (me) {
+          alert('Go ME: ' + JSON.stringify(me));
+        })
+      });
   });
 });
