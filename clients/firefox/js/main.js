@@ -197,6 +197,14 @@ define(function (require) {
 
       updateDom(dom, peep);
 
+      // Add the right peep IDs to the compose form.
+      dom
+        .find('[name="to"]')
+          .val(peepId)
+          .end()
+        .find('[name="from"]')
+          .val(moda.me().id);
+
       // Fill in list of conversations.
       peep.getConversations(function (conversations) {
         conversations.forEach(function (conv) {
@@ -320,6 +328,23 @@ define(function (require) {
           // Show the start card
           cards.onNav('start', {});
         });
+      })
+
+      // Handle compose from a peep screen.
+      .delegate('[data-cardid="peep"] .compose', 'submit', function (evt) {
+        evt.preventDefault();
+
+        var form = evt.target,
+            args = {},
+            i, node;
+
+        for (i = 0; (node = form.elements[i]); i++) {
+          if (node.name) {
+            args[node.name] = node.value.trim();
+          }
+        }
+
+        moda.startConversation(args);
       });
   });
 });

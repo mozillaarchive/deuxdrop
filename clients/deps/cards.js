@@ -151,17 +151,21 @@ function ($,        url,         array,         headerTemplate) {
       // Set up initial state via simulation of a nav click
       href = location.href.split('#')[1] || cards.startCardId;
 
-      onNavClick({
-        target: {
-          href: '#' + href
-        },
-        stopPropagation: function () {},
-        preventDefault: function () {}
-      }, true);
+      cards.nav(href, null, true);
     });
   };
 
   cards.startCardId = 'start';
+
+  cards.nav = function (templateId, data, skipPushState) {
+    onNavClick({
+      target: {
+        href: '#' + templateId + (data ? '?' + url.objectToQuery(data) : '')
+      },
+      stopPropagation: function () {},
+      preventDefault: function () {}
+    }, skipPushState);
+  };
 
   cards.templates = {};
 

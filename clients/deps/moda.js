@@ -70,11 +70,8 @@ define(function (require, exports) {
       listenerCounter = 0,
       messageIdCounter = 0,
       moda = exports,
-      prop,
-
-      // fake data stuff
-      peeps = [],
-      peepData, convData, conv1, conv2, conversations;
+      convCache = {},
+      peepCache = {};
 
   /**
    * Trigger listeners on an object an any global listeners.
@@ -104,6 +101,99 @@ define(function (require, exports) {
       return 0;
     }
   }
+
+/*
+
+Peep
+* id
+* name
+* pic
+* onChange
+* pinned
+* pin()
+* frecency
+* conversations []
+* onConvAdd  for conversation add
+* onConvChange
+* areConversationsLoaded
+* loadConversations()
+* onPeepChange
+* destroy()
+* remove()
+* connect()
+* reject()
+* connected
+* rejected
+*/
+
+  function Peep(obj) {
+    this.id = obj.id;
+    this.name = obj.name;
+    this.pic = obj.pic;
+    this.pinned = false;
+    this.frecency = 0;
+
+    this.areConversationsLoaded = false;
+
+    //TODO: this should start as false
+    this.connected = true;
+
+    this.rejected = false;
+
+    // Add the peep to the peepCache
+    if (!peepCache[this.id]) {
+      peepCache[this.id] = this;
+    }
+  }
+
+  Peep.prototype = {
+    /**
+     * Gets the conversations for this user.
+     * @param {Function} callback a callback to call when the conversations
+     * are retrieved. The callback will receive an array of Conversation
+     * objects.
+     */
+    getConversations: function (callback) {
+      var d = q.defer();
+
+      if (this.conversationsPromise) {
+        q.when(this.conversationsPromise, callback);
+      } else {
+        // fake the data for now
+        this.conversationsPromise = d.promise;
+        q.when(this.conversationsPromise, callback);
+        this.conversations = []; //conversations[this.id];
+        d.resolve(this.conversations);
+      }
+    }
+  };
+
+
+  function Users(query, on) {
+    this.items = [];
+    this.isComplete = false;
+    this.query = query;
+    this.on = on;
+
+    var d = q.defer();
+    q.when(d.promise, function (users) {
+
+      // Convert users into instance of peep objects
+      users = users.map(function (user) {
+        return new Peep(user);
+      });
+
+      this.items = users;
+      trigger(this, 'usersComplete', [users]);
+    }.bind(this));
+
+    //Ignore the query for now, use
+    //dummy data.
+    transport.users(query, function (users) {
+      d.resolve(users);
+    });
+  }
+
 
 /*
 Peeps
@@ -172,94 +262,6 @@ Peeps
     }
   };
 
-
-
-  function Users(query, on) {
-    this.items = [];
-    this.isComplete = false;
-    this.query = query;
-    this.on = on;
-
-    var d = q.defer();
-    q.when(d.promise, function (users) {
-
-      // Convert users into instance of peep objects
-      users = users.map(function (user) {
-        return new Peep(user);
-      });
-
-      this.items = users;
-      trigger(this, 'usersComplete', [users]);
-    }.bind(this));
-
-    //Ignore the query for now, use
-    //dummy data.
-    transport.users(query, function (users) {
-      d.resolve(users);
-    });
-  }
-
-/*
-
-Peep
-* id
-* name
-* pic
-* onChange
-* pinned
-* pin()
-* frecency
-* conversations []
-* onConvAdd  for conversation add
-* onConvChange
-* areConversationsLoaded
-* loadConversations()
-* onPeepChange
-* destroy()
-* remove()
-* connect()
-* reject()
-* connected
-* rejected
-*/
-
-  function Peep(obj) {
-    this.id = obj.id;
-    this.name = obj.name;
-    this.pic = obj.pic;
-    this.pinned = false;
-    this.frecency = 0;
-
-    this.areConversationsLoaded = false;
-
-    //TODO: this should start as false
-    this.connected = true;
-
-    this.rejected = false;
-  }
-
-  Peep.prototype = {
-    /**
-     * Gets the conversations for this user.
-     * @param {Function} callback a callback to call when the conversations
-     * are retrieved. The callback will receive an array of Conversation
-     * objects.
-     */
-    getConversations: function (callback) {
-      var d = q.defer();
-
-      if (this.conversationsPromise) {
-        q.when(this.conversationsPromise, callback);
-      } else {
-        // fake the data for now
-        this.conversationsPromise = d.promise;
-        q.when(this.conversationsPromise, callback);
-        this.conversations = conversations[this.id];
-        d.resolve(this.conversations);
-      }
-    }
-  };
-
 /*
 Message
 * id
@@ -271,7 +273,7 @@ Message
 
   function Message(from, text, time, location) {
     this.id = 'msg' + (messageIdCounter++);
-    this.from = peepData[from];
+    this.from = peepCache[from];
     this.text = text;
     this.time = time || (new Date()).getTime();
     this.location = location;
@@ -426,10 +428,14 @@ moda.on({
     var conv;
 
     if (query.by === 'id') {
-      conv = convData[query.filter];
+      conv = convCache[query.filter];
     }
 
     return conv;
+  };
+
+  moda.startConversation = function (args) {
+    transport.startConversation(args);
   };
 
   moda.signIn = function (id, name, callback) {
@@ -445,7 +451,6 @@ moda.on({
   };
 
 /*
-  //**********************************************************************
   //Fake data to use for UI mockups.
   peepData = {
     'me@raindrop.it': new Peep({

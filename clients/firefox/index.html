@@ -50,10 +50,10 @@
         </div>
         <div data-cardid="listUsersForAddPeep" title="Add Peep" class="card" data-childclass="addPeepLink">
         </div>
-       <div data-cardid="peep" class="card">
+        <div data-cardid="peep" class="card">
           <div class="peepInfo">
             <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
-            <span data-bind="name" class="peepInfoName">David</span>
+            <span data-bind="name" class="peepInfoName"></span>
           </div>
           <form data-class="compose"></form>
           <div class="peepConversations" data-childclass="convListItem">
@@ -74,7 +74,9 @@
     <div id="common" class="hidden">
 
       <form data-classimpl="compose" class="compose">
-        <textarea class="composeText"></textarea>
+        <input type="hidden" name="from" value="">
+        <input type="hidden" name="to" value="">
+        <textarea name="message"></textarea>
         <button>Send</button>
       </form>
 

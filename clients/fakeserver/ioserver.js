@@ -152,20 +152,22 @@ actions = {
 
   'addPeep': function (data, client) {
     var peepId = data.peepId,
-        userId = client._deuxUserId;
+        userId = client._deuxUserId,
+        multi;
 
     // Add the list to the data store
     redis.sadd('peeps:' + userId, peepId);
 
     // Get the peep ID and return it.
-    var multi = redis.multi()
-                  .hgetall(peepId)
-                  multi.exec(function (err, items) {
-                    client.send(JSON.stringify({
-                      action: 'addPeepResponse',
-                      peep: items[0]
-                    }));
-                  });
+    multi = redis
+              .multi()
+              .hgetall(peepId)
+              .exec(function (err, items) {
+                client.send(JSON.stringify({
+                  action: 'addPeepResponse',
+                  peep: items[0]
+                }));
+              });
   },
 
   'removePeep': function (data, client) {
@@ -173,6 +175,41 @@ actions = {
         userId = client._deuxUserId;
 
     redis.srem('peeps:' + userId, peepId);
+  },
+
+  'startConversation': function (data, client) {
+    //
+    var args = data.args,
+        from = args.from,
+        to = args.to,
+        message = args.message,
+        time = (new Date()).getTime(),
+        convId = args.from + '|' + args.to + '|' + time;
+
+    // Create the meta data record
+    redis.hmset(convId + '-meta', 'id', convId, 'from', from, 'to', to);
+
+    // Create the list of participants
+    redis.sadd(convId + '-peeps', from);
+    redis.sadd(convId + '-peeps', to);
+
+
+//TODO: Add converstaion ID to list of conversations for each user, but scoped
+//to the sender?
+
+
+    // Add the message to the message list for the conversation.
+    redis.sadd(convId + '-messages', JSON.stringify(message));
+
+    client.send(JSON.stringify({
+      action: 'message',
+      message: {
+        convId: convId,
+        from: from,
+        text: message,
+        time: time
+      }
+    }));
   },
 
   'message': function (data, client) {

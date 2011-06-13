@@ -183,5 +183,6 @@ define(function (require, exports) {
   makePassThroughApi('peeps', ['query'], 'items');
   makePassThroughApi('users', ['query'], 'items');
   makePassThroughApi('addPeep', ['peepId'], 'peep');
+  makePassThroughApi('startConversation', ['args']);
 
 });
