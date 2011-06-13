@@ -42,6 +42,12 @@
  *  maildrop/mailstore co-located in the same cluster as itself.  For this
  *  reason it is connection-less.
  *
+ * The fanout role has no server-specific identity key but instead has a user
+ *  provided identity key which the user has duly authorized.  The goal is to
+ *  avoid letting the server select keys because then it could reuse keys and
+ *  there is no obvious user benefit to that.  Since the user has to provide the
+ *  server with the private key, there is distinctly no benefit to secrecy.
+ *
  * ## Notes from conversation with Bryan just now:
  * - I will change the join protocol so it has to go through the fanout server
  *    so the fanout server does not have to deal with bearer bonds.
@@ -74,10 +80,13 @@
  * From conversation participants:
  * - Send human message to the conversation.
  * - Send machine message (meta-data) message to the conversation.
- * - Send invite request for another person to join.
+ * - "Server invite" request; one of two messages authored by the join requestor,
+ *   this one asks the server to loop in the person.
  *
  * From non-participants:
- * X Join conversation using attestation.
+ * - "User invite" request; the other of two messages authored by the join
+ *    requestor, this one asks the user to accept requests from the server.  It
+ *    may or may not be a redundant request.
  *
  * ## Messages Sent
  * To initial participants:
@@ -89,8 +98,6 @@
  * - Human message in the conversation (from participant).
  * - Machine message (from participant)
  * - Join message (machine message from fanout server itself)
- * - Invite request introduction required: (when a join request is issued that
- *    requires the server to talk to a server it is not currently friends with)
  *
  * ## hbase data model: conversations
  * - row id: [owner id, conversation epoch, conversation id]
@@ -116,11 +123,59 @@ define(
     exports
   ) {
 
+/**
+ * Process a conversation creation request from an account-holding user,
+ *  creating the conversation and sending out the initial set of messages as
+ *  duly authorized. Logic upstream of us is responsible for ensuring the
+ *  account-holding-ness.
+ */
 var CreateConversationTask = taskMaster.defineTask({
   name: "createConversation",
   steps: {
+    /**
+     * Make sure all the crypto checks out for creating the conversation.
+     */
+    validateRequestCrypto: function() {
+    },
+    /**
+     * Make sure the recipients are all known to us (and presumably we have a
+     *  mutual relationship).
+     */
+    validateRequestRecipients: function() {
+    },
+    /**
+     * Create the root database record if it does not exist, failing if it
+     *  already does.  This is a race only in the event of a failure upstream or
+     *  a badly behaved client and is a failure we accordingly want to draw
+     *  attention to.  (If this were less rare, we would check this further
+     *  upstream before we do some other db checks like recipient verification.)
+     *
+     * Note that because we do not have/require higher-level transactions, we
+     *  use an expiring lock that will let through an identical task in the
+     *  future if we have not marked the conversation as fully started before
+     *  the expiration.
+     */
+    createConversationRootRace: function() {
+    },
+    /**
+     * Send the messages to all the recipients, wait for the send layer to have
+     *  reliably taken on their delivery.
+     */
+    sendMessages: function() {
+    },
+    /**
+     * Mark the conversation as fully started.
+     */
+    finalizeConversationRoot: function() {
+    },
   }
 });
+
+/**
+ * Make sure the author of this message is in on the conversation.
+ */
+function commonVerifySenderIsAuthorized() {
+}
 
 /**
  * Add a human or machine-message to the conversation.  Machine-messages, such
@@ -129,11 +184,35 @@ var CreateConversationTask = taskMaster.defineTask({
 var AddMessageToConversationTask = taskMaster.defineTask({
   name: "addMessageToConversation",
   steps: {
+    verifySenderIsAuthorized: commonVerifySenderIsAuthorized,
+    persistMessage: function() {
+    },
+    sendMessageToAll: function() {
+    },
   }
 });
 
-var ProcessInviteTask = taskMaster.defineTask({
-  name: "processInvite",
+var ServerInviteTask = taskMaster.defineTask({
+  name: "serverInvite",
+  steps: {
+    verifySenderIsAuthorized: commonVerifySenderIsAuthorized,
+    /**
+     * Add the user to the conversation data structure, including creating and
+     *  persisting the join notification message.
+     */
+    addUserToConversation: function() {
+    },
+    /**
+     * Send the joining user all of the conversation backlog.
+     */
+    sendConversationBacklogToUser: function() {
+    },
+    /**
+     * Send the join notification to all users on the conversation.
+     */
+    sendJoinMessageToAll: function() {
+    },
+  },
 });
 
 

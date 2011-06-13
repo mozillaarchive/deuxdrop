@@ -36,72 +36,69 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * The raw client provides reliable low level interaction with a mailstore
- *  server while abstracting away key management concerns.  It is intended to
- *  exist on a background (non-UI) thread on the client device.  Interaction
- *  with the UI thread should be handled at a higher level that is aware of the
- *  UI's current "focus".
- *
- * "Reliable" in this sense means that the consumer of the API does not need to
- *  build its own layer to make sure we do the things it asks.  At the current
- *  time, we in fact do not bother persisting anything, but at some point we
- *  will.
+ * Tasks for messages received from the "web" side of the house, which
+ *  translates to the public side of the house.
  **/
 
 define(
   [
-    'rdcommon/log',
-    '../conversations/generator',
-    'module',
     'exports'
   ],
   function(
-    $log,
-    $conv_generator,
-    $module,
     exports
   ) {
 
-function RawClientAPI(myFullIdent, serverSelfIdent) {
-  this._fullIdent = myFullIdent;
-  this._serverSelfIdent = serverSelfIdent;
-
-  this.log = LOGFAB.rawClient(this, null,
-                              []);
-}
-RawClientAPI.prototype = {
-  createConversation: function() {
-  },
-  replyToConversation: function() {
-  },
-  inviteToConversation: function() {
-  },
-
-  pinConversation: function() {
-  },
-  updateWatermarkForConversation: function() {
-  },
-
-  deleteConversation: function() {
-  },
-
-};
-exports.RawClientAPI = RawClientAPI;
-
-var LOGFAB = exports.LOGFAB = $log.register($module, {
-  rawClient: {
-    // we are a client/server client, even if we are smart for one
-    type: $log.CONNECTION,
-    subtype: $log.CLIENT,
-    semanticIdent: {
-      clientIdent: 'key',
-      _l1: null,
-      serverIdent: 'key',
+/**
+ * We always receive an invite prior to receiving messages for a conversation;
+ *  this is a top-level person-to-person message.
+ */
+var UserInviteTask = taskMaster.defineTask({
+  name: "userInvite",
+  steps: {
+    /**
+     * Get the DB row for our alleged contact
+     */
+    lookupAuthor: function() {
     },
-    stateVars: {
-      haveConnection: true,
+    /**
+     * Make sure the contact is allowed to cause us to join...
+     */
+    validateContactAuthority: function() {
     },
-  }
+    /**
+     * Tell our maildrop it's cool to receive messages for this conversation.
+     */
+    authorizeConversation: function() {
+    },
+  },
 });
+
+/**
+ * Receive and process a human-message or machine-message in a conversation;
+ *  this message must come from the fan-out server responsible for the
+ *  conversation.
+ *
+ * Because the maildrop only lets in messages for conversations we have
+ *  explicitly authorized, we should be able to trust that we aren't going to
+ *  receive messages about random conversations (unless we revoke auths).
+ */
+var ConvMessageTask = taskMaster.defineTask({
+  name: "conversationMessage",
+  steps: {
+    /**
+     * Make sure it hits disk.
+     */
+    persistMessage: function() {
+    },
+    /**
+     * Relay to subscribed clients (either actively connected, or their
+     *  reliable queues for when they connect.)
+     */
+    notifySubscribers: function() {
+    },
+  },
+});
+
+
 
 }); // end define

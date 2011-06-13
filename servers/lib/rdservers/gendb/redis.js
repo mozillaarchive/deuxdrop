@@ -36,72 +36,15 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * The raw client provides reliable low level interaction with a mailstore
- *  server while abstracting away key management concerns.  It is intended to
- *  exist on a background (non-UI) thread on the client device.  Interaction
- *  with the UI thread should be handled at a higher level that is aware of the
- *  UI's current "focus".
- *
- * "Reliable" in this sense means that the consumer of the API does not need to
- *  build its own layer to make sure we do the things it asks.  At the current
- *  time, we in fact do not bother persisting anything, but at some point we
- *  will.
+ * (Remote) redis client.
  **/
 
 define(
   [
-    'rdcommon/log',
-    '../conversations/generator',
-    'module',
     'exports'
   ],
   function(
-    $log,
-    $conv_generator,
-    $module,
     exports
   ) {
-
-function RawClientAPI(myFullIdent, serverSelfIdent) {
-  this._fullIdent = myFullIdent;
-  this._serverSelfIdent = serverSelfIdent;
-
-  this.log = LOGFAB.rawClient(this, null,
-                              []);
-}
-RawClientAPI.prototype = {
-  createConversation: function() {
-  },
-  replyToConversation: function() {
-  },
-  inviteToConversation: function() {
-  },
-
-  pinConversation: function() {
-  },
-  updateWatermarkForConversation: function() {
-  },
-
-  deleteConversation: function() {
-  },
-
-};
-exports.RawClientAPI = RawClientAPI;
-
-var LOGFAB = exports.LOGFAB = $log.register($module, {
-  rawClient: {
-    // we are a client/server client, even if we are smart for one
-    type: $log.CONNECTION,
-    subtype: $log.CLIENT,
-    semanticIdent: {
-      clientIdent: 'key',
-      _l1: null,
-      serverIdent: 'key',
-    },
-    stateVars: {
-      haveConnection: true,
-    },
-  }
-});
 
 }); // end define
