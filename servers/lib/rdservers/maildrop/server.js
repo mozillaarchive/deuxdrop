@@ -42,14 +42,29 @@
 define(
   [
     '../authdb/api',
+    'rdcommon/log',
+    'rdcommon/taskidiom',
+    'module',
     'exports'
   ],
   function(
     $auth_api,
+    $log,
+    $task,
+    $module,
     exports
   ) {
 
 var AuthAPI = $auth_api;
+
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  deliveryConn: {
+  },
+});
+
+
+var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
 
 /**
  * Delivery processing connection.
@@ -142,17 +157,5 @@ var DropServerDef = {
     },
   },
 };
-
-var LOGFAB = exports.LOGFAB = $log.register($module, {
-  delivery: {
-    implClass: ReceiveDeliveryConnection,
-  },
-  contact: {
-    implClass: ContactConnection,
-  },
-  pickup: {
-    implClass: PickupConnection,
-  },
-});
 
 }); // end define

@@ -37,6 +37,30 @@
 
 /**
  *
+ *
+ * @typedef[ClientSignupBundle @dict[
+ *   @key[selfIdent PersonSelfIdentBlob]{
+ *     The identity that is signing up.
+ *   }
+ *   @key[clientAuths @listof[PersonClientAuthBlob]]{
+ *     Authorized clients to allow to contact the server on the identity's
+ *     behalf (signed by the `longtermSignPubKey`).
+ *   }
+ *   @key[because SignupBecause]{
+ *     The client's reason we should sign it up.
+ *   }
+ * ]]{
+ *
+ * }
+ *
+ * @typedef[SignupBecause @dict[
+ *   @key[type "existing-account:webfinger"]
+ *   @key[accountName String]{
+ *     The e-mail address in question.
+ *   }
+ * ]]{
+ *   Currently just our webfinger mechanism.
+ * }
  **/
 
 define(
@@ -46,6 +70,8 @@ define(
   function(
     exports
   ) {
+
+const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
 
 /**
  * Allow a new user/identity to register itself with this server.  Registration
@@ -60,23 +86,56 @@ define(
  * - In-band signed attestation from trusted source, such as a friend saying
  *    they are cool (possibly throttled by invite caps) or a company
  *    authority signing an attestation.
+ *
+ * Our current approach is a variant of limited identity verification that
+ *  reuses our webfinger support.  The user needs to put a link in their
+ *  webfinger profile that is a link to our server and names the root
+ *  identity key they are using.  This expresses a willingness by the owner
+ *  of the e-mail address to be associated with the identity in question and
+ *  allows us to then limit account signup to specific domains or e-mail
+ *  addresses in our initial testing configuration.
+ *
+ * The link we generate is predictable; we do not hash the identity key with a
+ *  secret or anything like that.  It's just the identity key in base 64.
  */
-function SignupConnection(server, sock) {
+function SignupConnection(conn) {
+  this.conn = conn;
 }
 SignupConnection.prototype = {
-  _msg_init_newSignup: function(msg) {
-  },
-  _msg_init_completeSignup: function(msg) {
+  /**
+   * The client signing up provides us with:
+   * -
+   *
+   * @args[
+   *   @param[msg ClientSignupBundle]
+   * ]
+   */
+  _msg_init_signup: function(msg) {
+
+
+    // issue the challenge
+    this.conn.writeMessage({
+      type: 'challenge',
+      challenge: {
+        mechanism: SIGNUP_TEMPORARY_INVOCATION,
+    });
+    return 'init';
   },
 };
 
-exports.makeServerDefs
-var SignupServerDef = {
-  endpoints: {
-    'signup/signup': {
-      implClass: SignupConnection,
+exports.makeServerDef = function(serverIdent) {
+  return {
+    endpoints: {
+      'signup/signup': {
+        implClass: SignupConnection,
+        serverIdent: serverIdent,
+        authVerifier: function(endpoint, clientKey) {
+          // (we have no identity on file)
+          return true;
+        },
+      },
     },
-  },
+  };
 };
 
 }); // end define

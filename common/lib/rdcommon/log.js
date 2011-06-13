@@ -970,13 +970,12 @@ var LEGAL_FABDEF_KEYS = [
   'TEST_ONLY_calls', 'TEST_ONLY_events',
 ];
 
-exports.register = function register(mod, defs) {
-  var fab = {_generalLog: true, _underTest: false, _actorCons: {},
-             _rawDefs: defs};
-  var testActors = fab._testActors;
+function augmentFab(mod, fab, defs) {
+  var testActors = fab._testActors, rawDefs = fab._rawDefs;
 
   for (var defName in defs) {
     var key, loggerDef = defs[defName], testOnlyMeta;
+    rawDefs[defName] = loggerDef;
 
     for (key in loggerDef) {
       if (LEGAL_FABDEF_KEYS.indexOf(key) === -1) {
@@ -1037,17 +1036,27 @@ exports.register = function register(mod, defs) {
 
   return fab;
 };
+exports.__augmentFab = augmentFab;
+
+exports.register = function register(mod, defs) {
+  var fab = {_generalLog: true, _underTest: false, _actorCons: {},
+             _rawDefs: {}};
+  return augmentFab(mod, fab, defs);
+};
+
 
 // role information
 exports.CONNECTION = 'connection';
 exports.SERVER = 'server';
 exports.CLIENT = 'client';
+exports.TASK = 'task';
 
 exports.TEST_DRIVER = 'testdriver';
 exports.TEST_GROUP = 'testgroup';
 exports.TEST_CASE = 'testcase';
 exports.TEST_PERMUTATION = 'testperm';
 exports.TEST_STEP = 'teststep';
+exports.TEST_LAZY = 'testlazy';
 
 // argument information
 var EXCEPTION = exports.EXCEPTION = 'exception';

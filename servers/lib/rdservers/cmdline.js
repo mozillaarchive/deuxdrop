@@ -63,6 +63,7 @@ var DEATH_PRONE = false;
 process.on("uncaughtException",
   function(err) {
     console.error("==== UNCAUGHT ====");
+    console.error(err.message);
     console.error(err.stack);
     if (DEATH_PRONE)
       process.exit(1);

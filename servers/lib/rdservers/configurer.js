@@ -91,6 +91,8 @@ exports.runConfig = function runConfig(configDir) {
   var config = loadConfig(configDir);
 
   // -- instantiate the server
+
+
   // -- bundle up the endpoints for the server def
 };
 

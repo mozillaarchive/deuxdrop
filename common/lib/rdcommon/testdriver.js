@@ -131,6 +131,12 @@ TestRuntimeContext.prototype = {
       return this._loggerStack[this._loggerStack.length - 1];
     return curParentLogger;
   },
+
+  peekLogger: function() {
+    if (this._loggerStack.length)
+      return this._loggerStack[this._loggerStack.length - 1];
+    return null;
+  },
 };
 
 var STEP_TIMEOUT_MS = 1000;
@@ -335,12 +341,14 @@ console.error("XXX XXX rejection", expPair);
   },
 
   _markDefinerUnderTest: function(definer) {
+    definer._runtimeContext = this._runtimeContext;
     for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
       definer.__logfabs[iFab]._underTest = this._runtimeContext;
     }
   },
 
   _clearDefinerUnderTest: function(definer) {
+    definer._runtimeContext = null;
     for (var iFab = 0; iFab < definer.__logfabs.length; iFab++) {
       definer.__logfabs[iFab]._underTest = null;
     }
@@ -407,6 +415,10 @@ console.error("XXX XXX rejection", expPair);
     var schema = {}, key, rawDef;
     // populate the schema with the test logger schemas
     rawDef = $testcontext.LOGFAB._rawDefs;
+    for (key in rawDef) {
+      schema[key] = rawDef[key];
+    }
+    rawDef = $testcontext.__LAZYLOGFAB._rawDefs;
     for (key in rawDef) {
       schema[key] = rawDef[key];
     }

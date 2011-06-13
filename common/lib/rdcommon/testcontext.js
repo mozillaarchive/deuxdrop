@@ -128,13 +128,58 @@ TestContext.prototype = {
     for (var iFab = 0; iFab < fabs.length; iFab++) {
       var actorDir = fabs[iFab]._actorCons;
       if (actorDir.hasOwnProperty(type)) {
+        // - create the actor
         var actor = new actorDir[type](name);
-        // poke it into our logger for reporting.
+
+        // - augment with test helpers
+        // (from an efficiency perspective, we might be better off creating a
+        //  parameterized prototype descendent during the defineTestsFor call
+        //  since we can establish linkages at that point.)
+        var helperDefs = this.__testCase.definer.__testHelperDefs;
+        if (helperDefs) {
+          for (var iHelpDef = 0; iHelpDef < helperDefs.length; iHelpDef++) {
+            var helperDef = helperDefs[iHelpDef];
+
+            if (!("actorMixins" in helperDef) ||
+                !helperDef.actorMixins.hasOwnProperty(name))
+              continue;
+            var mixyBits = helperDef.actorMixins[name];
+            for (var key in mixyBits) {
+              actor[key] = mixyBits[key];
+            }
+          }
+        }
+
+        // - poke it into our logger for reporting.
         this._log._named[actor._uniqueName] = actor;
         return actor;
       }
     }
     throw new Error("Unknown actor type '" + type + "'");
+  },
+
+  /**
+   * Create a actor/logger combo that only has a single event type "event" with
+   *  a single checked argument.  Intended to be an alternative to creating your
+   *  own custom logger or complicating the test framework.
+   */
+  lazyLogger: function lazyLogger(name) {
+    // create the actor
+    var actor = new LAZYLOGFAB._actorCons.lazyLogger(name);
+    // set our global to that when we create the logger, it gets linked up...
+    // (this happens at the bottom of this file, and the global gets cleared)
+    gNextLazyLoggerActor = actor;
+    // figure out the parent logger by getting at the TestRuntimeContext which
+    //  we can find on the definer
+    var parentLogger = this.__testCase.definer._runtimeContext.peekLogger();
+    // create the logger so it immediately bonds with the actor
+    var logger = LAZYLOGFAB.lazyLogger(null, parentLogger, name);
+
+    // directly copy across/bind the logger's event method for simplicity
+    // XXX this is brittle if we add other methods
+    actor.event = logger.event.bind(logger);
+
+    return actor;
   },
 
   /**
@@ -276,8 +321,9 @@ function TestCase(definer, kind, desc, setupFunc) {
 TestCase.prototype = {
 };
 
-function TestDefiner(modname, logfabs) {
+function TestDefiner(modname, logfabs, testHelpers) {
   this.__logfabs = logfabs;
+  this.__testHelperDefs = testHelpers;
 
   this._log = LOGFAB.testDefiner(this, null, modname);
 
@@ -335,11 +381,16 @@ TestDefiner.prototype = {
   },
 };
 
-exports.defineTestsFor = function defineTestsFor(testModule, logfabs) {
+exports.defineTestsFor = function defineTestsFor(testModule, logfabs,
+                                                 testHelpers) {
   if (logfabs == null)
     logfabs = [];
   else if (!Array.isArray(logfabs))
     logfabs = [logfabs];
+  if (testHelpers == null)
+    testHelpers = [];
+  else if (!Array.isArray(testHelpers))
+    testHelpers = [testHelpers];
   return new TestDefiner(testModule.id, logfabs);
 };
 
@@ -400,5 +451,31 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
   },
 });
+// other people should stay away from this dude
+var LAZYLOGFAB = exports.__LAZYLOGFAB = $log.register(null, {
+  /**
+   * Very generic logger to simplify test development...
+   */
+  lazyLogger: {
+    type: $log.TEST_LAZY,
+    subtype: $log.TEST_LAZY,
+    events: {
+      event: {name: true},
+    }
+  },
+});
+
+var gNextLazyLoggerActor = null;
+// lazy loggers are always under test!
+LAZYLOGFAB.lazyLogger._underTest = {
+  reportNewLogger: function(logger, currentParent) {
+    if (gNextLazyLoggerActor) {
+      gNextLazyLoggerActor._logger = logger;
+      logger._actor = gNextLazyLoggerActor;
+      gNextLazyLoggerActor = null;
+    }
+    return currentParent;
+  }
+};
 
 }); // end define

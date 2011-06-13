@@ -165,6 +165,7 @@ exports.TESTHELPER = {
   actorMixins: {
     client: ClientTestActorMixins,
     combo: ComboTestActorMixins,
+    mailstore: MailstoreActorMixins,
   },
 
   thingMixins: {

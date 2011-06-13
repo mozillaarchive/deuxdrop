@@ -112,7 +112,6 @@ TestServerConnection.prototype = {
 };
 
 TD.commonCase('working loopback authconn connection', function(T) {
-console.log("running loopback test context def thing");
   var eClientConn = T.actor('clientConn', 'C'), clientConn;
   var eServerConn = T.actor('serverConn', 'S'), serverConn;
   var eServer = T.actor('server', 'L'), server;

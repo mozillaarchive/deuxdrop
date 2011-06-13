@@ -61,64 +61,81 @@
  * }
  *
  * @typedef[PersonSelfIdentPayload @dict[
- *   @key[name String]{
- *     Identity's claimed name.
- *   }
- *   @key[suggestedNick String]{
- *     The identity's suggested nickname for itself.
+ *   @key[poco Object]{
+ *     A portable contact blob that the identity claims is them; the only
+ *     specially treated attributes are "displayName" and "nickname".
  *   }
  *
- *   @key[rootSignPubKey]{
- *     The root public key for this identity.
+ *   @key[root @dict[
+ *     @key[rootSignPubKey]{
+ *       The root public key for this identity.
  *
- *     The idea is that the identity's root secret key may be protected with
- *     a much greater degree of security (ex: written in disappearing ink in pig
- *     latin on a piece of highly flammable paper that lives in a safe deposit
- *     box) than the other keys whose day-to-day usage necessarily results in a
- *     greater risk of compromise.
- *   }
- *   @key[longtermSignPubKey]{
- *     The long term public key for this identity which must be the same used to
- *     sign the `PersonSelfIdentPayload` blob.  The identity may use different
- *     keys for all other tasks.
- *   }
- *   @key[longetermSignPubAuth]{
- *     The authorization by the `rootSignPubKey` that authorizes the
- *     `longtermSignPubKey` to act on its behalf.
+ *       The idea is that the identity's root secret key may be protected with a
+ *       much greater degree of security (ex: written in disappearing ink in pig
+ *       latin on a piece of highly flammable paper that lives in a safe deposit
+ *       box) than the other keys whose day-to-day usage necessarily results in
+ *       a greater risk of compromise.
+ *     }
+ *     @key[longtermSignPubKey]{
+ *       The long term public key for this identity which must be the same used
+ *       to sign the `PersonSelfIdentPayload` blob.  The identity may use
+ *       different keys for all other tasks.
+ *     }
+ *     @key[longetermSignPubAuth]{
+ *       The authorization by the `rootSignPubKey` that authorizes the
+ *       `longtermSignPubKey` to act on its behalf.
+ *     }
+ *   ]]{
+ *     Root authorization to long-term keys.
  *   }
  *
  *   @key[issuedAt DateMS]{
  *     The timestamp when this identity was created / asserted valid / etc.  We
- *     are currently not dealing with validity ranges and such; this is merely
- *     a debugging stop-gap measure.
+ *     are currently not dealing with validity ranges and such; this is merely a
+ *     debugging stop-gap measure.
  *   }
  *
  *   @key[transitServerIdent ServerSelfIdent]{
  *     The (current) self-ident of the transit server we are using.
  *   }
  *
- *   @key[envelopePubKey]{
- *     The public key to use to encrypt the envelope of messages to this person.
- *     This is different from the payload key so that a user can authorize their
- *     mailstore to be able to read the envelope for processing but not let it
- *     see the payload.
- *   }
- *   @key[payloadPubKey]{
- *     The public key to use to encrypt the payload of messages to this person.
- *   }
+ *   @key[keys @dict[
+ *     @key[envelopePubKey]{
+ *       The public key to use to encrypt the envelope of messages to this
+ *       person.  This is different from the payload key so that a user can
+ *       authorize their mailstore to be able to read the envelope for
+ *       processing but not let it see the payload.
+ *     }
+ *     @key[payloadPubKey]{
+ *       The public key to use to encrypt the payload of messages to this person.
+ *     }
  *
- *   @key[authorshipSignPubKey]{
- *     The public key corresponding to the secret key that will be used to sign
- *     messages authored by this identity.
- *   }
- *   @key[authorshipBoxPubKey]{
- *     The public key corresponding to the secret key that will be used to
- *     encrypt messages authored by this identity.
+ *     @key[authorshipSignPubKey]{
+ *       The public key corresponding to the secret key that will be used to sign
+ *       messages authored by this identity.
+ *     }
+ *     @key[authorshipBoxPubKey]{
+ *       The public key corresponding to the secret key that will be used to
+ *       encrypt messages authored by this identity.
+ *     }
+ *   ]]{
+ *    Keys to use to compose messages to the user and authenticate/decrypt
+ *    messages sent by the user.
  *   }
  * ]]{
  *   Data structure to be self-signed by an identity that provides their
  *   (claimed) name and all the host and key info to be able to send them
  *   messages and receive messages from them.
+ * }
+ *
+ * @tyepdef[PersonClientAuthPayload @dict[
+ *   @key[clientBoxPubKey]{
+ *     The public key corresponding to the secret key that will be used to
+ *     establish.
+ *   }
+ * ]]{
+ *   Authorizes and names a client and the keys it will use for contacting the
+ *   server.  Gets signed by the (active) longtermSignPubKey for the identity.
  * }
  **/
 

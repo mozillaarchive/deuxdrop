@@ -222,7 +222,6 @@ exports.signJsonWithRootKeypair = function(obj, rootKeypair) {
  */
 exports.assertGetRootSelfSignedPayload = function(signedStr) {
   var peekedJsonStr = $nacl.sign_peek_utf8(signedStr); // (throws)
-console.log("PEEKED: ", peekedJsonStr);
   var peekedObj = JSON.parse(peekedJsonStr); // (throws)
   var rootPubKey = peekedObj.rootPubKey;
 
