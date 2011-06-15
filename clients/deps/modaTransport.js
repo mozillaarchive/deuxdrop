@@ -43,7 +43,8 @@ define(function (require, exports) {
       transport = exports,
       meDeferred = q.defer(),
       deferreds = {},
-      actions, socket;
+      localMeCheck = false,
+      actions, socket, me;
 
   function send(obj) {
     socket.send(JSON.stringify(obj));
@@ -97,21 +98,21 @@ define(function (require, exports) {
 
   actions = {
     'signInComplete': function (data) {
-      if (!transport.me) {
-        transport.me = data.user;
+      if (!me) {
+        me = data.user;
 
-        localStorage.me = JSON.stringify(transport.me);
+        localStorage.me = JSON.stringify(me);
 
-        meDeferred.resolve(transport.me);
+        meDeferred.resolve(me);
+
+        moda.trigger('me', me);
       }
+    },
+
+    'message': function (data) {
+      moda.trigger('message', data.message);
     }
   };
-
-  // Load user from storage
-  transport.me = localStorage.me;
-  if (transport.me) {
-    transport.me = JSON.parse(transport.me);
-  }
 
   // Right now socket.io in the browser does not use define() so grab
   // the global.
@@ -136,8 +137,8 @@ define(function (require, exports) {
 
   socket.on('connect', function () {
     moda.trigger('networkConnected');
-    if (transport.me) {
-      transport.signIn(transport.me.id, transport.me.name);
+    if (me) {
+      transport.signIn(me.id, me.name);
     }
   });
 
@@ -164,6 +165,19 @@ define(function (require, exports) {
    * Define the transport object
    */
 
+  transport.me = function () {
+    if (!me && !localMeCheck) {
+      // Load user from storage
+      me = localStorage.me;
+      if (me) {
+        me = JSON.parse(me);
+        moda.trigger('me', me);
+      }
+      localMeCheck = true;
+    }
+    return me;
+  };
+
   /**
    * Sign in the user.
    */
@@ -183,6 +197,8 @@ define(function (require, exports) {
   makePassThroughApi('peeps', ['query'], 'items');
   makePassThroughApi('users', ['query'], 'items');
   makePassThroughApi('addPeep', ['peepId'], 'peep');
+  makePassThroughApi('loadConversation', ['convId'], 'details');
+
   makePassThroughApi('startConversation', ['args']);
 
 });

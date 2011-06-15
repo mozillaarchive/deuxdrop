@@ -236,6 +236,10 @@ function ($,        url,         array,         headerTemplate) {
     back.css('display', !cardPosition ? 'none' : '');
   };
 
+  cards.currentCard = function () {
+    return nlCards.find('.card').last();
+  };
+
   cards.getTitle = function () {
     return nlCards.find('.card').last().attr('title') || '';
   };

@@ -68,10 +68,10 @@ define(function (require, exports) {
       transport = require('modaTransport'),
       listeners = {},
       listenerCounter = 0,
-      messageIdCounter = 0,
       moda = exports,
       convCache = {},
-      peepCache = {};
+      peepCache = {},
+      me;
 
   /**
    * Trigger listeners on an object an any global listeners.
@@ -262,21 +262,11 @@ Peeps
     }
   };
 
-/*
-Message
-* id
-* from
-* text
-* location
-* time
-*/
-
-  function Message(from, text, time, location) {
-    this.id = 'msg' + (messageIdCounter++);
-    this.from = peepCache[from];
-    this.text = text;
-    this.time = time || (new Date()).getTime();
-    this.location = location;
+  function Message(msg) {
+    this.convId = msg.convId;
+    this.from = peepCache[msg.from];
+    this.text = msg.text;
+    this.time = msg.time;
   }
 
 /*
@@ -308,14 +298,37 @@ Conversation
 *
 */
 
-  function Conversation(id, peeps) {
+  function Conversation(id, on) {
     this.id = id;
-    this.peeps = peeps;
-    this.messages = [];
+    this.peeps = null;
+    this.messages = null;
     this.on = {};
+    this.messageDeferred = q.defer();
+
+    convCache[id] = this;
+
+    // Set up the retrieval of the messages and people.
+    transport.loadConversation(id, function (details) {
+      this.peeps = [];
+      details.peepIds.forEach(function (peepId) {
+        this.peeps.push(peepCache[peepId]);
+      }.bind(this));
+
+      this.messages = details.messages.map(function (message) {
+        return new Message(message);
+      });
+
+      this.messageDeferred.resolve(this);
+
+      trigger(this, 'conversationComplete', [this]);
+    }.bind(this));
   }
 
   Conversation.prototype = {
+    withMessages: function (callback) {
+      q.when(this.messageDeferred.promise, callback);
+    },
+
     addMessage: function (message) {
       this.messages.push(message);
       trigger(this, 'message', arguments);
@@ -382,10 +395,24 @@ moda.on({
    * Triggers an on event.
    */
   moda.trigger = function (name, data) {
-    var prop, triggered = false;
+    var triggered = false,
+        prop, conv;
+
+    // Some messages require updates to cached objects
+    if (name === 'message') {
+      conv = convCache[data.convId];
+      if (conv && conv.messages) {
+        conv.messages.push(data);
+      }
+    } else if (name === 'me') {
+      me = new Peep(data);
+    }
+
+    // Cycle through listeners and notify them.
     for (prop in listeners) {
       if (listeners.hasOwnProperty(prop) && listeners[prop][name]) {
         listeners[prop][name](data);
+        triggered = true;
       }
     }
 
@@ -412,23 +439,15 @@ moda.on({
     return new Users(query, on);
   };
 
-  /**
-   * Grabs a list of Peeps based on a query value.
-   *
-   * @param {Object} query the query to used for data selection.
-   * @param {Object} on an object whose properties are event names
-   * and values are event handlers for events that can be triggered
-   * for the return object.
-   *
-   * @returns {Peeps}
-   */
-  // TODO: on assignment does not work right now.
-  moda.conversation = function (query, on) {
+  moda.conversation = function (query) {
     // only support by ID filtering
     var conv;
 
     if (query.by === 'id') {
       conv = convCache[query.filter];
+      if (!conv) {
+        conv = new Conversation(query.filter);
+      }
     }
 
     return conv;
@@ -447,7 +466,10 @@ moda.on({
    * then it means the user is not signed in, and signIn should be called.
    */
   moda.me = function () {
-    return transport.me;
+    if (!me) {
+      me = transport.me();
+    }
+    return me;
   };
 
 /*

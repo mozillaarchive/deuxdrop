@@ -31,6 +31,12 @@ function multiBulkToStringArray(data) {
   });
 }
 
+function multiBulkToJsonArray(data) {
+  return data.map(function (item) {
+    return JSON.parse(item.toString());
+  });
+}
+
 function peepSort(a, b) {
   if (a.name > b.name) {
     return 1;
@@ -38,6 +44,15 @@ function peepSort(a, b) {
     return -1;
   } else {
     return 0;
+  }
+}
+
+function pushToClients(targetId, message) {
+  var list = clients[targetId];
+  if (list) {
+    list.forEach(function (client) {
+      client.send(message);
+    });
   }
 }
 
@@ -177,52 +192,98 @@ actions = {
     redis.srem('peeps:' + userId, peepId);
   },
 
+  'loadConversation': function (data, client) {
+    var convId = data.convId;
+
+    // Get the people involved
+    redis.smembers(convId + '-peeps', function (err, peeps) {
+      peeps = multiBulkToStringArray(peeps);
+
+      // Now get messages in the conversation.
+      redis.smembers(convId + '-messages', function (err, messages) {
+        messages = multiBulkToJsonArray(messages);
+
+        client.send(JSON.stringify({
+          action: 'loadConversationResponse',
+          details: {
+            peepIds: peeps,
+            messages: messages
+          }
+        }));
+      });
+    });
+  },
+
   'startConversation': function (data, client) {
-    //
     var args = data.args,
         from = args.from,
-        to = args.to,
-        message = args.message,
+        to = args.to.split(','),
+        users = [from].concat(to),
+        text = args.text,
         time = (new Date()).getTime(),
-        convId = args.from + '|' + args.to + '|' + time;
+        convId = args.from + '|' + args.to + '|' + time,
+        message, jsonMessage;
+
+    message = {
+      convId: convId,
+      from: from,
+      text: text,
+      time: time
+    };
+
+    jsonMessage = JSON.stringify({
+      action: 'message',
+      message: message
+    });
 
     // Create the meta data record
-    redis.hmset(convId + '-meta', 'id', convId, 'from', from, 'to', to);
-
-    // Create the list of participants
-    redis.sadd(convId + '-peeps', from);
-    redis.sadd(convId + '-peeps', to);
-
-
-//TODO: Add converstaion ID to list of conversations for each user, but scoped
-//to the sender?
-
+    //redis.hmset(convId + '-meta', 'id', convId);
 
     // Add the message to the message list for the conversation.
     redis.sadd(convId + '-messages', JSON.stringify(message));
 
-    client.send(JSON.stringify({
-      action: 'message',
-      message: {
-        convId: convId,
-        from: from,
-        text: message,
-        time: time
-      }
-    }));
+    users.forEach(function (user) {
+      // Add the user to the peep list for the conversation.
+      redis.sadd(convId + '-peeps', user);
+
+      // Update the set of conversations a user is involved in,
+      // but scope it per user
+      users.forEach(function (other) {
+        redis.rpush(user + '-' + other, convId);
+      });
+
+      // Push the message to any user clients
+      pushToClients(user, jsonMessage);
+    });
   },
 
-  'message': function (data, client) {
+  'sendMessage': function (data, client) {
     var convId = data.convId,
-        conv;
+        message, jsonMessage;
 
-    if (convCache[convId]) {
+    message = {
+      convId: convId,
+      from: data.from,
+      text: data.text,
+      time: (new Date()).getTime()
+    };
 
-    } else {
+    jsonMessage = JSON.stringify({
+      action: 'message',
+      message: message
+    });
 
-    }
+    // Add the message to the message list for the conversation.
+    redis.sadd(convId + '-messages', JSON.stringify(message));
 
-
+    // Get all conversation participants to send the message.
+    redis.smembers(convId + '-peeps', function (err, users) {
+      users = multiBulkToStringArray(users);
+      users.forEach(function (user) {
+        // Push the message to any user clients
+        pushToClients(user, jsonMessage);
+      });
+    });
   }
 
 };

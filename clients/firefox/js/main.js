@@ -247,21 +247,43 @@ define(function (require) {
         filter: convId
       });
 
-      // Clear out old messages
-      messagesNode.innerHTML = '';
+      conversation.withMessages(function (conv) {
+        // Clear out old messages
+        messagesNode.innerHTML = '';
 
-      conversation.messages.forEach(function (message) {
-        var node = messageCloneNode.cloneNode(true);
-        updateDom($(node), message);
-        frag.appendChild(node);
+        conversation.messages.forEach(function (message) {
+          var node = messageCloneNode.cloneNode(true);
+          updateDom($(node), message);
+          frag.appendChild(node);
+        });
+
+        messagesNode.appendChild(frag);
+
+        // Refresh the card sizes
+        cards.adjustCardSizes();
       });
-
-      messagesNode.appendChild(frag);
-
-      // Refresh the card sizes
-      cards.adjustCardSizes();
     }
   };
+
+  // Listen to events from moda
+  moda.on({
+    'message': function (message) {
+      var card = cards.currentCard();
+      if (card.attr('data-cardid') === "conversation") {
+        if (card.attr('data-conversationid') === message.convId) {
+          // Update the current conversation.
+
+        } else {
+          // Put up a notification
+        }
+      } else {
+        // Create a new card with the conversation.
+        cards.nav('conversation?id=' + message.convId, null, true);
+      }
+
+      console.log("GOT A MESSAGE: ", message);
+    }
+  });
 
   // Wait for DOM ready to do some DOM work.
   $(function () {
@@ -336,11 +358,12 @@ define(function (require) {
 
         var form = evt.target,
             args = {},
-            i, node;
+            i, node, value;
 
         for (i = 0; (node = form.elements[i]); i++) {
-          if (node.name) {
-            args[node.name] = node.value.trim();
+          value = (node.value || '').trim();
+          if (node.name && value) {
+            args[node.name] = value;
           }
         }
 
