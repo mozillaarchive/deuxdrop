@@ -41,14 +41,12 @@
 
 define(
   [
-    'rdcommon/identities/privident',
     'rdcommon/rawclient/api',
     'rdcommon/transport/authconn',
     'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
-    $privident,
     $rawclient_api,
     $authconn,
     $keyops,

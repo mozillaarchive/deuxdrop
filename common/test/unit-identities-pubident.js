@@ -70,8 +70,7 @@ TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
 
   var details = {
     tag: 'server:dummy',
-    host: '127.0.0.1',
-    port: 80,
+    url: 'ws://127.0.0.1:80/',
   };
   var signedSelfIdent = $pubident.generateServerSelfIdent(
                           rootKeypair, longtermBoxBundle, details);
@@ -82,8 +81,7 @@ TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
 
   // make sure the spec'ed details all got in there correctly.
   assert.equal(details.tag, payload.tag);
-  assert.equal(details.host, payload.host);
-  assert.equal(details.port, payload.port);
+  assert.equal(details.url, payload.url);
 
   // make sure the keys got in there correctly
   assert.equal(payload.publicKey, longtermBoxBundle.keypair.publicKey);

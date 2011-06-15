@@ -393,22 +393,20 @@ var AuthClientCommon = {
 };
 
 /**
- * The connection is locally uniquely named by the complex tuple of
- *  ((local IP:local port), (remote IP:remote port)).  The other end of the
- *  connection's log entry can be found by swapping the components of the tuple
- *  (and applying the appropriate host prefix as needed).
+ * Authenticated client connection.
  */
-function AuthClientConn(appConn, clientIdent, serverIdent, url, endpoint) {
+function AuthClientConn(appConn, clientKeyring, serverPublicKey,
+                        url, endpoint) {
   this.appConn = appConn;
   this.appState = appConn.INITIAL_STATE;
-  this.clientIdent = clientIdent;
-  this.serverIdent = serverIdent;
+  this.clientKeyring = clientKeyring;
+  this.serverPublicKey = serverPublicKey;
   this.url = url;
   this.endpoint = endpoint;
 
   this.log = LOGFAB.clientConn(this, null,
-                               [clientIdent.publicKey, 'to',
-                                serverIdent.publicKey,
+                               [clientKeyring.boxingPublicKey, 'to',
+                                serverPublicKey,
                                 'at endpoint', endpoint]);
 
   this._initCommon('connect',
@@ -437,11 +435,11 @@ AuthClientConn.prototype = {
 
     // send [S, C', nonce, Box[64-bytes of zeroes](C'->S)]
     var nonce = $nacl.box_random_nonce();
-    var boxedZeroes = $nacl.box(ZEROES_64, nonce, this.serverIdent.publicKey,
+    var boxedZeroes = $nacl.box(ZEROES_64, nonce, this.serverPublicKey,
                                 this._ephemKeyPair.sk);
     this._writeRaw({
       type: "key",
-      serverKey: this.serverIdent.publicKey,
+      serverKey: this.serverPublicKey,
       clientEphemeralKey: this._ephemKeyPair.pk,
       nonce: nonce,
       boxedZeroes: boxedZeroes
@@ -455,7 +453,7 @@ AuthClientConn.prototype = {
     var ephemKey;
     try {
       ephemKey = $nacl.box_open(msg.boxedEphemeralKey, msg.nonce,
-                                this.serverIdent.publicKey,
+                                this.serverPublicKey,
                                 this._ephemKeyPair.sk);
     }
     catch(ex) {
@@ -466,15 +464,26 @@ AuthClientConn.prototype = {
 
     // -- send [Box[C, vouchNonce, Box[C'](C->S)](C'->S')]
     var nonce = $nacl.box_random_nonce();
-    var boxedVoucher = $nacl.box(this._ephemKeyPair.pk, nonce,
-                                 this.serverIdent.publicKey,
-                                 this.clientIdent.secretKey);
+    var boxedVoucher = this.clientKeyring.box(this._ephemKeyPair.pk, nonce,
+                                              this.serverPublicKey);
     this.writeMessage({
       type: "vouch",
-      clientKey: this.clientIdent.publicKey,
+      clientKey: this.clientKeyring.boxingPublicKey,
       nonce: nonce,
       boxedVoucher: boxedVoucher
     });
+    // (transition to application space; no more protocol stuff to do)
+    // -- invoke any on-connected handler...
+    if ("__connected" in this.appConn) {
+      var rval = this.log.appConnectHandler(this.appConn,
+                                            this.appConn.__connected);
+      // if an exception is thrown, kill the connection
+      if (rval instanceof Error) {
+        this.log.handlerFailure(rval);
+        this.close(true);
+        return MAGIC_CLOSE_MARKER;
+      }
+    }
     return 'app';
   },
 
@@ -490,18 +499,19 @@ exports.AuthClientConn = AuthClientConn;
  *
  *
  */
-function AuthServerConn(serverIdent, endpoint, rawConn, authVerifier,
+function AuthServerConn(serverKeyring, endpoint,
+                        rawConn, authVerifier,
                         implClass, owningServer, _parentLogger) {
   this.appConn = null;
   this.appState = null;
-  this.serverIdent = serverIdent;
-  this.clientIdent = null;
+  this.serverKeyring = serverKeyring;
+  this.clientPublicKey = null;
   this.endpoint = endpoint;
 
   this._implClass = implClass;
   this._owningServer = owningServer;
   this.log = LOGFAB.serverConn(this, _parentLogger,
-                               [serverIdent.publicKey,
+                               [serverKeyring.boxingPublicKey,
                                 'on endpoint', endpoint]);
   this._authVerifier = authVerifier;
 
@@ -516,15 +526,15 @@ AuthServerConn.prototype = {
   // State Message Handlers
 
   _msg_authClientKey_key: function(msg) {
-    if (msg.serverKey !== this.serverIdent.publicKey) {
+    if (msg.serverKey !== this.serverKeyring.boxingPublicKey) {
       this.log.wrongServer();
       return this.close();
     }
     // We just care that the boxed zeroes authenticate with the key, not that
     //  what's inside is zeroes...
     try {
-      $nacl.box_open(msg.boxedZeroes, msg.nonce, msg.clientEphemeralKey,
-                     this.serverIdent.secretKey);
+      this.serverKeyring.openBox(msg.boxedZeroes, msg.nonce,
+                                 msg.clientEphemeralKey);
     }
     catch (ex) {
       this.log.corruptClientEphemeralKey();
@@ -534,9 +544,9 @@ AuthServerConn.prototype = {
 
     // -- send [nonce, Box[S'](S->C')].
     var nonce = $nacl.box_random_nonce();
-    var boxedEphemeralKey = $nacl.box(this._ephemKeyPair.pk, nonce,
-                                      this._otherPublicKey,
-                                      this.serverIdent.secretKey);
+    var boxedEphemeralKey = this.serverKeyring.box(this._ephemKeyPair.pk, nonce,
+                                                   this._otherPublicKey);
+
     this._writeRaw({
       type: "key",
       nonce: nonce,
@@ -551,8 +561,8 @@ AuthServerConn.prototype = {
     // this can fail 2 ways:
     // - the box is not properly formed (wrong keys, gibberish) => exception
     try {
-      ephemCheck = $nacl.box_open(msg.boxedVoucher, msg.nonce,
-                                  msg.clientKey, this.serverIdent.secretKey);
+      ephemCheck = this.serverKeyring.openBox(msg.boxedVoucher, msg.nonce,
+                                              msg.clientKey);
     }
     catch(ex) {
       this.log.badProto();
@@ -563,18 +573,18 @@ AuthServerConn.prototype = {
       this.log.badVoucher();
       return this.close();
     }
-    this.clientIdent = {publicKey: msg.clientKey};
+    this.clientPublicKey = msg.clientKey;
 
     var self = this;
-    return when(this._authVerifier(this.endpoint, this.clientIdent.publicKey),
+    return when(this._authVerifier(this.endpoint, this.clientPublicKey),
                 function(isgood, knownParty) {
       if (!isgood) {
         self.log.authFailed();
         return self.close();
       }
-      self.log.__updateIdent([self.serverIdent.publicKey,
+      self.log.__updateIdent([self.serverKeyring.boxingPublicKey,
                               'on endpoint', self.endpoint,
-                              'with client', self.clientIdent.publicKey]);
+                              'with client', self.clientPublicKey]);
       self._owningServer.__endpointConnected(self, self.endpoint, knownParty);
 
       self.appConn = new self._implClass(self);
@@ -628,7 +638,8 @@ AuthorizingServer.prototype = {
       var info = this._endpoints[protocol];
 
       var rawConn = request.accept(protocol, request.origin);
-      var authConn = new AuthServerConn(info.serverIdent, protocol, rawConn,
+      var authConn = new AuthServerConn(info.serverKeyring,
+                                        protocol, rawConn,
                                         info.authVerifier, info.implClass,
                                         this, this.log);
       return;
@@ -710,6 +721,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       receive: {msg: $log.JSONABLE},
     },
     calls: {
+      appConnectHandler: {},
       handleMsg: {type: true},
     },
     TEST_ONLY_calls: {

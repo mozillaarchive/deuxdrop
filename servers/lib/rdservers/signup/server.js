@@ -36,44 +36,6 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- *
- *
- * @typedef[ClientSignupBundle @dict[
- *   @key[selfIdent PersonSelfIdentBlob]{
- *     The identity that is signing up.
- *   }
- *   @key[clientAuths @listof[PersonClientAuthBlob]]{
- *     Authorized clients to allow to contact the server on the identity's
- *     behalf (signed by the `longtermSignPubKey`).
- *   }
- *   @key[because SignupBecause]{
- *     The client's reason we should sign it up.
- *   }
- * ]]{
- *
- * }
- *
- * @typedef[SignupBecause @dict[
- *   @key[type "existing-account:webfinger"]
- *   @key[accountName String]{
- *     The e-mail address in question.
- *   }
- * ]]{
- *   Currently just our webfinger mechanism.
- * }
- **/
-
-define(
-  [
-    'exports'
-  ],
-  function(
-    exports
-  ) {
-
-const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
-
-/**
  * Allow a new user/identity to register itself with this server.  Registration
  *  may potentially happen quickly in-band or require some out-of-band
  *  verification.
@@ -94,32 +56,155 @@ const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
  *  of the e-mail address to be associated with the identity in question and
  *  allows us to then limit account signup to specific domains or e-mail
  *  addresses in our initial testing configuration.
+ * XXX And this is not yet implemented.
  *
  * The link we generate is predictable; we do not hash the identity key with a
  *  secret or anything like that.  It's just the identity key in base 64.
+ *
+ *
+ * @typedef[ClientSignupBundle @dict[
+ *   @key[selfIdent PersonSelfIdentBlob]{
+ *     The identity that is signing up.
+ *   }
+ *   @key[clientAuths @listof[PersonClientAuthBlob]]{
+ *     Authorized clients to allow to contact the server on the identity's
+ *     behalf (signed by the `longtermSignPubKey`).  The first entry must be
+ *     the client that is attempting to perform the signup operation.
+ *   }
+ *   @key[because SignupBecause]{
+ *     The client's reason we should sign it up.
+ *   }
+ * ]]{
+ *
+ * }
+ *
+ * @typedef[SignupBecause @dict[
+ *   @key[type "existing-account:webfinger"]
+ *   @key[accountName String]{
+ *     The e-mail address in question.
+ *   }
+ * ]]{
+ *   Currently just our webfinger mechanism.
+ * }
+ **/
+
+define(
+  [
+    'rdcommon/taskidiom',
+    'exports'
+  ],
+  function(
+    $task,
+    exports
+  ) {
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {});
+
+var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
+
+/**
+ * Repurpose the challenge mechanism to convey that this request will never
+ *  succeed.
+ */
+const CHALLENGE_NEVER = "never";
+
+const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
+
+/**
+ * Validate that the request, regardless of challenges/responses, is in fact a
+ *  well-formed and legitimate request.
+ *
+ * This is implemented as a boolean task which means that all failures end up
+ *  resolving our promise with `false` and success ends up resolving our promise
+ *  with `true`.
+ */
+var ValidateSignupRequestTask = taskMaster.defineBooleanTask({
+  name: 'validateSignupRequest',
+  steps: {
+    /**
+     * Make sure the self-ident blob is self-consistent, especially that it
+     *  names us as the server of record.
+     */
+    validateSelfIdent: function() {
+    },
+    /**
+     * Make sure the client talking to us is the first authorized client in the
+     *  list of authorized clients (and that the self-ident has actually
+     *  authorized all the named clients.)
+     */
+    validateClientAuth: function() {
+    },
+    /**
+     * Fail if the given identity has already signed up with us.
+     */
+    verifyNoExistingAccount: function() {
+    },
+  },
+});
+
+var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
+  name: 'processSignup',
+  steps: {
+    /**
+     * Ensure the request is well-formed/legitimate.
+     */
+    validateSignupRequest: function(arg) {
+      return new ValidateSignupRequestTask(arg.msg, this.log);
+    },
+    /**
+     * Convey permanent failure if the request was not valid.
+     */
+    dealWithInvalidRequest: function(isValid) {
+      if (!isValid) {
+        // XXX we should initiate a close
+        return this.respondWithChallenge(CHALLENGE_NEVER);
+      }
+      return undefined;
+    },
+    /**
+     * Figure out what challenges could be used to authenciate this request.
+     */
+    determineChallenges: function() {
+    },
+    /**
+     * If a challenge response is included, verify it is one of the ones we
+     *  are allowing; if it is not, tell the client what is allowed.
+     */
+    checkOrGenerateChallenge: function() {
+    },
+  },
+  impl: {
+    respondWithChallenge: function(challengeType) {
+      this.arg.conn.writeMessage({
+        type: 'challenge',
+        challenge: {
+          mechanism: challengeType,
+        },
+      });
+      return this.earlyReturn("root");
+    }
+  },
+});
+
+/**
+ * Simple signup connection; most of the work is farmed out to
+ *  `ProcessSignupTask` and its subsidiary tasks.
  */
 function SignupConnection(conn) {
   this.conn = conn;
 }
 SignupConnection.prototype = {
+  INITIAL_STATE: 'root',
   /**
-   * The client signing up provides us with:
-   * -
+   * Signup the user if they provided everything required, otherwise issue an
+   *  appropriate set of challenges from which they can pick one to implement.
    *
    * @args[
    *   @param[msg ClientSignupBundle]
    * ]
    */
-  _msg_init_signup: function(msg) {
-
-
-    // issue the challenge
-    this.conn.writeMessage({
-      type: 'challenge',
-      challenge: {
-        mechanism: SIGNUP_TEMPORARY_INVOCATION,
-    });
-    return 'init';
+  _msg_root_signup: function(msg) {
+    return new ProcessSignupTask({msg: msg, conn: this.conn});
   },
 };
 

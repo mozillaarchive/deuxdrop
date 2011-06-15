@@ -51,16 +51,53 @@
 define(
   [
     'rdcommon/log',
+    'rdcommon/transport/authconn',
     '../conversations/generator',
     'module',
     'exports'
   ],
   function(
     $log,
+    $authconn,
     $conv_generator,
     $module,
     exports
   ) {
+
+function SignupConn(selfIdentBundle, clientIdentPayload, clientAuths,
+                    serverSelfIdentPayload) {
+  this.conn = new $authconn.AuthClientConn(
+                this,
+                clientIdent.publicKey,
+                serverSelfIdentPayload.boxPubKey,
+                serverSelfIdentPayload.url,
+                'signup/signup');
+
+}
+SignupConn.prototype = {
+  INITIAL_STATE: 'root',
+  /**
+   * When we've connected, send our request.
+   */
+  __connected: function() {
+    this.conn.writeMessage({
+      type: 'signup',
+
+    });
+  },
+
+  /**
+   * They did not like our signup, try again...
+   */
+  _msg_root_challenge: function() {
+  },
+
+  /**
+   * We are now signed up! Woo!
+   */
+  _msg_root_signedUp: function() {
+  },
+};
 
 function RawClientAPI(myFullIdent, serverSelfIdent) {
   this._fullIdent = myFullIdent;

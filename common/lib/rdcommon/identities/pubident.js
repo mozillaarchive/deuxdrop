@@ -43,8 +43,7 @@
  *
  * @typedef[ServerSelfIdentPayload @dict[
  *   @key[tag]
- *   @key[host]
- *   @key[port]
+ *   @key[url]
  *   @key[boxPubKey]
  * ]]{
  *   Server self-idents differ from person self-idents in that the root key
@@ -95,7 +94,7 @@
  *     debugging stop-gap measure.
  *   }
  *
- *   @key[transitServerIdent ServerSelfIdent]{
+ *   @key[transitServerIdent ServerSelfIdentBlob]{
  *     The (current) self-ident of the transit server we are using.
  *   }
  *
@@ -181,7 +180,8 @@ exports.assertGetServerSelfIdent = function(serverSelfIdent) {
  *   ]]
  * ]
  */
-exports.generatePersonSelfIdent = function(details) {
+exports.generatePersonSelfIdent = function(longtermAuth, poco,
+                                           serverIdentBlob) {
   var full = {pub: {}, secret: {}},
       pub = full.pub, secret = full.secret;
 

@@ -43,7 +43,7 @@ define(
   [
     'rdcommon/transport/authconn',
     'rdcommon/testcontext',
-    'rdcommon/crypto/keyops',
+    'rdcommon/crypto/keyring',
     'q',
     'module',
     'exports'
@@ -51,7 +51,7 @@ define(
   function(
     $authconn,
     $tc,
-    $keyops,
+    $keyring,
     $Q,
     $module,
     exports
@@ -63,10 +63,10 @@ var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
  * Test connection implementation with no logging layer of its own because
  *  this implementation is not under test.
  */
-function TestClientConnection(clientIdent, serverIdent, url, endpoint) {
+function TestClientConnection(clientKeyring, serverPublicKey, url, endpoint) {
   this._wallowDeferred = null;
 
-  this.conn = new $authconn.AuthClientConn(this, clientIdent, serverIdent,
+  this.conn = new $authconn.AuthClientConn(this, clientKeyring, serverPublicKey,
                                            url, endpoint);
   // a real impl class would insantiate its logger at this point using a
   //  parent logger of "this.conn.log"
@@ -116,23 +116,36 @@ TD.commonCase('working loopback authconn connection', function(T) {
   var eServerConn = T.actor('serverConn', 'S'), serverConn;
   var eServer = T.actor('server', 'L'), server;
 
-  var serverIdent, clientIdent;
+  var serverRootRing, serverKeyring;
+  var personRootRing, personLongTermRing, personKeyring,
+      clientKeyring;
 
   T.setup(eServer, 'performs setup and listens', function() {
     // (it is implied that eServer is created this step)
     eServer.expect_endpointRegistered('test/test');
     eServer.expect_listening();
 
-    serverIdent = $keyops.generateServerKeypair();
-    clientIdent = $keyops.generateServerKeypair();
+    // -- create keyrings
+    // XXX this really needs to go in some test helping logic
+    serverRootRing = $keyring.createNewServerRootKeyring();
+    serverKeyring = serverRootRing.issueLongtermBoxingKeyring();
+
+    personRootRing = $keyring.createNewPersonRootKeyring();
+    personLongTermRing = personRootRing.issueLongtermSigningKeyring();
+    personKeyring = personLongTermRing.makeDelegatedKeyring();
+    personKeyring.incorporateKeyGroup(
+      personLongTermRing.issueKeyGroup('client', {conn: 'box'}));
+
+    clientKeyring = personKeyring.exposeSimpleBoxingKeyringFor("client",
+                                                               "connBox");
 
     var TestServerDef = {
       endpoints: {
         'test/test': {
           implClass: TestServerConnection,
-          serverIdent: serverIdent,
+          serverKeyring: serverKeyring,
           authVerifier: function(endpoint, clientKey) {
-            return (clientKey === clientIdent.publicKey);
+            return (clientKey === clientKeyring.boxingPublicKey);
           }
         },
       },
@@ -173,7 +186,8 @@ TD.commonCase('working loopback authconn connection', function(T) {
 
     var url = "ws://" + server.address.address + ":" + server.address.port + "/";
     var endpoint = "test/test";
-    clientConn = new TestClientConnection(clientIdent, serverIdent,
+    clientConn = new TestClientConnection(clientKeyring,
+                                          serverKeyring.boxingPublicKey,
                                           url, endpoint);
 
   });

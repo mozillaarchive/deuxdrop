@@ -85,7 +85,10 @@ define(
  */
 var TAG_ROOT_SIGN = "root:sign",
     TAG_LONGTERM_SIGN = "longterm:sign",
-    TAG_LONGTERM_BOX = "longterm:box";
+    TAG_LONGTERM_BOX = "longterm:box",
+    TAG_GENERAL_SIGN = "general:sign",
+    TAG_GENERAL_BOX = "general:box";
+
 
 var AUTH_TAG_LONGTERM_SIGN = "longterm:sign",
     AUTH_TAG_LONGTERM_BOX = "longterm:box";
@@ -197,18 +200,39 @@ exports.assertLongtermKeypairIsAuthorized = function(longtermPublicKey,
     throw new Error("Timestamp is later than the authorized time range.");
 };
 
-/**
- * Deprecated test-only keypair generation.
- */
-exports.generateServerKeypair = function() {
-  var rawPair = $nacl.box_keypair();
-  return {
-    secretKey: rawPair.sk,
-    publicKey: rawPair.pk,
-  };
+exports.longtermBox = function(msg, nonce, recipientPubKey, keypair) {
+  if (keypair.tag !== TAG_LONGTERM_BOX)
+    throw new Error("Attempting to use a non-longterm key as one.");
+  return $nacl.box(msg, nonce, recipientPubKey, keypair.secretKey);
 };
 
+exports.longtermBoxUtf8 = function(msg, nonce, recipientPubKey, keypair) {
+  if (keypair.tag !== TAG_LONGTERM_BOX)
+    throw new Error("Attempting to use a non-longterm key as one.");
+  return $nacl.box_utf8(msg, nonce, recipientPubKey, keypair.secretKey);
+};
+
+exports.longtermOpenBox = function(msg, nonce, senderPubKey, keypair) {
+  if (keypair.tag !== TAG_LONGTERM_BOX)
+    throw new Error("Attempting to use a non-longterm key as one.");
+  return $nacl.box_open(msg, nonce, senderPubKey, keypair.secretKey);
+};
+
+exports.longtermOpenBoxUtf8 = function(msg, nonce, senderPubKey, keypair) {
+  if (keypair.tag !== TAG_LONGTERM_BOX)
+    throw new Error("Attempting to use a non-longterm key as one.");
+  return $nacl.box_open_utf8(msg, nonce, senderPubKey, keypair.secretKey);
+};
+
+
+/**
+ * Sign an object (that we convert into a JSON string for you) with a root
+ *  keypair.
+ */
 exports.signJsonWithRootKeypair = function(obj, rootKeypair) {
+  if (rootKeypair.tag !== TAG_ROOT_SIGN)
+    throw new Error("Attempting to use a non-root key as a root key!");
+
   var jsonObj = JSON.stringify(obj);
   return $nacl.sign_utf8(jsonObj, rootKeypair.secretKey);
 };
@@ -228,5 +252,118 @@ exports.assertGetRootSelfSignedPayload = function(signedStr) {
   var validJsonStr = $nacl.sign_open_utf8(signedStr, rootPubKey); // (throws)
   return peekedObj;
 };
+
+/**
+ * Create a general boxing keypair that is appropriately tagged.
+ */
+function makeGeneralBoxingKeypair() {
+  var rawPair = $nacl.box_keypair();
+  return {
+    tag: TAG_GENERAL_BOX,
+    secretKey: rawPair.sk,
+    publicKey: rawPair.pk,
+  };
+};
+
+/**
+ * Create a general signing keypair that is appropriately tagged.
+ */
+function makeGeneralSigningKeypair() {
+  var rawPair = $nacl.sign_keypair();
+  return {
+    tag: TAG_GENERAL_SIGN,
+    secretKey: rawPair.sk,
+    publicKey: rawPair.pk,
+  };
+};
+
+/**
+ * Sign an object (that we convert into a JSON string for you) with a longterm
+ *  signing keypair.
+ */
+exports.signJsonWithLongtermKeypair = function(obj, longtermSigningKeypair) {
+  if (longtermSigningKeypair.tag !== TAG_LONGTERM_SIGN)
+    throw new Error("Attempting to use a non-longterm key as one!");
+
+  var jsonObj = JSON.stringify(obj);
+  return $nacl.sign_utf8(jsonObj, longtermSigningKeypair.secretKey);
+};
+
+
+/**
+ * See `LongtermSigningKeyRing.issueKeyGroup`.
+ */
+exports.generateAndAuthorizeKeyGroup = function(longtermSigningKeypair,
+                                                groupName, groupKeys) {
+  var now = Date.now();
+
+  // - create the keypairs
+  var keypairs = {}, pubkeys = {};
+  for (var keyName in groupKeys) {
+    var isBox = boxOrSignToIsBox(groupKeys[keyName]);
+    var useName = keyName + (isBox ? "Box" : "Sign");
+    var keypair = keypairs[useName] = isBox ? makeGeneralBoxingKeypair()
+                                            : makeGeneralSigningKeypair();
+    pubkeys[useName] = keypair.publicKey;
+  }
+
+  // - generate the authorization
+  // the authorization is only over the public keys, of course...
+  var rawAuth = {
+    issuedAt: now,
+    groupNamee: groupName,
+    publicKeys: pubkeys,
+  };
+  var signedAuth = exports.signJsonWithLongtermKeypair(rawAuth,
+                                                       longtermSigningKeypair);
+
+  return {
+    groupName: groupName,
+    keypairs: keypairs,
+    authorization: signedAuth,
+  };
+};
+
+exports.generalBox = function(msg, nonce, recipientPubKey, keypair) {
+  if (keypair.tag !== TAG_GENERAL_BOX)
+    throw new Error("Attempting to use a non-general key as one.");
+  return $nacl.box(msg, nonce, recipientPubKey, keypair.secretKey);
+};
+
+exports.generalBoxUtf8 = function(msg, nonce, recipientPubKey, keypair) {
+  if (keypair.tag !== TAG_GENERAL_BOX)
+    throw new Error("Attempting to use a non-general key as one.");
+  return $nacl.box_utf8(msg, nonce, recipientPubKey, keypair.secretKey);
+};
+
+exports.generalOpenBox = function(msg, nonce, senderPubKey, keypair) {
+  if (keypair.tag !== TAG_GENERAL_BOX)
+    throw new Error("Attempting to use a non-general key as one.");
+  return $nacl.box_open(msg, nonce, senderPubKey, keypair.secretKey);
+};
+
+exports.generalOpenBoxUtf8 = function(msg, nonce, senderPubKey, keypair) {
+  if (keypair.tag !== TAG_GENERAL_BOX)
+    throw new Error("Attempting to use a non-general key as one.");
+  return $nacl.box_open_utf8(msg, nonce, senderPubKey, keypair.secretKey);
+};
+
+exports.generalSign = function(msg, keypair) {
+  if (keypair.tag !== TAG_GENERAL_SIGN)
+    throw new Error("Attempting to use a non-general key as one.");
+  return $nacl.sign(msg, keypair.secretKey);
+};
+
+exports.generalSignUtf8 = function(msg, keypair) {
+  if (keypair.tag !== TAG_GENERAL_SIGN)
+    throw new Error("Attempting to use a non-general key as one.");
+  return $nacl.sign_utf8(msg, keypair.secretKey);
+};
+
+// Signature verification/peeking does not need any help...
+exports.generalVerifySignature = $nacl.sign_open;
+exports.generalVerifySignatureUtf8 = $nacl.sign_open_utf8;
+exports.generalPeekInsideSignature = $nacl.sign_peek;
+exports.generalPeekInsideSignatureUtf8 = $nacl.sign_peek_utf8;
 
 }); // end define
