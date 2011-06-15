@@ -36,7 +36,8 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Defines public identity data structures.
+ * Defines / creates public identity data structures.  All creation is done
+ *  using keyrings.
  *
  * Note that all keys are either signing or boxing (signcryption) keys and they
  * are never used for both.
@@ -151,17 +152,16 @@ define(
 /**
  * Generate a server self-ident blob.
  */
-exports.generateServerSelfIdent = function(rootKeypair, longtermBoxBundle,
+exports.generateServerSelfIdent = function(rootKeyring, longtermKeyring,
                                            detailsObj) {
   // XXX schema-check the detailsObj
   var payloadObj = {
     tag: detailsObj.tag,
-    host: detailsObj.host,
-    port: detailsObj.port,
-    publicKey: longtermBoxBundle.keypair.publicKey,
-    rootPubKey: rootKeypair.publicKey,
+    url: detailsObj.url,
+    publicKey: longtermKeyring.boxingPublicKey,
+    rootPublicKey: rootKeyring.rootPublicKey,
   };
-  return $keyops.signJsonWithRootKeypair(payloadObj, rootKeypair);
+  return rootKeyring.signJsonObj(payloadObj);
 };
 
 /**

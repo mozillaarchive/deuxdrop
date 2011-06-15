@@ -72,16 +72,15 @@ exports.RINGAUTH_DELEGATED = 'delegated';
 const VERSION = 1;
 
 /**
- * A keyring with the root private keys for an identity.
+ * A keyring for people with the root private keys for an identity.
  *
  * It issues and remembers longterm keyrings, but can't do anything else.
  */
-function RootSigningKeyring(persistedForm) {
+function PersonRootSigningKeyring(persistedForm) {
   if (persistedForm == null) {
     this.data = {
       v: VERSION,
       rootKeypair: $keyops.generateRootSigningKeypair(),
-      issuedLongtermBoxers: [],
       issuedLongtermSigners: [],
     };
   }
@@ -89,7 +88,44 @@ function RootSigningKeyring(persistedForm) {
     this.data = persistedForm;
   }
 }
-RootSigningKeyring.prototype = {
+PersonRootSigningKeyring.prototype = {
+  get rootPublicKey() {
+    return this.data.rootKeypair.publicKey;
+  },
+
+  issueLongtermSigningKeyring: function() {
+    var now = Date.now();
+    var longtermSignBundle = $keyops.generateAndAuthorizeLongtermKeypair(
+                               this.data.rootKeypair, 'sign',
+                               now, now + $keyops.MAX_AUTH_TIMESPAN);
+    this.data.issuedLongtermSigners.push(longtermSignBundle);
+    return new LongtermSigningKeyring(
+      null,
+      {
+        rootPublicKey: this.rootPublicKey,
+        longtermSignBundle: longtermSignBundle,
+      });
+  },
+};
+
+/**
+ * A keyring for people with the root private keys for an identity.
+ *
+ * It issues and remembers longterm keyrings, but can't do anything else.
+ */
+function ServerRootSigningKeyring(persistedForm) {
+  if (persistedForm == null) {
+    this.data = {
+      v: VERSION,
+      rootKeypair: $keyops.generateRootSigningKeypair(),
+      issuedLongtermBoxers: [],
+    };
+  }
+  else {
+    this.data = persistedForm;
+  }
+}
+ServerRootSigningKeyring.prototype = {
   get rootPublicKey() {
     return this.data.rootKeypair.publicKey;
   },
@@ -108,20 +144,11 @@ RootSigningKeyring.prototype = {
       });
   },
 
-  issueLongtermSigningKeyring: function() {
-    var now = Date.now();
-    var longtermSignBundle = $keyops.generateAndAuthorizeLongtermKeypair(
-                               this.data.rootKeypair, 'sign',
-                               now, now + $keyops.MAX_AUTH_TIMESPAN);
-    this.data.issuedLongtermSigners.push(longtermSignBundle);
-    return new LongtermSigningKeyring(
-      null,
-      {
-        rootPublicKey: this.rootPublicKey,
-        longtermSignBundle: longtermSignBundle,
-      });
+  signJsonObj: function(obj) {
+    return $keyops.signJsonWithRootKeypair(obj, this.data.rootKeypair);
   },
 };
+
 
 function LongtermBoxingKeyring(persistedForm, creationForm) {
   if (persistedForm == null) {
@@ -362,7 +389,7 @@ ExposedSimpleBoxingKeyring.prototype = {
  * Create a completely new person identity with its own keyring.
  */
 exports.createNewPersonRootKeyring = function() {
-  return new RootSigningKeyring();
+  return new PersonRootSigningKeyring();
 };
 
 /**
@@ -373,7 +400,7 @@ exports.loadPersonKeyringFromPersistedBlob = function() {
 };
 
 exports.createNewServerRootKeyring = function() {
-  return new RootSigningKeyring();
+  return new ServerRootSigningKeyring();
 };
 
 }); // end define

@@ -247,9 +247,9 @@ exports.signJsonWithRootKeypair = function(obj, rootKeypair) {
 exports.assertGetRootSelfSignedPayload = function(signedStr) {
   var peekedJsonStr = $nacl.sign_peek_utf8(signedStr); // (throws)
   var peekedObj = JSON.parse(peekedJsonStr); // (throws)
-  var rootPubKey = peekedObj.rootPubKey;
+  var rootPublicKey = peekedObj.rootPublicKey;
 
-  var validJsonStr = $nacl.sign_open_utf8(signedStr, rootPubKey); // (throws)
+  var validJsonStr = $nacl.sign_open_utf8(signedStr, rootPublicKey); // (throws)
   return peekedObj;
 };
 

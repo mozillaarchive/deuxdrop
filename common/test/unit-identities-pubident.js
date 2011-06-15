@@ -43,7 +43,7 @@ define(
   [
     'assert',
     'rdcommon/testcontext',
-    'rdcommon/crypto/keyops',
+    'rdcommon/crypto/keyring',
     'rdcommon/identities/pubident',
     'module',
     'exports'
@@ -51,7 +51,7 @@ define(
   function(
     assert,
     $tc,
-    $keyops,
+    $keyring,
     $pubident,
     $module,
     exports
@@ -60,20 +60,15 @@ define(
 var TD = exports.TD = $tc.defineTestsFor($module);
 
 TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
-  // - create our root key
-  var rootKeypair = $keyops.generateRootSigningKeypair();
-  // - create our long term key
-  var now = Date.now();
-  var longtermBoxBundle = $keyops.generateAndAuthorizeLongtermKeypair(
-                            rootKeypair, 'box',
-                            now, now + $keyops.MAX_AUTH_TIMESPAN);
+  var rootKeyring = $keyring.createNewServerRootKeyring();
+  var longtermBoxingKeyring = rootKeyring.issueLongtermBoxingKeyring();
 
   var details = {
     tag: 'server:dummy',
     url: 'ws://127.0.0.1:80/',
   };
   var signedSelfIdent = $pubident.generateServerSelfIdent(
-                          rootKeypair, longtermBoxBundle, details);
+                          rootKeyring, longtermBoxingKeyring, details);
   var payload = $pubident.assertGetServerSelfIdent(signedSelfIdent);
 
   // make sure we get any payload
@@ -84,8 +79,8 @@ TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
   assert.equal(details.url, payload.url);
 
   // make sure the keys got in there correctly
-  assert.equal(payload.publicKey, longtermBoxBundle.keypair.publicKey);
-  assert.equal(payload.rootPubKey, rootKeypair.publicKey);
+  assert.equal(payload.publicKey, longtermBoxingKeyring.boxingPublicKey);
+  assert.equal(payload.rootPublicKey, rootKeyring.rootPublicKey);
 });
 
 }); // end define
