@@ -47,8 +47,7 @@ define(function (require) {
       moda = require('moda'),
 
       commonNodes = {},
-      peeps,
-      update;
+      peeps, update, messageCloneNode;
 
   function getChildCloneNode(node) {
     return commonNodes[node.getAttribute('data-childclass')];
@@ -77,6 +76,18 @@ define(function (require) {
         $(node).text(value);
       }
     });
+  }
+
+  function formToObject(formNode) {
+    var obj = {}, node, value, i;
+
+    for (i = 0; (node = formNode.elements[i]); i++) {
+      value = (node.value || '').trim();
+      if (node.name && value) {
+        obj[node.name] = value;
+      }
+    }
+    return obj;
   }
 
   // Set up card update actions.
@@ -237,16 +248,22 @@ define(function (require) {
     'conversation': function (data, dom) {
       var convId = data.id,
           messagesNode = dom.find('.conversationMessages')[0],
-          messageCloneNode = getChildCloneNode(messagesNode),
           frag = document.createDocumentFragment(),
           conversation;
 
-      // TODO: this should be an async setup.
+      // Save the message clone node for later if
+      // not already set.
+      if (!messageCloneNode) {
+        messageCloneNode = getChildCloneNode(messagesNode);
+      }
+
+      // Get a conversation object.
       conversation = moda.conversation({
         by: 'id',
         filter: convId
       });
 
+      // Wait for messages before showing the messages.
       conversation.withMessages(function (conv) {
         // Clear out old messages
         messagesNode.innerHTML = '';
@@ -262,17 +279,29 @@ define(function (require) {
         // Refresh the card sizes
         cards.adjustCardSizes();
       });
+
+      // Set up compose area
+      dom
+      .attr('data-conversationid', conversation.id)
+      .find('[name="convId"]')
+        .val(conversation.id)
+        .end()
+      .find('[name="from"]')
+        .val(moda.me().id);
     }
   };
 
   // Listen to events from moda
   moda.on({
     'message': function (message) {
-      var card = cards.currentCard();
+      var card = cards.currentCard(), node;
       if (card.attr('data-cardid') === "conversation") {
         if (card.attr('data-conversationid') === message.convId) {
           // Update the current conversation.
-
+          node = messageCloneNode.cloneNode(true);
+          updateDom($(node), message);
+          card.find('.conversationMessages').append(node);
+          cards.adjustCardSizes();
         } else {
           // Put up a notification
         }
@@ -356,18 +385,26 @@ define(function (require) {
       .delegate('[data-cardid="peep"] .compose', 'submit', function (evt) {
         evt.preventDefault();
 
+        moda.startConversation(formToObject(evt.target));
+      })
+
+      // Handle compose inside a conversation
+      .delegate('[data-cardid="conversation"] .compose', 'submit', function (evt) {
+        evt.preventDefault();
+
         var form = evt.target,
-            args = {},
-            i, node, value;
+            data = formToObject(form);
 
-        for (i = 0; (node = form.elements[i]); i++) {
-          value = (node.value || '').trim();
-          if (node.name && value) {
-            args[node.name] = value;
-          }
-        }
+        // Reset the form
+        form.text.value = '';
+        form.text.focus();
 
-        moda.startConversation(args);
+        // Send the message
+        moda.conversation({
+          by: 'id',
+          filter: data.convId
+        }).sendMessage(data);
+
       });
   });
 });

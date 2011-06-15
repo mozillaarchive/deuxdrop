@@ -329,9 +329,8 @@ Conversation
       q.when(this.messageDeferred.promise, callback);
     },
 
-    addMessage: function (message) {
-      this.messages.push(message);
-      trigger(this, 'message', arguments);
+    sendMessage: function (message) {
+      transport.sendMessage(message);
     }
   };
 
@@ -401,6 +400,7 @@ moda.on({
     // Some messages require updates to cached objects
     if (name === 'message') {
       conv = convCache[data.convId];
+      data.from = peepCache[data.from];
       if (conv && conv.messages) {
         conv.messages.push(data);
       }

@@ -258,13 +258,14 @@ actions = {
   },
 
   'sendMessage': function (data, client) {
-    var convId = data.convId,
+    var messageData = data.message,
+        convId = messageData.convId,
         message, jsonMessage;
 
     message = {
       convId: convId,
-      from: data.from,
-      text: data.text,
+      from: messageData.from,
+      text: messageData.text,
       time: (new Date()).getTime()
     };
 

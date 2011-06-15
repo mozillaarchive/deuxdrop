@@ -200,5 +200,5 @@ define(function (require, exports) {
   makePassThroughApi('loadConversation', ['convId'], 'details');
 
   makePassThroughApi('startConversation', ['args']);
-
+  makePassThroughApi('sendMessage', ['message']);
 });
