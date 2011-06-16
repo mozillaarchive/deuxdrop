@@ -1058,6 +1058,8 @@ exports.TEST_PERMUTATION = 'testperm';
 exports.TEST_STEP = 'teststep';
 exports.TEST_LAZY = 'testlazy';
 
+exports.TEST_SYNTHETIC_ACTOR = 'test:synthactor';
+
 // argument information
 var EXCEPTION = exports.EXCEPTION = 'exception';
 var JSONABLE = exports.JSONABLE = 'jsonable';

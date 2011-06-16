@@ -130,6 +130,8 @@ TestContext.prototype = {
       if (actorDir.hasOwnProperty(type)) {
         // - create the actor
         var actor = new actorDir[type](name);
+        // tell it about us, the operational context
+        actor.T = this;
 
         // - augment with test helpers
         // (from an efficiency perspective, we might be better off creating a
@@ -152,6 +154,12 @@ TestContext.prototype = {
 
         // - poke it into our logger for reporting.
         this._log._named[actor._uniqueName] = actor;
+
+        // - invoke the constructor helper if it has one
+        if ("__constructor" in actor) {
+          this._log.actorConstructor(actor, actor.__constructor, actor);
+        }
+
         return actor;
       }
     }
@@ -387,10 +395,25 @@ exports.defineTestsFor = function defineTestsFor(testModule, logfabs,
     logfabs = [];
   else if (!Array.isArray(logfabs))
     logfabs = [logfabs];
+  else // need to be able to mutate it
+    logfabs = logfabs.concat();
   if (testHelpers == null)
     testHelpers = [];
   else if (!Array.isArray(testHelpers))
     testHelpers = [testHelpers];
+  // smoosh any testhelper logfab deps in.
+  for (var iHelper = 0; iHelper < testHelpers.length; iHelper++) {
+    var testHelper = testHelpers[iHelper];
+    if ("LOGFAB_DEPS" in testHelper) {
+      // want to eliminate dupes, so we can't just concat
+      for (var iFab = 0; iFab < testHelper.LOGFAB_DEPS.length; iFab++) {
+        var logfab = testHelper.LOGFAB_DEPS[iFab];
+        if (logfabs.indexOf(logfab) === -1)
+          logfabs.push(logfab);
+      }
+    }
+  }
+
   return new TestDefiner(testModule.id, logfabs);
 };
 
@@ -426,6 +449,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
     calls: {
       setupFunc: {},
+      actorConstructor: {actorName: false},
     },
     latchState: {
       result: false,

@@ -75,17 +75,19 @@ define(
     exports
   ) {
 
-function ClientSignupConn(selfIdentBundle, clientIdentPayload, clientAuths,
-                          serverSelfIdentPayload) {
-
+/**
+ * Connect to the server, give it the signup bundle, that's basically it.
+ */
+function ClientSignupConn(selfIdentBlob, clientAuthBlob, clientKeyring,
+                          serverPublicKey, serverUrl, _logger) {
+  this._selfIdentBlob = selfIdentBlob;
+  this._clientAuthBlob = clientAuthBlob;
 
   this.conn = new $authconn.AuthClientConn(
-                this,
-                clientIdent.publicKey,
-                serverSelfIdentPayload.publicKey,
-                serverSelfIdentPayload.url,
-                'signup/signup');
-
+                this, clientKeyring, serverPublicKey,
+                serverUrl, 'signup/signup', _logger);
+  this._deferred = $Q.defer();
+  this.promise = this._deferred.promise;
 }
 ClientSignupConn.prototype = {
   INITIAL_STATE: 'root',
@@ -93,22 +95,43 @@ ClientSignupConn.prototype = {
    * When we've connected, send our request.
    */
   __connected: function() {
-    this.conn.writeMessage({
-      type: 'signup',
-
-    });
+    this._sendSignup();
   },
 
   /**
-   * They did not like our signup, try again...
+   * If we get closed, issue a rejection without a challenge; this notification
+   *  comes after any response processing, so we may just send the deferred
+   *  something it ends up ignoring.
    */
-  _msg_root_challenge: function() {
+  __closed: function() {
+    this._deferred.reject(false);
+  },
+
+  /**
+   * They did not like our signup, we will need to try again after resolving the
+   *  challenge, if possible.
+   */
+  _msg_root_challenge: function(msg) {
+    this._deferred.reject(msg.challenge);
+    this.close();
   },
 
   /**
    * We are now signed up! Woo!
    */
   _msg_root_signedUp: function() {
+    this._deferred.resolve(true);
+    this.close();
+  },
+
+  _sendSignup: function() {
+    this.conn.writeMessage({
+      type: 'signup',
+      selfIdent: this._selfIdentBlob,
+      clientAuths: [this._clientAuthBlob],
+      because: {
+      },
+    });
   },
 };
 
@@ -138,7 +161,7 @@ function RawClientAPI(persistedBlob) {
                               ['user', this._keyring.rootPublicKey,
                                'client', ]);
 
-  this._signupConn;
+  this._signupConn = null;
 }
 RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
@@ -172,10 +195,35 @@ RawClientAPI.prototype = {
    * Connect to a server using the provided self-ident blob and attempt to
    *  signup with it.
    *
-   * @return[Promise]
+   * @args[
+   *   @param[serverSelfIdentBlob ServerSelfIdentBlob]
+   * ]
+   * @return[Promise]{
+   *   Promise that is resolved with true on sucecss or rejected with the
+   *   challenge.
+   * }
    */
-  signupUsingServerSelfIdent: function() {
+  signupUsingServerSelfIdent: function(serverSelfIdentBlob) {
+    if (this._signupConn)
+      throw new Error("Still have a pending signup connection!");
 
+    var serverSelfIdent = $pubident.assertGetServerSelfIdent(
+                            serverSelfIdentBlob);
+
+    this.log.signup_begin();
+    this._signupConn = new ClientSignupConn(
+                         this._selfIdentBlob,
+                         this._keyring.getPublicAuthFor('client'),
+                         serverSelfIdent.publicKey,
+                         serverSelfIdent.url);
+    var self = this;
+    // Use the promise to clear our reference, but otherwise just re-provide it
+    //  to our caller.
+    $Q.when(this._signupConn.promise, function(val) {
+      self._signupConn = false;
+      self.log.signup_end();
+    });
+    return this._signupConn.promise;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -306,6 +354,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     stateVars: {
       haveConnection: true,
+    },
+    asyncJobs: {
+      signup: {},
+    },
+    events: {
+
     },
   }
 });

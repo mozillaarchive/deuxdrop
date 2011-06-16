@@ -41,44 +41,46 @@
 
 define(
   [
+    'rdcommon/log',
     'rdcommon/rawclient/api',
     'rdcommon/transport/authconn',
     'rdcommon/crypto/keyops',
+    'module',
     'exports'
   ],
   function(
+    $log,
     $rawclient_api,
     $authconn,
     $keyops,
+    $module,
     exports
   ) {
 
-var ClientTestActorMixins = {
+var TestClientActorMixins = {
   /**
    * Automatically create an identity; a client is not much use without one.
    *  (In the future we may look at the argument bundle provided to the actor
    *  instantiation in order to use an existing one too.)
    */
   __constructor: function(self) {
-    self.T.convenienceSetup([self, 'creates identity'], function() {
-      // -- create our identity
-      // - create our root key
-      // - create our long term key
-      // - create our self-attestation (this is where our name comes into it)
-      self._identity = $privident.generateHumanFullIdent({
-        name: self.__name,
-        suggestedNick: self.__name,
-      });
+    self._eRawClient = self.T.actor('rawClient', self.__name);
+    self.T.convenienceSetup([self._eRawClient, 'creates identity'], function() {
+      var poco = {
+        displayName: self.__name,
+      };
+      self._rawClient = $rawclient_api.makeClientForNewIdentity(poco);
     });
   },
 
-  signupWith: function(server) {
+  signupWith: function(testServerActor) {
     this._usingServer = server;
   },
 
   setup_useServer: function setup_useServer(server) {
+    var self = this;
     this.T.convenienceSetup([this, 'creates account with', server], function() {
-      this.signupWith(server);
+      self.signupWith(server);
     });
   },
 
@@ -118,7 +120,7 @@ var ClientTestActorMixins = {
   },
 };
 
-var MailstoreActorMixins = {
+var TestServerActorMixins = {
   __constructor: function(self) {
     self.T.convenienceSetup([self, 'creates self to get port'], function() {
       self.expect_listening();
@@ -143,24 +145,36 @@ var MailstoreActorMixins = {
   },
 };
 
-var ComboTestActorMixins = {
-};
-
 var MessageThingMixins = {
   expect_receivedBy: function() {
   },
 };
 
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  testClient: {
+    // we are a client/server client, even if we are smart for one
+    type: $log.TEST_SYNTHETIC_ACTOR,
+    subtype: $log.CLIENT,
+  },
+  testServer: {
+    // we are a client/server client, even if we are smart for one
+    type: $log.TEST_SYNTHETIC_ACTOR,
+    subtype: $log.SERVER,
+  }
+});
+
 exports.TESTHELPER = {
+  LOGFAB_DEPS: [LOGFAB, $rawclient_api.LOGFAB],
+
   actorMixins: {
-    client: ClientTestActorMixins,
-    combo: ComboTestActorMixins,
-    mailstore: MailstoreActorMixins,
+    testClient: TestClientActorMixins,
+    testServer: TestServerActorMixins,
   },
 
   thingMixins: {
     message: MessageThingMixins,
   },
 };
+
 
 }); // end define

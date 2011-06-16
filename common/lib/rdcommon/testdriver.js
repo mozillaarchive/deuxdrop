@@ -179,7 +179,6 @@ TestDefinerRunner.prototype = {
     if (rval instanceof Error) {
       step.log.run_end();
       step.log.result('fail');
-console.error("XXX XXX stepFunc returned an error");
       return false;
     }
 
@@ -192,7 +191,6 @@ console.error("XXX XXX stepFunc returned an error");
         promises.push(waitVal);
       // if it's not a promise, it must be a boolean
       else if (!waitVal) {
-console.error("XXX XXX __waitForExepctations returned falsey");
         allGood = false;
       }
     }
@@ -215,7 +213,6 @@ console.error("XXX XXX __waitForExepctations returned falsey");
 
         step.log.timeout();
         step.log.result('fail');
-console.error("XXX XXX timeout");
         deferred.resolve(false);
         deferred = null;
       }, STEP_TIMEOUT_MS);
@@ -246,7 +243,6 @@ console.error("XXX XXX timeout");
 
         step.log.run_end();
         step.log.result('fail');
-console.error("XXX XXX rejection", expPair);
         deferred.resolve(false);
       });
       return deferred.promise;

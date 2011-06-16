@@ -240,6 +240,16 @@ var AuthClientCommon = {
   _onClose: function() {
     this._conn = null;
     this.log.closed();
+
+    if ("__closed" in this.appConn) {
+      var rval = this.log.appCloseHandler(this.appConn,
+                                          this.appConn.__closed);
+      // if an exception is thrown, kill the connection
+      if (rval instanceof Error) {
+        this.log.handlerFailure(rval);
+      }
+    }
+
     this.log.__die();
   },
   /**
@@ -396,7 +406,7 @@ var AuthClientCommon = {
  * Authenticated client connection.
  */
 function AuthClientConn(appConn, clientKeyring, serverPublicKey,
-                        url, endpoint) {
+                        url, endpoint, _logger) {
   this.appConn = appConn;
   this.appState = appConn.INITIAL_STATE;
   this.clientKeyring = clientKeyring;
@@ -404,7 +414,7 @@ function AuthClientConn(appConn, clientKeyring, serverPublicKey,
   this.url = url;
   this.endpoint = endpoint;
 
-  this.log = LOGFAB.clientConn(this, null,
+  this.log = LOGFAB.clientConn(this, _logger,
                                [clientKeyring.boxingPublicKey, 'to',
                                 serverPublicKey,
                                 'at endpoint', endpoint]);
@@ -723,6 +733,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     calls: {
       appConnectHandler: {},
       handleMsg: {type: true},
+      appCloseHandler: {},
     },
     TEST_ONLY_calls: {
       handleMsg: {msg: $log.JSONABLE},
@@ -770,6 +781,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     calls: {
       handleMsg: {type: true},
+      appCloseHandler: {},
     },
     TEST_ONLY_calls: {
       handleMsg: {msg: $log.JSONABLE},

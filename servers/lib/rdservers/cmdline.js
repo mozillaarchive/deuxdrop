@@ -143,6 +143,11 @@ parser.command('nuke-server')
 parser.command('test')
   .help("Run tests!")
   .opts({
+    specificTest: {
+      position: 1,
+      default: null,
+      help: "(optional: The require name of a specific test to run)",
+    },
   })
   .callback(function(options) {
     process.on('exit', function(code) {
@@ -157,16 +162,27 @@ parser.command('test')
       'rdstests/': '../../servers/test',
       'rdctests/': '../../common/test',
     };
-    // XXX !!! obviously, we want this to find tests, not have them be hardcoded
-    $require(['rdcommon/testdriver'],
-             function($driver) {
-      when($driver.runTestsFromDirectories(testPrefixToPathMap),
-        function() {
-console.error("all test runs complete per promise");
-          process.exit(0);
-        });
-console.error("cmdline callback complete");
-    });
+    // -- specific test
+    if (options.specificTest) {
+      $require(['rdcommon/testdriver', options.specificTest],
+               function($driver, $testmod) {
+        when($driver.runTestsFromModule($testmod),
+          function(runner) {
+            runner.dumpLogResultsToConsole();
+            process.exit(0);
+          });
+      });
+    }
+    // -- scan for tests
+    else {
+      $require(['rdcommon/testdriver'],
+               function($driver) {
+        when($driver.runTestsFromDirectories(testPrefixToPathMap),
+          function() {
+            process.exit(0);
+          });
+      });
+    }
   });
 
 // We need to do our own argv slicing to compensate for RequireJS' r.js

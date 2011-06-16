@@ -355,7 +355,7 @@ DelegatedKeyring.prototype = {
       throw new Error("No such group: '" + groupName + "'");
     var bundle = this.data.activeGroups[groupName];
     if (!bundle.publicAuth)
-      throw new Error("No public authorization for group: ' + groupName + "'");
+      throw new Error("No public authorization for group: '" + groupName + "'");
     return bundle.publicAuth;
   },
 

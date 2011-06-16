@@ -48,23 +48,26 @@ define(
   [
     'rdcommon/testcontext',
     'rdservers/testhelper',
+    'rdcommon/rawclient/api',
     'module',
     'exports'
   ],
   function(
     $tc,
     $th_rdservers,
+    $rawclient_api,
     $module,
     exports
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module, null,
-                                         $th_rdservers.TESTHELPER);
+  [$th_rdservers.TESTHELPER]);
 
 TD.commonCase('create new identity, signup with server', function(T) {
-  var client = T.actor('client', 'C');
-  var server = T.actor('mailstore', 'S');
+  var client = T.actor('testClient', 'C');
+  var server = T.actor('testServer', 'S');
 
+  debugger;
   client.setup_useServer(server);
 });
 
