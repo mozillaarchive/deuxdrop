@@ -123,7 +123,7 @@ TestContext.prototype = {
    *  internal logger, but we're going to leave that door open and pretend like
    *  an actor is itself a (potentially cross-cutting) logger.
    */
-  actor: function actor(type, name) {
+  actor: function actor(type, name, opts) {
     var fabs = this.__testCase.definer.__logfabs;
     for (var iFab = 0; iFab < fabs.length; iFab++) {
       var actorDir = fabs[iFab]._actorCons;
@@ -143,9 +143,9 @@ TestContext.prototype = {
             var helperDef = helperDefs[iHelpDef];
 
             if (!("actorMixins" in helperDef) ||
-                !helperDef.actorMixins.hasOwnProperty(name))
+                !helperDef.actorMixins.hasOwnProperty(type))
               continue;
-            var mixyBits = helperDef.actorMixins[name];
+            var mixyBits = helperDef.actorMixins[type];
             for (var key in mixyBits) {
               actor[key] = mixyBits[key];
             }
@@ -157,7 +157,9 @@ TestContext.prototype = {
 
         // - invoke the constructor helper if it has one
         if ("__constructor" in actor) {
-          this._log.actorConstructor(actor, actor.__constructor, actor);
+          this._log.actorConstructor(type, name,
+                                     actor, actor.__constructor,
+                                     actor, opts);
         }
 
         return actor;
@@ -225,9 +227,21 @@ TestContext.prototype = {
     var iArg;
     for (iArg = 0; iArg < args.length - 1; iArg++) {
       var arg = args[iArg];
-      if ($log.TestActorProtoBase.isPrototypeOf(arg))
-        actors.push(arg);
-      descBits.push(arg);
+      // we allow the contents of arrays to be spliced in for the benefit of
+      //  test helper functions that get mixed in.
+      if (Array.isArray(arg)) {
+        for (var iNestedArg = 0; iNestedArg < arg.length; iNestedArg++) {
+          var nestedArg = arg[iNestedArg];
+          if ($log.TestActorProtoBase.isPrototypeOf(nestedArg))
+            actors.push(nestedArg);
+          descBits.push(nestedArg);
+        }
+      }
+      else {
+        if ($log.TestActorProtoBase.isPrototypeOf(arg))
+          actors.push(arg);
+        descBits.push(arg);
+      }
     }
     var testFunc = args[iArg];
     var step = new TestStep(this._log, kind, descBits, actors, testFunc);
@@ -414,7 +428,7 @@ exports.defineTestsFor = function defineTestsFor(testModule, logfabs,
     }
   }
 
-  return new TestDefiner(testModule.id, logfabs);
+  return new TestDefiner(testModule.id, logfabs, testHelpers);
 };
 
 var LOGFAB = exports.LOGFAB = $log.register(null, {
@@ -449,7 +463,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
     calls: {
       setupFunc: {},
-      actorConstructor: {actorName: false},
+      actorConstructor: {actorType: false, actorName: false},
     },
     latchState: {
       result: false,

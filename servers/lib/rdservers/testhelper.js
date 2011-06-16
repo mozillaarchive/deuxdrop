@@ -64,8 +64,18 @@ var TestClientActorMixins = {
    *  instantiation in order to use an existing one too.)
    */
   __constructor: function(self) {
+
+    // -- define the raw client and its setup step
     self._eRawClient = self.T.actor('rawClient', self.__name);
-    self.T.convenienceSetup([self._eRawClient, 'creates identity'], function() {
+    self.T.convenienceSetup(self._eRawClient, 'creates identity',
+        function() {
+      // - create our self-corresponding logger the manual way
+      // (we deferred until this point so we could nest in the hierarchy
+      //  in a traditional fashion.)
+      self._logger = LOGFAB.testClient(self, self.__name);
+      self._logger._actor = self;
+
+      // - create the client with a new identity
       var poco = {
         displayName: self.__name,
       };
@@ -79,7 +89,7 @@ var TestClientActorMixins = {
 
   setup_useServer: function setup_useServer(server) {
     var self = this;
-    this.T.convenienceSetup([this, 'creates account with', server], function() {
+    this.T.convenienceSetup(self, 'creates account with', server, function() {
       self.signupWith(server);
     });
   },
@@ -91,7 +101,7 @@ var TestClientActorMixins = {
   setup_superFriends: function(friends) {
     var tofriend = friends.concat([this]);
     this.T.convenienceSetup(
-      ['setup mutual friend relationships among:'].concat(tofriend),
+      'setup mutual friend relationships among:', tofriend,
     function() {
       // (the destructive mutation is fine)
       while (tofriend.length >= 2) {
@@ -122,14 +132,19 @@ var TestClientActorMixins = {
 
 var TestServerActorMixins = {
   __constructor: function(self) {
-    self.T.convenienceSetup([self, 'creates self to get port'], function() {
+    self.T.convenienceSetup(self, 'creates self to get port', function() {
+      // - create our synthetic logger...
+      self._logger = LOGFAB.testServer(self, self.__name);
+      self._logger._actor = self;
+
+      // - actual work
       self.expect_listening();
 
       self._server = new $authconn.AuthorizingServer();
       self._server.listen();
     });
     self.T.convenienceSetup(
-      [self, 'creates its identity and registers implementations'], function() {
+      self, 'creates its identity and registers implementations', function() {
       // -- create our identity
       var rootKeyring = $keyring.createNewServerRootKeyring();
       var longtermBoxingKeyring = rootKeyring.issueLongtermBoxingKeyring();
