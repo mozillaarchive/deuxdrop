@@ -21,7 +21,7 @@
  * Contributor(s):
  * */
 
-/*jslint indent: 2, regexp: false */
+/*jslint indent: 2, regexp: false, plusplus: false */
 /*global define: false, window: false, document: false,
   location: false, history: false, setTimeout: false */
 'use strict';
@@ -58,10 +58,21 @@ function ($,        url,         array,         headerTemplate) {
     cards.scroll();
   }
 
-  function onNavClick(evt, skipPush) {
-    var href = evt.target.href,
-        fragId = href && href.split('#')[1],
-        cardId, data;
+  function parseUrl(node) {
+    node = node || location;
+    var result = {},
+        fragId, data, cardId;
+
+    while (node && !node.href) {
+      node = node.parentNode;
+    }
+    if (!node) {
+      return result;
+    }
+
+    result.href = node.href;
+    fragId = result.href.split('#')[1];
+
     if (fragId) {
       fragId = fragId.split('?');
       cardId = fragId[0];
@@ -70,10 +81,22 @@ function ($,        url,         array,         headerTemplate) {
       // Convert the data into an object
       data = url.queryToObject(data);
 
-      cards.onNav(cardId, data);
+      result.cardId = cardId;
+      result.data = data;
+    }
 
-      if (!skipPush && cardId !== 'back') {
-        history.pushState({}, cards.getTitle(), href);
+    return result;
+  }
+
+  function onNavClick(evt, skipPush) {
+    var node = evt.target,
+        nav = parseUrl(node);
+    if (nav.cardId) {
+      cards.onNav(nav.cardId, nav.data);
+
+      if (!skipPush && nav.cardId !== 'back' &&
+        (!node.getAttribute || !node.getAttribute('data-nonav'))) {
+        history.pushState({}, cards.getTitle(), nav.href);
       }
 
       // Stop the event.
@@ -137,14 +160,28 @@ function ($,        url,         array,         headerTemplate) {
 
       // Listen for popstate to do the back navigation.
       window.addEventListener('popstate', function (evt) {
-        cards.back();
 
-        // Remove the last panel
+        var nav = parseUrl(),
+            cardsDom = cards.allCards(),
+            cardId = nav.cardId || cardsDom[0].getAttribute('data-cardid'),
+            i, index, cardNode;
+
+        // find the card in the history that matches the current URL
+        for (i = cardsDom.length - 1; i > -1 && (cardNode = cardsDom[i]); i--) {
+          if (cardNode.getAttribute('data-cardid') === cardId) {
+            index = i;
+            break;
+          }
+        }
+
+        cards.moveTo(index);
+
+        // Remove the panels after the index.
         // TODO: do this in a less hacky way, listen for transitionend for
         // example, if that now works in everywhere we want, and we are
         // using CSS3 transitions.
         setTimeout(function () {
-          nlCards.find('.card').last().remove();
+          cardsDom.slice(index + 1).remove();
         }, 300);
       }, false);
 
@@ -152,6 +189,8 @@ function ($,        url,         array,         headerTemplate) {
       href = location.href.split('#')[1] || cards.startCardId;
 
       cards.nav(href, null, true);
+
+      cards.onReady();
     });
   };
 
@@ -170,6 +209,10 @@ function ($,        url,         array,         headerTemplate) {
   cards.templates = {};
 
   cards.adjustCardSizes = adjustCardSizes;
+
+  // Triggered when the cards are ready after initialization. Override
+  // in app logic.
+  cards.onReady = function () {};
 
   /**
    * Triggered on card navigation that goes forward. Back navigation is
@@ -195,8 +238,8 @@ function ($,        url,         array,         headerTemplate) {
     cards.scroll();
   };
 
-  cards.moveTo = function (id) {
-    cardPosition = $('.card').index(document.getElementById(id));
+  cards.moveTo = function (position) {
+    cardPosition = position;
     if (cardPosition < 0) {
       cardPosition = 0;
     }
@@ -238,6 +281,10 @@ function ($,        url,         array,         headerTemplate) {
 
   cards.currentCard = function () {
     return nlCards.find('.card').last();
+  };
+
+  cards.allCards = function () {
+    return nlCards.find('.card');
   };
 
   cards.getTitle = function () {

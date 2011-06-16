@@ -79,6 +79,21 @@ button {
   left: 0;
 }
 
+#notify {
+  display: none;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 20px;
+  height: 20px;
+  line-height: 16px;
+  border: 1px solid red;
+  color: red;
+}
+
+#notify.active {
+  display: block;
+}
 
 #cardContainer {
   overflow: hidden;

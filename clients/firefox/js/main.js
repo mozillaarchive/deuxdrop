@@ -47,7 +47,7 @@ define(function (require) {
       moda = require('moda'),
 
       commonNodes = {},
-      peeps, update, messageCloneNode;
+      peeps, update, messageCloneNode, notifyDom, nodelessActions;
 
   function getChildCloneNode(node) {
     return commonNodes[node.getAttribute('data-childclass')];
@@ -93,6 +93,7 @@ define(function (require) {
   // Set up card update actions.
   update = {
     'start': function (data, dom) {
+      // Use user ID as the title
       dom[0].title = moda.me().id;
     },
 
@@ -210,6 +211,7 @@ define(function (require) {
 
       // Add the right peep IDs to the compose form.
       dom
+        .attr('data-peepid', peepId)
         .find('[name="to"]')
           .val(peepId)
           .end()
@@ -294,23 +296,35 @@ define(function (require) {
   // Listen to events from moda
   moda.on({
     'message': function (message) {
-      var card = cards.currentCard(), node;
-      if (card.attr('data-cardid') === "conversation") {
-        if (card.attr('data-conversationid') === message.convId) {
-          // Update the current conversation.
-          node = messageCloneNode.cloneNode(true);
-          updateDom($(node), message);
-          card.find('.conversationMessages').append(node);
-          cards.adjustCardSizes();
-        } else {
-          // Put up a notification
-        }
+      var card = cards.currentCard(), node, convNode, convCloneNode;
+
+      if (card.attr('data-cardid') === 'conversation' &&
+        card.attr('data-conversationid') === message.convId) {
+        // Update the current conversation.
+        node = messageCloneNode.cloneNode(true);
+        updateDom($(node), message);
+        card.find('.conversationMessages').append(node);
+        cards.adjustCardSizes();
+      } else if (message.from.id === moda.me().id) {
+        // If message is from me, it means I wanted to start a new conversation.
+        cards.nav('conversation?id=' + message.convId);
       } else {
-        // Create a new card with the conversation.
-        cards.nav('conversation?id=' + message.convId, null, true);
+        // Add a conversation box to the start card
+        convNode = $('.newConversationNotifications')[0];
+        convCloneNode = getChildCloneNode(convNode);
+        node = convCloneNode.cloneNode(true);
+        updateDom($(node), message);
+
+        node.href = node.href + encodeURIComponent(message.convId);
+
+        convNode.appendChild(node);
+        cards.adjustCardSizes();
+
+        // Activate new notification.
+        notifyDom.show();
       }
 
-      console.log("GOT A MESSAGE: ", message);
+      // console.log("GOT A MESSAGE: ", message);
     }
   });
 
@@ -339,10 +353,15 @@ define(function (require) {
     // Initialize the cards
     cards($('#cardContainer'));
 
+    nodelessActions = {
+      'back': true,
+      'notify': true
+    };
+
     // Listen for nav items.
     cards.onNav = function (templateId, data) {
       var cardNode;
-      if (templateId === 'back') {
+      if (nodelessActions[templateId]) {
         // A "back" action that could modify the data in a previous card.
         if (data.action && update[data.action]) {
           update[data.action](data);
@@ -363,7 +382,34 @@ define(function (require) {
       }
     };
 
+    cards.onReady = function () {
+      // Save a reference to the notify DOM
+      notifyDom = $('#notify');
+    };
+
     $('body')
+      .delegate('#notify', 'click', function (evt) {
+        evt.preventDefault();
+
+        // Clear notification
+        notifyDom.hide();
+
+        // Go back the number of steps to the start card.
+        var cardsDom = cards.allCards(),
+          length = cardsDom.length,
+          index, i, card, jumpLength;
+
+        for (i = 0; (card = cardsDom[i]); i++) {
+          if (card.getAttribute('data-cardid') === 'start') {
+            index = i;
+            break;
+          }
+        }
+
+        jumpLength = -(length - index - 1);
+        history.go(jumpLength);
+      })
+
       // Handle sign in form
       .delegate('.signInForm', 'submit', function (evt) {
         evt.preventDefault();
@@ -405,6 +451,15 @@ define(function (require) {
           filter: data.convId
         }).sendMessage(data);
 
+      })
+
+      // Handle clicks on new conversation links, to remove it
+      // once clicked
+      .delegate('a.newConversation', 'click', function (evt) {
+        var node = evt.currentTarget;
+
+        node.parentNode.removeChild(node);
+        cards.adjustCardSizes();
       });
   });
 });
