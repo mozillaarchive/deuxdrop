@@ -45,6 +45,7 @@ define(function (require) {
   var $ = require('jquery'),
       cards = require('cards'),
       moda = require('moda'),
+      friendly = require('friendly'),
 
       commonNodes = {},
       peeps, update, messageCloneNode, notifyDom, nodelessActions;
@@ -76,6 +77,34 @@ define(function (require) {
         $(node).text(value);
       }
     });
+  }
+
+  function makeMessageBubble(node, message) {
+    var nodeDom = $(node),
+        metaNode, senderNode, senderDom,
+        isMe = moda.me().id === message.from.id;
+
+    // do declarative text replacements.
+    updateDom(nodeDom, message);
+
+    // Insert the friendly time in meta, and message text before meta
+    metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
+    metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
+
+    // Update the URL to use for the peep
+    senderDom = nodeDom.find('.sender');
+    senderNode = senderDom[0];
+    senderNode.href = senderNode.href + encodeURIComponent(message.from.id);
+
+    // Apply different style if message is from "me"
+    nodeDom.addClass(isMe ? 'right' : 'left');
+
+    // If me, then swap the positions of the picture and name.
+    if (isMe) {
+      senderDom.find('.name').prependTo(senderDom);
+    }
+
+    return node;
   }
 
   function formToObject(formNode) {
@@ -271,9 +300,7 @@ define(function (require) {
         messagesNode.innerHTML = '';
 
         conversation.messages.forEach(function (message) {
-          var node = messageCloneNode.cloneNode(true);
-          updateDom($(node), message);
-          frag.appendChild(node);
+          frag.appendChild(makeMessageBubble(messageCloneNode.cloneNode(true), message));
         });
 
         messagesNode.appendChild(frag);
@@ -296,14 +323,12 @@ define(function (require) {
   // Listen to events from moda
   moda.on({
     'message': function (message) {
-      var card = cards.currentCard(), node, convNode, convCloneNode;
+      var card = cards.currentCard(), node, nodeDom, convNode, convCloneNode;
 
       if (card.attr('data-cardid') === 'conversation' &&
         card.attr('data-conversationid') === message.convId) {
         // Update the current conversation.
-        node = messageCloneNode.cloneNode(true);
-        updateDom($(node), message);
-        card.find('.conversationMessages').append(node);
+        card.find('.conversationMessages').append(makeMessageBubble(messageCloneNode.cloneNode(true), message));
         cards.adjustCardSizes();
       } else if (message.from.id === moda.me().id) {
         // If message is from me, it means I wanted to start a new conversation.
@@ -313,7 +338,11 @@ define(function (require) {
         convNode = $('.newConversationNotifications')[0];
         convCloneNode = getChildCloneNode(convNode);
         node = convCloneNode.cloneNode(true);
-        updateDom($(node), message);
+        nodeDom = $(node);
+        updateDom(nodeDom, message);
+
+        // Insert friendly date-time
+        nodeDom.find('.newConversationTime').text(friendly.date(new Date(message.time)).friendly);
 
         node.href = node.href + encodeURIComponent(message.convId);
 
@@ -432,6 +461,9 @@ define(function (require) {
         evt.preventDefault();
 
         moda.startConversation(formToObject(evt.target));
+
+        // Clear out the form for the next use.
+        evt.target.text.value = '';
       })
 
       // Handle compose inside a conversation
@@ -453,13 +485,25 @@ define(function (require) {
 
       })
 
-      // Handle clicks on new conversation links, to remove it
-      // once clicked
+      // Handle clicks on new conversation links
       .delegate('a.newConversation', 'click', function (evt) {
         var node = evt.currentTarget;
 
-        node.parentNode.removeChild(node);
-        cards.adjustCardSizes();
+        // Remove the box from the DOM, but do it on a delay,
+        // after transition has happened.
+        setTimeout(function () {
+          node.parentNode.removeChild(node);
+          cards.adjustCardSizes();
+        }, 1000);
+
+      })
+
+      // Handle submitting the text in the text field on enter key
+      .delegate('form.compose textarea', 'keyup', function (evt) {
+        if (evt.keyCode === 13) {
+          $(evt.target).parent('form').trigger('submit');
+        }
+        console.log('keyup event: ', evt);
       });
   });
 });

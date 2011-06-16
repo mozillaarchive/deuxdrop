@@ -56,14 +56,14 @@
             <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
             <span data-bind="name" class="peepInfoName"></span>
           </div>
-          <form data-class="compose"></form>
           <div class="peepConversations" data-childclass="convListItem">
           </div>
+          <form data-class="compose"></form>
         </div>
         <div data-cardid="conversation" title="Conversation" class="card">
+          <div class="conversationMessages" data-childclass="message">
+          </div>
           <form data-class="compose"></form>
-          <ul class="conversationMessages" data-childclass="message">
-          </ul>
         </div>
         <div data-cardid="compose" title="Compose" class="card">
           <form data-class="compose"></form>
@@ -74,18 +74,19 @@
     <!-- Start standard UI elements -->
     <div id="common" class="hidden">
 
-      <form data-classimpl="compose" class="compose">
+      <form data-classimpl="compose" class="compose hbox">
         <input type="hidden" name="from" value="">
         <input type="hidden" name="to" value="">
         <input type="hidden" name="convId" value="">
-        <textarea name="text"></textarea>
+        <textarea name="text" class="boxFlex"></textarea>
         <button>Send</button>
       </form>
 
       <a href="#conversation?id=" data-classimpl="newConversation" class="newConversation">
+        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
         <span class="newConversationPeep" data-bind="from.name"></span>
         <span class="newConversationText" data-bind="text"></span>
-        <span class="newConversationTime" data-bind="time"></span>
+        <span class="newConversationTime"></span>
       </a>
 
       <a data-classimpl="personLink" href="#peep"></a>
@@ -105,6 +106,25 @@
           <span data-bind="text" class="messageText"></span>
         </div>
       </li>
+
+
+
+  <div data-classimpl="message"  class="bubble">
+    <a href='#peep?id=' class="sender">
+      <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
+      <span class="name" data-bind="from.name"></span>
+    </a>
+    <div class="body">
+      <div class="meta">
+      </div>
+    </div>
+  </div>
+
+
+
+
+
+
 
     </div>
     <!-- End standard UI elements -->

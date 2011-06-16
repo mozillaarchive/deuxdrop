@@ -110,7 +110,7 @@ button {
   float: left;
 }
 
-.card a {
+.card > a {
   display: block;
   background-color: #fff;
   padding: 10px;
@@ -124,8 +124,8 @@ button {
   background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fff), color-stop(100%, #fafafa));
 }
 
-.card a:hover,
-.card a.selected {
+.card > a:hover,
+.card > a.selected {
   border-bottom: 1px solid #BFD5DE;
   border-top: 1px solid #BFD5DE;
   z-index: 100;
@@ -144,34 +144,148 @@ button {
 
 .conversationMessages {
   list-style: none;
+  margin: 0 10px;
 }
 
-.message {
+
+/* START chat bubble styles */
+
+  .bubble {
+    position: relative;
+    margin: 40px 20px;
+    box-sizing: border-box;
+  }
+  .chat-bubble-arrow-border {
+    border-color: transparent transparent #c4c4c4 transparent;
+    border-style: solid;
+    border-width: 10px;
+    height:0;
+    width:0;
+    position:absolute;
+    top:-20px;
+    left:30px;
+  }
+  .chat-bubble-arrow {
+    border-color: transparent transparent #f2f2f2 transparent;
+    border-style: solid;
+    border-width: 10px;
+    height:0;
+    width:0;
+    position:absolute;
+    top:-19px;
+    left:30px;
+  }
+  .sender {
+    display: block;
+    text-decoration: none;
+    position: absolute;
+    z-index: 1;
+    cursor: pointer;
+  }
+
+  a.sender:hover {
+    text-decoration: none;
+  }
+
+  .bubble.right .sender {
+    right: -20px;
+  }
+  .bubble.left .sender {
+    left: -20px;
+  }
+  span.avatar {
+    width: 52px;
+    height: 52px;
+    border: 1px solid #888;
+    display: inline-block;
+    border-radius: 2px;
+    -moz-box-shadow:0 0 5px #888888;
+    -webkit-box-shadow:0 0 5px #888888;
+  }
+  img.avatar {
+    margin: 1px;
+    width: 48px;
+    height: 48px;
+  }
+  .bubble.right span.name {
+  }
+  span.name {
+    color: #0066dd;
+    font-size: 11pt;
+    vertical-align: top;
+  }
+  .body {
+
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+
+    position: relative;
+    top: 20px;
+    padding: 15px 40px 30px 40px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+    display: inline-block;
+    width: 100%;
+    border-radius: 5px;
+    color: #111;
+    background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
+    background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
+  }
+
+  .right .body {
+    text-align: right;
+  }
+
+  .meta {
+    position: absolute;
+    right: 35px;
+    bottom: 5px;
+    font-size: 8pt;
+    color: #777;
+  }
+
+/* END chat bubble styles */
+
+
+
+
+.card .newConversation {
+  float: left;
+  position: relative;
+  margin: 10px;
   padding: 10px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+  display: inline-block;
+  width: 40%;
+  border-radius: 5px;
+  color: #111;
+  background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
 }
 
-.messageFrom {
-  margin: 0 10px 0 0;
+.newConversation span.avatar {
+  float: left;
+  margin-right: 10px;
 }
 
-.messageFromPic {
-  width: 24px;
-  height: 24px;
+.newConversation img.avatar {
 }
 
-.messageFromName {
-  font-weight: bold;
+.newConversationText {
+  display: block;
+  color: #2EA4FF;
 }
 
-.messageText {
-  margin: 0 0 0 10px;
+.newConversationTime {
+  display: block;
+  color: grey;
+  font-size: smaller;
+  text-align: right;
 }
-
-
-
-
-
-
 
 
 
