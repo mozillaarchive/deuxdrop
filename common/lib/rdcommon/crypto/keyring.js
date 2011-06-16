@@ -59,15 +59,21 @@ define(
     exports
   ) {
 
-exports.RINGAUTH_ROOT = 'root';
+const RINGAUTH_ROOT = 'root';
 /**
  * A keyring with a longterm authorized key for an identity.
  */
-exports.RINGAUTH_LONGTERM = 'longterm';
+const RINGAUTH_LONGTERM = 'longterm';
 /**
  * A keyring with some delegated authority from an identity.
  */
-exports.RINGAUTH_DELEGATED = 'delegated';
+const RINGAUTH_DELEGATED = 'delegated';
+
+const RINGTYPE_PERSON = 'person';
+const RINGTYPE_SERVER = 'server';
+
+const RINGTYPE_BOX = 'box';
+const RINGTYPE_SIGN = 'sign';
 
 const VERSION = 1;
 
@@ -80,6 +86,7 @@ function PersonRootSigningKeyring(persistedForm) {
   if (persistedForm == null) {
     this.data = {
       v: VERSION,
+      auth: RINGAUTH_ROOT, type: RINGTYPE_PERSON,
       rootKeypair: $keyops.generateRootSigningKeypair(),
       issuedLongtermSigners: [],
     };
@@ -117,6 +124,7 @@ function ServerRootSigningKeyring(persistedForm) {
   if (persistedForm == null) {
     this.data = {
       v: VERSION,
+      auth: RINGAUTH_ROOT, type: RINGTYPE_SERVER,
       rootKeypair: $keyops.generateRootSigningKeypair(),
       issuedLongtermBoxers: [],
     };
@@ -157,6 +165,7 @@ function LongtermBoxingKeyring(persistedForm, creationForm) {
 
     this.data = {
       v: VERSION,
+      auth: RINGAUTH_LONGTERM, type: RINGTYPE_BOX,
       rootPublicKey: creationForm.rootPublicKey,
       longtermBoxBundle: creationForm.longtermBoxBundle,
     };
@@ -207,6 +216,7 @@ function LongtermSigningKeyring(persistedForm, creationForm) {
 
     this.data = {
       v: VERSION,
+      auth: RINGAUTH_LONGTERM, type: RINGTYPE_SIGN,
       rootPublicKey: creationForm.rootPublicKey,
       longtermSignBundle: creationForm.longtermSignBundle,
       issuedGroups: {},
@@ -219,6 +229,12 @@ function LongtermSigningKeyring(persistedForm, creationForm) {
 LongtermSigningKeyring.prototype = {
   get rootPublicKey() {
     return this.data.rootPublicKey;
+  },
+  get signingPublicKey() {
+    return this.data.longtermSignBundle.keypair.publicKey;
+  },
+  get authorization() {
+    return this.data.longtermSignBundle.authorization;
   },
 
   /**
@@ -244,6 +260,11 @@ LongtermSigningKeyring.prototype = {
     return groupBundle;
   },
 
+  signJsonObj: function(obj) {
+    return $keyops.signJsonWithLongtermKeypair(
+      obj, this.data.longtermSignBundle.keypair);
+  },
+
   makeDelegatedKeyring: function() {
     return new DelegatedKeyring(
       null,
@@ -253,6 +274,7 @@ LongtermSigningKeyring.prototype = {
         longtermSignPublicKey: this.data.longtermSignBundle.keypair.publicKey,
       });
   },
+
 };
 
 /**
@@ -268,6 +290,7 @@ function DelegatedKeyring(persistedForm, creationForm) {
 
     this.data = {
       v: VERSION,
+      auth: RINGAUTH_DELEGATED,
       rootPublicKey: creationForm.rootPublicKey,
       longtermSignPublicKey: creationForm.longtermSignPublicKey,
       // it seems to me that we should only ever be using one instance of a group
@@ -303,6 +326,13 @@ DelegatedKeyring.prototype = {
 
   incorporateKeyGroup: function(groupBundle) {
     this.data.activeGroups[groupBundle.groupName] = groupBundle;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Key lookup
+
+  getPublicKeyFor: function(groupName, keyName) {
+    return this._gimmeKeypair(groupName, keyName).publicKey;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -392,11 +422,20 @@ exports.createNewPersonRootKeyring = function() {
   return new PersonRootSigningKeyring();
 };
 
-/**
- * Load a keyring associated with a person's identity from its persisted blob
- *  form.
- */
-exports.loadPersonKeyringFromPersistedBlob = function() {
+exports.loadPersonRootSigningKeyring = function(persistedForm) {
+  return new PersonRootSigningKeyring(persistedForm);
+};
+
+exports.loadLongtermBoxingKeyring = function(persistedForm) {
+  return new LongtermBoxingKeyring(persistedForm);
+};
+
+exports.loadLongtermSigningKeyring = function(persistedForm) {
+  return new LongtermSigningKeyring(persistedForm);
+};
+
+exports.loadDelegatedKeyring = function(persistedForm) {
+  return new DelegatedKeyring(persistedForm);
 };
 
 exports.createNewServerRootKeyring = function() {

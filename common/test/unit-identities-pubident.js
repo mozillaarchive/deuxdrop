@@ -83,4 +83,32 @@ TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
   assert.equal(payload.rootPublicKey, rootKeyring.rootPublicKey);
 });
 
+TD.commonSimple('personSelfIdent creation', function test_personSelfIdent() {
+  var rootKeyring, longtermKeyring, keyring;
+
+  rootKeyring = $keyring.createNewPersonRootKeyring();
+  longtermKeyring = rootKeyring.issueLongtermSigningKeyring();
+  keyring = longtermKeyring.makeDelegatedKeyring();
+
+  // -- create the messaging key group
+  keyring.incorporateKeyGroup(
+    longtermKeyring.issueKeyGroup('messaging', {
+        envelope: 'box',
+        payload: 'box',
+        announce: 'sign',
+        tell: 'box',
+      }));
+
+
+  // -- create the server-less self-ident
+  var poco = {displayName: 'Santy Claus'};
+  var personSelfIdentBlob = $pubident.generatePersonSelfIdent(
+                              longtermKeyring, keyring,
+                              poco, null);
+
+  var payload = $pubident.assertGetPersonSelfIdent(personSelfIdentBlob);
+  assert.notEqual(payload, null);
+  assert.equal(payload.poco.displayName, poco.displayName);
+});
+
 }); // end define

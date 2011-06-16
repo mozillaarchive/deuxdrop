@@ -185,15 +185,16 @@ exports.assertLongtermKeypairIsAuthorized = function(longtermPublicKey,
                                                      timestamp, signedAuth) {
   var isBox = boxOrSignToIsBox(boxOrSign);
   var jsonAuth = $nacl.sign_open_utf8(signedAuth, rootPublicKey); // (throws)
-  var auth = JSON.decode(jsonAuth);
+  var auth = JSON.parse(jsonAuth);
   if (auth.authorizedKey !== longtermPublicKey)
     throw new Error("Authorization is not for the provided long-term key.");
   if ((auth.authEnds < auth.authStarts) ||
       (auth.authEnds - auth.authStarts > MAX_AUTH_TIMESPAN))
     throw new Error("Authorization is gibberish.");
-  if (auth.authorizedFor !== isBox ? AUTH_TAG_LONGTERM_BOX
-                                   : AUTH_TAG_LONGTERM_SIGN)
-    throw new Error("Authorization is not for a long-term key!");
+  if (auth.authorizedFor !== (isBox ? AUTH_TAG_LONGTERM_BOX
+                                    : AUTH_TAG_LONGTERM_SIGN))
+    throw new Error("Authorization (" + auth.authorizedFor +
+                    ") is not for a long-term key!");
   if (timestamp < auth.authStarts)
     throw new Error("Timestamp is earlier than the authorized time range.");
   if (timestamp > auth.authEnds)

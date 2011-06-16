@@ -100,21 +100,21 @@
  *   }
  *
  *   @key[keys @dict[
- *     @key[envelopePubKey]{
+ *     @key[envelopeBoxPubKey]{
  *       The public key to use to encrypt the envelope of messages to this
  *       person.  This is different from the payload key so that a user can
  *       authorize their mailstore to be able to read the envelope for
  *       processing but not let it see the payload.
  *     }
- *     @key[payloadPubKey]{
+ *     @key[payloadBoxPubKey]{
  *       The public key to use to encrypt the payload of messages to this person.
  *     }
  *
- *     @key[authorshipSignPubKey]{
+ *     @key[announceSignPubKey]{
  *       The public key corresponding to the secret key that will be used to sign
  *       messages authored by this identity.
  *     }
- *     @key[authorshipBoxPubKey]{
+ *     @key[tellBoxPubKey]{
  *       The public key corresponding to the secret key that will be used to
  *       encrypt messages authored by this identity.
  *     }
@@ -166,40 +166,64 @@ exports.generateServerSelfIdent = function(rootKeyring, longtermKeyring,
 
 /**
  * Verify and return the given server self-ident if valid, throw if invalid.
+ *  Keep in mind this says nothing about the self-ident belonging to a specific
+ *  server; callers need to be sure to check that themselves.
  */
-exports.assertGetServerSelfIdent = function(serverSelfIdent) {
-  return $keyops.assertGetRootSelfSignedPayload(serverSelfIdent);
+exports.assertGetServerSelfIdent = function(serverSelfIdentBlob) {
+  return $keyops.assertGetRootSelfSignedPayload(serverSelfIdentBlob);
 };
 
 
 /**
- * @args[
- *   @param[details @dict[
- *     @key[name String]
- *     @key[suggestedNick #:optional String]
- *   ]]
- * ]
  */
-exports.generatePersonSelfIdent = function(longtermAuth, poco,
-                                           serverIdentBlob) {
-  var full = {pub: {}, secret: {}},
-      pub = full.pub, secret = full.secret;
+exports.generatePersonSelfIdent = function(longtermKeyring,
+                                           keyring,
+                                           poco,
+                                           serverSelfIdentBlob) {
+  var now = Date.now();
+  var selfIdentPayload = {
+    poco: poco,
+    root: {
+      rootSignPubKey: longtermKeyring.rootPublicKey,
+      longtermSignPubKey: longtermKeyring.signingPublicKey,
+      longtermSignPubAuth: longtermKeyring.authorization,
+    },
+    issuedAt: now,
+    transitServerIdent: serverSelfIdentBlob,
 
-  pub.name = details.name;
-  pub.suggestedNick = details.hasOwnProperty("suggestedNick") ?
-                        details.suggestedNick : details.name;
+    keys: {
+      envelopeBoxPubKey: keyring.getPublicKeyFor("messaging", "envelopeBox"),
+      payloadBoxPubKey: keyring.getPublicKeyFor("messaging", "payloadBox"),
+      announceSignPubKey: keyring.getPublicKeyFor("messaging", "announceSign"),
+      tellBoxPubKey: keyring.getPublicKeyFor("messaging", "tellBox"),
+    },
+  };
 
-  var rootSignPair = $nacl.sign_keypair();
-  secret.rootSignSecKey = rootSignPair.sk;
-  pub.rootSignPubKey = rootSignPair.pk;
+  return longtermKeyring.signJsonObj(selfIdentPayload);
+};
 
-  pub.issuedAt = secret.issuedAt = 0;
+/**
+ * Verify and return the given person self-ident if valid, throw if invalid.
+ *  Keep in mind this says nothing about the self-ident belonging to a specific
+ *  person; callers need to be sure to check that themselves.
+ */
+exports.assertGetPersonSelfIdent = function(personSelfIdentBlob) {
+  var peekedPayload = JSON.parse(
+    $keyops.generalPeekInsideSignatureUtf8(personSelfIdentBlob));
 
-  pub.maildropDNS = details.hasOwnProperty("maildropDNS") ?
-                      details.maildropDNS : null;
+  // - verify the blob is signed with the longterm key
+  var longtermSignPubKey = peekedPayload.root.longtermSignPubKey;
+  $keyops.generalVerifySignatureUtf8(personSelfIdentBlob, longtermSignPubKey);
+  var payload = peekedPayload;
 
+  // - verify the longterm key is authorized as of now
+  var now = Date.now();
+  $keyops.assertLongtermKeypairIsAuthorized(
+    payload.root.longtermSignPubKey, 'sign',
+    payload.root.rootSignPubKey, now,
+    payload.root.longtermSignPubAuth);
 
-  pub.issuedAt = secret.issuedAt = Date.now();
+  return payload;
 };
 
 }); // end define

@@ -46,12 +46,19 @@
  *  build its own layer to make sure we do the things it asks.  At the current
  *  time, we in fact do not bother persisting anything, but at some point we
  *  will.
+ *
+ * The raw client is not responsible for persisting/caching anything (at this
+ *  time), although it does maintain a blob of internal state that it will
+ *  provide for the client to persist its state and to give it when creating
+ *  a new instance of the client API.
  **/
 
 define(
   [
     'rdcommon/log',
     'rdcommon/transport/authconn',
+    'rdcommon/crypto/keyring',
+    'rdcommon/identities/pubident',
     '../conversations/generator',
     'module',
     'exports'
@@ -59,12 +66,14 @@ define(
   function(
     $log,
     $authconn,
+    $keyring,
+    $pubident,
     $conv_generator,
     $module,
     exports
   ) {
 
-function SignupConn(selfIdentBundle, clientIdentPayload, clientAuths,
+function ClientSignupConn(selfIdentBundle, clientIdentPayload, clientAuths,
                     serverSelfIdentPayload) {
   this.conn = new $authconn.AuthClientConn(
                 this,
@@ -74,7 +83,7 @@ function SignupConn(selfIdentBundle, clientIdentPayload, clientAuths,
                 'signup/signup');
 
 }
-SignupConn.prototype = {
+ClientSignupConn.prototype = {
   INITIAL_STATE: 'root',
   /**
    * When we've connected, send our request.
@@ -99,14 +108,84 @@ SignupConn.prototype = {
   },
 };
 
-function RawClientAPI(myFullIdent, serverSelfIdent) {
-  this._fullIdent = myFullIdent;
-  this._serverSelfIdent = serverSelfIdent;
+/**
+ *
+ * For the time being, we are assuming the client always has all sets of
+ *  its keyrings accessible to itself.
+ */
+function RawClientAPI(persistedBlob) {
+  // -- restore keyrings
+  this._rootKeyring = $keyring.loadPersonRootSigningKeyring(
+                        persistedBlob.keyrings.root);
+  this._longtermKeyring = $keyring.loadLongtermSigningKeyring(
+                            persistedBlob.keyrings.longterm);
+  this._keyring = $keyring.loadDelegatedKeyring(
+                             persistedBlob.keyrings.general);
+
+  // -- copy self-ident-blob, verify it, extract canon bits
+  // (The poco bit is coming from here.)
+  this._selfIdentBlob = persistedBlob.selfIdent;
 
   this.log = LOGFAB.rawClient(this, null,
                               []);
 }
 RawClientAPI.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Server Signup
+
+  /**
+   * Connect to the server and ask it for its self-ident, then go from there.
+   *  While this admittedly is a pretty bad idea, it's not as bad as it seems
+   *  since in order for them to maintain a useful man-in-the-middle attack
+   *  where the system looks like it is operating successfully while they can
+   *  see everything, they need to:
+   *
+   * - Consistently intercept and respond to the client's requests to talk to
+   *    the faux-server.  (Assuming we do error reporting correctly that we
+   *    notice when our connections end up talking to the wrong server...)
+   *
+   * - Be the sole source for all key/identity information for the user.
+   *
+   * Better ideas where we can leverage existing crypto trust-chains that the
+   *  user/device may already have include depending on the HTTPS/CA system or
+   *  DNSSEC.  Mo better ideas include not using this method at all and instead
+   *  using mobile-device to mobile-device chat to provide the self-ident.
+   */
+  signupDangerouslyUsingDomainName: function() {
+  },
+
+  signupUsingServerSelfIdent: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Request Querying
+
+  // email/time
+  queryRequests: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Peep Mutation
+
+  connectToPeep: function(email, optionalMessage) {
+  },
+  rejectPeep: function(email, reportAs) {
+  },
+
+  pinPeep: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Peep Querying
+
+  // all/pinned, time-ordered/alphabetical
+  queryPeeps: function() {
+  },
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Mutation
+
   createConversation: function() {
   },
   replyToConversation: function() {
@@ -122,8 +201,66 @@ RawClientAPI.prototype = {
   deleteConversation: function() {
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Querying
+
+  // involving-peep/all-peeps, time-ordered, pinned...
+  queryConversations: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Persist client state
+  __persist: function() {
+    return {
+      keyrings: {
+        root: this._rootKeyring.data,
+        longterm: this._longtermKeyring.data,
+        general: this._keyring.data,
+      }
+    };
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
-exports.RawClientAPI = RawClientAPI;
+
+/**
+ * Create a new identity using the provided portable contacts schema.
+ */
+exports.makeClientForNewIdentity = function(poco) {
+  // -- create the keyrings.
+  var rootKeyring, longtermKeyring, keyring;
+
+  rootKeyring = $keyring.createNewPersonRootKeyring();
+  longtermKeyring = rootKeyring.issueLongtermSigningKeyring();
+  keyring = longtermKeyring.makeDelegatedKeyring();
+
+  // -- create the messaging key group
+  keyring.incorporateKeyGroup(
+    longtermKeyring.issueKeyGroup('messaging', {
+        envelope: 'box',
+        payload: 'box',
+        announce: 'sign',
+        tell: 'box',
+      }));
+
+
+  // -- create the server-less self-ident
+  var personSelfIdentBlob = $pubident.generatePersonSelfIdent(
+                              longtermKeyring, keyring,
+                              poco, null);
+
+  var persistedBlob = {
+    selfIdent: personSelfIdentBlob,
+    keyrings: {
+      root: personRootRing.data,
+      longterm: personLongtermRing.data,
+      general: personKeyring.data,
+    },
+  };
+};
+
+exports.getClientForExistingIdentity = function(persistedBlob) {
+};
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   rawClient: {
@@ -131,9 +268,11 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
     semanticIdent: {
-      clientIdent: 'key',
+      userIdent: 'key:root:user',
+      _l0: null,
+      clientIdent: 'key:client',
       _l1: null,
-      serverIdent: 'key',
+      serverIdent: 'key:server',
     },
     stateVars: {
       haveConnection: true,
