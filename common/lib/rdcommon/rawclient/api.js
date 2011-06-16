@@ -55,6 +55,7 @@
 
 define(
   [
+    'q',
     'rdcommon/log',
     'rdcommon/transport/authconn',
     'rdcommon/crypto/keyring',
@@ -64,6 +65,7 @@ define(
     'exports'
   ],
   function(
+    $Q,
     $log,
     $authconn,
     $keyring,
@@ -74,11 +76,13 @@ define(
   ) {
 
 function ClientSignupConn(selfIdentBundle, clientIdentPayload, clientAuths,
-                    serverSelfIdentPayload) {
+                          serverSelfIdentPayload) {
+
+
   this.conn = new $authconn.AuthClientConn(
                 this,
                 clientIdent.publicKey,
-                serverSelfIdentPayload.boxPubKey,
+                serverSelfIdentPayload.publicKey,
                 serverSelfIdentPayload.url,
                 'signup/signup');
 
@@ -125,9 +129,16 @@ function RawClientAPI(persistedBlob) {
   // -- copy self-ident-blob, verify it, extract canon bits
   // (The poco bit is coming from here.)
   this._selfIdentBlob = persistedBlob.selfIdent;
+  var selfIdentPayload = $pubident.assertGetPersonSelfIdent(
+                           this._selfIdentBlob,
+                           this._keyring.rootPublicKey);
+  this._poco = selfIdentPayload.poco;
 
   this.log = LOGFAB.rawClient(this, null,
-                              []);
+                              ['user', this._keyring.rootPublicKey,
+                               'client', ]);
+
+  this._signupConn;
 }
 RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
@@ -150,11 +161,21 @@ RawClientAPI.prototype = {
    *  user/device may already have include depending on the HTTPS/CA system or
    *  DNSSEC.  Mo better ideas include not using this method at all and instead
    *  using mobile-device to mobile-device chat to provide the self-ident.
+   *
+   * @return[Promise]
    */
   signupDangerouslyUsingDomainName: function() {
+    throw new Error("not actually implemented right now");
   },
 
+  /**
+   * Connect to a server using the provided self-ident blob and attempt to
+   *  signup with it.
+   *
+   * @return[Promise]
+   */
   signupUsingServerSelfIdent: function() {
+
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -227,14 +248,15 @@ RawClientAPI.prototype = {
  * Create a new identity using the provided portable contacts schema.
  */
 exports.makeClientForNewIdentity = function(poco) {
-  // -- create the keyrings.
+  // -- keys
+  // - create the keyrings.
   var rootKeyring, longtermKeyring, keyring;
 
   rootKeyring = $keyring.createNewPersonRootKeyring();
   longtermKeyring = rootKeyring.issueLongtermSigningKeyring();
   keyring = longtermKeyring.makeDelegatedKeyring();
 
-  // -- create the messaging key group
+  // - create the messaging key group
   keyring.incorporateKeyGroup(
     longtermKeyring.issueKeyGroup('messaging', {
         envelope: 'box',
@@ -243,11 +265,17 @@ exports.makeClientForNewIdentity = function(poco) {
         tell: 'box',
       }));
 
+  // - create the client key
+  keyring.incorporateKeyGroup(
+    longtermKeyring.issueKeyGroup('client', {conn: 'box'},
+                                  'client'));
 
   // -- create the server-less self-ident
   var personSelfIdentBlob = $pubident.generatePersonSelfIdent(
                               longtermKeyring, keyring,
                               poco, null);
+
+  var clientAuthBlob = keyring.getPublicAuthFor('client');
 
   var persistedBlob = {
     selfIdent: personSelfIdentBlob,
@@ -256,6 +284,7 @@ exports.makeClientForNewIdentity = function(poco) {
       longterm: personLongtermRing.data,
       general: personKeyring.data,
     },
+    clientAuth: clientAuthBlob,
   };
 };
 
@@ -268,10 +297,11 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
     semanticIdent: {
-      userIdent: 'key:root:user',
       _l0: null,
-      clientIdent: 'key:client',
+      userIdent: 'key:root:user',
       _l1: null,
+      clientIdent: 'key:client',
+      _l2: null,
       serverIdent: 'key:server',
     },
     stateVars: {

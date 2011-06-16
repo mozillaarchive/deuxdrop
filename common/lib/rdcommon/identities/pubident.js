@@ -128,15 +128,7 @@
  *   messages and receive messages from them.
  * }
  *
- * @tyepdef[PersonClientAuthPayload @dict[
- *   @key[clientBoxPubKey]{
- *     The public key corresponding to the secret key that will be used to
- *     establish.
- *   }
- * ]]{
- *   Authorizes and names a client and the keys it will use for contacting the
- *   server.  Gets signed by the (active) longtermSignPubKey for the identity.
- * }
+ * @tyepdef[PersonClientAuthPayload GeneralAttestation]
  **/
 
 define(
@@ -204,10 +196,8 @@ exports.generatePersonSelfIdent = function(longtermKeyring,
 
 /**
  * Verify and return the given person self-ident if valid, throw if invalid.
- *  Keep in mind this says nothing about the self-ident belonging to a specific
- *  person; callers need to be sure to check that themselves.
  */
-exports.assertGetPersonSelfIdent = function(personSelfIdentBlob) {
+exports.assertGetPersonSelfIdent = function(personSelfIdentBlob, checkRootKey) {
   var peekedPayload = JSON.parse(
     $keyops.generalPeekInsideSignatureUtf8(personSelfIdentBlob));
 
@@ -222,6 +212,10 @@ exports.assertGetPersonSelfIdent = function(personSelfIdentBlob) {
     payload.root.longtermSignPubKey, 'sign',
     payload.root.rootSignPubKey, now,
     payload.root.longtermSignPubAuth);
+
+  if (checkRootKey &&
+      (payload.root.rootSignPubKey !== checkRootKey))
+    throw new Error("Self-ident is not for provided root key.");
 
   return payload;
 };

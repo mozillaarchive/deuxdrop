@@ -244,13 +244,28 @@ LongtermSigningKeyring.prototype = {
    * We will generate and persist a signature that proves we authorized these
    *  keys.  This is primarily done for parties controlled by or acting on the
    *  behalf of the user (including our own sanity-checking of our persisted
-   *  store.  We expect to generate a different signature for public
-   *  consumption.
+   *  store.
+   *
+   * We may also optionally generate a public attestation
    */
-  issueKeyGroup: function(groupName, keyNamesToTypesMap) {
+  issueKeyGroup: function(groupName, keyNamesToTypesMap,
+                          formalPublicAuthorizedFor) {
     var groupBundle = $keyops.generateAndAuthorizeKeyGroup(
       this.data.longtermSignBundle.keypair,
       groupName, keyNamesToTypesMap);
+
+    if (formalPublicAuthorizedFor) {
+      var keypairCount = 0, authorizingPubKey;
+      for (var keypairName in groupBundle.keypairs) {
+        if (keypairCount++)
+          throw new Error("public attestations are only for singleton keys");
+        authorizingPubKey = groupBundle.keypairs[keypairName].publicKey;
+      }
+
+      groupBundle.publicAuth = $keyops.generateLongtermBaseKeyAttestation(
+        this.data.longtermSignBundle.keypair,
+        formalPublicAuthorizedFor, authorizingPubKey);
+    }
 
     var issuedGroups = this.data.issuedGroups;
     if (!issuedGroups.hasOwnProperty(groupName))
@@ -333,6 +348,15 @@ DelegatedKeyring.prototype = {
 
   getPublicKeyFor: function(groupName, keyName) {
     return this._gimmeKeypair(groupName, keyName).publicKey;
+  },
+
+  getPublicAuthFor: function(groupName) {
+    if (!this.data.activeGroups.hasOwnProperty(groupName))
+      throw new Error("No such group: '" + groupName + "'");
+    var bundle = this.data.activeGroups[groupName];
+    if (!bundle.publicAuth)
+      throw new Error("No public authorization for group: ' + groupName + "'");
+    return bundle.publicAuth;
   },
 
   //////////////////////////////////////////////////////////////////////////////

@@ -292,7 +292,9 @@ exports.signJsonWithLongtermKeypair = function(obj, longtermSigningKeypair) {
 
 
 /**
- * See `LongtermSigningKeyRing.issueKeyGroup`.
+ * See `LongtermSigningKeyRing.issueKeyGroup`.  The authorization is for
+ *  internal sanity checking and is not to be exposed to the world or
+ *  accepted as a credential from the world.
  */
 exports.generateAndAuthorizeKeyGroup = function(longtermSigningKeypair,
                                                 groupName, groupKeys) {
@@ -312,7 +314,7 @@ exports.generateAndAuthorizeKeyGroup = function(longtermSigningKeypair,
   // the authorization is only over the public keys, of course...
   var rawAuth = {
     issuedAt: now,
-    groupNamee: groupName,
+    groupName: groupName,
     publicKeys: pubkeys,
   };
   var signedAuth = exports.signJsonWithLongtermKeypair(rawAuth,
@@ -322,7 +324,57 @@ exports.generateAndAuthorizeKeyGroup = function(longtermSigningKeypair,
     groupName: groupName,
     keypairs: keypairs,
     authorization: signedAuth,
+    publicAuth: null,
   };
+};
+
+/**
+ * Public attestation generation.  Patterned after our long-term key
+ *  attestation, but this needs to be refactored into the SDSI/SPKI model.
+ */
+exports.generateLongtermBaseKeyAttestation = function(longtermSigningKeypair,
+                                                      authorizedFor,
+                                                      authorizedKey) {
+  var now = Date.now();
+  var rawAuth = {
+    issuedAt: now,
+    authStarts: now,
+    authEnds: null, // as long as the long-term key is authorized.
+    authorizedFor: authorizedFor,
+    authorizedKey: authorizedKey,
+    authorizedBy: longtermSigningKeypair.publicKey,
+    canDelegate: false
+  };
+  return exports.signJsonWithLongtermKeypair(rawAuth,
+                                             longtermSigningKeypair);
+};
+
+/**
+ * Attestation verification that a key was authorized by one of a set of
+ *  provided keys.  This likely needs to change when we SDSI/SPKI refactor.
+ *
+ * One nice but vaguely useless aspect of the current strategy is that by
+ *  explicitly constraining the authorized (long-term) keys to a set, we could
+ *  more easily distinguish between uncompromised long-term keys still doing
+ *  stuff versus new-bad keys issued by a compromised root key.
+ *
+ * XXX we are not checking authorization time intervals, etc. etc. etc.
+ *  this is a serious bad one and suggests we strongly need more chain info.
+ */
+exports.assertCheckGetAttestation = function(attestationBlob,
+                                             authorizedFor,
+                                             allowedKeys) {
+  var peekedAuth = JSON.parse($nacl.sign_peek_utf8(attestationBlob));
+  if (allowedKeys.indexOf(peekedAuth.authorizedBy) === -1)
+    throw new Error("Attestation alleged signed by unacceptable key");
+  if (peekedAuth.authorizedFor !== authorizedFor)
+    throw new Error("Attestation alleged for the wrong purpose");
+
+  $nacl.sign_open_utf8(attestationBlob, peekdAuth.authorizedBy); // (throws)
+  var auth = peekedAuth;
+  // (the attestation is signed by the key it says it is signed by)
+
+  return auth;
 };
 
 exports.generalBox = function(msg, nonce, recipientPubKey, keypair) {
