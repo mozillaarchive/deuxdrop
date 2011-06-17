@@ -35,7 +35,8 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*jslint indent: 2, strict: false, plusplus: false */
-/*global define: false, document: false, setTimeout: false, history: false */
+/*global define: false, document: false, setTimeout: false, history: false,
+  setInterval: false */
 
 /**
  * Main JS file, bootstraps the logic.
@@ -89,6 +90,7 @@ define(function (require) {
 
     // Insert the friendly time in meta, and message text before meta
     metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
+    metaNode.setAttribute('data-time', message.time);
     metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
 
     // Update the URL to use for the peep
@@ -323,7 +325,8 @@ define(function (require) {
   // Listen to events from moda
   moda.on({
     'message': function (message) {
-      var card = cards.currentCard(), node, nodeDom, convNode, convCloneNode;
+      var card = cards.currentCard(), node, nodeDom, convNode,
+          convNotificationDom, convCloneNode;
 
       if (card.attr('data-cardid') === 'conversation' &&
         card.attr('data-conversationid') === message.convId) {
@@ -334,23 +337,34 @@ define(function (require) {
         // If message is from me, it means I wanted to start a new conversation.
         cards.nav('conversation?id=' + message.convId);
       } else {
-        // Add a conversation box to the start card
-        convNode = $('.newConversationNotifications')[0];
-        convCloneNode = getChildCloneNode(convNode);
-        node = convCloneNode.cloneNode(true);
-        nodeDom = $(node);
-        updateDom(nodeDom, message);
+        convNotificationDom = $('.newConversationNotifications');
 
-        // Insert friendly date-time
-        nodeDom.find('.newConversationTime').text(friendly.date(new Date(message.time)).friendly);
+        // Add a conversation box to the start card, but only if there is not
+        // one already.
+        if (convNotificationDom.find('[data-convid="' + message.convId + '"]').length === 0) {
+          convNode = convNotificationDom[0];
+          convCloneNode = getChildCloneNode(convNode);
+          node = convCloneNode.cloneNode(true);
+          nodeDom = $(node);
+          updateDom(nodeDom, message);
 
-        node.href = node.href + encodeURIComponent(message.convId);
+          // Insert friendly date-time
+          nodeDom.find('.newConversationTime')
+            .text(friendly.date(new Date(message.time)).friendly)
+            .attr('data-time', message.time);
 
-        convNode.appendChild(node);
-        cards.adjustCardSizes();
+          // Update the hyperlink
+          node.href = node.href + encodeURIComponent(message.convId);
 
-        // Activate new notification.
-        notifyDom.show();
+          // Add the conversation ID to the node
+          node.setAttribute('data-convid', message.convId);
+
+          convNode.appendChild(node);
+          cards.adjustCardSizes();
+
+          // Activate new notification.
+          notifyDom.show();
+        }
       }
 
       // console.log("GOT A MESSAGE: ", message);
@@ -499,11 +513,21 @@ define(function (require) {
       })
 
       // Handle submitting the text in the text field on enter key
-      .delegate('form.compose textarea', 'keyup', function (evt) {
+      .delegate('form.compose textarea', 'keypress', function (evt) {
         if (evt.keyCode === 13) {
           $(evt.target).parent('form').trigger('submit');
         }
-        console.log('keyup event: ', evt);
       });
+
+    // Periodically update the timestamps shown in the page, every minute.
+    setInterval(function () {
+      $('[data-time]').each(function (i, node) {
+        var dom = $(node),
+            value = parseInt(dom.attr('data-time'), 10),
+            text = friendly.date(new Date(value)).friendly;
+
+        dom.text(text);
+      });
+    }, 60000);
   });
 });

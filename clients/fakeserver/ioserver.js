@@ -56,6 +56,20 @@ function pushToClients(targetId, message) {
   }
 }
 
+/**
+ * Handles sending a responseData object to the client. Does
+ * the JSON stringify work, and also transfers over the defer ID
+ * so the client can match the response with the request.
+ */
+function clientSend(client, requestData, responseData) {
+
+  if (requestData._deferId) {
+    responseData._deferId = requestData._deferId;
+  }
+
+  client.send(JSON.stringify(responseData));
+}
+
 redis.on('error', function (err) {
   console.log('Redis error: ' + err);
 });
@@ -79,14 +93,14 @@ actions = {
 
     clientList.push(client);
 
-    client.send(JSON.stringify({
+    clientSend(client, data, {
       action: 'signInComplete',
       user: {
         id: id,
         name: name,
         pic: pic
       }
-    }));
+    });
   },
 
   'disconnect': function (data, client) {
@@ -121,16 +135,16 @@ actions = {
           multi.hgetall(id);
         });
         multi.exec(function (err, hashes) {
-          client.send(JSON.stringify({
+          clientSend(client, data, {
             action: 'usersResponse',
             items: hashes
-          }));
+          });
         });
       } else {
-        client.send(JSON.stringify({
+        clientSend(client, data, {
           action: 'usersResponse',
           items: []
-        }));
+        });
       }
     });
   },
@@ -151,18 +165,35 @@ actions = {
           multi.hgetall(id);
         });
         multi.exec(function (err, hashes) {
-          client.send(JSON.stringify({
+          clientSend(client, data, {
             action: 'peepsResponse',
             items: hashes
-          }));
+          });
         });
       } else {
-        client.send(JSON.stringify({
+        clientSend(client, data, {
           action: 'peepsResponse',
           items: []
-        }));
+        });
       }
     });
+  },
+
+  'peep': function (data, client) {
+    var peepId = data.peepId,
+        multi;
+
+    // Get the peep ID and return it.
+    multi = redis
+              .multi()
+              .hgetall(peepId)
+              .exec(function (err, items) {
+                clientSend(client, data, {
+                  action: 'peepResponse',
+                  peep: items[0],
+                  _deferId: data._deferId
+                });
+              });
   },
 
   'addPeep': function (data, client) {
@@ -178,10 +209,10 @@ actions = {
               .multi()
               .hgetall(peepId)
               .exec(function (err, items) {
-                client.send(JSON.stringify({
+                clientSend(client, data, {
                   action: 'addPeepResponse',
                   peep: items[0]
-                }));
+                });
               });
   },
 
@@ -203,13 +234,13 @@ actions = {
       redis.smembers(convId + '-messages', function (err, messages) {
         messages = multiBulkToJsonArray(messages);
 
-        client.send(JSON.stringify({
+        clientSend(client, data, {
           action: 'loadConversationResponse',
           details: {
             peepIds: peeps,
             messages: messages
           }
-        }));
+        });
       });
     });
   },

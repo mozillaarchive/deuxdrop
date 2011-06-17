@@ -318,6 +318,17 @@ Conversation
         return new Message(message);
       });
 
+      // Make sure messages are in time order.
+      this.messages.sort(function (a, b) {
+        if (a.time > b.time) {
+          return 1;
+        } else if (a.time < b.time) {
+          return -1;
+        } else {
+          return 0;
+        }
+      });
+
       this.messageDeferred.resolve(this);
 
       trigger(this, 'conversationComplete', [this]);
@@ -395,12 +406,28 @@ moda.on({
    */
   moda.trigger = function (name, data) {
     var triggered = false,
-        prop, conv;
+        prop, conv, peep;
 
     // Some messages require updates to cached objects
     if (name === 'message') {
       conv = convCache[data.convId];
-      data.from = peepCache[data.from];
+
+      // The from field should be a reference to the peepCache.
+      peep = peepCache[data.from];
+      if (!peep) {
+        // Need to fetch the peep and bail out.
+        transport.peep(data.from, function (peepData) {
+          var peep = new Peep(peepData);
+
+          //Re-trigger the event.
+          moda.trigger(name, data);
+        });
+
+        // Bail on this trigger, wait for peep response to re-trigger.
+        return;
+      }
+
+      data.from = peep;
       if (conv && conv.messages) {
         conv.messages.push(data);
       }

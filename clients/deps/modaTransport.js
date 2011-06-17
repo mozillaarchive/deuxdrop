@@ -34,7 +34,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-/*jslint indent: 2, strict: false */
+/*jslint indent: 2, strict: false, nomen: false, plusplus: false */
 /*global define: false, localStorage: false, window: false, console: false */
 define(function (require, exports) {
   var moda = require('moda'),
@@ -44,6 +44,8 @@ define(function (require, exports) {
       meDeferred = q.defer(),
       deferreds = {},
       localMeCheck = false,
+      deferIdCounter = 0,
+      waitingDeferreds = {},
       actions, socket, me;
 
   function send(obj) {
@@ -55,7 +57,12 @@ define(function (require, exports) {
    * server. Uses a deferred to only do the call once, so subsequent
    * calls just get the same response. Rely on event notifications
    * to catch data changes (moda layer should do this)
+   *
    * @param {String} action the name of the API
+   *
+   * @param {Array} argNames the name of the function args to map onto
+   * the data object passed to the server.
+   *
    * @param {String} [responseProp] optional name of the server's
    * response object property to use as the return data.
    */
@@ -93,6 +100,91 @@ define(function (require, exports) {
       if (callback) {
         q.when(deferreds[action].promise, callback);
       }
+    };
+  }
+
+  /**
+   * Factory machinery to creating an API that just calls back to the
+   * server. Uses a unique defer for each call.
+   *
+   * @param {String} action the name of the API
+   *
+   * @param {Array} argNames the name of the function args to map onto
+   * the data object passed to the server.
+   *
+   * @param {String} [responseProp] optional name of the server's
+   * response object property to use as the return data.
+   */
+  function makePerCallPassThroughApi(action, argNames, responseProp) {
+    // add a response handler
+
+    actions[action + 'Response'] = function (data) {
+      var deferId = data._deferId;
+      waitingDeferreds[deferId].resolve(responseProp ? data[responseProp] : data);
+      delete waitingDeferreds[deferId];
+    };
+
+    // set up the public API method
+    transport[action] = function () {
+      var args = arguments,
+          // The callback should be after the named args, so
+          // grabbing the argNames.length should give us the callback location.
+          callback = args[argNames.length],
+          payload,
+          deferred = q.defer(),
+          deferId = 'id' + (deferIdCounter++);
+
+      waitingDeferreds[deferId] = deferred;
+
+      payload = {
+        action: action,
+        _deferId: deferId
+      };
+
+      if (argNames) {
+        argNames.forEach(function (name, i) {
+          payload[name] = args[i];
+        });
+      }
+
+      send(payload);
+
+      if (callback) {
+        q.when(deferred.promise, callback);
+      }
+    };
+  }
+
+  /**
+   * Factory machinery to creating an API that just calls to the server
+   * but does not expect a matched response, and instead will get the
+   * response via an event notification.
+   *
+   * @param {String} action the name of the API
+   *
+   * @param {Array} argNames the name of the function args to map onto
+   * the data object passed to the server.
+   *
+   * @param {String} [responseProp] optional name of the server's
+   * response object property to use as the return data.
+   */
+  function makeRequestOnlyApi(action, argNames) {
+    // set up the public API method
+    transport[action] = function () {
+      var args = arguments,
+          payload;
+
+      payload = {
+        action: action
+      };
+
+      if (argNames) {
+        argNames.forEach(function (name, i) {
+          payload[name] = args[i];
+        });
+      }
+
+      send(payload);
     };
   }
 
@@ -196,9 +288,10 @@ define(function (require, exports) {
 
   makePassThroughApi('peeps', ['query'], 'items');
   makePassThroughApi('users', ['query'], 'items');
-  makePassThroughApi('addPeep', ['peepId'], 'peep');
-  makePassThroughApi('loadConversation', ['convId'], 'details');
+  makePerCallPassThroughApi('peep', ['peepId'], 'peep');
+  makePerCallPassThroughApi('addPeep', ['peepId'], 'peep');
+  makePerCallPassThroughApi('loadConversation', ['convId'], 'details');
 
-  makePassThroughApi('startConversation', ['args']);
-  makePassThroughApi('sendMessage', ['message']);
+  makeRequestOnlyApi('startConversation', ['args']);
+  makeRequestOnlyApi('sendMessage', ['message']);
 });

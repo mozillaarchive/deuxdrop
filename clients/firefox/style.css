@@ -148,6 +148,10 @@ button {
 }
 
 
+.compose {
+  padding: 0 10px;
+}
+
 /* START chat bubble styles */
 
   .bubble {
