@@ -208,7 +208,7 @@ SignupConnection.prototype = {
    * ]
    */
   _msg_root_signup: function(msg) {
-    return new ProcessSignupTask({msg: msg, conn: this.conn});
+    return new ProcessSignupTask({msg: msg, conn: this.conn}, this.conn.log);
   },
 };
 

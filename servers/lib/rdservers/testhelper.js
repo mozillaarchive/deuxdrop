@@ -44,7 +44,8 @@ define(function(require,exports,$module) {
 var $log = require('rdcommon/log'),
     $rawclient_api = require('rdcommon/rawclient/api'),
     $authconn = require('rdcommon/transport/authconn'),
-    $keyring = require('rdcommon/crypto/keyring');
+    $keyring = require('rdcommon/crypto/keyring'),
+    $pubident = require('rdcommon/identities/pubident');
 
 var $signup_server = require('rdservers/signup/server');
 
@@ -82,8 +83,8 @@ var TestClientActorMixins = {
 
   setup_useServer: function setup_useServer(server) {
     var self = this;
-    this.T.convenienceSetup(self, 'creates account with', server, function() {
-
+    this.T.convenienceSetup(self._eRawClient, 'creates account with', server,
+                            function() {
       self._eRawClient
         .expect_signup_begin()
         .expect_signedUp()
@@ -131,8 +132,9 @@ var TestClientActorMixins = {
 
 var TestServerActorMixins = {
   __constructor: function(self) {
-    self._eServer = self.T.actor('server', self__name);
-    self.T.convenienceSetup(self, 'creates self to get port', function() {
+    self._eServer = self.T.actor('server', self.__name);
+    self.T.convenienceSetup(self._eServer, 'created, listening to get port',
+                            function() {
       // - create our synthetic logger...
       self._logger = LOGFAB.testServer(self, self.__name);
       self._logger._actor = self;
@@ -182,7 +184,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
 console.log("RAWCLIENT IS", $rawclient_api);
 exports.TESTHELPER = {
-  LOGFAB_DEPS: [LOGFAB, $rawclient_api.LOGFAB],
+  LOGFAB_DEPS: [LOGFAB,
+    $authconn.LOGFAB, $rawclient_api.LOGFAB,
+    $signup_server.LOGFAB,
+  ],
 
   actorMixins: {
     testClient: TestClientActorMixins,

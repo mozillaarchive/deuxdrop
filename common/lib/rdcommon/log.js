@@ -335,6 +335,7 @@ var TestActorProtoBase = {
       testRuntimeContext.reportPendingActor(this);
     // we should have no expectations going into a test step.
     this.__resetExpectations();
+    this._activeForTestStep = true;
   },
 
   /**
@@ -357,6 +358,7 @@ var TestActorProtoBase = {
     this._iExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
     this._deferred = null;
+    this._activeForTestStep = false;
   },
 
   __failUnmetExpectations: function() {
@@ -493,6 +495,9 @@ LoggestClassMaker.prototype = {
     this._wrapLogProtoForTest(name);
 
     this.testActorProto['expect_' + name] = function(val) {
+      if (!this._activeForTestStep)
+        throw new Error("Attempt to set expectations on an actor that is not " +
+                        "participating in this test step!");
       this._expectations.push([name, val]);
       return this;
     };
@@ -590,6 +595,9 @@ LoggestClassMaker.prototype = {
     }
 
     this.testActorProto['expect_' + name] = function() {
+      if (!this._activeForTestStep)
+        throw new Error("Attempt to set expectations on an actor that is not " +
+                        "participating in this test step!");
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION) {
@@ -656,6 +664,9 @@ LoggestClassMaker.prototype = {
     this._wrapLogProtoForTest(name_end);
 
     this.testActorProto['expect_' + name_begin] = function() {
+      if (!this._activeForTestStep)
+        throw new Error("Attempt to set expectations on an actor that is not " +
+                        "participating in this test step!");
       var exp = [name_begin];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
@@ -665,6 +676,9 @@ LoggestClassMaker.prototype = {
       return this;
     };
     this.testActorProto['expect_' + name_end] = function() {
+      if (!this._activeForTestStep)
+        throw new Error("Attempt to set expectations on an actor that is not " +
+                        "participating in this test step!");
       var exp = [name_end];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
@@ -806,6 +820,9 @@ LoggestClassMaker.prototype = {
     // XXX we have no way to indicate we expect/desire an assertion
     //  (we will just explode on any logged exception)
     this.testActorProto['expect_' + name] = function() {
+      if (!this._activeForTestStep)
+        throw new Error("Attempt to set expectations on an actor that is not " +
+                        "participating in this test step!");
       var exp = [name];
       for (var iArg = 0; iArg < arguments.length; iArg++) {
         if (useArgs[iArg])
@@ -860,6 +877,9 @@ LoggestClassMaker.prototype = {
     this._wrapLogProtoForTest(name);
 
     this.testActorProto['expect_' + name] = function() {
+      if (!this._activeForTestStep)
+        throw new Error("Attempt to set expectations on an actor that is not " +
+                        "participating in this test step!");
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
@@ -925,6 +945,7 @@ LoggestClassMaker.prototype = {
       this._logger = undefined;
       this._expectations = [];
       this._expectationsMet = true;
+      this._activeForTestStep = false;
       this._iEntry = this._iExpectation = 0;
     };
     testActorCon.prototype = this.testActorProto;
@@ -973,7 +994,7 @@ console.error("statistics only for: " + testerCon.prototype.__defName);
 var LEGAL_FABDEF_KEYS = [
   'implClass', 'type', 'subtype', 'semanticIdent',
   'stateVars', 'latchState', 'events', 'asyncJobs', 'calls', 'errors',
-  'TEST_ONLY_calls', 'TEST_ONLY_events',
+  'TEST_ONLY_calls', 'TEST_ONLY_events', 'LAYER_MAPPING',
 ];
 
 function augmentFab(mod, fab, defs) {

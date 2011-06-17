@@ -158,8 +158,8 @@ function RawClientAPI(persistedBlob) {
   this._poco = selfIdentPayload.poco;
 
   this.log = LOGFAB.rawClient(this, null,
-                              ['user', this._keyring.rootPublicKey,
-                               'client', ]);
+    ['user', this._keyring.rootPublicKey,
+     'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
 
   this._signupConn = null;
 }
@@ -214,8 +214,11 @@ RawClientAPI.prototype = {
     this._signupConn = new ClientSignupConn(
                          this._selfIdentBlob,
                          this._keyring.getPublicAuthFor('client'),
+                         this._keyring.exposeSimpleBoxingKeyringFor('client',
+                                                                    'connBox'),
                          serverSelfIdent.publicKey,
-                         serverSelfIdent.url);
+                         serverSelfIdent.url,
+                         this.log);
     var self = this;
     // Use the promise to clear our reference, but otherwise just re-provide it
     //  to our caller.
@@ -344,6 +347,8 @@ exports.makeClientForNewIdentity = function(poco) {
     },
     clientAuth: clientAuthBlob,
   };
+
+  return new RawClientAPI(persistedBlob);
 };
 
 exports.getClientForExistingIdentity = function(persistedBlob) {

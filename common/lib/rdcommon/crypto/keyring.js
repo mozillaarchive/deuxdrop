@@ -171,7 +171,7 @@ function LongtermBoxingKeyring(persistedForm, creationForm) {
     };
   }
   else {
-    throw new Error("XXX persisted support notyetimplemented");
+    this.data = persistedForm;
   }
 }
 LongtermBoxingKeyring.prototype = {
@@ -223,7 +223,7 @@ function LongtermSigningKeyring(persistedForm, creationForm) {
     };
   }
   else {
-    throw new Error("XXX persisted support notyetimplemented");
+    this.data = persistedForm;
   }
 }
 LongtermSigningKeyring.prototype = {
@@ -315,7 +315,7 @@ function DelegatedKeyring(persistedForm, creationForm) {
     };
   }
   else {
-    throw new Error("XXX persisted support notyetimplemented");
+    this.data = persistedForm;
   }
 }
 DelegatedKeyring.prototype = {

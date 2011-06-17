@@ -151,7 +151,7 @@ TD.commonCase('successful task', function(T) {
     task.resolveStepOne();
   });
 
-  T.action('resolve fourTaskAsync,', eTask, 'completes',
+  T.action('resolve fourTaskAsync,', eTask, 'completes, resolving', ePromise,
            function() {
     eTask.expect_fourTaskAsync_end();
     ePromise.expect_event('resolved');

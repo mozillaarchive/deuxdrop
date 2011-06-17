@@ -139,6 +139,7 @@ define(
     'nacl',
     'websocket',
     'rdcommon/log',
+    'rdcommon/taskidiom',
     'module',
     'exports'
   ],
@@ -148,6 +149,7 @@ define(
     $nacl,
     $ws,
     $log,
+    $task,
     $module,
     exports
   ) {
@@ -337,6 +339,10 @@ var AuthClientCommon = {
       when(this._pendingPromise,
            this._boundHandlerResolved,
            this._boundHandlerRejected);
+    }
+    else if (typeof(rval) === "object" &&
+             $task.TaskProto.isPrototypeOf(rval)) {
+      when(rval.run(), this._boundHandlerResolved, this._boundHandlerRejected);
     }
     else if (typeof(rval) === "string") { // (good return)
       if (this.connState !== 'app')
@@ -752,6 +758,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       websocketError: {err: false},
       handlerFailure: {err: $log.EXCEPTION},
     },
+    LAYER_MAPPING: {
+      layer: "protocol",
+      transitions: [
+        {after: {connState: "app"}, become: "app"},
+      ],
+    },
   },
   serverConn: {
     //implClass: AuthServerConn,
@@ -801,6 +813,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       queueBacklogExceeded: {},
       websocketError: {err: false},
       handlerFailure: {err: $log.EXCEPTION},
+    },
+    LAYER_MAPPING: {
+      layer: "protocol",
+      transitions: [
+        {after: {connState: "app"}, become: "app"},
+      ],
     },
   },
   server: {
