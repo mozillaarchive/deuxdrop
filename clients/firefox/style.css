@@ -155,6 +155,9 @@ button {
     margin: 40px 20px;
     box-sizing: border-box;
   }
+  .bubble.right {
+    text-align: right;
+  }
   .chat-bubble-arrow-border {
     border-color: transparent transparent #c4c4c4 transparent;
     border-style: solid;
@@ -207,15 +210,12 @@ button {
     width: 48px;
     height: 48px;
   }
-  .bubble.right span.name {
-  }
   span.name {
     color: #0066dd;
     font-size: 11pt;
     vertical-align: top;
   }
   .body {
-
   -webkit-box-sizing: border-box;
      -moz-box-sizing: border-box;
           box-sizing: border-box;
@@ -223,27 +223,27 @@ button {
     position: relative;
     top: 20px;
     padding: 15px 40px 30px 40px;
+    min-width: 300px;
     border-width: 1px;
     border-style: solid;
     border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
     display: inline-block;
-    width: 100%;
     border-radius: 5px;
     color: #111;
     background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
     background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
   }
 
-  .right .body {
-    text-align: right;
-  }
-
   .meta {
     position: absolute;
-    right: 35px;
+    left: 35px;
     bottom: 5px;
     font-size: 8pt;
     color: #777;
+  }
+
+  .right .meta {
+    right: 35px;
   }
 
 /* END chat bubble styles */
@@ -272,19 +272,21 @@ button {
   margin-right: 10px;
 }
 
+.newConversation .newConversationPeep {
+  color: #2EA4FF;
+}
+
 .newConversation img.avatar {
 }
 
 .newConversationText {
   display: block;
-  color: #2EA4FF;
 }
 
 .newConversationTime {
   display: block;
-  color: grey;
+  color: #777;
   font-size: smaller;
-  text-align: right;
 }
 
 
