@@ -324,7 +324,7 @@ server = http.createServer(function (req, res) {
   //Normal HTTP server stuff
   var ip = req.connection.remoteAddress;
   paperboy
-    .deliver(path.join(__dirname, '..'), req, res)
+    .deliver(path.join(__dirname, '.'), req, res)
     .addHeader('Expires', 300)
     .error(function (statCode, msg) {
       res.writeHead(statCode, {'Content-Type': 'text/plain'});
@@ -338,7 +338,7 @@ server = http.createServer(function (req, res) {
     });
 });
 
-server.listen(8888);
+server.listen(process.env.PORT || 8888);
 
 listener = io.listen(server, {
   transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']

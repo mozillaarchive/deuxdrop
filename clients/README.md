@@ -12,4 +12,4 @@ Get redis running on your local box.
 > `redis-server /usr/local/etc/redis.conf`
 
 Run the node chat server
-`node ioserver.js`
+`node server.js`
