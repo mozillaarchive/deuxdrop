@@ -277,7 +277,7 @@ define(function (require, exports) {
 
     send({
       action: 'signIn',
-      userId: id,
+      userId: id.toLowerCase(),
       userName: name
     });
 

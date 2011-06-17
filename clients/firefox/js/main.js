@@ -333,6 +333,12 @@ define(function (require) {
         // Update the current conversation.
         card.find('.conversationMessages').append(makeMessageBubble(messageCloneNode.cloneNode(true), message));
         cards.adjustCardSizes();
+
+        // Scroll to the bottom of the conversation
+        setTimeout(function () {
+          card[0].scrollTop = card[0].scrollHeight;
+        });
+
       } else if (message.from.id === moda.me().id) {
         // If message is from me, it means I wanted to start a new conversation.
         cards.nav('conversation?id=' + message.convId);
