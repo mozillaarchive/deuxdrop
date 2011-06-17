@@ -84,6 +84,8 @@ function uneval(x) {
 }
 
 function simplifyFilename(filename) {
+  if (!filename)
+    return filename;
   // can we reduce it?
   if (filename.substring(0, baseUrl.length) === baseUrl) {
     // we could take this a step further and do path analysis.
@@ -105,6 +107,9 @@ Error.prepareStackTrace = function(e, frames) {
   }
   return o;
 };
+// raise the limit in case of super-nested require()s
+//Error.stackTraceLimit = 64;
+
 
 var SM_STACK_FORMAT = /^(.*)@([^:]):\d+$/;
 

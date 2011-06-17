@@ -295,6 +295,10 @@ TaskMaster.prototype = {
   defineBooleanTask: function(taskDef) {
     return this._commonDefineTask(taskDef, BooleanTaskProto);
   },
+
+  defineEarlyReturnTask: function(taskDef) {
+    return this._commonDefineTask(taskDef, EarlyReturnTaskProto);
+  },
 };
 
 exports.makeTaskMasterForModule = function(mod, logfab) {

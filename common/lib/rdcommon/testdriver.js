@@ -44,6 +44,7 @@ define(
     'util', 'fs',
     'q', 'q-util',
     './testcontext',
+    './extransform',
     'require',
     'exports'
   ],
@@ -51,7 +52,8 @@ define(
     $util, $fs,
     $Q, $Qutil,
     $testcontext,
-    $require,
+    $extransform,
+    require,
     exports
   ) {
 var when = $Q.when, whenAll = $Qutil.whenAll;
@@ -459,9 +461,10 @@ exports.runTestsFromModule = function runTestsFromModule(tmod) {
  *  test in succession.  In the future, this may operate by forking a new node
  *  runtime, but for now, everything runs in the same process.
  */
-function MultiTestFileRunner(moduleNames) {
+function MultiTestFileRunner(moduleNames, errorTrapper) {
   this._moduleNames = moduleNames;
   this._iNextModule = 0;
+  this._errorTrapper = errorTrapper;
 }
 MultiTestFileRunner.prototype = {
   runAll: function() {
@@ -482,7 +485,23 @@ MultiTestFileRunner.prototype = {
 
       // require the module to test
       var testModuleName = self._moduleNames[self._iNextModule++];
+      // - require the file, be ready for an exception
+console.error("TRAPPING ERRORS");
+      self._errorTrapper.trapErrors();
       require([testModuleName], function(tmod) {
+        // If there was a problem, tmod will be null (and we will have trapped
+        //  an error.)
+        console.error("INSIDE CALLBACK, DONE TRAPPING");
+        var trappedErrors = self._errorTrapper.gobbleAndStopTrappingErrors();
+        if (trappedErrors.length) {
+          self._reportTestModuleRequireFailures(testModuleName, trappedErrors);
+        }
+        // this should correlate with the above...
+        if (!tmod) {
+          // we screwed up, we need to advanced to the next dude
+          process.nextTick(runNextFile);
+          return;
+        }
         if (!tmod.TD)
           throw new Error("Test module: '" + testModuleName +
                           "' does not export a 'TD' symbol!");
@@ -490,11 +509,35 @@ MultiTestFileRunner.prototype = {
         var runner = new TestDefinerRunner(tmod.TD);
         when(runner.runAll(), runNextFile);
       });
+      console.error("REQUIRE ALL DONE");
     }
 
     runNextFile();
 
     return deferred.promise;
+  },
+
+  /**
+   * In the event require()ing a test module fails, we want to report this
+   *  so it's not just like the test disappears from the radar.
+   */
+  _reportTestModuleRequireFailures: function(testModuleName, exceptions) {
+    console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
+    try {
+      var dumpObj = {
+        schema: $testcontext.LOGFAB._rawDefs,
+        fileFailure: {
+          fileName: testModuleName,
+          exceptions: exceptions.map($extransform.transformException),
+        }
+      };
+      console.error(JSON.stringify(dumpObj));
+    }
+    catch (ex) {
+      console.error("JSON problem:", ex.message, ex.stack, ex);
+      console.error($util.inspect(dumpObj, false, 12));
+    }
+    console.error("##### LOGGEST-TEST-RUN-END #####");
   },
 };
 
@@ -507,7 +550,7 @@ const RE_TEST = /^(.+)\.js$/;
  * XXX this should ideally be migrated to a cross-platform API like jstut's
  *  unifile abstraction or something more universally adopted.
  */
-exports.runTestsFromDirectories = function(namespacePathMap) {
+exports.runTestsFromDirectories = function(namespacePathMap, errorTrapper) {
   var testModules = [];
   for (var namespacePrefix in namespacePathMap) {
     var path = namespacePathMap[namespacePrefix];
@@ -521,7 +564,7 @@ exports.runTestsFromDirectories = function(namespacePathMap) {
     }
   }
 
-  var multiRunner = new MultiTestFileRunner(testModules);
+  var multiRunner = new MultiTestFileRunner(testModules, errorTrapper);
   return multiRunner.runAll();
 };
 

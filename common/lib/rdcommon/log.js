@@ -494,6 +494,7 @@ LoggestClassMaker.prototype = {
 
     this.testActorProto['expect_' + name] = function(val) {
       this._expectations.push([name, val]);
+      return this;
     };
     this.testActorProto['_verify_' + name] = function(exp, entry) {
       return exp[1] === entry[1];
@@ -596,6 +597,7 @@ LoggestClassMaker.prototype = {
         }
       }
       this._expectations.push(exp);
+      return this;
     };
     this.testActorProto['_verify_' + name] = function(tupe, entry) {
       // only check arguments we had expectations for.
@@ -660,6 +662,7 @@ LoggestClassMaker.prototype = {
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+      return this;
     };
     this.testActorProto['expect_' + name_end] = function() {
       var exp = [name_end];
@@ -668,6 +671,7 @@ LoggestClassMaker.prototype = {
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+      return this;
     };
     this.testActorProto['_verify_' + name_begin] =
         this.testActorProto['_verify_' + name_end] = function(tupe, entry) {
@@ -808,6 +812,7 @@ LoggestClassMaker.prototype = {
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+      return this;
     };
     this.testActorProto['_verify_' + name] = function(tupe, entry) {
       // report failure if an exception was returned!
@@ -861,6 +866,7 @@ LoggestClassMaker.prototype = {
           exp.push(arguments[iArg]);
       }
       this._expectations.push(exp);
+      return this;
     };
     this.testActorProto['_verify_' + name] = function(tupe, entry) {
       // only check arguments we had expectations for.

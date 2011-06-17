@@ -90,11 +90,15 @@
 
 define(
   [
+    'rdcommon/log',
     'rdcommon/taskidiom',
+    'module',
     'exports'
   ],
   function(
+    $log,
     $task,
+    $module,
     exports
   ) {
 
@@ -208,12 +212,12 @@ SignupConnection.prototype = {
   },
 };
 
-exports.makeServerDef = function(serverIdent) {
+exports.makeServerDef = function(serverKeyring) {
   return {
     endpoints: {
       'signup/signup': {
         implClass: SignupConnection,
-        serverIdent: serverIdent,
+        serverKeyring: serverKeyring,
         authVerifier: function(endpoint, clientKey) {
           // (we have no identity on file)
           return true;

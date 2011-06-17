@@ -220,6 +220,16 @@ RawClientAPI.prototype = {
     // Use the promise to clear our reference, but otherwise just re-provide it
     //  to our caller.
     $Q.when(this._signupConn.promise, function(val) {
+      if (val === true) {
+        self.log.signedUp();
+      }
+      else if ($Q.isRejection(val)) {
+        if (val.valueOf().reason === false)
+          self.log.signupFailure();
+        else
+          self.log.signupChallenged();
+      }
+
       self._signupConn = false;
       self.log.signup_end();
     });
@@ -328,9 +338,9 @@ exports.makeClientForNewIdentity = function(poco) {
   var persistedBlob = {
     selfIdent: personSelfIdentBlob,
     keyrings: {
-      root: personRootRing.data,
-      longterm: personLongtermRing.data,
-      general: personKeyring.data,
+      root: rootKeyring.data,
+      longterm: longtermKeyring.data,
+      general: keyring.data,
     },
     clientAuth: clientAuthBlob,
   };
@@ -359,7 +369,11 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       signup: {},
     },
     events: {
-
+      signedUp: {},
+      signupChallenged: {},
+    },
+    errors: {
+      signupFailure: {},
     },
   }
 });

@@ -35,6 +35,45 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
+
+var DEATH_PRONE = false;
+
+var ErrorTrapper = {
+  _trappedErrors: null,
+  /**
+   * Express interest in errors.
+   */
+  trapErrors: function() {
+    this._trappedErrors = [];
+  },
+  yoAnError: function(err, moduleName) {
+    if (this._trappedErrors == null) {
+      console.error("==== REQUIREJS ERR ====");
+      console.error(err.message);
+      console.error(err.stack);
+      if (DEATH_PRONE)
+        process.exit(1);
+      return;
+    }
+    this._trappedErrors.push(err);
+  },
+  gobbleAndStopTrappingErrors: function() {
+    var errs = this._trappedErrors;
+    this._trappedErrors = null;
+    return errs;
+  },
+};
+
+require.onError = function(err) {
+  console.error("(Exception)");
+  console.error("RJS EX STACK", err.message, err.stack);
+
+  if (err.originalError)
+    err = err.originalError;
+  ErrorTrapper.yoAnError(err, err.moduleName);
+};
+
+
 require(
   {
     baseUrl: "../../",
@@ -55,15 +94,15 @@ require(
   function(
     $nomnom,
     $Q,
-    $require
+    require
   ) {
 var when = $Q.when;
 
-var DEATH_PRONE = false;
 process.on("uncaughtException",
   function(err) {
     console.error("==== UNCAUGHT ====");
     console.error(err.message);
+    console.error(err);
     console.error(err.stack);
     if (DEATH_PRONE)
       process.exit(1);
@@ -112,7 +151,7 @@ parser.command('define-server')
     listenPort: OPT_LISTEN_PORT,
   })
   .callback(function(options) {
-    $require(['rdservers/configurer'], function($configurer) {
+    require(['rdservers/configurer'], function($configurer) {
       $configurer.createConfig(ops.configDir, opts);
     });
   });
@@ -123,7 +162,7 @@ parser.command('run-server')
     configDir: OPT_CONFIG_DIR,
   })
   .callback(function(options) {
-    $require(['rdservers/configurer'], function($configurer) {
+    require(['rdservers/configurer'], function($configurer) {
       $configurer.runConfig(opts.configDir);
     });
   });
@@ -134,7 +173,7 @@ parser.command('nuke-server')
     configDir: OPT_CONFIG_DIR,
   })
   .callback(function(options) {
-    $require(['rdservers/configurer'], function($configurer) {
+    require(['rdservers/configurer'], function($configurer) {
       $configurer.nukeConfig(opts.configDir);
     });
   });
@@ -164,7 +203,7 @@ parser.command('test')
     };
     // -- specific test
     if (options.specificTest) {
-      $require(['rdcommon/testdriver', options.specificTest],
+      require(['rdcommon/testdriver', options.specificTest],
                function($driver, $testmod) {
         when($driver.runTestsFromModule($testmod),
           function(runner) {
@@ -175,9 +214,10 @@ parser.command('test')
     }
     // -- scan for tests
     else {
-      $require(['rdcommon/testdriver'],
+      require(['rdcommon/testdriver'],
                function($driver) {
-        when($driver.runTestsFromDirectories(testPrefixToPathMap),
+        when($driver.runTestsFromDirectories(testPrefixToPathMap,
+                                             ErrorTrapper),
           function() {
             process.exit(0);
           });

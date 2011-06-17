@@ -39,23 +39,14 @@
  *
  **/
 
-define(
-  [
-    'rdcommon/log',
-    'rdcommon/rawclient/api',
-    'rdcommon/transport/authconn',
-    'rdcommon/crypto/keyops',
-    'module',
-    'exports'
-  ],
-  function(
-    $log,
-    $rawclient_api,
-    $authconn,
-    $keyops,
-    $module,
-    exports
-  ) {
+define(function(require,exports,$module) {
+
+var $log = require('rdcommon/log'),
+    $rawclient_api = require('rdcommon/rawclient/api'),
+    $authconn = require('rdcommon/transport/authconn'),
+    $keyring = require('rdcommon/crypto/keyring');
+
+var $signup_server = require('rdservers/signup/server');
 
 var TestClientActorMixins = {
   /**
@@ -84,12 +75,20 @@ var TestClientActorMixins = {
   },
 
   signupWith: function(testServerActor) {
-    this._usingServer = server;
+    this._usingServer = testServerActor;
+    this._rawClient.signupUsingServerSelfIdent(
+      this._usingServer.__signedSelfIdentBlob);
   },
 
   setup_useServer: function setup_useServer(server) {
     var self = this;
     this.T.convenienceSetup(self, 'creates account with', server, function() {
+
+      self._eRawClient
+        .expect_signup_begin()
+        .expect_signedUp()
+        .expect_signup_end();
+
       self.signupWith(server);
     });
   },
@@ -132,13 +131,14 @@ var TestClientActorMixins = {
 
 var TestServerActorMixins = {
   __constructor: function(self) {
+    self._eServer = self.T.actor('server', self__name);
     self.T.convenienceSetup(self, 'creates self to get port', function() {
       // - create our synthetic logger...
       self._logger = LOGFAB.testServer(self, self.__name);
       self._logger._actor = self;
 
       // - actual work
-      self.expect_listening();
+      self._eServer.expect_listening();
 
       self._server = new $authconn.AuthorizingServer();
       self._server.listen();
@@ -146,16 +146,18 @@ var TestServerActorMixins = {
     self.T.convenienceSetup(
       self, 'creates its identity and registers implementations', function() {
       // -- create our identity
-      var rootKeyring = $keyring.createNewServerRootKeyring();
-      var longtermBoxingKeyring = rootKeyring.issueLongtermBoxingKeyring();
+      var rootKeyring = $keyring.createNewServerRootKeyring(),
+          keyring = rootKeyring.issueLongtermBoxingKeyring();
+
       var details = {
         tag: 'server:dummy',
         url: 'ws://127.0.0.1:' + self._server.address.port + '/',
       };
-      var signedSelfIdent = $pubident.generateServerSelfIdent(
-        rootKeyring, longtermBoxingKeyring, details);
+      var signedSelfIdent = self.__signedSelfIdentBlob =
+        $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
 
       // -- bind the server definitions
+      self._server.registerServer($signup_server.makeServerDef(keyring));
     });
   },
 };
@@ -178,6 +180,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
   }
 });
 
+console.log("RAWCLIENT IS", $rawclient_api);
 exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB, $rawclient_api.LOGFAB],
 

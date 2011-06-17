@@ -56,7 +56,7 @@ define(
     $module,
     exports
   ) {
-
+console.error("I AM IN A FILE, MY $authconn IS", $authconn);
 var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
 
 /**
