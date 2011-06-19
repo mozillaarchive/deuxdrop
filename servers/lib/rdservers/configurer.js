@@ -57,6 +57,13 @@ define(
 const CONFIG_DIR_MODE = parseInt("700", 8);
 const CONFIG_FILE_NAME = 'config.json';
 
+function ServerConfig(keyring, selfIdentBlob) {
+  this.keyring = keyring;
+  this.selfIdentBlob = selfIdentBlob;
+}
+ServerConfig.prototype = {
+};
+
 function saveConfig(config, configDir) {
   var jsonConfig = JSON.stringify(config, null, 2);
   var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
@@ -73,6 +80,9 @@ function loadConfig(configDir) {
   return JSON.parse(jsonConfig);
 }
 
+/**
+ * Create a server configuration from scratch.
+ */
 exports.createConfig = function createConfig(configDir, opts) {
   // -- explode if the directory already exists
   if ($path.existsSync(configDir))
@@ -85,6 +95,15 @@ exports.createConfig = function createConfig(configDir, opts) {
   // - create the keys / identity
 
   saveConfig(config, configDir);
+};
+
+/**
+ * Populate a `ServerConfig` for a unit test that has already done most of the
+ *  legwork itself.
+ */
+exports.__populateTestConfig = function populateTestConfig(keyring,
+                                                           selfIdentBlob) {
+  return new ServerConfig(keyring, selfIdentBlob);
 };
 
 exports.runConfig = function runConfig(configDir) {

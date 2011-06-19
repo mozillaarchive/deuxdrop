@@ -45,7 +45,12 @@
  * @typedef[ServerSelfIdentPayload @dict[
  *   @key[tag]
  *   @key[url]
- *   @key[boxPubKey]
+ *   @key[publicKey]{
+ *     The boxing public key for the server.
+ *   }
+ *   @key[rootPublicKey]{
+ *     The root public key for the server.
+ *   }
  * ]]{
  *   Server self-idents differ from person self-idents in that the root key
  *   signs the self-ident which names the long-term boxing public key.  (Person
@@ -167,6 +172,7 @@ exports.assertGetServerSelfIdent = function(serverSelfIdentBlob) {
 
 
 /**
+ * Generate a person self-ident blob.
  */
 exports.generatePersonSelfIdent = function(longtermKeyring,
                                            keyring,
@@ -196,6 +202,15 @@ exports.generatePersonSelfIdent = function(longtermKeyring,
 
 /**
  * Verify and return the given person self-ident if valid, throw if invalid.
+ *
+ * @args[
+ *   @param[personSelfIdentBlob PersonSelfIdentBlob]
+ *   @param[checkRootKey #:optional RootSigningKey]{
+ *     If provided, we will check that the self-ident blob is signed with the
+ *     given key which must also be the key named in the self-ident blob
+ *     (for it to be valid).
+ *   }
+ * ]
  */
 exports.assertGetPersonSelfIdent = function(personSelfIdentBlob, checkRootKey) {
   var peekedPayload = JSON.parse(

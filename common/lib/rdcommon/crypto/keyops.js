@@ -93,6 +93,69 @@ var TAG_ROOT_SIGN = "root:sign",
 var AUTH_TAG_LONGTERM_SIGN = "longterm:sign",
     AUTH_TAG_LONGTERM_BOX = "longterm:box";
 
+var BadBoxError = exports.BadBoxError = $nacl.BadBoxError;
+var BadSignatureError = exports.BadSignatureError = $nacl.BadSignatureError;
+
+var SecretKeyMisuseError = exports.SecretKeyMisuseError =
+    function SecretKeyMisuseError(msg) {
+  this.message = msg;
+};
+SecretKeyMisuseError.prototype = {
+  __proto__: Error.prototype,
+};
+
+var SelfIdentKeyMismatchError = exports.SelfIdentKeyMismatchError =
+    function SelfIdentKeyMismatchError(msg) {
+  this.message = msg;
+};
+SelfIdentKeyMismatchError.prototype = {
+  __proto__: Error.prototype
+};
+
+var KeyMismatchError = exports.KeyMismatchError =
+    function KeyMismatchError(msg) {
+  this.message = msg;
+};
+KeyMismatchError.prototype = {
+  __proto__: Error.prototype,
+};
+
+/**
+ * Superclass for authorization errors; usually something more specific should
+ *  be used.
+ */
+var InvalidAuthorizationError = exports.InvalidAuthorizationError =
+    function InvalidAuthorizationError(msg) {
+  this.message = msg;
+};
+InvalidAuthorizationError.prototype = {
+  __proto__: Error.prototype,
+};
+
+/**
+ * The authorization in question was never valid; it could be gibberish or
+ *  just be signed with a key that never had any power.
+ */
+var NeverValidAuthorizationError = exports.NeverValidAuthorizationError =
+    function NeverValidAuthorizationError(msg) {
+};
+NeverValidAuthorizationError.prototype = {
+  __proto__: InvalidAuthorizationError.prototype,
+};
+
+/**
+ * The authorization in question is not good for the requested timestamp, but
+ *  appears to be a legitimate authorization.
+ */
+var TimestampNotInRangeAuthorizationError =
+  exports.TimestampNotInRangeAuthorizationError =
+    function TimestampNotInRangeAuthorizationError(msg) {
+  this.message = msg;
+};
+TimestampNotInRangeAuthorizationError.prototype = {
+  __proto__: InvalidAuthorizationError.prototype,
+};
+
 /**
  * Generate a root signing keypair.
  */
@@ -134,8 +197,8 @@ exports.generateAndAuthorizeLongtermKeypair = function(rootKeypair,
                                                        effectiveEnd) {
   var isBox = boxOrSignToIsBox(boxOrSign);
   if (rootKeypair.tag !== TAG_ROOT_SIGN)
-    throw new Error("Attempting to use a non-root key to generate long " +
-                    "term keys");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-root key to generate long term keys");
   var now = Date.now();
 
   if (typeof(effectiveStart) !== "number" ||
@@ -187,41 +250,51 @@ exports.assertLongtermKeypairIsAuthorized = function(longtermPublicKey,
   var jsonAuth = $nacl.sign_open_utf8(signedAuth, rootPublicKey); // (throws)
   var auth = JSON.parse(jsonAuth);
   if (auth.authorizedKey !== longtermPublicKey)
-    throw new Error("Authorization is not for the provided long-term key.");
-  if ((auth.authEnds < auth.authStarts) ||
+    throw new NeverValidAuthorizationError(
+      "Authorization is not for the provided long-term key.");
+  if ((typeof(auth.authStarts) !== "number") ||
+      (typeof(auth.authEnds) !== "number") ||
+      (auth.authEnds < auth.authStarts) ||
       (auth.authEnds - auth.authStarts > MAX_AUTH_TIMESPAN))
-    throw new Error("Authorization is gibberish.");
+    throw new NeverValidAuthorizationError(
+      "Authorization time interval is gibberish.");
   if (auth.authorizedFor !== (isBox ? AUTH_TAG_LONGTERM_BOX
                                     : AUTH_TAG_LONGTERM_SIGN))
-    throw new Error("Authorization (" + auth.authorizedFor +
-                    ") is not for a long-term key!");
+    throw new NeverValidAuthorizationError(
+      "Authorization (" + auth.authorizedFor + ") is not for a long-term key!");
   if (timestamp < auth.authStarts)
-    throw new Error("Timestamp is earlier than the authorized time range.");
+    throw new TimestampNotInRangeAuthorizationError(
+      "Timestamp is earlier than the authorized time range.");
   if (timestamp > auth.authEnds)
-    throw new Error("Timestamp is later than the authorized time range.");
+    throw new TimestampNotInRangeAuthorizationError(
+      "Timestamp is later than the authorized time range.");
 };
 
 exports.longtermBox = function(msg, nonce, recipientPubKey, keypair) {
   if (keypair.tag !== TAG_LONGTERM_BOX)
-    throw new Error("Attempting to use a non-longterm key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-longterm key as one.");
   return $nacl.box(msg, nonce, recipientPubKey, keypair.secretKey);
 };
 
 exports.longtermBoxUtf8 = function(msg, nonce, recipientPubKey, keypair) {
   if (keypair.tag !== TAG_LONGTERM_BOX)
-    throw new Error("Attempting to use a non-longterm key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-longterm key as one.");
   return $nacl.box_utf8(msg, nonce, recipientPubKey, keypair.secretKey);
 };
 
 exports.longtermOpenBox = function(msg, nonce, senderPubKey, keypair) {
   if (keypair.tag !== TAG_LONGTERM_BOX)
-    throw new Error("Attempting to use a non-longterm key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-longterm key as one.");
   return $nacl.box_open(msg, nonce, senderPubKey, keypair.secretKey);
 };
 
 exports.longtermOpenBoxUtf8 = function(msg, nonce, senderPubKey, keypair) {
   if (keypair.tag !== TAG_LONGTERM_BOX)
-    throw new Error("Attempting to use a non-longterm key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-longterm key as one.");
   return $nacl.box_open_utf8(msg, nonce, senderPubKey, keypair.secretKey);
 };
 
@@ -232,7 +305,8 @@ exports.longtermOpenBoxUtf8 = function(msg, nonce, senderPubKey, keypair) {
  */
 exports.signJsonWithRootKeypair = function(obj, rootKeypair) {
   if (rootKeypair.tag !== TAG_ROOT_SIGN)
-    throw new Error("Attempting to use a non-root key as a root key!");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-root key as a root key!");
 
   var jsonObj = JSON.stringify(obj);
   return $nacl.sign_utf8(jsonObj, rootKeypair.secretKey);
@@ -284,7 +358,8 @@ function makeGeneralSigningKeypair() {
  */
 exports.signJsonWithLongtermKeypair = function(obj, longtermSigningKeypair) {
   if (longtermSigningKeypair.tag !== TAG_LONGTERM_SIGN)
-    throw new Error("Attempting to use a non-longterm key as one!");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-longterm key as one!");
 
   var jsonObj = JSON.stringify(obj);
   return $nacl.sign_utf8(jsonObj, longtermSigningKeypair.secretKey);
@@ -366,9 +441,11 @@ exports.assertCheckGetAttestation = function(attestationBlob,
                                              allowedKeys) {
   var peekedAuth = JSON.parse($nacl.sign_peek_utf8(attestationBlob));
   if (allowedKeys.indexOf(peekedAuth.authorizedBy) === -1)
-    throw new Error("Attestation alleged signed by unacceptable key");
+    throw new KeyMismatchError(
+      "Attestation alleged signed by unacceptable key");
   if (peekedAuth.authorizedFor !== authorizedFor)
-    throw new Error("Attestation alleged for the wrong purpose");
+    throw new NeverValidAuthorizationError(
+      "Attestation alleged for the wrong purpose");
 
   $nacl.sign_open_utf8(attestationBlob, peekdAuth.authorizedBy); // (throws)
   var auth = peekedAuth;
@@ -379,37 +456,43 @@ exports.assertCheckGetAttestation = function(attestationBlob,
 
 exports.generalBox = function(msg, nonce, recipientPubKey, keypair) {
   if (keypair.tag !== TAG_GENERAL_BOX)
-    throw new Error("Attempting to use a non-general key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-general key as one.");
   return $nacl.box(msg, nonce, recipientPubKey, keypair.secretKey);
 };
 
 exports.generalBoxUtf8 = function(msg, nonce, recipientPubKey, keypair) {
   if (keypair.tag !== TAG_GENERAL_BOX)
-    throw new Error("Attempting to use a non-general key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-general key as one.");
   return $nacl.box_utf8(msg, nonce, recipientPubKey, keypair.secretKey);
 };
 
 exports.generalOpenBox = function(msg, nonce, senderPubKey, keypair) {
   if (keypair.tag !== TAG_GENERAL_BOX)
-    throw new Error("Attempting to use a non-general key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-general key as one.");
   return $nacl.box_open(msg, nonce, senderPubKey, keypair.secretKey);
 };
 
 exports.generalOpenBoxUtf8 = function(msg, nonce, senderPubKey, keypair) {
   if (keypair.tag !== TAG_GENERAL_BOX)
-    throw new Error("Attempting to use a non-general key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-general key as one.");
   return $nacl.box_open_utf8(msg, nonce, senderPubKey, keypair.secretKey);
 };
 
 exports.generalSign = function(msg, keypair) {
   if (keypair.tag !== TAG_GENERAL_SIGN)
-    throw new Error("Attempting to use a non-general key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-general key as one.");
   return $nacl.sign(msg, keypair.secretKey);
 };
 
 exports.generalSignUtf8 = function(msg, keypair) {
   if (keypair.tag !== TAG_GENERAL_SIGN)
-    throw new Error("Attempting to use a non-general key as one.");
+    throw new SecretKeyMisuseError(
+      "Attempting to use a non-general key as one.");
   return $nacl.sign_utf8(msg, keypair.secretKey);
 };
 

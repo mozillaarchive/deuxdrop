@@ -48,11 +48,21 @@ define(
     exports
   ) {
 
-exports.AuthAPI = {
+function AuthAPI(dbConn) {
+  this._db = dbConn;
+}
+exports.AuthAPI = AuthAPI;
+AuthAPI.prototype = {
+  /**
+   * Check if the user has an account with us.
+   */
+  serverCheckUserAccount: function() {
+  },
+
   /**
    * Check if the server is allowed to talk to this server (at all).
    */
-  checkServerAuth: function(otherServerIdent) {
+  serverCheckServerAuth: function(otherServerIdent) {
   },
 
   /**
@@ -60,19 +70,20 @@ exports.AuthAPI = {
    *  user for a given privilege?  For now, there is only one privilege,
    *  "contact".
    */
-  checkUserPrivilege: function(ourUserIdent, otherUserIdent, privilege) {
+  userCheckUserPrivilege: function(ourUserIdent, otherUserIdent, privilege) {
   },
 
   /**
    * From the perspective of one of our users, is this an authorized
    *  conversation?
    */
-  checkConversation: function(ourUserIdent, conversationIdent) {
+  userCheckConversation: function(ourUserIdent, conversationIdent) {
   },
 
-  authorizeServerForContact: function(ourUserIdent, otherServerIdent) {
+  userAuthorizeServerForContact: function(ourUserIdent, otherServerIdent) {
   },
-  authorizeServerForConversation: function(ourUserIdent, convIdent, attestation) {
+  userAuthorizeServerForConversation: function(ourUserIdent, convIdent,
+                                               attestation) {
   },
 
 };

@@ -47,7 +47,8 @@ var $log = require('rdcommon/log'),
     $keyring = require('rdcommon/crypto/keyring'),
     $pubident = require('rdcommon/identities/pubident');
 
-var $signup_server = require('rdservers/signup/server');
+var $signup_server = require('rdservers/signup/server'),
+    $configurer = require('rdservers/configurer');
 
 var TestClientActorMixins = {
   /**
@@ -158,8 +159,11 @@ var TestServerActorMixins = {
       var signedSelfIdent = self.__signedSelfIdentBlob =
         $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
 
+      var serverConfig = $configurer.__populateTestConfig(
+                           keyring, signedSelfIdent);
+
       // -- bind the server definitions
-      self._server.registerServer($signup_server.makeServerDef(keyring));
+      self._server.registerServer($signup_server.makeServerDef(serverConfig));
     });
   },
 };

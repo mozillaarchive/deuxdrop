@@ -515,19 +515,20 @@ exports.AuthClientConn = AuthClientConn;
  *
  *
  */
-function AuthServerConn(serverKeyring, endpoint,
+function AuthServerConn(serverConfig, endpoint,
                         rawConn, authVerifier,
                         implClass, owningServer, _parentLogger) {
   this.appConn = null;
   this.appState = null;
-  this.serverKeyring = serverKeyring;
+  this.serverConfig = serverConfig;
+  this.serverKeyring = serverConfig.keyring;
   this.clientPublicKey = null;
   this.endpoint = endpoint;
 
   this._implClass = implClass;
   this._owningServer = owningServer;
   this.log = LOGFAB.serverConn(this, _parentLogger,
-                               [serverKeyring.boxingPublicKey,
+                               [this.serverKeyring.boxingPublicKey,
                                 'on endpoint', endpoint]);
   this._authVerifier = authVerifier;
 

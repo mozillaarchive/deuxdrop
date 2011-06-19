@@ -37,14 +37,101 @@
 
 /**
  * (Remote) redis client.
+ *
+ * General data view mappings:
+ * - Mailstore for users
+ *   - User address book (peeps): [all, pinned] x [alphabetical, recency] of
+ *      hash
+ *   - Conversations: [all, by peep, pinned] x [recency] of hash+list
+ *   - (Messages in conversations): [all, sent, received, in pinned] x [time] of
+ *      some combo of blob/reference/metahash.
+ * - Mailstore per-client stuff for users:
+ *   - subscription: big blob? or big blob for major coverage plus lexicographic
+ *      one-offs that should ideally cache well?
+ * - Fanout server, per account
+ *   - Live conversations:  [all live] x [conv id] of hash+list.
  **/
 
 define(
   [
+    'redis',
     'exports'
   ],
   function(
+    $redis,
     exports
   ) {
+
+function RedisDbConn(connInfo, nsprefix) {
+  this._conn = $redis.createClient(connInfo.port, connInfo.host);
+  if (connInfo.password)
+    this._conn.auth(connInfo.password);
+
+  this._prefix = nsprefix;
+}
+RedisDbConn.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Hbase model
+  //
+  // Table/region/row/column family/column data-model where column families for
+  //  a region cluster together with lexicographically ordered rows.  The level
+  //  of atomicity is a single row.
+  //
+  // This should be used when:
+  // - We believe we can generate long-term lexicographic clustering (things
+  //    will be clustered on disk when fully merged) and/or temporal
+  //    lexicographic clustering (things will be clustered in intermediary
+  //    generations, including the memstore, because of write/read access
+  //    patterns; this implies that we won't have to scan through all
+  //    generations because of a bloom check/what not).
+  // - We will not create undesirable disk hot-spotting.  Specifically, we want
+  //    to avoid clustering seeks onto a spindle.  It's better to use a DHT
+  //    model if we expect a request to result in a large number of seeks.
+
+  defineHbaseTable: function(tableName, columnFamilies) {
+  },
+
+  getRow: function(tableName, rowId, columns) {
+  },
+
+  putCells: function(tableName, rowId, cells) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Reorderable collection index model
+  //
+  // Support manually-updated ordered indices that name reference object
+  //  identities (probably rows in the hbase model).  Semantics currently
+  //  exactly correspond to the redis sorted set model, although there are ways
+  //  to reflect this into hbase that will need analysis.  (We will likely use
+  //  a naive stopgap for hbase initially.)
+
+  defineReorderableIndex: function(tableName) {
+  },
+  /**
+   * Scan index using the (ordered) values as our keypoints; although redis
+   *  supports actual offsets, any hbase implementation would have serious
+   *  difficulty with that model.  Because there could be multiple object
+   *  names associated with a given value, object names can be provided to
+   *  provide precise boundaries.  Passing null for a value tells us to use
+   *  the relevant infinity.  Passing null for an object name means to use the
+   *  relevant first/last value.
+   */
+  scanIndex: function(tableName, indexName,
+                      lowValue, lowObjectName, lowInclusive,
+                      highValue, highObjectName, highInclusive) {
+  },
+
+  /**
+   * Update the value associated with an objectName for the given index for the
+   *  given (index) table.
+   */
+  updateIndexValue: function(tableName, indexName, objectName, newValue,
+                             oldValueIfKnown) {
+    this._conn.zadd(this._prefix + '_' + tableName + '_' + indexName,
+                    value, objectName);
+  },
+};
+exports.DbConn = RedisDbConn;
 
 }); // end define

@@ -91,13 +91,17 @@
 define(
   [
     'rdcommon/log',
-    'rdcommon/taskidiom',
+    'rdcommon/taskidiom', 'rdcommon/taskerrors',
+    'rdcommon/crypto/keyops',
+    'rdcommon/identities/pubident',
     'module',
     'exports'
   ],
   function(
     $log,
-    $task,
+    $task, $taskerrors,
+    $keyops,
+    $pubident,
     $module,
     exports
   ) {
@@ -130,13 +134,47 @@ var ValidateSignupRequestTask = taskMaster.defineBooleanTask({
      *  names us as the server of record.
      */
     validateSelfIdent: function() {
+      // - self-consistent
+      this.personSelfIdentPayload = $pubident.assertGetPersonSelfIdent(
+                                      this.arg.msg.selfIdent, null); // (throws)
+      // - names us
+      // Verify they are using our self-signed blob verbatim.
+      if (this.personSelfIdentPayload.transitServerIdent !==
+          this.arg.serverConfig.selfIdentBlob)
+        throw new $taskerrors.KeyMismatchError("transit server is not us");
     },
     /**
-     * Make sure the client talking to us is the first authorized client in the
-     *  list of authorized clients (and that the self-ident has actually
-     *  authorized all the named clients.)
+     * Make sure all named clients are authorized and that we are talking to one
+     *  of them.
      */
     validateClientAuth: function() {
+      var clientAuthBlobs = this.personSelfIdentPayload.clientAuths;
+      if (!Array.isArray(clientAuths) || clientAuths.length === 0)
+        throw new $taskerrors.MalformedPayloadError();
+
+      // - assert all clients are authorized
+      // (There is no leakage from returning on the first failure since an
+      //  attacker is just as able as us to verify the clients are not
+      //  authorized; the public key is in the self-ident payload after all.)
+      var foundClientWeAreTalkingTo = false;
+      // the client must be authorized by the ident's longterm signing key
+      var authorizedKeys = [
+        this.personSelfIdentPayload.root.longtermSignPubKey];
+      for (var iAuth = 0; iAuth < clientAuthBlobss.length; iAuth++) {
+        var clientAuth = $keyops.assertCheckGetAttestation(
+                           clientAuthsBlobs[iAuth], "client",
+                           authorizedKeys);
+        if (clientAuth.authorizedKey === this.arg.clientPublicKey)
+          foundClientWeAreTalkingTo = true;
+      }
+
+      // - assert we are talking to one of the authorized clients
+      // If we are not, then it is notable that someone had at least one valid
+      //  client authorization to tell us about.  Since client authorizations
+      //  are a private matter between a client and server, this constitutes
+      //  a potential data leak.
+      if (!foundClientWeAreTalkingTo)
+        throw new $taskerrors.UnauthorizedUserDataLeakError();
     },
     /**
      * Fail if the given identity has already signed up with us.
@@ -153,7 +191,9 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
      * Ensure the request is well-formed/legitimate.
      */
     validateSignupRequest: function(arg) {
-      return new ValidateSignupRequestTask(arg.msg, this.log);
+      return new ValidateSignupRequestTask(
+        {msg: arg.msg, clientPublicKey: arg.conn.clientPublicKey,
+         serverConfig: arg.conn.serverConfig}, this.log);
     },
     /**
      * Convey permanent failure if the request was not valid.
@@ -208,16 +248,17 @@ SignupConnection.prototype = {
    * ]
    */
   _msg_root_signup: function(msg) {
-    return new ProcessSignupTask({msg: msg, conn: this.conn}, this.conn.log);
+    return new ProcessSignupTask(
+      {msg: msg, conn: this.conn}, this.conn.log);
   },
 };
 
-exports.makeServerDef = function(serverKeyring) {
+exports.makeServerDef = function(serverConfig) {
   return {
     endpoints: {
       'signup/signup': {
         implClass: SignupConnection,
-        serverKeyring: serverKeyring,
+        serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {
           // (we have no identity on file)
           return true;

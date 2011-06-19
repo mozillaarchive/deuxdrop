@@ -39,15 +39,81 @@
  * Define an explicit hierarchy of errors that can be used by tasks to convey
  *  semantic details about their failures and which can be used by a supervisory
  *  process to figure out whether they should be re-scheduled in the future.
+ *
+ * Sorta decision tree:
+ * - Received a malformed data record: `MalformedPayloadError`.
+ * - Crypto badness (all exposed via `keyops.js`):
+ *   - `BadBoxError`: a signcryption box was not valid.  This could be due to
+ *     a corrupt ciphertext or the keys/nonce used were not the keys claimed.
+ *   - `BadSignatureError`: a signature was not valid.  This could be due to a
+ *     corrupt signed blob or the key used was not the key claimed.
+ *   - Authorization problems:
+ *     - At no time was the authorization ever valid:
+ *       `NeverValidAuthorizationError`.
+ *     - The authorization is valid for an interval, but not the requested one:
+ *       `TimestampNotInRangeAuthorizationError`.
+ *   - Self-ident key mismatch; a self-ident blob (that self-names its signing
+ *     key) did not name the right key but was otherwise valid.
+ *     `SelfIdentKeyMismatchError`.
+ *   - `SecretKeyMisuseError`: trying to use a secret key for a purpose other
+ *     than its tagged purpose.
+ *   - General key mismatch catch-all: `KeyMismatchError`
+ * - Legitimate-seeming user trying to do something they're not allowed to do:
+ *   - But this is sorta-expected because of a designed-in protocol race which
+ *      could be happening in this context: `NotYetAuthorizedError`.
+ *   - And they knew about something they shouldn't know about:
+ *     `UnauthorizedUserDataLeakError`.
+ *   - Otherwise: `UnauthorizedUserError`.
+ * - Apparent invariant violation, likely a local cluster thing:
+ *   - Someone else is trying to do this at the same time as us and may still
+ *     be trying to do it (aka not obviously dead):
+ *     `ApparentRaceMaybeLaterError`.
+ *   - Someone already did what we're trying to do: `AlreadyHappenedError`.
+ *     (Note: preferably not used in cases where a replay attack is possible.)
+ *   - A pre-requisite step appears to not have successfully completed:
+ *     `MissingPrereqFatalError`.
+ * - An apparent outage is stopping us from doing this right now:
+ *   `ApparentOutageMaybeLaterError`.
  **/
 
 define(
   [
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
+    $keyops,
     exports
   ) {
+
+exports.BadBoxError = $keyops.BadBoxError;
+exports.BadSignatureError = $keyops.BadSignatureError;
+
+exports.SelfIdentKeyMismatchError = $keyops.SelfIdentKeyMismatchError;
+exports.KeyMismatchError = $keyops.KeyMismatchError;
+exports.SecretKeyMisuseError = $keyops.SecretKeyMisuseError;
+
+exports.InvalidAuthorizationError = $keyops.InvalidAuthorizationError;
+exports.NeverValidAuthorizationError = $keyops.NeverValidAuthorizationError;
+exports.TimestampNotInRangeAuthorizationError =
+  $keyops.TimestampNotInRangeAuthorizationError;
+
+/**
+ * We received a badly formed payload; this should be used when a field is of
+ *  the wrong type, an array is erroneously empty, or the like.  It should not
+ *  be used if a signature fails to validate or keys do not match.  Those
+ *  constitute more concerning errors for which we have other errors for.
+ *
+ * Possible explanations for such a thing:
+ * - Someone's implementation bug.
+ * - Malicious implementation probing us for weaknesses.
+ * - Malicious implementation trying to waste our resources.
+ */
+var MalformedPayloadError = exports.MalformedPayloadError = function() {
+};
+MalformedPayloadError.prototype = {
+  __proto__: Error.prototype,
+};
 
 /**
  * An exception that can be used by a task to signify to aware parties that the
