@@ -115,6 +115,17 @@ var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
  *  succeed.
  */
 const CHALLENGE_NEVER = "never";
+/**
+ * They already have an account with us.  The most likely explanations for this
+ *  are:
+ * - Client bug, it has forgotten it has an account, etc.
+ * - An attack attempting to clobber the existing account details with a
+ *    different set of details.  This would be useful in the case where the
+ *    client registering is not currently authorized on the account or does
+ *    not have the credentials required to accomplish its goal within the
+ *    legal account-manipulation framework.
+ */
+const CHALLENGE_ALREADY_SIGNED_UP = "already-signed-up";
 
 const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
 
@@ -122,11 +133,13 @@ const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
  * Validate that the request, regardless of challenges/responses, is in fact a
  *  well-formed and legitimate request.
  *
- * This is implemented as a boolean task which means that all failures end up
- *  resolving our promise with `false` and success ends up resolving our promise
- *  with `true`.
+ * This is implemented as a soft failure task which means that all failures end
+ *  up resolving our promise with `false` and success ends up resolving our
+ *  promise with whatever it was resolved with.  This is done so that if we
+ *  fail, the task that created us will not immediately fail in turn, but can
+ *  react to our failure.
  */
-var ValidateSignupRequestTask = taskMaster.defineBooleanTask({
+var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
   name: 'validateSignupRequest',
   steps: {
     /**
@@ -175,11 +188,8 @@ var ValidateSignupRequestTask = taskMaster.defineBooleanTask({
       //  a potential data leak.
       if (!foundClientWeAreTalkingTo)
         throw new $taskerrors.UnauthorizedUserDataLeakError();
-    },
-    /**
-     * Fail if the given identity has already signed up with us.
-     */
-    verifyNoExistingAccount: function() {
+
+      return this.personSelfIdentPayload;
     },
   },
 });
@@ -198,12 +208,20 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
     /**
      * Convey permanent failure if the request was not valid.
      */
-    dealWithInvalidRequest: function(isValid) {
-      if (!isValid) {
-        // XXX we should initiate a close
+    dealWithInvalidRequest: function(validSelfIdentPayload) {
+      if (!validSelfIdentPayload) {
         return this.respondWithChallenge(CHALLENGE_NEVER);
       }
+      this.selfIdentPayload = validSelfIdentPayload;
       return undefined;
+    },
+    checkForExistingAccount: function() {
+      return this.arg.conn.serverConfig.authApi.serverCheckUserAccount(
+               this.selfIdentPayload.root.rootSignPubKey);
+    },
+    verifyNoExistingAccount: function(hasAccount) {
+      if (hasAccount)
+        return this.respondWithChallenge(CHALLENGE_ALREADY_SIGNED_UP);
     },
     /**
      * Figure out what challenges could be used to authenciate this request.
@@ -225,6 +243,7 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
           mechanism: challengeType,
         },
       });
+      this.arg.conn.close();
       return this.earlyReturn("root");
     }
   },

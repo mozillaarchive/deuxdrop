@@ -54,10 +54,12 @@
 
 define(
   [
+    'q',
     'redis',
     'exports'
   ],
   function(
+    $Q,
     $redis,
     exports
   ) {
@@ -91,10 +93,40 @@ RedisDbConn.prototype = {
   defineHbaseTable: function(tableName, columnFamilies) {
   },
 
-  getRow: function(tableName, rowId, columns) {
+  getRowCell: function(tableName, rowId, columnName) {
+    var deferred = $Q.defer();
+    this._conn.hget(this._prefix + '_' + tableName + '_' + rowId, columnName,
+                     function(err, result) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(result);
+    });
+    return deferred.promise;
+  },
+
+  getRow: function(tableName, rowId, columnFamilies) {
+    var deferred = $Q.defer();
+    this._conn.hgetall(this._prefix + '_' + tableName + '_' + rowId, columnName,
+                     function(err, result) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(result);
+    });
+    return deferred.promise;
   },
 
   putCells: function(tableName, rowId, cells) {
+    var deferred = $Q.defer();
+    this._conn.hmset(this._prefix + '_' + tableName + '_' + rowId, cells,
+                     function(err, replies) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(null);
+    });
+    return deferred.promise;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -133,5 +165,28 @@ RedisDbConn.prototype = {
   },
 };
 exports.DbConn = RedisDbConn;
+
+const TEST_DB_OFFSET = 16;
+
+/**
+ * Create a test connection to a test database.
+ *
+ * XXX theory, not done, just using db 2 for now...
+ * To ensure tests get their own
+ *  little world to play in, we use the process pid as a uniqueifying
+ *  constraint.  Callers are still required to provide a unique name to
+ *  namespace this connection from other connections used by the same test but
+ *  that want their own theoretical database.
+ */
+exports.makeTestDBConnection = function(uniqueName) {
+  var conn = new RedisDbConn({host: '127.0.0.1', port: 6379}, uniqueName);
+  conn._conn.select(2); // TEST_DB_OFFSET + process.pid);
+  conn._conn.flushdb();
+  return conn;
+};
+
+exports.cleanupTestDBConnection = function(conn) {
+  conn._conn.flushdb();
+};
 
 }); // end define

@@ -290,16 +290,14 @@ TestDefinerRunner.prototype = {
     self._runtimeContext.pushLogger(defContext._log);
 
     // - execute the test-case definition function with the context
-    // (simple cases may not have a setup func; just a single step)
-    if (testCase.setupFunc) {
-      var rval = defContext._log.setupFunc({}, testCase.setupFunc, defContext);
-      if (rval instanceof Error) {
-        // in the event we threw during the case setup phase, it's a failure.
-        defContext._log.result('fail');
-        testCase.log.result('fail');
-        return false;
-      }
+    var rval = defContext._log.setupFunc({}, testCase.setupFunc, defContext);
+    if (rval instanceof Error) {
+      // in the event we threw during the case setup phase, it's a failure.
+      defContext._log.result('fail');
+      testCase.log.result('fail');
+      return false;
     }
+    defContext.__postSetupFunc();
 
     // -- process the steps
     // In event of a setup/action failure, change to only running cleanup steps.
@@ -377,7 +375,7 @@ TestDefinerRunner.prototype = {
 
     // node.js will automatically terminate when the event loop says there is
     //  nothing left to do.  We register a listener to detect this and promote
-    //  it to a last-dithc failure case.  Note that this is not a recoverable
+    //  it to a last-ditch failure case.  Note that this is not a recoverable
     //  state; there will be no more event loop ticks in an auto-termination
     //  and so we can't depend on promises, etc.  Buffers will be flushed,
     //  however.

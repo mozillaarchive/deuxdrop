@@ -110,6 +110,18 @@ Error.prepareStackTrace = function(e, frames) {
 // raise the limit in case of super-nested require()s
 //Error.stackTraceLimit = 64;
 
+// XXX not sure if this even works since Error is not supposed to be
+//  configurable... provide a captureStackTrace method
+if (!Error.captureStackTrace) {
+  Error.captureStackTrace = function(who, errType) {
+    try {
+      throw new Error();
+    }
+    catch(ex) {
+      who.stack = ex.stack;
+    }
+  };
+}
 
 var SM_STACK_FORMAT = /^(.*)@([^:]):\d+$/;
 
@@ -121,6 +133,7 @@ exports.transformException = function transformException(e) {
   // it's conceivable someone
   if (!(e instanceof Error)) {
     return {
+      n: "Object",
       m: "" + e,
       f: [],
     };
@@ -130,6 +143,7 @@ exports.transformException = function transformException(e) {
   // evidence of v8 thunk?
   if (Array.isArray(stack)) {
     return {
+      n: e.name,
       m: e.message,
       f: stack,
     };
@@ -137,6 +151,7 @@ exports.transformException = function transformException(e) {
 
   // handle the spidermonkey case, XXX maybe
   var o = {
+    n: e.name,
     m: e.message,
     f: [],
   };

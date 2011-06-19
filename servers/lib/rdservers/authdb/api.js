@@ -42,28 +42,84 @@
 
 define(
   [
+    'q',
     'exports'
   ],
   function(
+    $Q,
     exports
   ) {
+var when = $Q.when;
 
-function AuthAPI(dbConn) {
+const TBL_USER_ACCOUNT = "auth:userAccountByRootKey";
+const TBL_CLIENT_AUTH = "auth:clientAuthByClientKey";
+
+function AuthApi(dbConn) {
   this._db = dbConn;
+
+  this._db.defineHbaseTable(TBL_USER_ACCOUNT, ["d"]);
+  this._db.defineHbaseTable(TBL_CLIENT_AUTH, ["d"]);
 }
-exports.AuthAPI = AuthAPI;
-AuthAPI.prototype = {
+exports.AuthApi = exports.Api = AuthApi;
+AuthApi.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // User Accounts (on this server)
+
   /**
    * Check if the user has an account with us.
+   *
+   * @args[
+   *   @param[rootSignPubKey]
+   *   }
+   * ]
    */
-  serverCheckUserAccount: function() {
+  serverCheckUserAccount: function(rootSignPubKey) {
+    // no errback, let the outage exception propagate.
+    return when(
+      this._db.getRowCell(TBL_USER_ACCOUNT, rootSignPubKey, "d:selfIdent"),
+      this._serverCheckUserAccountCallback);
   },
+  _serverCheckUserAccountCallback: function(val) {
+    return val !== null;
+  },
+
+  serverCreateUserAccount: function(rootSignPubKey, selfIdentBlob,
+                                    clientAuthsMap) {
+    var promises = [];
+    var accountCells = {
+      "d:selfIdent": selfIdentBlob,
+    };
+    for (var clientKey in clientAuthsMap) {
+      accountCells["d:c:" + clientKey] = clientAuthsMap[clientKey];
+      promises.push(
+        this._db.putCells(TBL_CLIENT_AUTH, clientKey, rootSignPubKey));
+
+    }
+    promises.push(
+      this._db.putCells(TBL_USER_ACCOUNT, rootSignPubKey, accountCells));
+    return $Q.wait.apply(null, promises);
+  },
+
+  serverCheckClientAuth: function(clientPublicKey) {
+    return when(
+      this._db.getRow(TBL_CLIENT_AUTH, clientPublicKey, "d"),
+      this._serverCheckClientAuthCallback);
+  },
+  _serverCheckClientAuthCallback: function(val) {
+    return val !== null;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Inter-Server Auths
 
   /**
    * Check if the server is allowed to talk to this server (at all).
    */
   serverCheckServerAuth: function(otherServerIdent) {
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Inter-User Authorizations
 
   /**
    * From the perspective of one of our users, have they authorized the other
@@ -86,6 +142,7 @@ AuthAPI.prototype = {
                                                attestation) {
   },
 
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 }); // end define

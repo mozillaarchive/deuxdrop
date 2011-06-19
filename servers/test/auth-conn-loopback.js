@@ -44,6 +44,7 @@ define(
     'rdcommon/transport/authconn',
     'rdcommon/testcontext',
     'rdcommon/crypto/keyring',
+    'rdservers/configurer',
     'q',
     'module',
     'exports'
@@ -52,6 +53,7 @@ define(
     $authconn,
     $tc,
     $keyring,
+    $configurer,
     $Q,
     $module,
     exports
@@ -116,7 +118,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
   var eServerConn = T.actor('serverConn', 'S'), serverConn;
   var eServer = T.actor('server', 'L'), server;
 
-  var serverRootRing, serverKeyring;
+  var serverRootRing, serverKeyring, serverConfig;
   var personRootRing, personLongTermRing, personKeyring,
       clientKeyring;
 
@@ -129,6 +131,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
     // XXX this really needs to go in some test helping logic
     serverRootRing = $keyring.createNewServerRootKeyring();
     serverKeyring = serverRootRing.issueLongtermBoxingKeyring();
+    serverConfig = $configurer.__populateTestConfig(serverKeyring, null);
 
     personRootRing = $keyring.createNewPersonRootKeyring();
     personLongTermRing = personRootRing.issueLongtermSigningKeyring();
@@ -143,7 +146,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
       endpoints: {
         'test/test': {
           implClass: TestServerConnection,
-          serverKeyring: serverKeyring,
+          serverConfig: serverConfig,
           authVerifier: function(endpoint, clientKey) {
             return (clientKey === clientKeyring.boxingPublicKey);
           }

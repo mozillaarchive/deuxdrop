@@ -47,7 +47,10 @@ var $log = require('rdcommon/log'),
     $keyring = require('rdcommon/crypto/keyring'),
     $pubident = require('rdcommon/identities/pubident');
 
+var $gendb = require('rdservers/gendb/redis');
+
 var $signup_server = require('rdservers/signup/server'),
+    $authdb_api = require('rdservers/authdb/api'),
     $configurer = require('rdservers/configurer');
 
 var TestClientActorMixins = {
@@ -131,8 +134,19 @@ var TestClientActorMixins = {
   },
 };
 
+var SERVER_ROLE_MODULES = {
+  auth: {
+    apiModule: $authdb_api,
+    serverModule: null,
+  },
+  signup: {
+    apiModule: null,
+    serverModule: $signup_server,
+  }
+};
+
 var TestServerActorMixins = {
-  __constructor: function(self) {
+  __constructor: function(self, opts) {
     self._eServer = self.T.actor('server', self.__name);
     self.T.convenienceSetup(self._eServer, 'created, listening to get port',
                             function() {
@@ -145,6 +159,8 @@ var TestServerActorMixins = {
 
       self._server = new $authconn.AuthorizingServer();
       self._server.listen();
+
+      self._db = $gendb.makeTestDBConnection(self.__name);
     });
     self.T.convenienceSetup(
       self, 'creates its identity and registers implementations', function() {
@@ -162,8 +178,25 @@ var TestServerActorMixins = {
       var serverConfig = $configurer.__populateTestConfig(
                            keyring, signedSelfIdent);
 
-      // -- bind the server definitions
-      self._server.registerServer($signup_server.makeServerDef(serverConfig));
+      // -- create api's, bind server definitions
+      var roles = opts.roles;
+      for (var iRole = 0; iRole < roles.length; iRole++) {
+        var roleName = roles[iRole];
+        var serverRoleInfo = SERVER_ROLE_MODULES[roleName];
+        if (serverRoleInfo.apiModule) {
+          serverConfig[roleName + 'Api'] =
+            new serverRoleInfo.apiModule.Api(self._db);
+        }
+        if (serverRoleInfo.serverModule) {
+          self._server.registerServer(
+            serverRoleInfo.serverModule.makeServerDef(serverConfig));
+        }
+      }
+    });
+    self.T.convenienceDeferredCleanup(self, 'cleans up, killing', self._eServer,
+                              function() {
+      self._server.shutdown();
+      $gendb.cleanupTestDBConnection(self._db);
     });
   },
 };

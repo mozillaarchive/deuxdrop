@@ -136,7 +136,7 @@ var TaskProto = exports.TaskProto = {
   },
 };
 
-var BooleanTaskProto = exports.BooleanTaskProto = {
+var SoftFailureTaskProto = exports.SoftFailureTaskProto = {
   __proto__: TaskProto,
   __fail: function() {
     // iNextStep is always one beyond the most recent/current step...
@@ -146,8 +146,8 @@ var BooleanTaskProto = exports.BooleanTaskProto = {
       this.log.cleaup(this, this.__cleanup);
     this.__deferred.resolve(false);
   },
-  __succeed: function() {
-    this.__deferred.resolve(true);
+  __succeed: function(val) {
+    this.__deferred.resolve(val);
   },
 };
 
@@ -292,10 +292,22 @@ TaskMaster.prototype = {
     return this._commonDefineTask(taskDef, TaskProto);
   },
 
-  defineBooleanTask: function(taskDef) {
-    return this._commonDefineTask(taskDef, BooleanTaskProto);
+  /**
+   * Define a task that resolves to false when it fails (because of a thrown
+   *  exception) and otherwise behaves like a normal task (a successful
+   *  return value is resolved as such).
+   */
+  defineSoftFailureTask: function(taskDef) {
+    return this._commonDefineTask(taskDef, SoftFailureTaskProto);
   },
 
+  /**
+   * Define a task that can terminate early; call the `earlyReturn` method on
+   *  the instance that takes the value to resolve and return its value to
+   *  terminate early.
+   *
+   * Example: @js{return this.earlyReturn(actualReturnValue);}
+   */
   defineEarlyReturnTask: function(taskDef) {
     return this._commonDefineTask(taskDef, EarlyReturnTaskProto);
   },

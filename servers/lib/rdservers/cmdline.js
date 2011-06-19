@@ -109,10 +109,11 @@ process.on("uncaughtException",
   });
 
 var DEFAULT_WATCHDOG_TIMEOUT = 3 * 60 * 1000;
-function deathClock(timeout) {
+function deathClock(timeout, nonfatal) {
   if (timeout === undefined)
     timeout = DEFAULT_WATCHDOG_TIMEOUT;
-  DEATH_PRONE = true;
+  if (!nonfatal)
+    DEATH_PRONE = true;
   setTimeout(function() {
     console.log("WATCHDOG KILLIN");
     process.exit(10);
@@ -194,7 +195,7 @@ parser.command('test')
       console.log("EXIT EVENT", code);
     });
 
-    deathClock(30 * 1000);
+    deathClock(30 * 1000, true);
     // Ideally we could slurp this from requirejs... and maybe we can, but for
     //  now...
     var testPrefixToPathMap = {

@@ -655,10 +655,9 @@ AuthorizingServer.prototype = {
       var info = this._endpoints[protocol];
 
       var rawConn = request.accept(protocol, request.origin);
-      var authConn = new AuthServerConn(info.serverKeyring,
-                                        protocol, rawConn,
-                                        info.authVerifier, info.implClass,
-                                        this, this.log);
+      var authConn = new AuthServerConn(info.serverConfig, protocol,
+                                        rawConn, info.authVerifier,
+                                        info.implClass, this, this.log);
       return;
     }
     this.log.badRequest("['" + protocol + "']");

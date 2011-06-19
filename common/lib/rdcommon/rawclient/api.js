@@ -113,7 +113,7 @@ ClientSignupConn.prototype = {
    */
   _msg_root_challenge: function(msg) {
     this._deferred.reject(msg.challenge);
-    this.close();
+    this.conn.close();
   },
 
   /**
@@ -121,7 +121,7 @@ ClientSignupConn.prototype = {
    */
   _msg_root_signedUp: function() {
     this._deferred.resolve(true);
-    this.close();
+    this.conn.close();
   },
 
   _sendSignup: function() {
@@ -210,6 +210,12 @@ RawClientAPI.prototype = {
     var serverSelfIdent = $pubident.assertGetServerSelfIdent(
                             serverSelfIdentBlob);
 
+    // - regenerate our selfIdentBlob using the server as the transit server
+    this._selfIdentBlob = $pubident.generatePersonSelfIdent(
+                            this._longtermKeyring, this._keyring,
+                            this._poco, serverSelfIdentBlob);
+
+    // - signup!
     this.log.signup_begin();
     this._signupConn = new ClientSignupConn(
                          this._selfIdentBlob,

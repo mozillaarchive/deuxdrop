@@ -65,7 +65,7 @@ var TD = exports.TD = $tc.defineTestsFor($module, null,
 
 TD.commonCase('create new identity, signup with server', function(T) {
   var client = T.actor('testClient', 'C');
-  var server = T.actor('testServer', 'S');
+  var server = T.actor('testServer', 'S', {roles: ['auth', 'signup']});
 
   debugger;
   client.setup_useServer(server);

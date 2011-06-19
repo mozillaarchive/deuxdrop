@@ -110,9 +110,11 @@ exports.TimestampNotInRangeAuthorizationError =
  * - Malicious implementation trying to waste our resources.
  */
 var MalformedPayloadError = exports.MalformedPayloadError = function() {
+  Error.captureStackTrace(this, MalformedPayloadError);
 };
 MalformedPayloadError.prototype = {
   __proto__: Error.prototype,
+  name: 'MalformedPayloadError',
 };
 
 /**
@@ -123,9 +125,11 @@ MalformedPayloadError.prototype = {
  *  be addressed that might be causing redundant operations to be attempted.
  */
 var AlreadyHappenedError = exports.AlreadyHappenedError = function(mesage) {
+  Error.captureStackTrace(this, AlreadyHappenedError);
 };
 AlreadyHappenedError.prototype = {
   __proto__: Error.prototype,
+  name: 'AlreadyHappenedError',
 };
 
 /**
@@ -146,10 +150,12 @@ AlreadyHappenedError.prototype = {
  */
 var MissingPrereqFatalError = exports.MissingPrereqFatalError =
     function(message) {
+  Error.captureStackTrace(this, MissingPrereqFatalError);
   this.message = message;
 };
 MissingPrereqFatalError.prototype = {
   __proto__: Error.prototype,
+  name: 'MissingPrereqFatalError',
 };
 
 /**
@@ -163,9 +169,11 @@ MissingPrereqFatalError.prototype = {
  *  entirely give up on a task.
  */
 var MaybeLaterError = exports.MaybeLaterError = function() {
+  Error.captureStackTrace(this, MaybeLaterError);
 };
 MaybeLaterError.prototype = {
   __proto__: Error.prototype,
+  name: 'MaybeLaterError',
 };
 
 /**
@@ -179,9 +187,11 @@ MaybeLaterError.prototype = {
  */
 var ApparentOutageMaybeLaterError = exports.ApparentOutageMaybeLaterError =
   function() {
+  Error.captureStackTrace(this, ApparentOutageMaybeLaterError);
 };
 ApparentOutageMaybeLaterError.prototype = {
   __proto__: MaybeLaterError.prototype,
+  name: 'ApparentOutageMaybeLaterError',
 };
 
 /**
@@ -194,9 +204,11 @@ ApparentOutageMaybeLaterError.prototype = {
  */
 var ApparentRaceMaybeLaterError = exports.ApparentRaceMaybeLaterError =
   function() {
+  Error.captureStackTrace(this, ApparentRaceMaybeLaterError);
 };
 ApparentRaceMaybeLaterError.prototype = {
   __proto__: MaybeLaterError.prototype,
+  name: 'ApparentRaceMaybeLaterError',
 };
 
 /**
@@ -205,9 +217,11 @@ ApparentRaceMaybeLaterError.prototype = {
  */
 var UnauthorizedUserError = exports.UnauthorizedUserError =
   function() {
+  Error.captureStackTrace(this, UnauthorizedUserError);
 };
 UnauthorizedUserError.prototype = {
   __proto__: Error.prototype,
+  name: 'UnauthorizedUserError',
 };
 
 /**
@@ -232,9 +246,11 @@ UnauthorizedUserError.prototype = {
  */
 var UnauthorizedUserDataLeakError = exports.UnauthorizedUserDataLeakError =
   function() {
+  Error.captureStackTrace(this, UnauthorizedUserDataLeakError);
 };
 UnauthorizedUserDataLeakError.prototype = {
   __proto__: UnauthorizedUserError.prototype,
+  name: 'UnauthorizedUserDataLeakError',
 };
 
 /**
@@ -258,9 +274,11 @@ UnauthorizedUserDataLeakError.prototype = {
  */
 var NotYetAuthorizedError = exports.NotYetAuthorizedError =
     function() {
+  Error.captureStackTrace(this, NotYetAuthorizedError);
 };
 NotYetAuthorizedError.prototype = {
   __proto__: Error.prototype,
+  name: 'NotYetAuthorizedError',
 };
 
 }); // end define

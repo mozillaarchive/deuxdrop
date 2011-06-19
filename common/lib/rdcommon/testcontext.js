@@ -94,6 +94,7 @@ function TestContext(testCase, permutationIndex) {
   this._permIdx = permutationIndex;
   this._permutations = 1;
   this.__steps = [];
+  this._deferredSteps = null;
 
   this._log = LOGFAB.testCasePermutation(this, testCase.log,
                                          permutationIndex);
@@ -249,6 +250,22 @@ TestContext.prototype = {
     return step;
   },
 
+  _newDeferredStep: function(kind, args) {
+    if (!this._deferredSteps)
+      this._deferredSteps = [];
+    this._deferredSteps.push([kind, args]);
+  },
+
+  __postSetupFunc: function() {
+    if (this._deferredSteps) {
+      for (var i = 0; i < this._deferredSteps.length; i++) {
+        var stepDef = this._deferredSteps[i];
+        this._newStep(stepDef[0], stepDef[1]);
+      }
+      this._deferredSteps = null;
+    }
+  },
+
   /**
    * Defines a test step/action.  Each action has a description that is made
    *  up of strings and actors (defined via `entity`).  All actors
@@ -326,6 +343,24 @@ TestContext.prototype = {
    */
   cleanup: function() {
     return this._newStep('cleanup', arguments);
+  },
+
+  /**
+   * A cleanup step defined by a convenience helper that is added to the current
+   *  list of steps as it stands right now.  Contrast with
+   *  `convenienceDeferredCleanup` which defines a step that
+   */
+  convenienceCleanup: function() {
+    return this._newStep('cleanup', arguments);
+  },
+
+  /**
+   * A cleanup step defined by a convenience helper which is only added to the
+   *  list of steps after the function defining the test case has finished
+   *  executing.
+   */
+  convenienceDeferredCleanup: function() {
+    return this._newDeferredStep('cleanup', arguments);
   },
 };
 exports.TestContext = TestContext;

@@ -98,26 +98,32 @@ var BadSignatureError = exports.BadSignatureError = $nacl.BadSignatureError;
 
 var SecretKeyMisuseError = exports.SecretKeyMisuseError =
     function SecretKeyMisuseError(msg) {
+  Error.captureStackTrace(this, SecretKeyMisuseError);
   this.message = msg;
 };
 SecretKeyMisuseError.prototype = {
   __proto__: Error.prototype,
+  name: 'SecretKeyMisuseError',
 };
 
 var SelfIdentKeyMismatchError = exports.SelfIdentKeyMismatchError =
     function SelfIdentKeyMismatchError(msg) {
+  Error.captureStackTrace(this, SelfIdentKeyMismatchError);
   this.message = msg;
 };
 SelfIdentKeyMismatchError.prototype = {
-  __proto__: Error.prototype
+  __proto__: Error.prototype,
+  name: 'SelfIdentKeyMismatchError',
 };
 
 var KeyMismatchError = exports.KeyMismatchError =
     function KeyMismatchError(msg) {
+  Error.captureStackTrace(this, KeyMismatchError);
   this.message = msg;
 };
 KeyMismatchError.prototype = {
   __proto__: Error.prototype,
+  name: 'KeyMismatchError',
 };
 
 /**
@@ -126,10 +132,12 @@ KeyMismatchError.prototype = {
  */
 var InvalidAuthorizationError = exports.InvalidAuthorizationError =
     function InvalidAuthorizationError(msg) {
+  Error.captureStackTrace(this, InvalidAuthorizationError);
   this.message = msg;
 };
 InvalidAuthorizationError.prototype = {
   __proto__: Error.prototype,
+  name: 'InvalidAuthorizationError',
 };
 
 /**
@@ -138,9 +146,12 @@ InvalidAuthorizationError.prototype = {
  */
 var NeverValidAuthorizationError = exports.NeverValidAuthorizationError =
     function NeverValidAuthorizationError(msg) {
+  Error.captureStackTrace(this, NeverValidAuthorizationError);
+  this.message = msg;
 };
 NeverValidAuthorizationError.prototype = {
   __proto__: InvalidAuthorizationError.prototype,
+  name: 'NeverValidAuthorizationError',
 };
 
 /**
@@ -150,10 +161,12 @@ NeverValidAuthorizationError.prototype = {
 var TimestampNotInRangeAuthorizationError =
   exports.TimestampNotInRangeAuthorizationError =
     function TimestampNotInRangeAuthorizationError(msg) {
+  Error.captureStackTrace(this, TimestampNotInRangeAuthorizationError);
   this.message = msg;
 };
 TimestampNotInRangeAuthorizationError.prototype = {
   __proto__: InvalidAuthorizationError.prototype,
+  name: 'TimestampNotInRangeAuthorizationError',
 };
 
 /**
