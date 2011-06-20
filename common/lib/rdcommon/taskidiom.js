@@ -233,6 +233,7 @@ TaskMaster.prototype = {
       subtype: $log.TASK, // figure it out from context, fancy pants.
       asyncJobs: {},
       calls: {},
+      TEST_ONLY_calls: {},
       errors: {
         failed: {step: false},
       },
@@ -241,6 +242,9 @@ TaskMaster.prototype = {
     for (stepName in taskDef.steps) {
       logDef.asyncJobs[stepName] = {};
       logDef.calls[stepName + "_call"] = {};
+      // The argument is definitely interesting, but may have complicated data
+      //  structures in it.
+      logDef.TEST_ONLY_calls[stepName + "_call"] = {arg: $log.RAWOBJ_DATABIAS};
     }
 
     if ("cleanup" in taskDef)

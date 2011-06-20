@@ -438,6 +438,12 @@ function AuthClientConn(appConn, clientKeyring, serverPublicKey,
 }
 AuthClientConn.prototype = {
   __proto__: AuthClientCommon,
+  toJSON: function() {
+    return {
+      type: 'AuthClientConn',
+      endpoint: this.endpoint,
+    };
+  },
 
   _onConnectError: function(error) {
     this.log.connectError(error);
@@ -538,6 +544,12 @@ function AuthServerConn(serverConfig, endpoint,
 }
 AuthServerConn.prototype = {
   __proto__: AuthClientCommon,
+  toJSON: function() {
+    return {
+      type: 'AuthServerConn',
+      endpoint: this.endpoint,
+    };
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // State Message Handlers
@@ -642,6 +654,12 @@ console.log("instantiating server");
 console.log("constructor completed.");
 }
 AuthorizingServer.prototype = {
+  toJSON: function() {
+    return {
+      type: 'AuthorizingServer',
+    };
+  },
+
   _onRequest: function _onRequest(request) {
     if (request.requestedProtocols.length != 1) {
       this.log.badRequest("['" + request.requestedProtocols.join("', '") + "']");

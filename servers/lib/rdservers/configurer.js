@@ -62,6 +62,11 @@ function ServerConfig(keyring, selfIdentBlob) {
   this.selfIdentBlob = selfIdentBlob;
 }
 ServerConfig.prototype = {
+  toJSON: function() {
+    return {
+      type: 'ServerConfig',
+    };
+  },
 };
 
 function saveConfig(config, configDir) {

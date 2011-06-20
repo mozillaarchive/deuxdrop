@@ -96,6 +96,12 @@ function PersonRootSigningKeyring(persistedForm) {
   }
 }
 PersonRootSigningKeyring.prototype = {
+  toJSON: function() {
+    return {
+      type: 'PersonRootSigningKeyring',
+    };
+  },
+
   get rootPublicKey() {
     return this.data.rootKeypair.publicKey;
   },
@@ -134,6 +140,12 @@ function ServerRootSigningKeyring(persistedForm) {
   }
 }
 ServerRootSigningKeyring.prototype = {
+  toJSON: function() {
+    return {
+      type: 'ServerRootSigningKeyring',
+    };
+  },
+
   get rootPublicKey() {
     return this.data.rootKeypair.publicKey;
   },
@@ -175,6 +187,12 @@ function LongtermBoxingKeyring(persistedForm, creationForm) {
   }
 }
 LongtermBoxingKeyring.prototype = {
+  toJSON: function() {
+    return {
+      type: 'LongtermBoxingKeyring',
+    };
+  },
+
   get rootPublicKey() {
     return this.data.rootPublicKey;
   },
@@ -227,6 +245,12 @@ function LongtermSigningKeyring(persistedForm, creationForm) {
   }
 }
 LongtermSigningKeyring.prototype = {
+  toJSON: function() {
+    return {
+      type: 'LongtermSigningKeyring',
+    };
+  },
+
   get rootPublicKey() {
     return this.data.rootPublicKey;
   },
@@ -319,6 +343,12 @@ function DelegatedKeyring(persistedForm, creationForm) {
   }
 }
 DelegatedKeyring.prototype = {
+  toJSON: function() {
+    return {
+      type: 'DelegatedKeyring',
+    };
+  },
+
   get rootPublicKey() {
     return this.data.rootPublicKey;
   },
@@ -419,6 +449,12 @@ function ExposedSimpleBoxingKeyring(rootPublicKey, keypair) {
   this._keypair = keypair;
 }
 ExposedSimpleBoxingKeyring.prototype = {
+  toJSON: function() {
+    return {
+      type: 'ExposedSimpleBoxingKeyring',
+    };
+  },
+
   get boxingPublicKey() {
     return this._keypair.publicKey;
   },

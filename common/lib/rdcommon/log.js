@@ -1089,6 +1089,27 @@ exports.TEST_SYNTHETIC_ACTOR = 'test:synthactor';
 
 // argument information
 var EXCEPTION = exports.EXCEPTION = 'exception';
+/**
+ * In short, something that we can JSON.stringify without throwing an exception
+ *  and that is strongly expected to have a reasonable, bounded size.  This
+ *  value is *not* snapshotted when it is provided, and so should be immutable
+ *  for this to not turn out confusing.
+ */
 var JSONABLE = exports.JSONABLE = 'jsonable';
+/**
+ * XXX speculative, we currently are just using JSON.stringify and putting
+ *  toJSON methods on complex objects that there is no benefit from recursively
+ *  traversing.
+ *
+ * An object that could be anything, including resulting in deep or cyclic
+ *  data structures.  We will serialize type information where available.  This
+ *  will necessarily be more expensive to serialize than a `JSONABLE` data
+ *  structure.  This type of data *is snapshotted* when logged, allowing it to
+ *  be used on mutable data structures.
+ *
+ * A data-biased raw-object will just report the type of instances it encounters
+ *  unless they have a toJSON method, in which case it will invoke that.
+ */
+var RAWOBJ_DATABIAS = exports.RAWOBJ_DATABIAS = 'jsonable'; //'rawobj:databias';
 
 }); // end define

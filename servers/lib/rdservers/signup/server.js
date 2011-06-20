@@ -162,7 +162,7 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
      */
     validateClientAuth: function() {
       var clientAuthBlobs = this.personSelfIdentPayload.clientAuths;
-      if (!Array.isArray(clientAuths) || clientAuths.length === 0)
+      if (!Array.isArray(clientAuthBlobs) || clientAuthBlobs.length === 0)
         throw new $taskerrors.MalformedPayloadError();
 
       // - assert all clients are authorized
@@ -173,7 +173,7 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
       // the client must be authorized by the ident's longterm signing key
       var authorizedKeys = [
         this.personSelfIdentPayload.root.longtermSignPubKey];
-      for (var iAuth = 0; iAuth < clientAuthBlobss.length; iAuth++) {
+      for (var iAuth = 0; iAuth < clientAuthBlobs.length; iAuth++) {
         var clientAuth = $keyops.assertCheckGetAttestation(
                            clientAuthsBlobs[iAuth], "client",
                            authorizedKeys);
