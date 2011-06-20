@@ -68,7 +68,7 @@ var TestClientActorMixins = {
       // - create our self-corresponding logger the manual way
       // (we deferred until this point so we could nest in the hierarchy
       //  in a traditional fashion.)
-      self._logger = LOGFAB.testClient(self, self.__name);
+      self._logger = LOGFAB.testClient(self, null, self.__name);
       self._logger._actor = self;
 
       // - create the client with a new identity
@@ -148,19 +148,24 @@ var SERVER_ROLE_MODULES = {
 var TestServerActorMixins = {
   __constructor: function(self, opts) {
     self._eServer = self.T.actor('server', self.__name);
-    self.T.convenienceSetup(self._eServer, 'created, listening to get port',
+    self._eDb = self.T.actor('gendbConn', self.__name);
+    self.T.convenienceSetup(self._eServer, 'created, listening to get port.',
+                            self._eDb, 'established',
                             function() {
       // - create our synthetic logger...
-      self._logger = LOGFAB.testServer(self, self.__name);
+      self._logger = LOGFAB.testServer(self, null, self.__name);
       self._logger._actor = self;
 
-      // - actual work
+      // - create the server
       self._eServer.expect_listening();
 
       self._server = new $authconn.AuthorizingServer();
       self._server.listen();
 
-      self._db = $gendb.makeTestDBConnection(self.__name);
+      // - establish db connection
+      // (we want to make sure this happens successfully, hence the actor)
+      self._eDb.expect_connected();
+      self._db = $gendb.makeTestDBConnection(self.__name, self._logger);
     });
     self.T.convenienceSetup(
       self, 'creates its identity and registers implementations', function() {
@@ -194,9 +199,13 @@ var TestServerActorMixins = {
       }
     });
     self.T.convenienceDeferredCleanup(self, 'cleans up, killing', self._eServer,
+                                      'shutting down', self._eDb,
                               function() {
       self._server.shutdown();
       $gendb.cleanupTestDBConnection(self._db);
+
+      self._eDb.expect_closed();
+      self._db.close();
     });
   },
 };
@@ -223,7 +232,7 @@ console.log("RAWCLIENT IS", $rawclient_api);
 exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB,
     $authconn.LOGFAB, $rawclient_api.LOGFAB,
-    $signup_server.LOGFAB,
+    $signup_server.LOGFAB, $gendb.LOGFAB,
   ],
 
   actorMixins: {

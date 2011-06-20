@@ -188,7 +188,8 @@ var MAX_FUTURE_AUTH_START = MS_YEAR * 4;
 // It would be reasonable to allow backdating to avoid leaking information by
 //  virtue of when the auth is created, except for the bit where we embed the
 //  timestamp of when we created the auth, making that moot.
-var MAX_AUTH_BACKDATING = 0;
+// We do, however, need to give our caller a little bit of time to call us...
+var MAX_AUTH_BACKDATING = 3000;
 
 const CANON_BOX = 'box', CANON_SIGN = 'sign';
 
@@ -460,7 +461,7 @@ exports.assertCheckGetAttestation = function(attestationBlob,
     throw new NeverValidAuthorizationError(
       "Attestation alleged for the wrong purpose");
 
-  $nacl.sign_open_utf8(attestationBlob, peekdAuth.authorizedBy); // (throws)
+  $nacl.sign_open_utf8(attestationBlob, peekedAuth.authorizedBy); // (throws)
   var auth = peekedAuth;
   // (the attestation is signed by the key it says it is signed by)
 

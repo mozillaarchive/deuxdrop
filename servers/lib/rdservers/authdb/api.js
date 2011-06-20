@@ -93,7 +93,6 @@ AuthApi.prototype = {
       accountCells["d:c:" + clientKey] = clientAuthsMap[clientKey];
       promises.push(
         this._db.putCells(TBL_CLIENT_AUTH, clientKey, rootSignPubKey));
-
     }
     promises.push(
       this._db.putCells(TBL_USER_ACCOUNT, rootSignPubKey, accountCells));

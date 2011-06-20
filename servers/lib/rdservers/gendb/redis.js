@@ -56,22 +56,42 @@ define(
   [
     'q',
     'redis',
+    'rdcommon/log',
+    'module',
     'exports'
   ],
   function(
     $Q,
     $redis,
+    $log,
+    $module,
     exports
   ) {
 
-function RedisDbConn(connInfo, nsprefix) {
+function RedisDbConn(connInfo, nsprefix, _logger) {
   this._conn = $redis.createClient(connInfo.port, connInfo.host);
   if (connInfo.password)
     this._conn.auth(connInfo.password);
 
+  this._conn.on('ready', this._onReady.bind(this));
+  this._conn.on('error', this._onError.bind(this));
+  this._conn.on('end', this._onClosed.bind(this));
+
+  this._log = LOGFAB.gendbConn(this, _logger, [connInfo.host, connInfo.port]);
+
   this._prefix = nsprefix;
 }
 RedisDbConn.prototype = {
+  _onReady: function() {
+    this._log.connected();
+  },
+  _onError: function(err) {
+    this._log.error(err);
+  },
+  _onClosed: function() {
+    this._log.closed();
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Hbase model
   //
@@ -95,6 +115,7 @@ RedisDbConn.prototype = {
 
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
+    this._log.getRowCell(tableName, rowId, columnName);
     this._conn.hget(this._prefix + '_' + tableName + '_' + rowId, columnName,
                      function(err, result) {
       if (err)
@@ -107,6 +128,7 @@ RedisDbConn.prototype = {
 
   getRow: function(tableName, rowId, columnFamilies) {
     var deferred = $Q.defer();
+    this._log.getRow(tableName, rowId, columnFamilies);
     this._conn.hgetall(this._prefix + '_' + tableName + '_' + rowId, columnName,
                      function(err, result) {
       if (err)
@@ -119,6 +141,7 @@ RedisDbConn.prototype = {
 
   putCells: function(tableName, rowId, cells) {
     var deferred = $Q.defer();
+    this._log.putCells(tableName, rowId, cells);
     this._conn.hmset(this._prefix + '_' + tableName + '_' + rowId, cells,
                      function(err, replies) {
       if (err)
@@ -163,6 +186,15 @@ RedisDbConn.prototype = {
     this._conn.zadd(this._prefix + '_' + tableName + '_' + indexName,
                     value, objectName);
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Session Management
+
+  close: function() {
+    this._conn.quit();
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 exports.DbConn = RedisDbConn;
 
@@ -178,8 +210,9 @@ const TEST_DB_OFFSET = 16;
  *  namespace this connection from other connections used by the same test but
  *  that want their own theoretical database.
  */
-exports.makeTestDBConnection = function(uniqueName) {
-  var conn = new RedisDbConn({host: '127.0.0.1', port: 6379}, uniqueName);
+exports.makeTestDBConnection = function(uniqueName, _logger) {
+  var conn = new RedisDbConn({host: '127.0.0.1', port: 6379}, uniqueName,
+                             _logger);
   conn._conn.select(2); // TEST_DB_OFFSET + process.pid);
   conn._conn.flushdb();
   return conn;
@@ -188,5 +221,35 @@ exports.makeTestDBConnection = function(uniqueName) {
 exports.cleanupTestDBConnection = function(conn) {
   conn._conn.flushdb();
 };
+
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  gendbConn: {
+    //implClass: AuthClientConn,
+    type: $log.CONNECTION,
+    subtype: $log.CLIENT,
+    semanticIdent: {
+      host: 'host',
+      port: 'port',
+    },
+    events: {
+      connected: {},
+      closed: {},
+
+      getRowCell: {tableName: true, rowId: true, columnName: true},
+      getRow: {tableName: true, rowId: true, columnFamilies: false},
+      putCells: {tableName: true, rowId: true},
+    },
+    TEST_ONLY_events: {
+      putCells: {cells: $log.JSONABLE},
+    },
+    errors: {
+      error: {err: false},
+    },
+    LAYER_MAPPING: {
+      layer: "db",
+    },
+  },
+});
 
 }); // end define

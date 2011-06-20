@@ -118,6 +118,8 @@ const CHALLENGE_NEVER = "never";
 /**
  * They already have an account with us.  The most likely explanations for this
  *  are:
+ * - They got disconnected during a successful signup process and so they never
+ *    heard they were successful.
  * - Client bug, it has forgotten it has an account, etc.
  * - An attack attempting to clobber the existing account details with a
  *    different set of details.  This would be useful in the case where the
@@ -161,7 +163,7 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
      *  of them.
      */
     validateClientAuth: function() {
-      var clientAuthBlobs = this.personSelfIdentPayload.clientAuths;
+      var clientAuthBlobs = this.arg.msg.clientAuths;
       if (!Array.isArray(clientAuthBlobs) || clientAuthBlobs.length === 0)
         throw new $taskerrors.MalformedPayloadError();
 
@@ -173,10 +175,12 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
       // the client must be authorized by the ident's longterm signing key
       var authorizedKeys = [
         this.personSelfIdentPayload.root.longtermSignPubKey];
+      var clientAuthsMap = {};
       for (var iAuth = 0; iAuth < clientAuthBlobs.length; iAuth++) {
         var clientAuth = $keyops.assertCheckGetAttestation(
-                           clientAuthsBlobs[iAuth], "client",
+                           clientAuthBlobs[iAuth], "client",
                            authorizedKeys);
+        clientAuthsMap[clientAuth.authorizedKey] = clientAuthBlobs[iAuth];
         if (clientAuth.authorizedKey === this.arg.clientPublicKey)
           foundClientWeAreTalkingTo = true;
       }
@@ -189,7 +193,10 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
       if (!foundClientWeAreTalkingTo)
         throw new $taskerrors.UnauthorizedUserDataLeakError();
 
-      return this.personSelfIdentPayload;
+      return {
+        selfIdentPayload: this.personSelfIdentPayload,
+        clientAuthsMap: clientAuthsMap,
+      };
     },
   },
 });
@@ -208,13 +215,17 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
     /**
      * Convey permanent failure if the request was not valid.
      */
-    dealWithInvalidRequest: function(validSelfIdentPayload) {
-      if (!validSelfIdentPayload) {
+    dealWithInvalidRequest: function(validBits) {
+      if (!validBits) {
         return this.respondWithChallenge(CHALLENGE_NEVER);
       }
-      this.selfIdentPayload = validSelfIdentPayload;
+      this.selfIdentPayload = validBits.selfIdentPayload;
+      this.clientAuthsMap = validBits.clientAuthsMap;
       return undefined;
     },
+    /**
+     * You can't signup if you are already signed up...
+     */
     checkForExistingAccount: function() {
       return this.arg.conn.serverConfig.authApi.serverCheckUserAccount(
                this.selfIdentPayload.root.rootSignPubKey);
@@ -222,17 +233,33 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
     verifyNoExistingAccount: function(hasAccount) {
       if (hasAccount)
         return this.respondWithChallenge(CHALLENGE_ALREADY_SIGNED_UP);
+      return undefined;
     },
     /**
-     * Figure out what challenges could be used to authenciate this request.
+     * Figure out what challenges could be used to authenticate this request.
+     *
+     * (The idea is to avoid a mismatch between our checking logic and our
+     *  generation logic by having the checking logic depend on the generation
+     *  logic.)
      */
     determineChallenges: function() {
+      // XXX everyone wins!
     },
     /**
      * If a challenge response is included, verify it is one of the ones we
      *  are allowing; if it is not, tell the client what is allowed.
      */
     checkOrGenerateChallenge: function() {
+      // XXX everyone wins!
+    },
+    doTheSignup: function() {
+
+      return this.arg.conn.serverConfig.authApi.serverCreateUserAccount(
+        this.selfIdentPayload.root.rootSignPubKey,
+        this.arg.msg.selfIdent,
+        this.clientAuthsMap);
+    },
+    tellThemTheyAreSignedUp: function() {
     },
   },
   impl: {
@@ -245,7 +272,7 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
       });
       this.arg.conn.close();
       return this.earlyReturn("root");
-    }
+    },
   },
 });
 

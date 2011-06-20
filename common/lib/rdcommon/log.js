@@ -336,6 +336,13 @@ var TestActorProtoBase = {
     // we should have no expectations going into a test step.
     this.__resetExpectations();
     this._activeForTestStep = true;
+    // and also all current entries should not be considered for expectations
+    // (We originally considered that we could let loggers accumulate entries
+    //  in the background and then specify expectations about them in a
+    //  subsequent step.  That seems confusing.  Seems far better for us to
+    //  just slice a single step into multiple perspectives...)
+    if (this._logger)
+      this._iEntry = this._logger._entries.length;
   },
 
   /**
@@ -961,6 +968,8 @@ LoggestClassMaker.prototype = {
       // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
 console.error("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
+        if (typeof(parentLogger) === "string")
+          throw new Error("A string can't be a logger => not a valid parent");
         logger = new testerCon(ident);
         parentLogger = tester.reportNewLogger(logger, parentLogger);
       }

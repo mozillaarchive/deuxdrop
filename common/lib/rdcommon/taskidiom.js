@@ -68,7 +68,7 @@ var TaskProto = exports.TaskProto = {
     if (this.__cleanup)
       this.log.cleaup(this, this.__cleanup);
     this.log.__die();
-    this.__deferred.reject(val);
+    this.__deferred.reject();
   },
 
   __succeed: function(val) {
