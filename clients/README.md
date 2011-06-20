@@ -5,7 +5,7 @@ Install node libraries
 Copy the md5 module into the modules directory
 `cp md5.js to node_modules`
 
-Get redis running on your local box.
+Get redis 2.2 running on your local box.
 
 > using [homebrew](http://mxcl.github.com/homebrew/) for Mac OS X
 > `brew install redis`

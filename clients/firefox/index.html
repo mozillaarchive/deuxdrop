@@ -43,8 +43,8 @@
           </form>
         </div>
         <div data-cardid="start" title="Deuxdrop" class="card">
-          <a href="#peeps">Peeps</a>
-          <a href="#compose">Compose</a>
+          <a class="item" href="#peeps">Peeps</a>
+          <a class="item" href="#compose">Compose</a>
           <div class="newConversationNotifications" data-childclass="newConversation"></div>
         </div>
         <div data-cardid="peeps" title="Peeps" class="card" data-childclass="personLink">
@@ -89,42 +89,25 @@
         <span class="newConversationTime"></span>
       </a>
 
-      <a data-classimpl="personLink" href="#peep"></a>
+      <a data-classimpl="personLink" class="item" href="#peep"></a>
 
-      <a data-classimpl="addPeepLink" href="#back?action=addPeep"></a>
+      <a data-classimpl="addPeepLink" class="item" href="#back?action=addPeep"></a>
 
-      <a data-classimpl="addPersonLink" href="#listUsersForAddPeep">+ Add Peep</a>
+      <a data-classimpl="addPersonLink" class="item" href="#listUsersForAddPeep">+ Add Peep</a>
 
-      <a data-classimpl="convListItem" href="#conversation"></a>
+      <a data-classimpl="convListItem" class="item" href="#conversation?id="><span class="meta">
+          </span></a>
 
-      <li data-classimpl="message" class="message hbox">
-        <div class="messageFrom">
-          <img class="messageFromPic" data-bind="from.pic" data-attr="src" src="i/face2.png">
+      <div data-classimpl="message"  class="bubble">
+        <a href='#peep?id=' class="sender">
+          <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
+          <span class="name" data-bind="from.name"></span>
+        </a>
+        <div class="body">
+          <div class="meta">
+          </div>
         </div>
-        <div class="messageBubble boxFlex">
-          <span class="messageFromName" data-bind="from.name"></span>
-          <span data-bind="text" class="messageText"></span>
-        </div>
-      </li>
-
-
-
-  <div data-classimpl="message"  class="bubble">
-    <a href='#peep?id=' class="sender">
-      <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
-      <span class="name" data-bind="from.name"></span>
-    </a>
-    <div class="body">
-      <div class="meta">
       </div>
-    </div>
-  </div>
-
-
-
-
-
-
 
     </div>
     <!-- End standard UI elements -->

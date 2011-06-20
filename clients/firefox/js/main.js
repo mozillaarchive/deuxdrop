@@ -80,18 +80,23 @@ define(function (require) {
     });
   }
 
+  function insertTextAndMeta(nodeDom, message) {
+    // Insert the friendly time in meta, and message text before meta
+    var metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
+    metaNode.setAttribute('data-time', message.time);
+    metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
+  }
+
   function makeMessageBubble(node, message) {
     var nodeDom = $(node),
-        metaNode, senderNode, senderDom,
+        senderNode, senderDom,
         isMe = moda.me().id === message.from.id;
 
     // do declarative text replacements.
     updateDom(nodeDom, message);
 
     // Insert the friendly time in meta, and message text before meta
-    metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
-    metaNode.setAttribute('data-time', message.time);
-    metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
+    insertTextAndMeta(nodeDom, message);
 
     // Update the URL to use for the peep
     senderDom = nodeDom.find('.sender');
@@ -253,21 +258,14 @@ define(function (require) {
       peep.getConversations(function (conversations) {
         conversations.forEach(function (conv) {
           var node = convCloneNode.cloneNode(true),
-              messages = conv.messages,
-              msg, lastMsg, i;
+              nodeDom = $(node),
+              message = conv.message;
 
-          for (i = messages.length - 1; i > -1 && (msg = messages[i]); i--) {
-            if (msg.from.id === peep.id) {
-              lastMsg = msg;
-              break;
-            }
-          }
-          if (!lastMsg) {
-            lastMsg = messages[messages.length - 1];
-          }
+          //Insert the message text and time.
+          insertTextAndMeta(nodeDom, message);
 
-          $(node).text(lastMsg.text);
-          node.href +=  '?id=' + encodeURIComponent(conv.id);
+          // Update the link to have the conversation ID.
+          node.href += encodeURIComponent(message.convId);
 
           frag.appendChild(node);
 
@@ -278,6 +276,7 @@ define(function (require) {
         });
       });
     },
+
     'conversation': function (data, dom) {
       var convId = data.id,
           messagesNode = dom.find('.conversationMessages')[0],

@@ -112,8 +112,9 @@ button {
   overflow-y: auto;
 }
 
-.card > a {
+a.item {
   display: block;
+  position: relative;
   background-color: #fff;
   padding: 10px;
   border-bottom: 1px solid #e6e6e6;
@@ -126,8 +127,8 @@ button {
   background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fff), color-stop(100%, #fafafa));
 }
 
-.card > a:hover,
-.card > a.selected {
+a.item:hover,
+a.item.selected {
   border-bottom: 1px solid #BFD5DE;
   border-top: 1px solid #BFD5DE;
   z-index: 100;
@@ -151,7 +152,7 @@ button {
 
 
 .compose {
-  padding: 0 10px;
+  padding: 10px 10px 0 10px;
   height: 20px;
 }
 
@@ -249,14 +250,22 @@ button {
 
   .meta {
     position: absolute;
-    left: 35px;
     bottom: 5px;
     font-size: 8pt;
     color: #777;
   }
 
+  .left .meta {
+    left: 35px;
+  }
+
   .right .meta {
     right: 35px;
+  }
+
+  .peepConversations .meta {
+    bottom: 10px;
+    right: 10px;
   }
 
 /* END chat bubble styles */

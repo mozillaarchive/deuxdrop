@@ -223,6 +223,36 @@ actions = {
     redis.srem('peeps:' + userId, peepId);
   },
 
+  'getPeepConversations': function (data, client) {
+    var peepId = data.peepId,
+        userId = client._deuxUserId,
+        multi;
+
+    redis.smembers(userId + '-' + peepId, function (err, convIds) {
+      convIds = multiBulkToStringArray(convIds || []);
+
+      // Now get the conversation objects for each convId
+      multi = redis.multi();
+
+      convIds.forEach(function (convId) {
+        multi.hgetall(convId + '-' + peepId);
+      });
+
+      multi.exec(function (err, summaries) {
+        // Rehydrate the message
+        summaries.forEach(function (summary) {
+          summary.message = JSON.parse(summary.message);
+        });
+
+        // Send the response
+        clientSend(client, data, {
+          action: 'getPeepConversationsResponse',
+          conversations: summaries
+        });
+      });
+    });
+  },
+
   'loadConversation': function (data, client) {
     var convId = data.convId;
 
@@ -273,6 +303,10 @@ actions = {
     // Add the message to the message list for the conversation.
     redis.sadd(convId + '-messages', JSON.stringify(message));
 
+    // Update the "last message from user" conversation summary for use
+    // when showing the list of conversations from a user.
+    redis.hmset(convId + '-' + from, 'message', JSON.stringify(message));
+
     users.forEach(function (user) {
       // Add the user to the peep list for the conversation.
       redis.sadd(convId + '-peeps', user);
@@ -280,7 +314,7 @@ actions = {
       // Update the set of conversations a user is involved in,
       // but scope it per user
       users.forEach(function (other) {
-        redis.rpush(user + '-' + other, convId);
+        redis.sadd(user + '-' + other, convId);
       });
 
       // Push the message to any user clients
@@ -307,6 +341,10 @@ actions = {
 
     // Add the message to the message list for the conversation.
     redis.sadd(convId + '-messages', JSON.stringify(message));
+
+    // Update the "last message from user" conversation summary for use
+    // when showing the list of conversations from a user.
+    redis.hmset(convId + '-' + message.from, 'message', JSON.stringify(message));
 
     // Get all conversation participants to send the message.
     redis.smembers(convId + '-peeps', function (err, users) {

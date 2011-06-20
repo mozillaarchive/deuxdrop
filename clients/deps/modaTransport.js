@@ -286,12 +286,15 @@ define(function (require, exports) {
     }
   };
 
-  makePassThroughApi('peeps', ['query'], 'items');
-  makePassThroughApi('users', ['query'], 'items');
+  makePerCallPassThroughApi('peeps', ['query'], 'items');
+  makePerCallPassThroughApi('users', ['query'], 'items');
   makePerCallPassThroughApi('peep', ['peepId'], 'peep');
   makePerCallPassThroughApi('addPeep', ['peepId'], 'peep');
   makePerCallPassThroughApi('loadConversation', ['convId'], 'details');
+  makePerCallPassThroughApi('getPeepConversations', ['peepId'], 'conversations');
 
   makeRequestOnlyApi('startConversation', ['args']);
   makeRequestOnlyApi('sendMessage', ['message']);
+
+
 });

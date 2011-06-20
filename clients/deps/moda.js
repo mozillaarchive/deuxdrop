@@ -133,8 +133,6 @@ Peep
     this.pinned = false;
     this.frecency = 0;
 
-    this.areConversationsLoaded = false;
-
     //TODO: this should start as false
     this.connected = true;
 
@@ -154,20 +152,9 @@ Peep
      * objects.
      */
     getConversations: function (callback) {
-      var d = q.defer();
-
-      if (this.conversationsPromise) {
-        q.when(this.conversationsPromise, callback);
-      } else {
-        // fake the data for now
-        this.conversationsPromise = d.promise;
-        q.when(this.conversationsPromise, callback);
-        this.conversations = []; //conversations[this.id];
-        d.resolve(this.conversations);
-      }
+      transport.getPeepConversations(this.id, callback);
     }
   };
-
 
   function Users(query, on) {
     this.items = [];
