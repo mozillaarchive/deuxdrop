@@ -73,7 +73,7 @@ TD.commonCase('create new identity, signup with server', function(T) {
   });
 
   // signup; this waits for the confirmations...
-  client.setup_useServer(server);
+  client.setup_useServer(server).log.boring(false); // rebrand it as not boring
 
   T.check('have', server, 'verify', client,
            'is authorized now that we signed up', function() {

@@ -66,13 +66,14 @@ define(
 /**
  * Data-record class for test steps; no built-in logic.
  */
-function TestStep(_log, kind, descBits, actors, testFunc) {
+function TestStep(_log, kind, descBits, actors, testFunc, isBoring) {
   this.kind = kind;
   this.descBits = descBits;
   this.actors = actors;
   this.testFunc = testFunc;
 
   this.log = LOGFAB.testStep(this, _log, descBits);
+  this.log.boring(isBoring);
 }
 TestStep.prototype = {
 };
@@ -235,7 +236,7 @@ TestContext.prototype = {
     return thang;
   },
 
-  _newStep: function(kind, args) {
+  _newStep: function(kind, args, isBoring) {
     var actors = [], descBits = [];
     // args[:-1] are actors/description intermixed, args[-1] is the testfunc
     var iArg;
@@ -258,22 +259,23 @@ TestContext.prototype = {
       }
     }
     var testFunc = args[iArg];
-    var step = new TestStep(this._log, kind, descBits, actors, testFunc);
+    var step = new TestStep(this._log, kind, descBits, actors, testFunc,
+                            isBoring);
     this.__steps.push(step);
     return step;
   },
 
-  _newDeferredStep: function(kind, args) {
+  _newDeferredStep: function(kind, args, isBoring) {
     if (!this._deferredSteps)
       this._deferredSteps = [];
-    this._deferredSteps.push([kind, args]);
+    this._deferredSteps.push([kind, args, isBoring]);
   },
 
   __postSetupFunc: function() {
     if (this._deferredSteps) {
       for (var i = 0; i < this._deferredSteps.length; i++) {
         var stepDef = this._deferredSteps[i];
-        this._newStep(stepDef[0], stepDef[1]);
+        this._newStep(stepDef[0], stepDef[1], stepDef[2]);
       }
       this._deferredSteps = null;
     }
@@ -298,7 +300,7 @@ TestContext.prototype = {
    *  interactions for clarity.
    */
   action: function action() {
-    return this._newStep('action', arguments);
+    return this._newStep('action', arguments, false);
   },
 
   /**
@@ -306,7 +308,7 @@ TestContext.prototype = {
    *  affect anything.
    */
   check: function action() {
-    return this._newStep('check', arguments);
+    return this._newStep('check', arguments, false);
   },
 
   /**
@@ -341,7 +343,7 @@ TestContext.prototype = {
    *  failures of lower level tests.
    */
   setup: function() {
-    return this._newStep('setup', arguments);
+    return this._newStep('setup', arguments, true);
   },
 
   /**
@@ -349,7 +351,7 @@ TestContext.prototype = {
    *  accordingly be marked as boring.
    */
   convenienceSetup: function() {
-    return this._newStep('setup', arguments);
+    return this._newStep('setup', arguments, true);
   },
 
   /**
@@ -363,7 +365,7 @@ TestContext.prototype = {
    *  the cleanup steps, even though they may also experience failures.
    */
   cleanup: function() {
-    return this._newStep('cleanup', arguments);
+    return this._newStep('cleanup', arguments, true);
   },
 
   /**
@@ -372,7 +374,7 @@ TestContext.prototype = {
    *  `convenienceDeferredCleanup` which defines a step that
    */
   convenienceCleanup: function() {
-    return this._newStep('cleanup', arguments);
+    return this._newStep('cleanup', arguments, true);
   },
 
   /**
@@ -381,7 +383,7 @@ TestContext.prototype = {
    *  executing.
    */
   convenienceDeferredCleanup: function() {
-    return this._newDeferredStep('cleanup', arguments);
+    return this._newDeferredStep('cleanup', arguments, true);
   },
 };
 exports.TestContext = TestContext;
@@ -537,6 +539,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
       stepFunc: {},
     },
     latchState: {
+      boring: false,
       result: false,
     },
     errors: {

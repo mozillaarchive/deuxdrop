@@ -99,9 +99,9 @@ var TestClientActorMixins = {
 
   setup_useServer: function setup_useServer(server) {
     var self = this;
-    this.T.convenienceSetup(self._eRawClient, 'creates account with',
-                            server._eServer,
-                            function() {
+    return this.T.convenienceSetup(self._eRawClient, 'creates account with',
+                                   server._eServer,
+                                   function() {
       self._eRawClient
         .expect_signup_begin()
         .expect_signedUp()
