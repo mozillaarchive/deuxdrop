@@ -62,7 +62,7 @@ var TestClientActorMixins = {
   __constructor: function(self) {
 
     // -- define the raw client and its setup step
-    self._eRawClient = self.T.actor('rawClient', self.__name);
+    self._eRawClient = self.T.actor('rawClient', self.__name, null, self);
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
         function() {
       // - create our self-corresponding logger the manual way
@@ -75,7 +75,8 @@ var TestClientActorMixins = {
       var poco = {
         displayName: self.__name,
       };
-      self._rawClient = $rawclient_api.makeClientForNewIdentity(poco);
+      self._rawClient = $rawclient_api.makeClientForNewIdentity(poco,
+                                                                self._logger);
     });
   },
 
@@ -147,8 +148,8 @@ var SERVER_ROLE_MODULES = {
 
 var TestServerActorMixins = {
   __constructor: function(self, opts) {
-    self._eServer = self.T.actor('server', self.__name);
-    self._eDb = self.T.actor('gendbConn', self.__name);
+    self._eServer = self.T.actor('server', self.__name, null, self);
+    self._eDb = self.T.actor('gendbConn', self.__name, null, self);
     self.T.convenienceSetup(self._eServer, 'created, listening to get port.',
                             self._eDb, 'established',
                             function() {
@@ -159,7 +160,7 @@ var TestServerActorMixins = {
       // - create the server
       self._eServer.expect_listening();
 
-      self._server = new $authconn.AuthorizingServer();
+      self._server = new $authconn.AuthorizingServer(self._logger);
       self._server.listen();
 
       // - establish db connection

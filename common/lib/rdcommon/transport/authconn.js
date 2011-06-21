@@ -636,11 +636,11 @@ function serve404s(request, response) {
  *  listening on.  It is globally uniquely named by prefixing the host
  *  identifier (which is handled by the logging layer).
  */
-function AuthorizingServer() {
+function AuthorizingServer(_logger) {
 console.log("instantiating server");
   this._endpoints = {};
 
-  this.log = LOGFAB.server(this, null, []);
+  this.log = LOGFAB.server(this, _logger, []);
 
   // That which is not a websocket shall be severely disappointed currently.
   var httpServer = this._httpServer = $http.createServer(serve404s);

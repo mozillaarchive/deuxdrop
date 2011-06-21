@@ -321,6 +321,7 @@ var TestActorProtoBase = {
       actorIdent: this.__defName,
       semanticIdent: this.__name,
       uniqueName: this._uniqueName,
+      parentUniqueName: this._parentUniqueName,
       loggerUniqueName: this._logger ? this._logger._uniqueName : null,
     };
   },
@@ -944,9 +945,10 @@ LoggestClassMaker.prototype = {
     };
     testerCon.prototype = this.testLogProto;
 
-    var testActorCon = function testActorConstructor(name) {
+    var testActorCon = function testActorConstructor(name, _parentUniqueName) {
       this.__name = name;
       this._uniqueName = gUniqueActorName++;
+      this._parentUniqueName = _parentUniqueName;
       // initially undefined, goes null when we register for pairing, goes to
       //  the logger instance when paired.
       this._logger = undefined;

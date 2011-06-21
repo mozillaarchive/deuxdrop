@@ -140,7 +140,7 @@ ClientSignupConn.prototype = {
  * For the time being, we are assuming the client always has all sets of
  *  its keyrings accessible to itself.
  */
-function RawClientAPI(persistedBlob) {
+function RawClientAPI(persistedBlob, _logger) {
   // -- restore keyrings
   this._rootKeyring = $keyring.loadPersonRootSigningKeyring(
                         persistedBlob.keyrings.root);
@@ -157,7 +157,7 @@ function RawClientAPI(persistedBlob) {
                            this._keyring.rootPublicKey);
   this._poco = selfIdentPayload.poco;
 
-  this.log = LOGFAB.rawClient(this, null,
+  this.log = LOGFAB.rawClient(this, _logger,
     ['user', this._keyring.rootPublicKey,
      'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
 
@@ -314,7 +314,7 @@ RawClientAPI.prototype = {
 /**
  * Create a new identity using the provided portable contacts schema.
  */
-exports.makeClientForNewIdentity = function(poco) {
+exports.makeClientForNewIdentity = function(poco, _logger) {
   // -- keys
   // - create the keyrings.
   var rootKeyring, longtermKeyring, keyring;
@@ -354,7 +354,7 @@ exports.makeClientForNewIdentity = function(poco) {
     clientAuth: clientAuthBlob,
   };
 
-  return new RawClientAPI(persistedBlob);
+  return new RawClientAPI(persistedBlob, _logger);
 };
 
 exports.getClientForExistingIdentity = function(persistedBlob) {

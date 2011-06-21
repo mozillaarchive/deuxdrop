@@ -124,13 +124,14 @@ TestContext.prototype = {
    *  internal logger, but we're going to leave that door open and pretend like
    *  an actor is itself a (potentially cross-cutting) logger.
    */
-  actor: function actor(type, name, opts) {
+  actor: function actor(type, name, opts, optionalParentActor) {
     var fabs = this.__testCase.definer.__logfabs;
     for (var iFab = 0; iFab < fabs.length; iFab++) {
       var actorDir = fabs[iFab]._actorCons;
       if (actorDir.hasOwnProperty(type)) {
         // - create the actor
-        var actor = new actorDir[type](name);
+        var actor = new actorDir[type](
+          name, optionalParentActor ? optionalParentActor._uniqueName : null);
         // tell it about us, the operational context
         actor.T = this;
 
