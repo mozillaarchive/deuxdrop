@@ -42,7 +42,7 @@
 define(
   [
     'util', 'fs',
-    'q', 'q-util',
+    'q',
     './testcontext',
     './extransform',
     'require',
@@ -50,13 +50,13 @@ define(
   ],
   function(
     $util, $fs,
-    $Q, $Qutil,
+    $Q,
     $testcontext,
     $extransform,
     require,
     exports
   ) {
-var when = $Q.when, whenAll = $Qutil.whenAll;
+var when = $Q.when;
 
 /**
  * The runtime context interacts with the log fab subsystem to indicate that we
@@ -219,7 +219,7 @@ TestDefinerRunner.prototype = {
         deferred = null;
       }, STEP_TIMEOUT_MS);
       // -- promise resolution/rejection handler
-      whenAll(promises, function passed() {
+      when($Q.wait.apply(null, promises), function passed() {
         if (!deferred) return;
         clearTimeout(countdownTimer);
 

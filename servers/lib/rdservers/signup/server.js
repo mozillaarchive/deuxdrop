@@ -253,13 +253,17 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
       // XXX everyone wins!
     },
     doTheSignup: function() {
-
       return this.arg.conn.serverConfig.authApi.serverCreateUserAccount(
         this.selfIdentPayload.root.rootSignPubKey,
         this.arg.msg.selfIdent,
         this.clientAuthsMap);
     },
     tellThemTheyAreSignedUp: function() {
+      this.arg.conn.writeMessage({
+        type: 'signedUp',
+      });
+      // (end of the line; not an early return)
+      return this.arg.conn.close();
     },
   },
   impl: {
@@ -270,8 +274,7 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
           mechanism: challengeType,
         },
       });
-      this.arg.conn.close();
-      return this.earlyReturn("root");
+      return this.earlyReturn(this.arg.conn.close());
     },
   },
 });

@@ -290,6 +290,14 @@ TestContext.prototype = {
   },
 
   /**
+   * Defines a test step that just checks the state of things and does not
+   *  affect anything.
+   */
+  check: function action() {
+    return this._newStep('check', arguments);
+  },
+
+  /**
    * Defines a step where two or more alternative actions should be run.
    *  Implicitly results in the test case as a whole being run a sufficient
    *  number of times to satisfy all contained permutations.

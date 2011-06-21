@@ -113,7 +113,7 @@ ClientSignupConn.prototype = {
    */
   _msg_root_challenge: function(msg) {
     this._deferred.reject(msg.challenge);
-    this.conn.close();
+    return this.conn.close();
   },
 
   /**
@@ -121,7 +121,7 @@ ClientSignupConn.prototype = {
    */
   _msg_root_signedUp: function() {
     this._deferred.resolve(true);
-    this.conn.close();
+    return this.conn.close();
   },
 
   _sendSignup: function() {
@@ -164,6 +164,12 @@ function RawClientAPI(persistedBlob, _logger) {
   this._signupConn = null;
 }
 RawClientAPI.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Identity Info
+  get rootPublicKey() {
+    return this._keyring.rootPublicKey;
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Server Signup
 

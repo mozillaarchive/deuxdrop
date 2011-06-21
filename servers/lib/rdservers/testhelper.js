@@ -41,6 +41,9 @@
 
 define(function(require,exports,$module) {
 
+var $Q = require('q'),
+    when = $Q.when;
+
 var $log = require('rdcommon/log'),
     $rawclient_api = require('rdcommon/rawclient/api'),
     $authconn = require('rdcommon/transport/authconn'),
@@ -88,7 +91,8 @@ var TestClientActorMixins = {
 
   setup_useServer: function setup_useServer(server) {
     var self = this;
-    this.T.convenienceSetup(self._eRawClient, 'creates account with', server,
+    this.T.convenienceSetup(self._eRawClient, 'creates account with',
+                            server._eServer,
                             function() {
       self._eRawClient
         .expect_signup_begin()
@@ -181,8 +185,8 @@ var TestServerActorMixins = {
       var signedSelfIdent = self.__signedSelfIdentBlob =
         $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
 
-      var serverConfig = $configurer.__populateTestConfig(
-                           keyring, signedSelfIdent);
+      var serverConfig = self._config = $configurer.__populateTestConfig(
+                                         keyring, signedSelfIdent);
 
       // -- create api's, bind server definitions
       var roles = opts.roles;
@@ -209,6 +213,17 @@ var TestServerActorMixins = {
       self._db.close();
     });
   },
+
+  assertClientAuthorizationState: function(testClient, isAuthorized) {
+    var userRootKey = testClient._rawClient.rootPublicKey;
+    this.expect_clientAuthorizationCheck(userRootKey, isAuthorized);
+
+    var self = this;
+    when(this._config.authApi.serverCheckUserAccount(userRootKey),
+      function(val) {
+        self._logger.clientAuthorizationCheck(userRootKey, val);
+      });
+  },
 };
 
 var MessageThingMixins = {
@@ -226,6 +241,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.SERVER,
+
+    events: {
+      clientAuthorizationCheck: {userRootKey: 'key', isAuthorized: true},
+    },
   }
 });
 

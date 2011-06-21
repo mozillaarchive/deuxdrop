@@ -67,8 +67,19 @@ TD.commonCase('create new identity, signup with server', function(T) {
   var client = T.actor('testClient', 'C');
   var server = T.actor('testServer', 'S', {roles: ['auth', 'signup']});
 
-  debugger;
+  T.check('have', server, 'verify', client,
+           'is not authorized before we signup', function() {
+    server.assertClientAuthorizationState(client, false);
+  });
+
+  // signup; this waits for the confirmations...
   client.setup_useServer(server);
+
+  T.check('have', server, 'verify', client,
+           'is authorized now that we signed up', function() {
+    server.assertClientAuthorizationState(client, true);
+  });
+
 });
 
 }); // end define
