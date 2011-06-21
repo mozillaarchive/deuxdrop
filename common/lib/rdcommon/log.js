@@ -191,6 +191,7 @@ var ThingProto = exports.ThingProto = {
     return {
       type: this.__type,
       name: this.__name,
+      dname: this.__diginame,
       uniqueName: this._uniqueName,
     };
   },
@@ -201,17 +202,18 @@ var ThingProto = exports.ThingProto = {
  *  is allocated with a unique name.
  *
  * This should not be called directly by user code; it is being surfaced for use
- *  by `testcontext.js` in order to define things with names drawn from a
+ *  by `testcontext.js` in order to define things with names drawn from an
  *  over-arching global namespace.  The caller needs to take on the
  *  responsibility of exposing the thing via a logger or the like.
  */
-exports.makeThing = function makeThing(type, name, proto) {
+exports.__makeThing = function makeThing(type, humanName, digitalName, proto) {
   if (proto === undefined)
     proto = ThingProto;
   return {
     __proto__: proto,
     __type: type,
-    __name: name,
+    __name: humanName,
+    __diginame: digitalName,
     _uniqueName: gUniqueThingName--,
   };
 };

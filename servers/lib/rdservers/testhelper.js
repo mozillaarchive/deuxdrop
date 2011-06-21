@@ -80,6 +80,14 @@ var TestClientActorMixins = {
       };
       self._rawClient = $rawclient_api.makeClientForNewIdentity(poco,
                                                                 self._logger);
+
+      // - bind names to our public keys (so the logs are less gibberish)
+      self.T.thing('key', self.__name + ' root',
+                   self._rawClient.rootPublicKey);
+      self.T.thing('key', self.__name + ' longterm',
+                   self._rawClient.longtermSigningPublicKey);
+      self.T.thing('key', self.__name + ' client',
+                   self._rawClient.clientPublicKey);
     });
   },
 
@@ -177,6 +185,9 @@ var TestServerActorMixins = {
       // -- create our identity
       var rootKeyring = $keyring.createNewServerRootKeyring(),
           keyring = rootKeyring.issueLongtermBoxingKeyring();
+
+      self.T.thing('key', self.__name + ' root', keyring.rootPublicKey);
+      self.T.thing('key', self.__name + ' longterm', keyring.boxingPublicKey);
 
       var details = {
         tag: 'server:dummy',

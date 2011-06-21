@@ -203,21 +203,33 @@ TestContext.prototype = {
    *  life cycle.  Much of the point of the thing abstraction is to allow us to
    *  tie all those representations together.
    *
-   * Thing naming and reconstruction is accomplished by using consistent
+   * Simple thing naming just lets us bind a name to a public key or the like.
+   *
+   * Complex thing naming and reconstruction is accomplished by using consistent
    *  argument names across logging layers that are made known to the
    *  reconstruction layer.  Message layering/containment is accomplished
    *  by logging an event when the encapsulation/decapsulation occurs that
    *  contains both identifiers.
    *
-   * Because things can be exist and need to be named prior to the true name
-   *  they will eventually know, they are given unique identifiers within
-   *  their containing namespaces.
+   * Because complex things can be exist and may need to be named prior to the
+   *  true name they will eventually know, they are given unique identifiers
+   *  within their containing namespaces.  Simple things are just reusing the
+   *  infrastructure and don't really need the unique name support.
    *
    * Things, like actors, can have convenience functions placed onto their
-   *  prototype chain.  Their convenience functions
+   *  prototype chain.
+   *
+   * @args[
+   *   @param[type String]
+   *   @param[humanName String]
+   *   @param[digitalName #:optional String]{
+   *     If the thing is a crypto key, the public key which we should map to the
+   *     human name when we see it.
+   *   }
+   * ]
    */
-  thing: function thing(type, name) {
-    var thang = $log.makeThing(type, name);
+  thing: function thing(type, humanName, digitalName) {
+    var thang = $log.__makeThing(type, humanName, digitalName);
     // poke it into our logger for reporting.
     this._log._named[thang._uniqueName] = thang;
     return thang;

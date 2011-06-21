@@ -166,8 +166,21 @@ function RawClientAPI(persistedBlob, _logger) {
 RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Identity Info
+
   get rootPublicKey() {
     return this._keyring.rootPublicKey;
+  },
+
+  get longtermSigningPublicKey() {
+    return this._keyring.signingPublicKey;
+  },
+
+  /**
+   * The client's boxing public key; it is not intended to be named to external
+   *  parties other than us and the server at this type.
+   */
+  get clientPublicKey() {
+    return this._keyring.getPublicKeyFor('client', 'connBox');
   },
 
   //////////////////////////////////////////////////////////////////////////////
