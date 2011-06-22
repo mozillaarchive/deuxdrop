@@ -41,7 +41,7 @@
 
 define(
   [
-    'util', 'fs',
+    'util', 'fs', 'child_process',
     'q',
     './testcontext',
     './extransform',
@@ -49,7 +49,7 @@ define(
     'exports'
   ],
   function(
-    $util, $fs,
+    $util, $fs, $subproc,
     $Q,
     $testcontext,
     $extransform,
@@ -351,12 +351,14 @@ TestDefinerRunner.prototype = {
   },
 
   runAll: function() {
+console.error(" runAll()");
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
     this._markDefinerUnderTest(definer);
     definer._log.run_begin();
     // -- next case
     function runNextTestCase() {
+console.error("  runNextTestCase()");
       // - all done
       if (iTestCase >= definer.__testCases.length) {
         process.removeListener('exit', earlyBailHandler);
@@ -364,14 +366,13 @@ TestDefinerRunner.prototype = {
 
         definer._log.run_end();
         self._clearDefinerUnderTest(definer);
+console.error("   resolving!");
         deferred.resolve(self);
         return;
       }
       var testCase = definer.__testCases[iTestCase++];
       when(self.runTestCase(testCase), runNextTestCase);
     }
-    runNextTestCase();
-
 
     // node.js will automatically terminate when the event loop says there is
     //  nothing left to do.  We register a listener to detect this and promote
@@ -380,7 +381,7 @@ TestDefinerRunner.prototype = {
     //  and so we can't depend on promises, etc.  Buffers will be flushed,
     //  however.
     function earlyBailHandler() {
-      console.log("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
+      console.error("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
                     "DUMPING LOG.");
       self.dumpLogResultsToConsole();
     }
@@ -395,6 +396,7 @@ TestDefinerRunner.prototype = {
     }
     process.on('uncaughtException', uncaughtExceptionHandler);
 
+    runNextTestCase();
     return deferred.promise;
   },
 
@@ -446,13 +448,107 @@ TestDefinerRunner.prototype = {
   }
 };
 
+
 /**
- * Run the tests defined in a single, already-require()d module.
+ * In the event require()ing a test module fails, we want to report this
+ *  so it's not just like the test disappears from the radar.
  */
-exports.runTestsFromModule = function runTestsFromModule(tmod) {
-  var runner = new TestDefinerRunner(tmod.TD);
-  return runner.runAll();
+function reportTestModuleRequireFailures(testModuleName, exceptions) {
+  console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
+  try {
+    var dumpObj = {
+      schema: $testcontext.LOGFAB._rawDefs,
+      fileFailure: {
+        fileName: testModuleName,
+        exceptions: exceptions.map($extransform.transformException),
+      }
+    };
+    console.error(JSON.stringify(dumpObj));
+  }
+  catch (ex) {
+    console.error("JSON problem:", ex.message, ex.stack, ex);
+    console.error($util.inspect(dumpObj, false, 12));
+  }
+  console.error("##### LOGGEST-TEST-RUN-END #####");
+}
+
+/**
+ * Run the tests defined in a single module that we require (so that we can
+ *  handle errors in the require() process).
+ *
+ * @return[success Boolean]
+ */
+exports.runTestsFromModule = function runTestsFromModule(testModuleName,
+                                                         ErrorTrapper) {
+  var deferred = $Q.defer();
+  var runner;
+  function itAllGood() {
+console.error("  itAllGood()");
+    runner.dumpLogResultsToConsole();
+    deferred.resolve(true);
+  };
+
+  ErrorTrapper.trapErrors();
+  require([testModuleName], function(tmod) {
+    // If there was a problem, tmod will be null (and we will have trapped
+    //  an error.)
+    var trappedErrors = ErrorTrapper.gobbleAndStopTrappingErrors();
+    if (trappedErrors.length) {
+      reportTestModuleRequireFailures(testModuleName, trappedErrors);
+      deferred.resolve(true);
+      return;
+    }
+    if (!tmod.TD) {
+      var fakeError = new Error("Test module: '" + testModuleName +
+                                 "' does not export a 'TD' symbol!");
+      reportTestModuleRequireFailures(testModuleName, [fakeError]);
+      deferred.resolve(true);
+      return;
+    }
+
+    // now that it is loaded, run it
+    runner = new TestDefinerRunner(tmod.TD);
+    when(runner.runAll(), itAllGood, itAllGood);
+  });
+  return deferred.promise;
 };
+
+/**
+ * Run the given test in a subprocess by invoking our command-line handler
+ *  again but giving it a specific test, thereby avoiding system destroying
+ *  fork-bombs.
+ *
+ * This function is intended to support having multiple concurrent test runs
+ *  happening through multiple concurrent runs of this function.  As such
+ *  we do buffer the output of the sub-tests so there is no chance for
+ *  interleaving.
+ */
+function runTestInSubProcess(testModuleName) {
+  console.error(":: running", testModuleName, "in subprocess");
+  var deferred = $Q.defer();
+
+  // we are assuming/requiring the same working path of servers/lib
+  var args = [process.execPath, 'r.js', 'rdservers/cmdline.js',
+              'test', testModuleName];
+  var cmd = args.join(' ');
+  var opts = {
+    // deathClock + 5sec.
+    timeout: 1000 * 25,
+    // logs should ideally be much smaller, but they deserve their space
+    maxBuffer: 10 * 1024 * 1024,
+  };
+  console.error("    ", cmd);
+  $subproc.exec(cmd, opts, function(error, stdout, stderr) {
+    console.error("  :: stdout");
+    console.error(stdout);
+    console.error("  :: stderr");
+    console.error(stderr);
+    console.error("  :: finished", Boolean(error), "\n\n");
+    deferred.resolve();
+  });
+
+  return deferred.promise;
+}
 
 /**
  * Runs multiple test files given their module names; we require and run each
@@ -469,12 +565,7 @@ MultiTestFileRunner.prototype = {
     var self = this;
     var deferred = $Q.defer();
 
-    function runNextFile(wasRunner) {
-      // dump the results (if this is not the first file)
-      if (wasRunner) {
-        wasRunner.dumpLogResultsToConsole();
-      }
-
+    function runNextFile() {
       // finish if there's no more work to do
       if (self._iNextModule >= self._moduleNames.length) {
         deferred.resolve();
@@ -483,31 +574,9 @@ MultiTestFileRunner.prototype = {
 
       // require the module to test
       var testModuleName = self._moduleNames[self._iNextModule++];
-      // - require the file, be ready for an exception
-console.error("TRAPPING ERRORS");
-      self._errorTrapper.trapErrors();
-      require([testModuleName], function(tmod) {
-        // If there was a problem, tmod will be null (and we will have trapped
-        //  an error.)
-        console.error("INSIDE CALLBACK, DONE TRAPPING");
-        var trappedErrors = self._errorTrapper.gobbleAndStopTrappingErrors();
-        if (trappedErrors.length) {
-          self._reportTestModuleRequireFailures(testModuleName, trappedErrors);
-        }
-        // this should correlate with the above...
-        if (!tmod) {
-          // we screwed up, we need to advanced to the next dude
-          process.nextTick(runNextFile);
-          return;
-        }
-        if (!tmod.TD)
-          throw new Error("Test module: '" + testModuleName +
-                          "' does not export a 'TD' symbol!");
-        // now that it is loaded, run it
-        var runner = new TestDefinerRunner(tmod.TD);
-        when(runner.runAll(), runNextFile);
-      });
-      console.error("REQUIRE ALL DONE");
+
+      // - have a subprocess run the file
+      when(runTestInSubProcess(testModuleName), runNextFile);
     }
 
     runNextFile();
@@ -515,28 +584,6 @@ console.error("TRAPPING ERRORS");
     return deferred.promise;
   },
 
-  /**
-   * In the event require()ing a test module fails, we want to report this
-   *  so it's not just like the test disappears from the radar.
-   */
-  _reportTestModuleRequireFailures: function(testModuleName, exceptions) {
-    console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
-    try {
-      var dumpObj = {
-        schema: $testcontext.LOGFAB._rawDefs,
-        fileFailure: {
-          fileName: testModuleName,
-          exceptions: exceptions.map($extransform.transformException),
-        }
-      };
-      console.error(JSON.stringify(dumpObj));
-    }
-    catch (ex) {
-      console.error("JSON problem:", ex.message, ex.stack, ex);
-      console.error($util.inspect(dumpObj, false, 12));
-    }
-    console.error("##### LOGGEST-TEST-RUN-END #####");
-  },
 };
 
 const RE_TEST = /^(.+)\.js$/;

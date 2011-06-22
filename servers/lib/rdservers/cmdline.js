@@ -65,8 +65,8 @@ var ErrorTrapper = {
 };
 
 require.onError = function(err) {
-  console.error("(Exception)");
-  console.error("RJS EX STACK", err.message, err.stack);
+  //console.error("(Exception)");
+  //console.error("RJS EX STACK", err.message, err.stack);
 
   if (err.originalError)
     err = err.originalError;
@@ -115,7 +115,7 @@ function deathClock(timeout, nonfatal) {
   if (!nonfatal)
     DEATH_PRONE = true;
   setTimeout(function() {
-    console.log("WATCHDOG KILLIN");
+    console.error("WATCHDOG KILLIN");
     process.exit(10);
   }, timeout);
 }
@@ -195,7 +195,6 @@ parser.command('test')
       console.log("EXIT EVENT", code);
     });
 
-    deathClock(30 * 1000, true);
     // Ideally we could slurp this from requirejs... and maybe we can, but for
     //  now...
     var testPrefixToPathMap = {
@@ -204,17 +203,21 @@ parser.command('test')
     };
     // -- specific test
     if (options.specificTest) {
-      require(['rdcommon/testdriver', options.specificTest],
-               function($driver, $testmod) {
-        when($driver.runTestsFromModule($testmod),
-          function(runner) {
-            runner.dumpLogResultsToConsole();
+      deathClock(20 * 1000, true);
+      require(['rdcommon/testdriver'],
+               function($driver) {
+        when($driver.runTestsFromModule(options.specificTest, ErrorTrapper),
+          function() {
+console.error("  !! performing exit");
+            // pass or fail, we want to exit normally; only the death clock
+            //  should result in a non-zero exit.
             process.exit(0);
           });
       });
     }
-    // -- scan for tests
+    // -- scan for tests (which uses child processes to invoke specific tests)
     else {
+      deathClock(90 * 1000, true);
       require(['rdcommon/testdriver'],
                function($driver) {
         when($driver.runTestsFromDirectories(testPrefixToPathMap,

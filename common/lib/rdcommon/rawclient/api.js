@@ -168,6 +168,18 @@ MailstoreConn.prototype = {
     // tell our owner we are dead so it can deal
     this._owner._mailstoreDisconnected(this);
   },
+
+  /**
+   * Server acknowledging completion of a request we issued.
+   */
+  _msg_root_ackRequest: function() {
+  },
+
+  /**
+   * Server pushing updates to our persistent/subscribed views.
+   */
+  _msg_root_timeviewUpdate: function() {
+  },
 };
 
 /**
