@@ -606,17 +606,17 @@ AuthServerConn.prototype = {
 
     var self = this;
     return when(this._authVerifier(this.endpoint, this.clientPublicKey),
-                function(isgood, knownParty) {
-      if (!isgood) {
+                function(authResult) {
+      if (!authResult) {
         self.log.authFailed();
         return self.close();
       }
       self.log.__updateIdent([self.serverKeyring.boxingPublicKey,
                               'on endpoint', self.endpoint,
                               'with client', self.clientPublicKey]);
-      self._owningServer.__endpointConnected(self, self.endpoint, knownParty);
+      self._owningServer.__endpointConnected(self, self.endpoint);
 
-      self.appConn = new self._implClass(self);
+      self.appConn = new self._implClass(self, authResult);
       self.appState = self.appConn.INITIAL_STATE;
       return 'app';
     });
@@ -688,7 +688,7 @@ AuthorizingServer.prototype = {
    *  actors by distinguishing good connections from bad connections.  Right
    *  now this just generates a log event that is vaguely interesting.
    */
-  __endpointConnected: function(conn, endpoint, knownParty) {
+  __endpointConnected: function(conn, endpoint) {
     this.log.endpointConn(endpoint);
   },
 

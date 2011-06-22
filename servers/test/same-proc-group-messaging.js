@@ -132,16 +132,19 @@
 define(
   [
     'rdcommon/testcontext',
+    'rdservers/testhelper',
     'module',
     'exports'
   ],
   function(
     $tc,
+    $th_rdservers,
     $module,
     exports
   ) {
 
-var TD = exports.TD = $tc.defineTestsFor($module);
+var TD = exports.TD = $tc.defineTestsFor($module, null,
+  [$th_rdservers.TESTHELPER]);
 
 TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
   // clients are test helper entities that have convenience functions.
@@ -168,7 +171,7 @@ TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
   // make everybody already be friends with everybody else
   // XXX this would ideally be one of our permutations or just an additional
   //  explicit step (to invite someone who is not a friend of everyone else)
-  client_a.setup_superfriends([client_b, client_c]);
+  client_a.setup_superFriends([client_b, client_c]);
 
   // -- actual testing stuff
   T.action(client_a, 'initiates one-on-one conversation with', client_b,

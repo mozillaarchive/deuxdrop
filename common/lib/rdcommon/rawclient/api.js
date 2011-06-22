@@ -76,7 +76,8 @@ define(
   ) {
 
 /**
- * Connect to the server, give it the signup bundle, that's basically it.
+ * Connect to the server, give it the signup bundle, expose our result via a
+ *  promise.
  */
 function ClientSignupConn(selfIdentBlob, clientAuthBlob, clientKeyring,
                           serverPublicKey, serverUrl, _logger) {
@@ -136,9 +137,45 @@ ClientSignupConn.prototype = {
 };
 
 /**
+ * Long-duration mailstore connection.
+ *
+ * The connection itself is largely stateless; we send a 'deviceCheckin'
+ *  whenever we (re)connect so the server knows the device's state.  Otherwise,
+ *  the device maintains
+ */
+function MailstoreConn(boxingKeyring, serverPublicKey, serverUrl,
+                       owner, clientReplicaInfo, _logger) {
+  this.conn = new $authconn.AuthClientConn(
+                this, boxingKeyring, serverPublicKey,
+                serverUrl, 'mailstore/mailstore', _logger);
+  this._owner = owner;
+  this._replicaInfo = clientReplicaInfo;
+}
+MailstoreConn.prototype = {
+  INITIAL_STATE: 'root',
+
+  __connected: function() {
+    this.conn.writeMessage({
+      type: 'deviceCheckin',
+      replicaInfo: this._replicaInfo,
+    });
+
+    // tell our owner so it can feed us actions
+    this._owner._mailstoreConnected(this);
+  },
+
+  __closed: function() {
+    // tell our owner we are dead so it can deal
+    this._owner._mailstoreDisconnected(this);
+  },
+};
+
+/**
  *
  * For the time being, we are assuming the client always has all sets of
  *  its keyrings accessible to itself.
+ *
+ *
  */
 function RawClientAPI(persistedBlob, _logger) {
   // -- restore keyrings
@@ -155,15 +192,71 @@ function RawClientAPI(persistedBlob, _logger) {
   var selfIdentPayload = $pubident.assertGetPersonSelfIdent(
                            this._selfIdentBlob,
                            this._keyring.rootPublicKey);
+
+  // XXX we are assuming a fullpub server config here...
+  if (selfIdentPayload.transitServerIdent)
+    this._transitServer = $pubident.assertGetServerSelfIdent(
+                            selfIdentPayload.transitServerIdent);
+  else
+    this._transitServer = null;
   this._poco = selfIdentPayload.poco;
 
   this.log = LOGFAB.rawClient(this, _logger,
     ['user', this._keyring.rootPublicKey,
      'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
 
+  /**
+   * Signup connection; it should only be in play when signing up.
+   */
   this._signupConn = null;
+  /**
+   * Server mailstore connection.
+   */
+  this._conn = null;
+
+  /**
+   * Persistent list of action-taking messages.  This includes everything but
+   *  webmail-style non-persistent data queries.
+   */
+  this._actionQueue = [];
 }
 RawClientAPI.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Internal Client stuff
+
+  _connect: function() {
+    if (this._conn)
+      throw new Error("Already connected!");
+    if (!this._transitServer)
+      throw new Error("No (transit) server configured!");
+
+    this._conn = new MailstoreConn(
+                   this._keyring.exposeSimpleBoxingKeyringFor('client',
+                                                              'connBox'),
+                   this._transitServer.publicKey, this._transitServer.url,
+                   this, {/*XXX replica Info */}, this.log);
+  },
+
+  /**
+   * A notification from our `MailstoreConn` friend that it is connected and
+   *  we can cram it full of stuff.
+   */
+  _mailstoreConnected: function() {
+  },
+
+  /**
+   * A notification from our `MailstoreConn` friend that it is disconnected,
+   *  meaning any actions not yet acked are not going to be acked.  Also, we
+   *  should try and re-establish our connection if we believe the network is
+   *  amenable, otherwise wait for it to get amenable.
+   */
+  _mailstoreDisconnected: function() {
+  },
+
+  _enqueueAction: function(msg) {
+
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Identity Info
 
@@ -226,8 +319,8 @@ RawClientAPI.prototype = {
     if (this._signupConn)
       throw new Error("Still have a pending signup connection!");
 
-    var serverSelfIdent = $pubident.assertGetServerSelfIdent(
-                            serverSelfIdentBlob);
+    var serverSelfIdent = this._transitServerPayload =
+      $pubident.assertGetServerSelfIdent(serverSelfIdentBlob);
 
     // - regenerate our selfIdentBlob using the server as the transit server
     this._selfIdentBlob = $pubident.generatePersonSelfIdent(
@@ -272,12 +365,21 @@ RawClientAPI.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Peep Mutation
+  // Peep Relationships
 
-  connectToPeep: function(email, optionalMessage) {
+  connectToPeepUsingEmail: function(email, optionalMessage) {
   },
-  rejectPeep: function(email, reportAs) {
+  rejectPeepUsingEmail: function(email, reportAs) {
   },
+
+  connectToPeepUsingSelfIdent: function(personSelfIdentBlob) {
+    // generate an OtherPersonIdentPayload
+
+
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Peep Mutation
 
   pinPeep: function() {
   },

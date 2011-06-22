@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Authorization API; we segregate use-cases so we can optimize for the
+ * Authorization DB API; we segregate use-cases so we can optimize for the
  *  differing record counts, access patterns, turnover, etc.
  **/
 
@@ -54,7 +54,7 @@ var when = $Q.when;
 const TBL_USER_ACCOUNT = "auth:userAccountByRootKey";
 const TBL_CLIENT_AUTH = "auth:clientAuthByClientKey";
 
-function AuthApi(dbConn) {
+function AuthApi(serverConfig, dbConn, _logger) {
   this._db = dbConn;
 
   this._db.defineHbaseTable(TBL_USER_ACCOUNT, ["d"]);
@@ -83,6 +83,13 @@ AuthApi.prototype = {
     return val !== null;
   },
 
+  /**
+   * Create a user account for the given person and their clients to talk to us.
+   *
+   * XXX this should also describe the server roles they are signing up with us
+   *  for.  (This may be defined by the self-ident blob, but we want higher
+   *  levels to split that out for us and our consumers.)
+   */
   serverCreateUserAccount: function(rootSignPubKey, selfIdentBlob,
                                     clientAuthsMap) {
     var promises = [];
@@ -100,13 +107,36 @@ AuthApi.prototype = {
     return $Q.wait.apply(null, promises);
   },
 
+  /**
+   * Shallowly check if given client key is allowed to talk with us.  This is
+   *  done by checking for the client auth in our db without crypto validation
+   *  and without loading up the user account.
+   */
   serverCheckClientAuth: function(clientPublicKey) {
     return when(
-      this._db.getRow(TBL_CLIENT_AUTH, clientPublicKey, "d"),
+      this._db.getRowCell(TBL_CLIENT_AUTH, clientPublicKey, "d:rootKey"),
       this._serverCheckClientAuthCallback);
   },
   _serverCheckClientAuthCallback: function(val) {
     return val !== null;
+  },
+
+  /**
+   * Retrieve the information for a user account relevant to a specific server
+   *  role.
+   */
+  serverFetchUserEffigyUsingClient: function(clientPublicKey, serverRole) {
+    // get the user's root public key given the client key
+    var self = this;
+    return when(
+      this._db.getRowCell(TBL_CLIENT_AUTH, clientPublicKey, "d:rootKey"),
+      function(rootKey) {
+        return when(
+          self._db.getRow(TBL_USER_ACCOUNT, rootSignPubKey, "d"),
+          function(cells) {
+
+          });
+      });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -126,19 +156,26 @@ AuthApi.prototype = {
    *  user for a given privilege?  For now, there is only one privilege,
    *  "contact".
    */
-  userCheckUserPrivilege: function(ourUserIdent, otherUserIdent, privilege) {
+  userCheckUserPrivilege: function(ourUserKey, otherUserIdent, privilege) {
   },
 
   /**
    * From the perspective of one of our users, is this an authorized
    *  conversation?
    */
-  userCheckConversation: function(ourUserIdent, conversationIdent) {
+  userCheckConversation: function(ourUserKey, conversationIdent) {
   },
 
-  userAuthorizeServerForContact: function(ourUserIdent, otherServerIdent) {
+  /**
+   * Authorize a given user on a given server to send our user messages.
+   */
+  userAuthorizeServerForContact: function(ourUserKey, serverKey, userKey,
+                                          attestation) {
   },
-  userAuthorizeServerForConversation: function(ourUserIdent, convIdent,
+  /**
+   * Authorize a server to send our user messages for a specific conversation.
+   */
+  userAuthorizeServerForConversation: function(ourUserKey, serverKey, convKey,
                                                attestation) {
   },
 

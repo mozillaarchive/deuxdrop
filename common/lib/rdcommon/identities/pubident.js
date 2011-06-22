@@ -134,6 +134,23 @@
  * }
  *
  * @tyepdef[PersonClientAuthPayload GeneralAttestation]
+ *
+ * @typedef[OtherPersonIdentPayload @dict[
+ *   @key[personSelfIdent PersonSelfIdentBlob]
+ *   @key[localPoco Object]{
+ *     My local set of portable contacts contributions about the person.
+ *     This could vary from just a nickname to a wholesale set of contact
+ *     attributes.
+ *   }
+ * ]]{
+ *   Data structure to be signed by person B to describe their world view of
+ *   person A in a form that snapshots person A's self-ident.  Snapshotting
+ *   is still essential even in the context of "local" names.  Although our
+ *   dubbing an identity "Tom" does make it harder for the identity to
+ *   effectively claim to be your local bank, it would still let our friend
+ *   "Tom Foolery" trick people into thinking he's "Tom Brokaw" if we just
+ *   signed an attestation about the identity.
+ * }
  **/
 
 define(

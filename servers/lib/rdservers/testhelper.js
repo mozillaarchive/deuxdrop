@@ -54,6 +54,7 @@ var $gendb = require('rdservers/gendb/redis');
 
 var $signup_server = require('rdservers/signup/server'),
     $authdb_api = require('rdservers/authdb/api'),
+    $maildrop_local_api = require('rdservers/maildrop/localapi'),
     $configurer = require('rdservers/configurer');
 
 var TestClientActorMixins = {
@@ -117,9 +118,9 @@ var TestClientActorMixins = {
    */
   setup_superFriends: function(friends) {
     var tofriend = friends.concat([this]);
-    this.T.convenienceSetup(
-      'setup mutual friend relationships among:', tofriend,
-    function() {
+    return this.T.convenienceSetup(
+        'setup mutual friend relationships among:', tofriend,
+        function() {
       // (the destructive mutation is fine)
       while (tofriend.length >= 2) {
         var focal = tofriend.pop();
@@ -147,6 +148,9 @@ var TestClientActorMixins = {
   },
 };
 
+/**
+ * Server roles in a weakly ordered sequence.
+ */
 var SERVER_ROLE_MODULES = {
   auth: {
     apiModule: $authdb_api,
@@ -155,7 +159,23 @@ var SERVER_ROLE_MODULES = {
   signup: {
     apiModule: null,
     serverModule: $signup_server,
-  }
+  },
+  drop: { // needs 'auth'
+    apiModule: $maildrop_local_api,
+    serverModule: null,
+  },
+  sender: {
+    apiModule: null,
+    serverModule: null,
+  },
+  fanout: {
+    apiModule: null,
+    serverModule: null,
+  },
+  store: {
+    apiModule: null,
+    serverModule: null,
+  },
 };
 
 var TestServerActorMixins = {
@@ -206,7 +226,8 @@ var TestServerActorMixins = {
         var serverRoleInfo = SERVER_ROLE_MODULES[roleName];
         if (serverRoleInfo.apiModule) {
           serverConfig[roleName + 'Api'] =
-            new serverRoleInfo.apiModule.Api(self._db);
+            new serverRoleInfo.apiModule.Api(serverConfig,
+                                             self._db, self._logger);
         }
         if (serverRoleInfo.serverModule) {
           self._server.registerServer(
