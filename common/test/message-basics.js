@@ -53,7 +53,8 @@ define(
     exports
   ) {
 
-var TD = exports.TD = $tc.defineTestsFor($module);
+var TD = exports.TD = $tc.defineTestsFor($module, null, null,
+                                         ['abstraction:messages']);
 
 
 var DUMMY_CONV_ID = "aaaaaaaa", DUMMY_TIMESTAMP = 1304980532222,

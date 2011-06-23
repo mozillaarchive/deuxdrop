@@ -58,8 +58,8 @@ define(
     $module,
     exports
   ) {
-console.error("I AM IN A FILE, MY $authconn IS", $authconn);
-var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB);
+var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB, null,
+                                         ['protocol']);
 
 /**
  * Test connection implementation with no logging layer of its own because
@@ -133,6 +133,9 @@ TD.commonCase('working loopback authconn connection', function(T) {
     serverKeyring = serverRootRing.issueLongtermBoxingKeyring();
     serverConfig = $configurer.__populateTestConfig(serverKeyring, null);
 
+    T.thing('key', 'S root', serverKeyring.rootPublicKey);
+    T.thing('key', 'S longterm', serverKeyring.boxingPublicKey);
+
     personRootRing = $keyring.createNewPersonRootKeyring();
     personLongTermRing = personRootRing.issueLongtermSigningKeyring();
     personKeyring = personLongTermRing.makeDelegatedKeyring();
@@ -141,6 +144,10 @@ TD.commonCase('working loopback authconn connection', function(T) {
 
     clientKeyring = personKeyring.exposeSimpleBoxingKeyringFor("client",
                                                                "connBox");
+
+    T.thing('key', 'C root', personKeyring.rootPublicKey);
+    T.thing('key', 'C client', personKeyring.getPublicKeyFor("client",
+                                                             "connBox"));
 
     var TestServerDef = {
       endpoints: {

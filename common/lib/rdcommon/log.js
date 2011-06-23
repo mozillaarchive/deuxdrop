@@ -145,6 +145,72 @@
  * ]]{
  *
  * }
+ *
+ * == Original Brainstorming ==
+ *  + Unit Test Understanding
+ *    - Want to know what the participants are and the high-level messages that
+ *       are being exchanged, plus the ability to drill down into the messages.
+ *      => logging should expose the actor (with type available)
+ *      => message transmission should optionally have high-level logging
+ *          associated in a way that provides us with the message or lets us
+ *          sniff the payload
+ *  + Unit Test Failure Diagnosis
+ *    - Want to know what a good run looked like, and the differences between
+ *       this run and that run.
+ *      => the viewer has access to a data-store.
+ *  + Debugging (General)
+ *    - Want to be able to trace message delivery and related activities
+ *       across the system.
+ *      => Use global names where possible, perhaps identity key and message
+ *          hashes and TCP endpoint identifiers should allow reconstitution.
+ *      x> Having clients pass around extra identifiers seems dangerous.  (Do
+ *          not provide attackers with anything they do not already have,
+ *          although debugging tools will of course make making use of that
+ *          info easier.)
+ *  + System Understanding (Initial, non-live, investigative)
+ *    - Likely want what unit test understanding provides but with higher level
+ *       capabilities.
+ *  + System Understanding (Steady-state with testing system)
+ *    - Likely want initial understanding unit test-level data but with only
+ *       the traffic information and no ability to see the (private) data.
+ *  + Automated Performance Runs / Regression Detection
+ *    - Want timestamps of progress of message delivery.
+ *    - Want easily comparable data.
+ *  + At Scale Performance Understanding
+ *    - Want to know throughput, latency of the various parts of the system,
+ *       plus the ability to sample specific trace timelines.
+ *  + At Scale Debugging of specific failures (ex: 1 user having trouble)
+ *    - Want to be able to enable logging for the specific user, trace
+ *       across the system.
+ *
+ *  + General
+ *    - Want to be able to easily diff for notable changes...
+ *      => Markup or something should indicate values that will vary between
+ *          runs.  (Maybe as part of context?)
+ *
+ *  + Logging efficiency
+ *    - Want minimal impact when not enabled.
+ *      - But willing to accept some hit for the benefit of logging.
+ *      - Assume JITs can try and help us out if we help them.
+ *    - Don't want to clutter up the code with logging code.
+ *    - Don't want debugging logging code that can compromise privacy
+ *       accidentally active.
+ *      => Use decoration/monkeypatching for debugging logging, isolated in
+ *          a sub-tree that can be completely excluded from the production
+ *          build process.  Have the decoration/monkeypatching be loud
+ *          about what it's doing or able to fail, etc.
+ *    - Nice if it's obvious that we can log/trace at a point.
+ *    => Place always-on event logging in the code at hand.
+ *    => Use (pre-computed) conditionals or maybe alternate classes for
+ *        runtime optional logging.
+ *
+ *  + Storage / Transit efficiency
+ *    - Want logging for test runs broken up into initialization logging and
+ *       per-test compartments.
+ *    => Time-bucketing (per "channel") likely sufficient for debugging logging
+ *        purposes.
+ *    => Performance stuff that can't be reduced to time-series probably wants
+ *        its own channel, and its data should be strongly biased to aggregates.
  **/
 
 define(

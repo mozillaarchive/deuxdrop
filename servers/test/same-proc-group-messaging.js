@@ -144,7 +144,7 @@ define(
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module, null,
-  [$th_rdservers.TESTHELPER]);
+  [$th_rdservers.TESTHELPER], ['app']);
 
 TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
   // clients are test helper entities that have convenience functions.

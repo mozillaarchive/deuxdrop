@@ -61,7 +61,7 @@ define(
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module, null,
-  [$th_rdservers.TESTHELPER]);
+  [$th_rdservers.TESTHELPER], ['app']);
 
 TD.commonCase('have two contacts be friends using magic rendezvous',
               function(T) {

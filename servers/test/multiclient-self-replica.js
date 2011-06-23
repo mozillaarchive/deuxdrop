@@ -56,7 +56,7 @@ define(
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module, null,
-  [$th_rdservers.TESTHELPER]);
+  [$th_rdservers.TESTHELPER], ['replica']);
 
 TD.commonCase('clone client has state matching the mutator', function(T) {
   // usual client
@@ -67,21 +67,27 @@ TD.commonCase('clone client has state matching the mutator', function(T) {
   // a friend for our client!
   var alice = T.actor('testClient', 'A');
 
-  var server = T.actor('testServer', 'S', {roles: ['auth', 'signup']});
+  var serverOpts = {roles: ['auth', 'signup', 'drop', 'sender', 'store',]};
+  var server = T.actor('testServer', 'S', serverOpts);
 
   // signup
   client.setup_useServer(server);
+  clone.setup_assumeUsingServer(server);
 
-  // make sure both got signed up
   T.check('have', server, 'verify', client, 'and', clone,
            'are both signed up', function() {
     server.assertClientAuthorizationState(client, true);
     server.assertClientAuthorizationState(clone, true);
-  });
+  }).log.boring(true);
+
+  client.setup_connect();
+  clone.setup_connect();
 
   // -- contact propagation
+/*
   T.action('have', client, 'add a contact', function() {
   });
+*/
 });
 
 }); // end define

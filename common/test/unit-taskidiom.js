@@ -111,7 +111,8 @@ var TestTask = taskMaster.defineTask({
 });
 
 
-var TD = exports.TD = $tc.defineTestsFor($module, LOGFAB);
+var TD = exports.TD = $tc.defineTestsFor($module, LOGFAB, null,
+                                         ['utils:tasks']);
 
 TD.commonCase('successful task', function(T) {
   var eTask = T.actor('testTask', 't'), task, taskPromise;

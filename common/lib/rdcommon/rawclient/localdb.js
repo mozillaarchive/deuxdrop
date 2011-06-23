@@ -54,6 +54,10 @@ define(
 /**
  * XXX we currently use a JSON-persistable in-memory store.
  *
+ * An optimization we are capable of performing is that we do not have to store
+ *  things in a particularly encrypted form.  This allows us to potentially
+ *  save a lot of CPU/power.
+ *
  * Local storage implementation assuming a SQLite-based backend with a slight
  *  bias towards SSD storage.  More specifically, we are going to try and avoid
  *  triggering behaviours that result in a large number of random writes (since

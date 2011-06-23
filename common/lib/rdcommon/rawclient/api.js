@@ -186,6 +186,12 @@ MailstoreConn.prototype = {
    */
   _msg_root_replicaData: function() {
   },
+
+  /**
+   * Server telling us we are caught up to what it believes to be realtime.
+   */
+  _msg_root_replicaCaughtUp: function() {
+  },
 };
 
 /**
@@ -228,7 +234,7 @@ function RawClientAPI(persistedBlob, _logger) {
     this._transitServer = null;
   this._poco = selfIdentPayload.poco;
 
-  this.log = LOGFAB.rawClient(this, _logger,
+  this._log = LOGFAB.rawClient(this, _logger,
     ['user', this._keyring.rootPublicKey,
      'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
 
@@ -242,6 +248,11 @@ function RawClientAPI(persistedBlob, _logger) {
   this._conn = null;
 
   /**
+   * Do we want to be connected to the server?
+   */
+  this._connectionDesired = false;
+
+  /**
    * Persistent list of action-taking messages.  This includes everything but
    *  webmail-style non-persistent data queries.
    */
@@ -251,17 +262,25 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Internal Client stuff
 
+  /**
+   * How long to wait before reconnecting; this is currently intended to be a
+   *  sane-ish real-world value while also ensuring our tests will fail if we
+   *  end up disconnecting and reconnecting.
+   */
+  _RECONNECT_DELAY_MS: 4000,
+
   _connect: function() {
     if (this._conn)
       throw new Error("Already connected!");
     if (!this._transitServer)
       throw new Error("No (transit) server configured!");
 
+    this._log.connecting();
     this._conn = new MailstoreConn(
                    this._keyring.exposeSimpleBoxingKeyringFor('client',
                                                               'connBox'),
                    this._transitServer.publicKey, this._transitServer.url,
-                   this, {/*XXX replica Info */}, this.log);
+                   this, {/*XXX replica Info */}, this._log);
   },
 
   /**
@@ -269,6 +288,7 @@ RawClientAPI.prototype = {
    *  we can cram it full of stuff.
    */
   _mailstoreConnected: function() {
+    this._log.connected();
   },
 
   /**
@@ -278,6 +298,10 @@ RawClientAPI.prototype = {
    *  amenable, otherwise wait for it to get amenable.
    */
   _mailstoreDisconnected: function() {
+    this._log.disconnected();
+    this._conn = null;
+    if (this._connectionDesired) {
+    }
   },
 
   _enqueueAction: function(msg) {
@@ -301,6 +325,21 @@ RawClientAPI.prototype = {
    */
   get clientPublicKey() {
     return this._keyring.getPublicKeyFor('client', 'connBox');
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Mailstore connection management.
+
+  connect: function() {
+    this._connectionDesired = true;
+    if (!this._conn)
+      this._connect();
+  },
+
+  disconnect: function() {
+    this._connectionDesired = false;
+    if (this._conn)
+      this._conn.close();
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -346,7 +385,7 @@ RawClientAPI.prototype = {
     if (this._signupConn)
       throw new Error("Still have a pending signup connection!");
 
-    var serverSelfIdent = this._transitServerPayload =
+    var serverSelfIdent = this._transitServer =
       $pubident.assertGetServerSelfIdent(serverSelfIdentBlob);
 
     // - regenerate our selfIdentBlob using the server as the transit server
@@ -355,7 +394,7 @@ RawClientAPI.prototype = {
                             this._poco, serverSelfIdentBlob);
 
     // - signup!
-    this.log.signup_begin();
+    this._log.signup_begin();
     var clientAuthBlobs = [this._keyring.getPublicAuthFor('client')]
       .concat(this._otherClientAuths);
     this._signupConn = new ClientSignupConn(
@@ -364,25 +403,37 @@ RawClientAPI.prototype = {
                                                                     'connBox'),
                          serverSelfIdent.publicKey,
                          serverSelfIdent.url,
-                         this.log);
+                         this._log);
     var self = this;
     // Use the promise to clear our reference, but otherwise just re-provide it
     //  to our caller.
-    $Q.when(this._signupConn.promise, function(val) {
+    return $Q.when(this._signupConn.promise, function(val) {
       if (val === true) {
-        self.log.signedUp();
+        self._log.signedUp();
       }
       else if ($Q.isRejection(val)) {
         if (val.valueOf().reason === false)
-          self.log.signupFailure();
+          self._log.signupFailure();
         else
-          self.log.signupChallenged();
+          self._log.signupChallenged();
       }
 
       self._signupConn = false;
-      self.log.signup_end();
+      self._log.signup_end();
     });
-    return this._signupConn.promise;
+  },
+
+  /**
+   * Assume we are already signed up with a server via other means.
+   */
+  useServerAssumeAlreadySignedUp: function(serverSelfIdentBlob) {
+    var serverSelfIdent = this._transitServer =
+      $pubident.assertGetServerSelfIdent(serverSelfIdentBlob);
+
+    // - regenerate our selfIdentBlob using the server as the transit server
+    this._selfIdentBlob = $pubident.generatePersonSelfIdent(
+                            this._longtermKeyring, this._keyring,
+                            this._poco, serverSelfIdentBlob);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -594,6 +645,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     events: {
       signedUp: {},
       signupChallenged: {},
+
+      connecting: {},
+      connected: {},
+      disconnected: {},
     },
     errors: {
       signupFailure: {},

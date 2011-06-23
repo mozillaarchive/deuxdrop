@@ -65,6 +65,8 @@ var when = $Q.when;
 function TestRuntimeContext() {
   this._loggerStack = [];
   this._pendingActorsByLoggerType = {};
+
+  this._liveActors = null;
 }
 TestRuntimeContext.prototype = {
   /**
@@ -134,6 +136,17 @@ TestRuntimeContext.prototype = {
     return curParentLogger;
   },
 
+  /**
+   * Allows actor mix-in methods that contain nested sub-actors to report their
+   *  sub-actors as active this step, allowing them to be used for expectations.
+   */
+  reportActiveActorThisStep: function(actor) {
+    if (actor._activeForTestStep)
+      return;
+    this._liveActors.push(actor);
+     actor.__prepForTestStep(this);
+  },
+
   peekLogger: function() {
     if (this._loggerStack.length)
       return this._loggerStack[this._loggerStack.length - 1];
@@ -167,7 +180,10 @@ TestDefinerRunner.prototype = {
 
     this._logBadThingsToLogger = step.log;
 
+    var liveActors = this._runtimeContext._liveActors = step.actors.concat();
+
     // -- notify the actors about their imminent use in a step
+    // (intentionally step.actors rather that liveActors)
     for (iActor = 0; iActor < step.actors.length; iActor++) {
       actor = step.actors[iActor];
       actor.__prepForTestStep(this._runtimeContext);
@@ -186,8 +202,8 @@ TestDefinerRunner.prototype = {
 
     // -- wait on actors' expectations (if any) promise-style
     var promises = [], allGood = true;
-    for (iActor = 0; iActor < step.actors.length; iActor++) {
-      actor = step.actors[iActor];
+    for (iActor = 0; iActor < liveActors.length; iActor++) {
+      actor = liveActors[iActor];
       var waitVal = actor.__waitForExpectations();
       if ($Q.isPromise(waitVal))
         promises.push(waitVal);
@@ -208,8 +224,8 @@ TestDefinerRunner.prototype = {
       // -- timeout handler
       var countdownTimer = setTimeout(function() {
         // - tell the actors to fail any remaining expectations
-        for (var iActor = 0; iActor < step.actors.length; iActor++) {
-          actor = step.actors[iActor];
+        for (var iActor = 0; iActor < liveActors.length; iActor++) {
+          actor = liveActors[iActor];
           actor.__failUnmetExpectations();
         }
 
@@ -224,8 +240,8 @@ TestDefinerRunner.prototype = {
         clearTimeout(countdownTimer);
 
         // - tell the actors we are done with this round
-        for (var iActor = 0; iActor < step.actors.length; iActor++) {
-          actor = step.actors[iActor];
+        for (var iActor = 0; iActor < liveActors.length; iActor++) {
+          actor = liveActors[iActor];
           actor.__resetExpectations();
         }
 

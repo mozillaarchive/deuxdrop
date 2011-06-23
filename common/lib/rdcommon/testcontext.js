@@ -135,6 +135,7 @@ TestContext.prototype = {
           name, optionalParentActor ? optionalParentActor._uniqueName : null);
         // tell it about us, the operational context
         actor.T = this;
+        actor.RT = this.__testCase.definer._runtimeContext;
 
         // - augment with test helpers
         // (from an efficiency perspective, we might be better off creating a
@@ -401,11 +402,13 @@ function TestCase(definer, kind, desc, setupFunc) {
 TestCase.prototype = {
 };
 
-function TestDefiner(modname, logfabs, testHelpers) {
+function TestDefiner(modname, logfabs, testHelpers, tags) {
   this.__logfabs = logfabs;
   this.__testHelperDefs = testHelpers;
+  this.__tags = tags;
 
   this._log = LOGFAB.testDefiner(this, null, modname);
+  this._runtimeContext = null;
 
   this.__testCases = [];
 }
@@ -462,7 +465,7 @@ TestDefiner.prototype = {
 };
 
 exports.defineTestsFor = function defineTestsFor(testModule, logfabs,
-                                                 testHelpers) {
+                                                 testHelpers, tags) {
   if (logfabs == null)
     logfabs = [];
   else if (!Array.isArray(logfabs))
@@ -486,7 +489,7 @@ exports.defineTestsFor = function defineTestsFor(testModule, logfabs,
     }
   }
 
-  return new TestDefiner(testModule.id, logfabs, testHelpers);
+  return new TestDefiner(testModule.id, logfabs, testHelpers, tags);
 };
 
 var LOGFAB = exports.LOGFAB = $log.register(null, {

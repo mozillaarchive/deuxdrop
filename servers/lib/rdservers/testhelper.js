@@ -55,6 +55,7 @@ var $gendb = require('rdservers/gendb/redis');
 var $signup_server = require('rdservers/signup/server'),
     $authdb_api = require('rdservers/authdb/api'),
     $maildrop_local_api = require('rdservers/maildrop/localapi'),
+    $mailstore_server = require('rdservers/mailstore/server'),
     $configurer = require('rdservers/configurer');
 
 var TestClientActorMixins = {
@@ -120,13 +121,20 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Server Accounts
 
-  signupWith: function(testServerActor) {
-    this._usingServer = testServerActor;
+  /**
+   * Perform a signup with the given server.  This is marked private because
+   *  we really need to know `_usingServer` during the step definition for
+   *  many of other helpers, so we really want test code to call our
+   *  `setup_useServer` function instead since it runs at step definition time.
+   */
+  _signupWith: function(testServerActor) {
+    this.RT.reportActiveActorThisStep(this._eRawClient);
     this._rawClient.signupUsingServerSelfIdent(
       this._usingServer.__signedSelfIdentBlob);
   },
 
   setup_useServer: function setup_useServer(server) {
+    this._usingServer = server;
     var self = this;
     return this.T.convenienceSetup(self._eRawClient, 'creates account with',
                                    server._eServer,
@@ -136,7 +144,39 @@ var TestClientActorMixins = {
         .expect_signedUp()
         .expect_signup_end();
 
-      self.signupWith(server);
+      self._signupWith(server);
+    });
+  },
+
+
+  setup_assumeUsingServer: function(testServerActor) {
+    this._usingServer = testServerActor;
+    var self = this;
+    return this.T.convenienceSetup(this._eRawClient, 'assumes account with',
+                                   testServerActor._eServer, function() {
+      self._rawClient.useServerAssumeAlreadySignedUp(
+        self._usingServer.__signedSelfIdentBlob);
+    });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Mailstore Connection
+
+  /**
+   * Connect to the mailstore and generate an appropriate expectation.
+   */
+  connect: function() {
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eRawClient.expect_connecting();
+    this._eRawClient.expect_connected();
+    this._rawClient._connect();
+  },
+
+  setup_connect: function() {
+    var self = this;
+    return this.T.convenienceSetup(this._eRawClient, 'connects to server',
+                                   this._usingServer._eServer, function() {
+      self.connect();
     });
   },
 
@@ -144,7 +184,7 @@ var TestClientActorMixins = {
   // Contacts
 
   addContact: function(other) {
-    self._eRawClient.connectToPeepUsingSelfIdent(
+    this._eRawClient.connectToPeepUsingSelfIdent(
       other._eRawClient._selfIdentBlob);
   },
 
@@ -234,7 +274,7 @@ var SERVER_ROLE_MODULES = {
   },
   store: {
     apiModule: null,
-    serverModule: null,
+    serverModule: $mailstore_server,
   },
 };
 

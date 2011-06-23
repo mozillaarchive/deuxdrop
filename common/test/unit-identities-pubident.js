@@ -57,7 +57,8 @@ define(
     exports
   ) {
 
-var TD = exports.TD = $tc.defineTestsFor($module);
+var TD = exports.TD = $tc.defineTestsFor($module, null, null,
+                                         ['abstraction:identity']);
 
 TD.commonSimple('serverSelfIdent creation', function test_serverSelfIdent() {
   var rootKeyring = $keyring.createNewServerRootKeyring();

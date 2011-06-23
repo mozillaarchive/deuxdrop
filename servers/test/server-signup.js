@@ -61,7 +61,7 @@ define(
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module, null,
-  [$th_rdservers.TESTHELPER]);
+  [$th_rdservers.TESTHELPER], ['app']);
 
 TD.commonCase('create new identity, signup with server', function(T) {
   var client = T.actor('testClient', 'C');

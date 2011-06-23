@@ -188,6 +188,51 @@ RedisDbConn.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Queue Abstraction
+
+  queueAppend: function(tableName, queueName, values) {
+    var multi = this._conn.multi();
+    for (var i = 0; i < values.length; i++) {
+      multi.rpush(this._prefix + '_' + tableName + '_' + queueName,
+                  values[i]);
+    }
+    var deferred = $Q.defer();
+    multi.exec(function(err, replies) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(null);
+    });
+    return deferred.promise;
+  },
+
+  queuePeek: function(table, queueName, count) {
+    var deferred = $Q.defer();
+
+    this._conn.lrange(this._prefix + '_' + tableName + '_' + queueName,
+                      0, count - 1, function(err, multibulk) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(multibulk);
+    });
+
+    return deferred.promise;
+  },
+
+  queueConsume: function(table, queueName, count) {
+    var deferred = $Q.defer();
+    this._conn.ltrim(this._prefix + '_' + tableName + '_' + queueName,
+                     count, -1, function(status) {
+      if (status === "OK")
+        deferred.resolve();
+      else
+        deferred.reject(status);
+    });
+    return deferred.promise;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Session Management
 
   close: function() {
