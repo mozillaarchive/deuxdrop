@@ -2,6 +2,8 @@
 Install node libraries
 `npm install socket.io redis paperboy`
 
+socket.io needs to be 0.7 or later
+
 Copy the md5 module into the modules directory
 `cp md5.js to node_modules`
 

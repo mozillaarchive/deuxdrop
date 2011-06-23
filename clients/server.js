@@ -16,12 +16,12 @@ var http = require('http'),
     clients = {},
     convCache = {},
     redis = redisLib.createClient(),
-    server, listener, actions;
+    server, actions, listener;
 
 function send(id, message) {
   var clientList = clients[id];
   clientList.forEach(function (client) {
-    client.send(message);
+    client.emit('clientMessage', message);
   });
 }
 
@@ -51,7 +51,7 @@ function pushToClients(targetId, message) {
   var list = clients[targetId];
   if (list) {
     list.forEach(function (client) {
-      client.send(message);
+      client.emit('clientMessage', message);
     });
   }
 }
@@ -67,7 +67,9 @@ function clientSend(client, requestData, responseData) {
     responseData._deferId = requestData._deferId;
   }
 
-  client.send(JSON.stringify(responseData));
+  console.log("CLIENT SEND: " + JSON.stringify(responseData));
+
+  client.emit('clientMessage', JSON.stringify(responseData));
 }
 
 redis.on('error', function (err) {
@@ -283,49 +285,66 @@ actions = {
         text = args.text,
         time = (new Date()).getTime(),
         convId = args.from + '|' + args.to + '|' + time,
-        message, jsonMessage;
+        message, responseMessage, stringifiedMessage;
 
     message = {
+      id: 0,
       convId: convId,
       from: from,
       text: text,
       time: time
     };
 
-    jsonMessage = JSON.stringify({
-      action: 'message',
-      message: message
-    });
-
     // Create the meta data record
     //redis.hmset(convId + '-meta', 'id', convId);
 
-    // Add the message to the message list for the conversation.
-    redis.sadd(convId + '-messages', JSON.stringify(message));
+    // Set up the message counter.
+    redis.set(convId + '-messageCounter', '0', function (err, response) {
 
-    // Update the "last message from user" conversation summary for use
-    // when showing the list of conversations from a user.
-    redis.hmset(convId + '-' + from, 'message', JSON.stringify(message));
+      stringifiedMessage = JSON.stringify(message);
 
-    users.forEach(function (user) {
-      // Add the user to the peep list for the conversation.
-      redis.sadd(convId + '-peeps', user);
-
-      // Update the set of conversations a user is involved in,
-      // but scope it per user
-      users.forEach(function (other) {
-        redis.sadd(user + '-' + other, convId);
+      responseMessage = JSON.stringify({
+        action: 'message',
+        message: message
       });
 
-      // Push the message to any user clients
-      pushToClients(user, jsonMessage);
+      // Add the message to the message list for the conversation.
+      redis.sadd(convId + '-messages', stringifiedMessage);
+
+      // Update the "last message from user" conversation summary for use
+      // when showing the list of conversations from a user.
+      redis.hmset(convId + '-' + from, 'message', stringifiedMessage);
+
+      users.forEach(function (user) {
+        // Add the user to the peep list for the conversation.
+        redis.sadd(convId + '-peeps', user);
+
+        // Update the set of conversations a user is involved in,
+        // but scope it per user
+        users.forEach(function (other) {
+          redis.sadd(user + '-' + other, convId);
+        });
+
+        // Update the unseen set for the user, as long as the user
+        // is not the "from" person.
+        if (user !== from) {
+          redis.hexists(user + '-unseen', convId, function (err, exists) {
+            if (!exists) {
+              redis.hset(user + '-unseen', convId, stringifiedMessage);
+            }
+          });
+        }
+
+        // Push the message to any user clients
+        pushToClients(user, responseMessage);
+      });
     });
   },
 
   'sendMessage': function (data, client) {
     var messageData = data.message,
         convId = messageData.convId,
-        message, jsonMessage;
+        message, responseMessage, stringifiedMessage;
 
     message = {
       convId: convId,
@@ -334,24 +353,86 @@ actions = {
       time: (new Date()).getTime()
     };
 
-    jsonMessage = JSON.stringify({
-      action: 'message',
-      message: message
+    // Increment the message ID counter by one so we can get unique message
+    // IDs.
+    redis.incr(convId + '-messageCounter', function (err, id) {
+
+      message.id = id;
+
+      stringifiedMessage = JSON.stringify(message);
+
+      responseMessage = JSON.stringify({
+        action: 'message',
+        message: message
+      });
+
+      // Add the message to the message list for the conversation.
+      redis.sadd(convId + '-messages', stringifiedMessage);
+
+      // Update the "last message from user" conversation summary for use
+      // when showing the list of conversations from a user.
+      redis.hmset(convId + '-' + message.from, 'message', stringifiedMessage);
+
+      // Get all conversation participants to send the message.
+      redis.smembers(convId + '-peeps', function (err, users) {
+        users = multiBulkToStringArray(users);
+        users.forEach(function (user) {
+          // Update the unseen set for the user, as long as the user
+          // is not the "from" person.
+          if (user !== message.from) {
+            redis.hexists(user + '-unseen', convId, function (err, exists) {
+              if (!exists) {
+                redis.hset(user + '-unseen', convId, stringifiedMessage);
+              }
+            });
+          }
+
+          // Push the message to any user clients
+          pushToClients(user, responseMessage);
+        });
+      });
+    });
+  },
+
+  'messageSeen': function (data, client) {
+    var convId = data.convId,
+        messageId = data.messageId,
+        userId = client._deuxUserId;
+
+    // Update unseen hash for the user
+    redis.hget(userId + '-unseen', convId, function (err, json) {
+      var message = JSON.parse(json);
+
+      if (message && messageId >= message.id) {
+        redis.hdel(userId + '-unseen', convId);
+      }
     });
 
-    // Add the message to the message list for the conversation.
-    redis.sadd(convId + '-messages', JSON.stringify(message));
+    // Update the 'seen' metadata for the conversation.
+    redis.hset(convId + 'seen', userId, messageId);
+  },
 
-    // Update the "last message from user" conversation summary for use
-    // when showing the list of conversations from a user.
-    redis.hmset(convId + '-' + message.from, 'message', JSON.stringify(message));
+  'listUnseen': function (data, client) {
+    var userId = client._deuxUserId;
 
-    // Get all conversation participants to send the message.
-    redis.smembers(convId + '-peeps', function (err, users) {
-      users = multiBulkToStringArray(users);
-      users.forEach(function (user) {
-        // Push the message to any user clients
-        pushToClients(user, jsonMessage);
+    redis.hgetall(userId + '-unseen', function (err, unseen) {
+      // Convert messages to be JS objects
+      unseen = unseen || {};
+
+      var prop, message;
+
+      for (prop in unseen) {
+        if (unseen.hasOwnProperty(prop)) {
+          message = unseen[prop];
+          if (message) {
+            unseen[prop] = JSON.parse(message);
+          }
+        }
+      }
+
+      clientSend(client, data, {
+        action: 'listUnseenResponse',
+        unseen: unseen
       });
     });
   }
@@ -382,11 +463,11 @@ listener = io.listen(server, {
   transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
 });
 
-listener.on('connection', function (client) {
+listener.sockets.on('connection', function (client) {
   //client.send({ buffer: buffer });
   //client.broadcast({ announcement: client.sessionId + ' connected' });
 
-  client.on('message', function (message) {
+  client.on('serverMessage', function (message) {
     message = JSON.parse(message);
 
     actions[message.action](message, client);

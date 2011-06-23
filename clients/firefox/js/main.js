@@ -126,6 +126,40 @@ define(function (require) {
     return obj;
   }
 
+  function insertUnseenMessage(message) {
+    var convNotificationDom = $('.newConversationNotifications'),
+        convNode, convCloneNode, node, nodeDom;
+
+    // Add a conversation box to the start card, but only if there is not
+    // one already.
+    if (convNotificationDom.find('[data-convid="' + message.convId + '"]').length === 0) {
+      convNode = convNotificationDom[0];
+      convCloneNode = getChildCloneNode(convNode);
+      node = convCloneNode.cloneNode(true);
+      nodeDom = $(node);
+      updateDom(nodeDom, message);
+
+      // Insert friendly date-time
+      nodeDom.find('.newConversationTime')
+        .text(friendly.date(new Date(message.time)).friendly)
+        .attr('data-time', message.time);
+
+      // Update the hyperlink
+      node.href = node.href + encodeURIComponent(message.convId);
+
+      // Add the conversation ID to the node
+      node.setAttribute('data-convid', message.convId);
+
+      convNode.appendChild(node);
+      cards.adjustCardSizes();
+
+      // Activate new notification, but only if not already on start page.
+      if (cards.currentCard().attr('data-cardid') !== 'start') {
+        notifyDom.show();
+      }
+    }
+  }
+
   // Set up card update actions.
   update = {
     'start': function (data, dom) {
@@ -308,6 +342,9 @@ define(function (require) {
 
         // Refresh the card sizes
         cards.adjustCardSizes();
+
+        // Let the server know the messages have been seen
+        conversation.setSeen();
       });
 
       // Set up compose area
@@ -323,9 +360,14 @@ define(function (require) {
 
   // Listen to events from moda
   moda.on({
+    'me': function (me) {
+      // Once we get the "me" message, it means user is signed in,
+      // now fetch unseen data.
+      moda.listUnseen();
+    },
+
     'message': function (message) {
-      var card = cards.currentCard(), node, nodeDom, convNode,
-          convNotificationDom, convCloneNode;
+      var card = cards.currentCard();
 
       if (card.attr('data-cardid') === 'conversation' &&
         card.attr('data-conversationid') === message.convId) {
@@ -336,42 +378,22 @@ define(function (require) {
         // Scroll to the bottom of the conversation
         setTimeout(function () {
           card[0].scrollTop = card[0].scrollHeight;
+
+          // Let the server know the messages have been seen
+          moda.conversation({
+            by: 'id',
+            filter: message.convId
+          }).withMessages(function (conv) {
+            conv.setSeen();
+          });
         });
 
       } else if (message.from.id === moda.me().id) {
         // If message is from me, it means I wanted to start a new conversation.
         cards.nav('conversation?id=' + message.convId);
       } else {
-        convNotificationDom = $('.newConversationNotifications');
-
-        // Add a conversation box to the start card, but only if there is not
-        // one already.
-        if (convNotificationDom.find('[data-convid="' + message.convId + '"]').length === 0) {
-          convNode = convNotificationDom[0];
-          convCloneNode = getChildCloneNode(convNode);
-          node = convCloneNode.cloneNode(true);
-          nodeDom = $(node);
-          updateDom(nodeDom, message);
-
-          // Insert friendly date-time
-          nodeDom.find('.newConversationTime')
-            .text(friendly.date(new Date(message.time)).friendly)
-            .attr('data-time', message.time);
-
-          // Update the hyperlink
-          node.href = node.href + encodeURIComponent(message.convId);
-
-          // Add the conversation ID to the node
-          node.setAttribute('data-convid', message.convId);
-
-          convNode.appendChild(node);
-          cards.adjustCardSizes();
-
-          // Activate new notification.
-          notifyDom.show();
-        }
+        insertUnseenMessage(message);
       }
-
       // console.log("GOT A MESSAGE: ", message);
     }
   });

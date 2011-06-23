@@ -251,6 +251,7 @@ Peeps
 
   function Message(msg) {
     this.convId = msg.convId;
+    this.id = msg.id;
     this.from = peepCache[msg.from];
     this.text = msg.text;
     this.time = msg.time;
@@ -329,6 +330,13 @@ Conversation
 
     sendMessage: function (message) {
       transport.sendMessage(message);
+    },
+
+    setSeen: function () {
+      var message = this.messages.length ? this.messages[this.messages.length - 1] : null;
+      if (message) {
+        transport.messageSeen(this.id, message.id);
+      }
     }
   };
 
@@ -473,6 +481,23 @@ moda.on({
 
   moda.signIn = function (id, name, callback) {
     return transport.signIn(id, name, callback);
+  };
+
+  moda.listUnseen = function () {
+    return transport.listUnseen(function (unseen) {
+      // TODO: may want to optimize this display at some point
+      // but passing it through the trigger machinery since it
+      // has logic to make sure the peep object is loaded for
+      // the message senders.
+      var prop, message;
+
+      for (prop in unseen) {
+        if (unseen.hasOwnProperty(prop)) {
+          message = unseen[prop];
+          moda.trigger('message', message);
+        }
+      }
+    });
   };
 
   /**

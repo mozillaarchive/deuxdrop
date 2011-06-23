@@ -49,7 +49,7 @@ define(function (require, exports) {
       actions, socket, me;
 
   function send(obj) {
-    socket.send(JSON.stringify(obj));
+    socket.emit('serverMessage', JSON.stringify(obj));
   }
 
   /**
@@ -196,9 +196,9 @@ define(function (require, exports) {
         localStorage.me = JSON.stringify(me);
 
         meDeferred.resolve(me);
-
-        moda.trigger('me', me);
       }
+
+      moda.trigger('me', me);
     },
 
     'message': function (data) {
@@ -210,12 +210,11 @@ define(function (require, exports) {
   // the global.
   io = window.io;
 
-  socket = new io.Socket(null, {port: 8888, rememberTransport: false,
+  socket = io.connect(null, {port: 8888, rememberTransport: false,
                 transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
                 });
-  socket.connect();
 
-  socket.on('message', function (data) {
+  socket.on('clientMessage', function (data) {
     if (data) {
       data = JSON.parse(data);
     }
@@ -263,7 +262,6 @@ define(function (require, exports) {
       me = localStorage.me;
       if (me) {
         me = JSON.parse(me);
-        moda.trigger('me', me);
       }
       localMeCheck = true;
     }
@@ -293,8 +291,10 @@ define(function (require, exports) {
   makePerCallPassThroughApi('loadConversation', ['convId'], 'details');
   makePerCallPassThroughApi('getPeepConversations', ['peepId'], 'conversations');
 
+  makePerCallPassThroughApi('listUnseen', [], 'unseen');
+
   makeRequestOnlyApi('startConversation', ['args']);
   makeRequestOnlyApi('sendMessage', ['message']);
 
-
+  makeRequestOnlyApi('messageSeen', ['convId', 'messageId']);
 });
