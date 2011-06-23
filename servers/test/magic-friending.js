@@ -63,11 +63,12 @@ define(
 var TD = exports.TD = $tc.defineTestsFor($module, null,
   [$th_rdservers.TESTHELPER]);
 
-TD.commonCase('create new identity, signup with server', function(T) {
+TD.commonCase('have two contacts be friends using magic rendezvous',
+              function(T) {
   var client_a = T.actor('testClient', 'A'),
       client_b = T.actor('testClient', 'B');
 
-  var serverOpts = {roles: ['auth', 'signup', 'mailstore', 'drop', 'sender']};
+  var serverOpts = {roles: ['auth', 'signup', 'drop', 'sender', 'store',]};
   var server_x = T.actor('testServer', 'X', serverOpts),
       server_y = T.actor('testServer', 'Y', serverOpts);
 

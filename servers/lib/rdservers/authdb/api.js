@@ -144,6 +144,8 @@ AuthApi.prototype = {
 
   /**
    * Check if the server is allowed to talk to this server (at all).
+   *
+   * Implies maildrop.
    */
   serverCheckServerAuth: function(otherServerIdent) {
   },
@@ -169,8 +171,8 @@ AuthApi.prototype = {
   /**
    * Authorize a given user on a given server to send our user messages.
    */
-  userAuthorizeServerForContact: function(ourUserKey, serverKey, userKey,
-                                          attestation) {
+  userAuthorizeServerUserForContact: function(ourUserKey, serverKey, userKey,
+                                              attestation) {
   },
   /**
    * Authorize a server to send our user messages for a specific conversation.

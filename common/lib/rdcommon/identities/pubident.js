@@ -136,6 +136,7 @@
  * @tyepdef[PersonClientAuthPayload GeneralAttestation]
  *
  * @typedef[OtherPersonIdentPayload @dict[
+ *   @key[issuedAt DateMS]
  *   @key[personSelfIdent PersonSelfIdentBlob]
  *   @key[localPoco Object]{
  *     My local set of portable contacts contributions about the person.
@@ -214,7 +215,7 @@ exports.generatePersonSelfIdent = function(longtermKeyring,
     },
   };
 
-  return longtermKeyring.signJsonObj(selfIdentPayload);
+  return longtermKeyring.__signJsonObj(selfIdentPayload);
 };
 
 /**
@@ -250,6 +251,34 @@ exports.assertGetPersonSelfIdent = function(personSelfIdentBlob, checkRootKey) {
     throw new Error("Self-ident is not for provided root key.");
 
   return payload;
+};
+
+exports.generateOtherPersonIdent = function(longtermKeyring,
+                                            otherPersonSelfIdent,
+                                            localPoco) {
+  var now = Date.now();
+  var otherPersonPayload = {
+    issuedAt: now,
+    personSelfIdent: otherPersonSelfIdent,
+    localPoco: localPoco,
+    assertedBy: longtermKeyring.signingPublicKey,
+  };
+  return longtermKeyring.__signJsonObj(otherPersonPayload);
+};
+
+/**
+ * Verify an other-person ident, returning the nested self-ident payload and
+ *  localPoco, and asserter's key (which is optionally checked.)
+ */
+exports.assertGetOtherPersonIdent = function(otherPersonIdentBlob,
+                                             checkAuthorPubring) {
+  var peekedPayload = JSON.parse(
+    $keyops.generalPeekInsideSignatureUtf8(otherPersonIdentBlob));
+  var longtermSignPubKey = peekedPayload.assertedBy;
+  $keyops.generalVerifySignatureUtf8(otherPersonIdentBlob, longtermSignPubKey);
+  
+  if (checkAuthorPubring)
+    checkAuthorPubring.assertValidLongtermSigningKey(longtermSignPubKey);
 };
 
 }); // end define

@@ -51,6 +51,12 @@
  *  time), although it does maintain a blob of internal state that it will
  *  provide for the client to persist its state and to give it when creating
  *  a new instance of the client API.
+ *
+ * Abstracting away key management concerns also roughly translates to
+ *  "our consumers never touch crypto keys knowing they are crypto keys".  We
+ *  may give them crypto keys as unique identifiers for simplicity/consistency,
+ *  but at any point we could replace them with meaningless distinct identifiers
+ *  and nothing should break.
  **/
 
 define(
@@ -79,10 +85,10 @@ define(
  * Connect to the server, give it the signup bundle, expose our result via a
  *  promise.
  */
-function ClientSignupConn(selfIdentBlob, clientAuthBlob, clientKeyring,
-                          serverPublicKey, serverUrl, _logger) {
+function ClientSignupConn(selfIdentBlob, clientAuthBlobs,
+                          clientKeyring, serverPublicKey, serverUrl, _logger) {
   this._selfIdentBlob = selfIdentBlob;
-  this._clientAuthBlob = clientAuthBlob;
+  this._clientAuthBlobs = clientAuthBlobs;
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
@@ -129,7 +135,7 @@ ClientSignupConn.prototype = {
     this.conn.writeMessage({
       type: 'signup',
       selfIdent: this._selfIdentBlob,
-      clientAuths: [this._clientAuthBlob],
+      clientAuths: this._clientAuthBlobs,
       because: {
       },
     });
@@ -176,9 +182,9 @@ MailstoreConn.prototype = {
   },
 
   /**
-   * Server pushing updates to our persistent/subscribed views.
+   * Server pushing updates to our subscribed replicas.
    */
-  _msg_root_timeviewUpdate: function() {
+  _msg_root_replicaData: function() {
   },
 };
 
@@ -187,7 +193,14 @@ MailstoreConn.prototype = {
  * For the time being, we are assuming the client always has all sets of
  *  its keyrings accessible to itself.
  *
+ * == Relationship With Local Storage, Other Clients, Mailstore  ==
  *
+ * All client actions result in attestations which are fed to our LocalStore
+ *  and to the mailstore.  The mailstore will process these to affect its
+ *  storage and relay them to all other clients to process.  While it is
+ *  arguably redundant to have our local client generate an attestation and
+ *  then verify it, it does avoid us having to write a second code-path.
+ *  XXX actually, maybe we won't be redundant? revisit this doc soon.
  */
 function RawClientAPI(persistedBlob, _logger) {
   // -- restore keyrings
@@ -204,6 +217,8 @@ function RawClientAPI(persistedBlob, _logger) {
   var selfIdentPayload = $pubident.assertGetPersonSelfIdent(
                            this._selfIdentBlob,
                            this._keyring.rootPublicKey);
+
+  this._otherClientAuths = persistedBlob.otherClientAuths;
 
   // XXX we are assuming a fullpub server config here...
   if (selfIdentPayload.transitServerIdent)
@@ -341,9 +356,10 @@ RawClientAPI.prototype = {
 
     // - signup!
     this.log.signup_begin();
+    var clientAuthBlobs = [this._keyring.getPublicAuthFor('client')]
+      .concat(this._otherClientAuths);
     this._signupConn = new ClientSignupConn(
-                         this._selfIdentBlob,
-                         this._keyring.getPublicAuthFor('client'),
+                         this._selfIdentBlob, clientAuthBlobs,
                          this._keyring.exposeSimpleBoxingKeyringFor('client',
                                                                     'connBox'),
                          serverSelfIdent.publicKey,
@@ -384,16 +400,24 @@ RawClientAPI.prototype = {
   rejectPeepUsingEmail: function(email, reportAs) {
   },
 
-  connectToPeepUsingSelfIdent: function(personSelfIdentBlob) {
+  connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco) {
     // generate an OtherPersonIdentPayload
+    var otherPersonIdentBlob = $pubident.generateOtherPersonIdent(
+      this._longtermKeyring, personSelfIdentBlob, localPoco);
 
-
+    this._enqueueAction({
+      type: 'addContact',
+      otherPersonIdent: otherPersonIdentBlob,
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Peep Mutation
 
   pinPeep: function() {
+    // - retrieve the existing meta-data blob
+    // - modify the blob
+    // - generate a new attestation
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -401,25 +425,26 @@ RawClientAPI.prototype = {
 
   // all/pinned, time-ordered/alphabetical
   queryPeeps: function() {
+    // (this should all already be locally available in the localstore)
   },
 
 
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Mutation
 
-  createConversation: function() {
+  createConversation: function(peeps, messageText, location) {
   },
-  replyToConversation: function() {
+  replyToConversation: function(conversation, messageText, location) {
   },
-  inviteToConversation: function() {
-  },
-
-  pinConversation: function() {
-  },
-  updateWatermarkForConversation: function() {
+  inviteToConversation: function(conversation, peep) {
   },
 
-  deleteConversation: function() {
+  pinConversation: function(conversation, pinned) {
+  },
+  updateWatermarkForConversation: function(conversation, seenMarkValue) {
+  },
+
+  deleteConversation: function(conversation) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -427,17 +452,70 @@ RawClientAPI.prototype = {
 
   // involving-peep/all-peeps, time-ordered, pinned...
   queryConversations: function() {
+    // this may require instantiating a new persistent subscription
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Persist client state
+  // Other Clients
+
+  /**
+   * Create a copy of this identity with a new client keypair.
+   *
+   * This is being created for unit testing reasons and likely does not
+   *  represent a realistic use-case.
+   */
+  __forkNewPersistedIdentityForNewClient: function() {
+    // - clone our longterm and normal keyrings
+    // (it is vitally important we pass this through JSON so we deep copy!)
+    var clonedLongtermKeyring = $keyring.loadLongtermSigningKeyring(
+      JSON.parse(JSON.stringify(this._longtermKeyring.data)));
+    var clonedKeyring = $keyring.loadDelegatedKeyring(
+      JSON.parse(JSON.stringify(this._keyring.data)));
+
+    // - have the clones generate a new keypair and clobber our keypair
+    // (we do not want the other client to be able to impersonate us)
+    clonedLongtermKeyring.forgetIssuedGroup('client');
+    clonedKeyring.forgetKeyGroup('client');
+
+    clonedKeyring.incorporateKeyGroup(
+      clonedLongtermKeyring.issueKeyGroup('client', {conn: 'box'}, 'client'));
+
+    // - persist ourself
+    var persisted = this.__persist();
+
+    // - replace the longterm and normal keyrings with our clones
+    persisted.keyrings.longterm = clonedLongtermKeyring.data;
+    persisted.keyrings.general = clonedKeyring.data;
+
+    // - add our auth to the other client auths
+    persisted.otherClientAuths.push(this._keyring.getPublicAuthFor('client'));
+
+    // - finally, update our own list of other client auths with this new guy
+    this._otherClientAuths = clonedKeyring.getPublicAuthFor('client');
+
+    return persisted;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Hygiene
+
+  /**
+   * Nuke data/subscriptions that we no longer have a reason to keep around.
+   *  This should generally mean things aged out so that they are no longer
+   *  recent or recently accessed.
+   */
+  __cullSubscriptions: function() {
+  },
+
   __persist: function() {
     return {
-      keyrings: {
-        root: this._rootKeyring.data,
-        longterm: this._longtermKeyring.data,
-        general: this._keyring.data,
-      }
+      selfIdent: this._selfIdentBlob, // (immutable)
+      keyrings: { // (mutable)
+        root: this._rootKeyring.data, // (atomic)
+        longterm: this._longtermKeyring.data, // (atomic)
+        general: this._keyring.data, // (atomic)
+      },
+      otherClientAuths: this._otherClientAuths.concat(), // (mutable of immut)
     };
   },
 
@@ -467,8 +545,7 @@ exports.makeClientForNewIdentity = function(poco, _logger) {
 
   // - create the client key
   keyring.incorporateKeyGroup(
-    longtermKeyring.issueKeyGroup('client', {conn: 'box'},
-                                  'client'));
+    longtermKeyring.issueKeyGroup('client', {conn: 'box'}, 'client'));
 
   // -- create the server-less self-ident
   var personSelfIdentBlob = $pubident.generatePersonSelfIdent(
@@ -485,12 +562,14 @@ exports.makeClientForNewIdentity = function(poco, _logger) {
       general: keyring.data,
     },
     clientAuth: clientAuthBlob,
+    otherClientAuths: [],
   };
 
   return new RawClientAPI(persistedBlob, _logger);
 };
 
-exports.getClientForExistingIdentity = function(persistedBlob) {
+exports.getClientForExistingIdentity = function(persistedBlob, _logger) {
+  return new RawClientAPI(persistedBlob, _logger);
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {

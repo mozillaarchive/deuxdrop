@@ -105,12 +105,6 @@ ClientServicingConnection.prototype = {
   },
 
   /**
-   * Here's a composed message to send, perhaps with some meta-data.
-   */
-  _msg_root_send: function(msg) {
-  },
-
-  /**
    * Request a conversation index, such as:
    * - All conversations (by time).
    * - Conversations with a specific content (by time).
@@ -130,6 +124,14 @@ ClientServicingConnection.prototype = {
   _msg_root_convGetMsgs: function(msg) {
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Mutation
+
+  /**
+   */
+  _msg_root_createConversation: function(msg) {
+  },
+
   /**
    * Set meta-data on a conversation/messages.
    */
@@ -142,6 +144,9 @@ ClientServicingConnection.prototype = {
   _msg_root_delConvMsgs: function(msg) {
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Contact Mutation
+
   /**
    * Add a new contact, someday with related-metadata for prioritization, etc.
    *
@@ -151,13 +156,19 @@ ClientServicingConnection.prototype = {
    *
    * @args[
    *   @param[msg @dict[
-   *     @key[contactSelfIdent PersonSelfIdentBlob]
+   *     @key[otherPersonIdent OtherPersonIdentBlob]
    *   ]]
    * ]
    */
   _msg_root_addContact: function(msg) {
-    this.config.dropApi.authorizeServerForContact();
-    // XXX YYY YYY writing code here!
+    // - verify the attestation
+
+    // - persist the attestation to our random-access store
+
+    // - enqueue for other (existing) clients
+
+    // - perform maildrop/fanout authorization
+    this.config.dropApi.authorizeServerUserForContact();
   },
 
   /**
@@ -171,8 +182,12 @@ ClientServicingConnection.prototype = {
   /**
    * Delete a contact.
    */
+  /*
   _msg_root_delContact: function(msg) {
   },
+  */
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 exports.ClientServicingConnection = ClientServicingConnection;
 
@@ -186,7 +201,8 @@ exports.makeServerDef = function(serverConfig) {
          * Verify that the client in question is allowed to talk to us.
          */
         authVerifier: function(endpoint, clientKey) {
-          return when(serverConfig.authApi.serverCheckUserAccount
+          return serverConfig.authApi.serverFetchUserEffigyUsingClient(
+            clientKey, "store");
         },
       },
     },

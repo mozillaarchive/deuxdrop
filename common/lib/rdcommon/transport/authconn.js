@@ -243,7 +243,7 @@ var AuthClientCommon = {
     this._conn = null;
     this.log.closed();
 
-    if ("__closed" in this.appConn) {
+    if (this.appConn && ("__closed" in this.appConn)) {
       var rval = this.log.appCloseHandler(this.appConn,
                                           this.appConn.__closed);
       // if an exception is thrown, kill the connection

@@ -96,6 +96,9 @@ function PersonRootSigningKeyring(persistedForm) {
   }
 }
 PersonRootSigningKeyring.prototype = {
+  toString: function() {
+    return '[PersonRootSigningKeyring]';
+  },
   toJSON: function() {
     return {
       type: 'PersonRootSigningKeyring',
@@ -140,6 +143,9 @@ function ServerRootSigningKeyring(persistedForm) {
   }
 }
 ServerRootSigningKeyring.prototype = {
+  toString: function() {
+    return '[ServerRootSigningKeyring]';
+  },
   toJSON: function() {
     return {
       type: 'ServerRootSigningKeyring',
@@ -187,6 +193,9 @@ function LongtermBoxingKeyring(persistedForm, creationForm) {
   }
 }
 LongtermBoxingKeyring.prototype = {
+  toString: function() {
+    return '[LongtermBoxingKeyring]';
+  },
   toJSON: function() {
     return {
       type: 'LongtermBoxingKeyring',
@@ -245,6 +254,9 @@ function LongtermSigningKeyring(persistedForm, creationForm) {
   }
 }
 LongtermSigningKeyring.prototype = {
+  toString: function() {
+    return '[LongtermSigningKeyring]';
+  },
   toJSON: function() {
     return {
       type: 'LongtermSigningKeyring',
@@ -270,7 +282,7 @@ LongtermSigningKeyring.prototype = {
    *  behalf of the user (including our own sanity-checking of our persisted
    *  store.
    *
-   * We may also optionally generate a public attestation
+   * We may also optionally generate a public attestation.
    */
   issueKeyGroup: function(groupName, keyNamesToTypesMap,
                           formalPublicAuthorizedFor) {
@@ -299,7 +311,16 @@ LongtermSigningKeyring.prototype = {
     return groupBundle;
   },
 
-  signJsonObj: function(obj) {
+  forgetIssuedGroup: function(groupName) {
+    delete this.data.issuedGroups[groupName];
+  },
+
+  /**
+   * Low-level operation to sign a JSON object with our long-term signing key.
+   *  Do not use this willy-nilly, try and use other higher level mechanisms
+   *  like attestation generation.
+   */
+  __signJsonObj: function(obj) {
     return $keyops.signJsonWithLongtermKeypair(
       obj, this.data.longtermSignBundle.keypair);
   },
@@ -343,6 +364,9 @@ function DelegatedKeyring(persistedForm, creationForm) {
   }
 }
 DelegatedKeyring.prototype = {
+  toString: function() {
+    return '[DelegatedKeyring]';
+  },
   toJSON: function() {
     return {
       type: 'DelegatedKeyring',
@@ -368,6 +392,10 @@ DelegatedKeyring.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Keyring key management
+
+  forgetKeyGroup: function(groupName) {
+    delete this.data.activeGroups[groupName];
+  },
 
   incorporateKeyGroup: function(groupBundle) {
     this.data.activeGroups[groupBundle.groupName] = groupBundle;
@@ -449,6 +477,9 @@ function ExposedSimpleBoxingKeyring(rootPublicKey, keypair) {
   this._keypair = keypair;
 }
 ExposedSimpleBoxingKeyring.prototype = {
+  toString: function() {
+    return '[ExposedSimpleBoxingKeyring]';
+  },
   toJSON: function() {
     return {
       type: 'ExposedSimpleBoxingKeyring',

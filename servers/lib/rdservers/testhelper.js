@@ -62,9 +62,21 @@ var TestClientActorMixins = {
    * Automatically create an identity; a client is not much use without one.
    *  (In the future we may look at the argument bundle provided to the actor
    *  instantiation in order to use an existing one too.)
+   *
+   * @args[
+   *   @param[self]
+   *   @param[opts @dict[
+   *     @key[clone #:optional TestClient]{
+   *       Have this new test client be another client for the same imagined
+   *       user of the other client.  Make sure both clients know about each
+   *       other and accordingly signups do the right thing.
+   *
+   *       This linkage is established before any tests are run.
+   *     }
+   *   ]]
+   * ]
    */
-  __constructor: function(self) {
-
+  __constructor: function(self, opts) {
     // -- define the raw client and its setup step
     self._eRawClient = self.T.actor('rawClient', self.__name, null, self);
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
@@ -75,22 +87,38 @@ var TestClientActorMixins = {
       self._logger = LOGFAB.testClient(self, null, self.__name);
       self._logger._actor = self;
 
-      // - create the client with a new identity
-      var poco = {
-        displayName: self.__name,
-      };
-      self._rawClient = $rawclient_api.makeClientForNewIdentity(poco,
-                                                                self._logger);
+      if (opts && opts.clone) {
+        // - fork an identity with a new client keypair
+        self._rawClient = $rawclient_api.getClientForExistingIdentity(
+            opts.clone._rawClient.__forkNewPersistedIdentityForNewClient(),
+            self._logger);
+        // (This leaves the thing we are cloning knowing about us, and we know
+        //  about it.  But this is a pairwise thing so any other clones should
+        //  also fork off of the same guy as us, leaving only that one guy
+        //  knowing about all us clones!)
+      }
+      else {
+        // - create the client with a new identity
+        var poco = {
+          displayName: self.__name,
+        };
+        self._rawClient = $rawclient_api.makeClientForNewIdentity(poco,
+                                                                  self._logger);
 
-      // - bind names to our public keys (so the logs are less gibberish)
-      self.T.thing('key', self.__name + ' root',
-                   self._rawClient.rootPublicKey);
-      self.T.thing('key', self.__name + ' longterm',
-                   self._rawClient.longtermSigningPublicKey);
+        // - bind names to our public keys (so the logs are less gibberish)
+        self.T.thing('key', self.__name + ' root',
+                     self._rawClient.rootPublicKey);
+        self.T.thing('key', self.__name + ' longterm',
+                     self._rawClient.longtermSigningPublicKey);
+      }
+
       self.T.thing('key', self.__name + ' client',
                    self._rawClient.clientPublicKey);
     });
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Server Accounts
 
   signupWith: function(testServerActor) {
     this._usingServer = testServerActor;
@@ -112,6 +140,14 @@ var TestClientActorMixins = {
     });
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Contacts
+
+  addContact: function(other) {
+    self._eRawClient.connectToPeepUsingSelfIdent(
+      other._eRawClient._selfIdentBlob);
+  },
+
   /**
    * Create mutual friendship relationships between 'this' client and the
    *  provided clients.
@@ -127,12 +163,34 @@ var TestClientActorMixins = {
         for (var i = 0; i < tofriend.length; i++) {
           var other = tofriend[i];
           focal.addContact(other);
-          focal._usingServer.expect_XXX();
+          focal._usingServer.expect_clientAddedContact(focal, other);
+
           other.addContact(focal);
+          other._usingServer.expect_clientAddedContact(other, focal);
         }
       }
     });
   },
+
+  assert_superFriends: function(friends) {
+    var tocheck = friends.concat([this]);
+    return this.T.convenienceSetup(
+        'assert mutual friend relationships among:', tocheck,
+        function() {
+      // (the destructive mutation is fine)
+      while (tocheck.length >= 2) {
+        var focal = tocheck.pop();
+        for (var i = 0; i < tocheck.length; i++) {
+          var other = tofriend[i];
+          focal._usingServer.assertUserHasContact(focal, other);
+          other._usingServer.assertUserHasContact(other, focal);
+        }
+      }
+    });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Messaging
 
   writeMessage: function(conv, outMsgThing, recipients) {
   },
@@ -146,6 +204,8 @@ var TestClientActorMixins = {
   inviteToConv: function(recipient, outConvThing) {
     throw new Error("XXX NOT IMPLEMENTED");
   },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 /**
@@ -246,14 +306,32 @@ var TestServerActorMixins = {
     });
   },
 
+  /**
+   * Add expectations that ensure that client's addition of the contact hit
+   *  all the relevant pieces of the server.
+   */
+  expect_clientAddedContact: function(userClient, otherUserClient) {
+
+  },
+
+  assertUserHasContact: function(userClient, otherUserClient) {
+  },
+
   assertClientAuthorizationState: function(testClient, isAuthorized) {
     var userRootKey = testClient._rawClient.rootPublicKey;
-    this.expect_clientAuthorizationCheck(userRootKey, isAuthorized);
+    this.expect_userAuthorizationCheck(userRootKey, isAuthorized);
+    var clientKey = testClient._rawClient.clientPublicKey;
+    this.expect_clientAuthorizationCheck(clientKey, isAuthorized);
 
     var self = this;
     when(this._config.authApi.serverCheckUserAccount(userRootKey),
       function(val) {
-        self._logger.clientAuthorizationCheck(userRootKey, val);
+        self._logger.userAuthorizationCheck(userRootKey, val);
+      });
+
+    when(this._config.authApi.serverCheckClientAuth(clientKey),
+      function(val) {
+        self._logger.clientAuthorizationCheck(clientKey, val);
       });
   },
 };
@@ -275,12 +353,14 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.SERVER,
 
     events: {
-      clientAuthorizationCheck: {userRootKey: 'key', isAuthorized: true},
+      clientAuthorizationCheck: {clientRootKey: 'key', isAuthorized: true},
+      userAuthorizationCheck: {userRootKey: 'key', isAuthorized: true},
+      clientContactCheck: {userRootKey: 'key', otherUserRootKey: 'key',
+                           isAuthorized: true},
     },
   }
 });
 
-console.log("RAWCLIENT IS", $rawclient_api);
 exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB,
     $authconn.LOGFAB, $rawclient_api.LOGFAB,

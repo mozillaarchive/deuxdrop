@@ -36,11 +36,12 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Local API for:
- * - A mailstore co-located with a maildrop.
- * - The fanout server, which is always co-located with a maildrop.
+ * Public-only keyring representation; they track the known public keys and
+ *  their relationships for an external entity.  This is used to hide the
+ *  implementation details of authorization chains.
  *
- * The remote API is for when the mailstore is talking with a remote maildrop.
+ * Currently this is only done for "person"s and not servers because the
+ *  person key situation is (intentionally) much more complicated.
  **/
 
 define(
@@ -51,23 +52,29 @@ define(
     exports
   ) {
 
-/**
- * Local maildrop API.  A maildrop does not keep attestations around; in the
- *  event the set of authorizations becomes suspect, they should be regenerated
- *  by the mailstore from its attestations.
- */
-function MaildropLocalApi(serverConfig, dbConn, _logger) {
-  this._authApi = serverConfig.authApi;
+function PersonPubring(persistedBlob) {
 }
-exports.Api = MaildropLocalApi;
-MaildropLocalApi.prototype = {
-  authorizeServerUserForContact: function(ourUserRootPubKey,
-                                          serverBoxPublicKey,
-                                          serverUser) {
+PersonPubring.prototype = {
+  /**
+   * Assert that the longterm signing public key was valid for this person at
+   *  the given timestamp, throwing an exception if the key is either unknown
+   *  to us or is not valid for the given timestamp.
+   *
+   * The timestamp is required in all cases.  Ideally the timestamp at which
+   *  something was received by a (trusted) node will be persisted with the
+   *  data so we can use that timestamp to validate the data.  This avoids
+   *  weird semantics where data starts expiring out from under an application
+   *  in nonsensical ways.
+   */
+  assertValidLongtermSigningKey: function(longtermSignPubKey, timestamp) {
   },
+};
 
-  authorizeServerForConversation: function() {
-  },
+exports.createPersonPubringFromSelfIdent = function() {
+
+};
+
+exports.loadPersonPubring = function(persistedForm) {
 };
 
 }); // end define

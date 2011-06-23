@@ -36,38 +36,52 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Local API for:
- * - A mailstore co-located with a maildrop.
- * - The fanout server, which is always co-located with a maildrop.
  *
- * The remote API is for when the mailstore is talking with a remote maildrop.
  **/
 
 define(
   [
+    'rdcommon/testcontext',
+    'rdservers/testhelper',
+    'rdcommon/rawclient/api',
+    'module',
     'exports'
   ],
   function(
+    $tc,
+    $th_rdservers,
+    $rawclient_api,
+    $module,
     exports
   ) {
 
-/**
- * Local maildrop API.  A maildrop does not keep attestations around; in the
- *  event the set of authorizations becomes suspect, they should be regenerated
- *  by the mailstore from its attestations.
- */
-function MaildropLocalApi(serverConfig, dbConn, _logger) {
-  this._authApi = serverConfig.authApi;
-}
-exports.Api = MaildropLocalApi;
-MaildropLocalApi.prototype = {
-  authorizeServerUserForContact: function(ourUserRootPubKey,
-                                          serverBoxPublicKey,
-                                          serverUser) {
-  },
+var TD = exports.TD = $tc.defineTestsFor($module, null,
+  [$th_rdservers.TESTHELPER]);
 
-  authorizeServerForConversation: function() {
-  },
-};
+TD.commonCase('clone client has state matching the mutator', function(T) {
+  // usual client
+  var client = T.actor('testClient', 'C');
+  // a different client for the same user
+  var clone = T.actor('testClient', 'C2', {clone: client});
+
+  // a friend for our client!
+  var alice = T.actor('testClient', 'A');
+
+  var server = T.actor('testServer', 'S', {roles: ['auth', 'signup']});
+
+  // signup
+  client.setup_useServer(server);
+
+  // make sure both got signed up
+  T.check('have', server, 'verify', client, 'and', clone,
+           'are both signed up', function() {
+    server.assertClientAuthorizationState(client, true);
+    server.assertClientAuthorizationState(clone, true);
+  });
+
+  // -- contact propagation
+  T.action('have', client, 'add a contact', function() {
+  });
+});
 
 }); // end define
