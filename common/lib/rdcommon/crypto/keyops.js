@@ -67,6 +67,20 @@
  * - Generate attestations of some fact/authorization for some other key to
  *    have some specific privilege for some time period, etc.  The desired
  *    eventual semantics/functionality are those provided by SDSI-become-SPKI.
+ *
+ * - Box/open.  THIS IS NOT A TRAPDOOR MECHANISM.  If Alice boxes a payload for
+ *    Bob, the result is *identical* if Bob boxes the same payload for Alice
+ *    using the same nonce.  This means that as long as Alice knows what she
+ *    boxed, she can conclude that Bob must have boxed anything she did not box.
+ *    This makes things repudiable because Bob can't prove Alice wrote
+ *    something.  The flip-side is that if Alice doesn't remember what she
+ *    wrote, she can't tell things apart either!
+ * - Sign/verify.  This is a true public-key signature system.  It's much
+ *    slower than boxes.
+ * - Auth/verify.  Secret-key-based authentication/verification.
+ * - Secretbox/open.  Secret-key-based authenticated encryption.
+ *
+ * WE HAVE NO SIGNCRYPTION PRIMITIVE.
  **/
 
 define(

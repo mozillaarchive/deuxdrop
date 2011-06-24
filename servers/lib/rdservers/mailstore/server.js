@@ -66,11 +66,22 @@ var when = $Q.when;
  *
  * In the opposite direction, the client does not want to have to trust us a
  *  lot.  So if there's something it tells us that we might need to tell it
- *  again later, it will tend to want to wrap them in signed attestations.  That
- *  way the device has something stronger than "I swear, you told me this
- *  earlier" to go on.  Likewise, if an attacker inserts stuff into our
- *  database, we can weed out attacker injected stuff because we won't be
- *  able to revalidate it.
+ *  again later, it will (using secret key cryptography) either:
+ * - Tell us the plaintext along with an authenticator if the payload is
+ *    something we should see.
+ * - Give us a secret boxed blob so we can tell it again later.  While we can
+ *    obviously establish a correlation between the secret blob and whatever
+ *    may have been told to us in plaintext, the idea is that we do not persist
+ *    this relationship so that if we are not currently compromised but do
+ *    become compromised in the future, the attacker gains miminal information
+ *    from what is already on disk.  (Note: this requires us to be careful
+ *    about timestamps or other monotonic values that could establish a total
+ *    ordering or correlation in the database.)
+ *
+ * The reason the client uses secret key cryptography is because no one but
+ *  the clients needs to be able to verify the integrity of these things and
+ *  it's also much much faster to do the secret key crypto.
+ *
  *
  * We talk to the maildrop, mailsender, and fanout server roles via proxy
  *  objects that may either directly effect the requested changes (locally

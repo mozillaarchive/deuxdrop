@@ -486,6 +486,15 @@ RawClientAPI.prototype = {
   createConversation: function(peeps, messageText, location) {
   },
   replyToConversation: function(conversation, messageText, location) {
+    // - create a signed message payload
+    // this is what the receipients will read/display
+
+    // - encrypt the signed message with the conversation's secret key
+
+    // - box it for transit to the fanout server
+    // this is what makes the fanout server agree to re-publish it
+    // (it can't see the payload)
+
   },
   inviteToConversation: function(conversation, peep) {
   },
