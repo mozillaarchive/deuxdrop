@@ -116,7 +116,7 @@ RedisDbConn.prototype = {
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    this._conn.hget(this._prefix + '_' + tableName + '_' + rowId, columnName,
+    this._conn.hget(this._prefix + ':' + tableName + ':' + rowId, columnName,
                      function(err, result) {
       if (err)
         deferred.reject(err);
@@ -129,7 +129,7 @@ RedisDbConn.prototype = {
   getRow: function(tableName, rowId, columnFamilies) {
     var deferred = $Q.defer();
     this._log.getRow(tableName, rowId, columnFamilies);
-    this._conn.hgetall(this._prefix + '_' + tableName + '_' + rowId, columnName,
+    this._conn.hgetall(this._prefix + ':' + tableName + ':' + rowId, columnName,
                      function(err, result) {
       if (err)
         deferred.reject(err);
@@ -142,7 +142,7 @@ RedisDbConn.prototype = {
   putCells: function(tableName, rowId, cells) {
     var deferred = $Q.defer();
     this._log.putCells(tableName, rowId, cells);
-    this._conn.hmset(this._prefix + '_' + tableName + '_' + rowId, cells,
+    this._conn.hmset(this._prefix + ':' + tableName + ':' + rowId, cells,
                      function(err, replies) {
       if (err)
         deferred.reject(err);
@@ -183,7 +183,7 @@ RedisDbConn.prototype = {
    */
   updateIndexValue: function(tableName, indexName, objectName, newValue,
                              oldValueIfKnown) {
-    this._conn.zadd(this._prefix + '_' + tableName + '_' + indexName,
+    this._conn.zadd(this._prefix + ':' + tableName + ':' + indexName,
                     value, objectName);
   },
 
@@ -193,7 +193,7 @@ RedisDbConn.prototype = {
   queueAppend: function(tableName, queueName, values) {
     var multi = this._conn.multi();
     for (var i = 0; i < values.length; i++) {
-      multi.rpush(this._prefix + '_' + tableName + '_' + queueName,
+      multi.rpush(this._prefix + ':' + tableName + ':' + queueName,
                   values[i]);
     }
     var deferred = $Q.defer();
@@ -209,7 +209,7 @@ RedisDbConn.prototype = {
   queuePeek: function(table, queueName, count) {
     var deferred = $Q.defer();
 
-    this._conn.lrange(this._prefix + '_' + tableName + '_' + queueName,
+    this._conn.lrange(this._prefix + ':' + tableName + ':' + queueName,
                       0, count - 1, function(err, multibulk) {
       if (err)
         deferred.reject(err);
@@ -222,7 +222,7 @@ RedisDbConn.prototype = {
 
   queueConsume: function(table, queueName, count) {
     var deferred = $Q.defer();
-    this._conn.ltrim(this._prefix + '_' + tableName + '_' + queueName,
+    this._conn.ltrim(this._prefix + ':' + tableName + ':' + queueName,
                      count, -1, function(status) {
       if (status === "OK")
         deferred.resolve();

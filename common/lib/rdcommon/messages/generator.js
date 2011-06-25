@@ -69,25 +69,28 @@
  *
  * }
  *
- * @typedef[MaildropTransitEnvelope @dict[
- *   @key[senderHash]{
+ * @typedef[TransitEnvelope @dict[
+ *   @key[senderKey]{
  *   }
- *   @key[recipHash]{
- *   }
- *   @key[convHash]{
+ *   @key[recipKey]{
  *   }
  *   @key[nonce]{
- *     The nonce used for all encryption for this message and sub-parts.
+ *     The randomly generated nonce used for all encryption for this message and
+ *     sub-parts.  When the transit envelope gets stripped, the payload should
+ *     be re-encapsulated with the nonce so lower level consumers have it.
  *   }
  *   @key[version Integer]{
  *     Schema version for sanity checking; there is no support for inter-version
  *     operation during the development phase, but we want to be able to detect
  *     such an attempt and fail-fast.
  *   }
- *   @key[envelope EncStorageEnvelope]{
+ *   @key[payload BoxedPayload]{
+ *     Something boxed between the sender and recipient with the given nonce.
  *   }
  * ]]{
- *   This blob gets signed by the sender.
+ *    A box with the meta-data to identify the sender and recipient so we know
+ *    what keys were used in the boxing without having to try multiple keys.
+ *    The nonce is also included because we need to know that.
  * }
  *
  * @typedef[StorageEnvelope @dict[
@@ -104,8 +107,6 @@
  *   The storage envelope contains meta-data about the message that is for use
  *   by the mailstore (and friends) to be able to classify/prioritize the mail
  *   without needing to see the actual message contents in the `MessagePayload`.
- *
- *   It is encrypted
  * }
  *
  * @typedef[MessagePayload @dict[
@@ -119,17 +120,190 @@
  * ]]{
  *   The message payload contains the actual contents of the message.
  * }
+ *
+ * @typedef[ConversationFanoutEnvelopePayload @dict[
+ *   @key[sentBy]
+ *   @key[envelope ConversationEnvelopeEncrypted]
+ * ]]{
+ *   The (boxed) envelope for things sent to the conversation.  This has the
+ *   sender's key rather than the inner envelope because we are depending on
+ *   the fanout server to truthfully tell us which depends on it doing the
+ *   boxing to us.
+ * }
+ *
+ * @typedef[ConversationEnvelopePayload @dict[
+ *   @key[body ConversationBodyEncrypted]
+ * ]]{
+ *   The conversation envelope is encrypted with the conversation's envelope
+ *   (symmetric) secret key using the nonce providing in one the containing
+ *   objects.
+ * }
+ *
+ * @typedef[ConversationBodyPayload @dict[
+ *   @key[author AnnounceSignPubKey]
+ *   @key[convId]
+ *   @key[composedAt DateMS]{
+ *     Composition date of the message.
+ *   }
+ *   @key[body String]
+ * ]]{
+ * }
+ *
+ * @typedef[ConversationBodySigned @naclSigned[ConversationBodyPayload author]]{
+ *   The body signed by the author using
+ * }
+ *
+ * @typedef[ConversationBodyEncrypted @naclSecretBoxed[ConversationBodySigned]]{
+ * }
  **/
 
 define(
   [
-    'nacl',
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
-    $nacl,
+    $keyops,
     exports
   ) {
+
+
+
+exports.createNewConversation = function(starterKeyring, serverIdentPayload) {
+  // - create the new signing keypair that defines the conversation
+  var convKeypair = $keyops.makeGeneralSigningKeypair();
+
+  // - create the converation attestation
+  var convAttestPayload = {
+    type: "conversation",
+    convId: convKeypair.publicKey,
+    starter: starterKeyring.rootPublicKey,
+  };
+
+  // - create the symmetric secret keys (envelope, body) for the conversation
+  var envelopeSharedSecretKey = $keyops.makeSecretBoxKey();
+  var bodySharedSecretKey = $keyops.makeSecretBoxKey();
+
+  // the actual information required to participate in the conversation...
+  var convMeta = {
+    id: convKeypair.publicKey,
+    envelopeSharedSecretKey: envelopeSharedSecretKey,
+    bodySharedSecretKey: bodySharedSecretKey,
+    // this both names who to contact and is used for encryption; we don't
+    //  bind the url into the conversation info; the mailsender will have it on
+    //  file.
+    transitServerKey: serverIdentPayload.publicKey,
+  };
+
+};
+
+/**
+ * @args[
+ *   @param[authorKeyring DelegatedKeyring]
+ *   @param[otherPersonIdentSigned OtherPersonIdentSigned]{
+ *     The author's previously generated signature that states who the person
+ *     is to us.
+ *   }
+ *   @param[recipPubring PersonPubring]
+ * ]
+ */
+exports.createConversationInvitation = function(authorKeyring,
+                                                otherPersonIdent,
+                                                recipPubring) {
+  // --- to the fanout server
+  // -- for the conversation participants (not the fanout server)
+  // - generate signed attestation to be sent to the list
+  // - encrypt the attestation with the message key
+
+  // -- for the fanout server itself
+
+  // --- to the invitee
+  // -- for the invitee
+  // (sekret detailz about the conversation)
+  // - encrypt the shared secret keys into
+
+  // -- for their fanin server
+  // - tell the server to authorize incoming messages for the conversation
+  // - give it the encrypted conversation details to feed to the user
+
+
+
+};
+
+exports.createConversationHumanMessage = function(bodyString, authorKeyring,
+                                                  convMeta) {
+  // (for the conversation participants)
+  var now = Date.now();
+  var bodyObj = {
+    author: authorKeyring.getPublicKeyFor('messaging', 'announceSign'),
+    convId: convMeta.id,
+    composedAt: now,
+    body: bodyString,
+  };
+  var bodyJsonStr = JSON.stringify(bodyObj);
+  var bodySigned = authorKeyring.signWith(bodyJsonStr,
+                                          'messaging', 'announceSign');
+
+  var nonce = $keyops.makeSecretBoxNonce();
+  var bodyEncrypted = $keyops.secretBoxUtf8(bodySigned, nonce,
+                                            convMeta.bodySharedSecretKey);
+
+  var envelopeObj = {
+    // so, ideally there would be something interesting that could go in here,
+    //  but it's not clear what would be useful, especially because we don't
+    //  really authenticate the envelope.
+    body: bodyEncrypted,
+  };
+  var envelopeJsonStr = JSON.strigify(envelopeObj);
+  var envelopeEncrypted = $keyops.secretBoxUtf8(
+                            envelopeJsonStr, nonce,
+                            convMeta.envelopeSharedSecretKey);
+};
+
+exports.assertGetConversationHumanMessageEnvelope = function(envelopeEncrypted,
+                                                             nonce,
+                                                             convMeta) {
+  var envelopeJsonStr = $keyops.secretBoxOpenUtf8(
+                          envelopeEncrypted, nonce,
+                          convMeta.envelopeSharedSecretKey);
+  return JSON.parse(envelopeJsonStr);
+};
+
+/**
+ * @args[
+ *   @param[bodyEncrypted]
+ *   @param[nonce]
+ *   @param[convMeta]
+ *   @param[authorPubring]{
+ *     The pubring of the supposed author of this message as conveyed to us by
+ *     the transit envelope from the fanout server.
+ *   }
+ * ]
+ */
+exports.assertGetConversationHumanMessageBody = function(bodyEncrypted,
+                                                         nonce,
+                                                         convMeta,
+                                                         receivedTS,
+                                                         authorPubring) {
+  var bodySigned = $keyops.secretBoxOpenUtf8(bodyEncrypted, nonce,
+                                             convMeta.bodySharedSecretKey);
+  var peekedBodyObj = JSON.parse(
+                        $keyops.generalPeekInsideSignatureUtf8(bodySigned));
+  // make sure the signature is consistent with its payload
+  $keyops.generalVerifySignatureUtf8(bodySigned, peekedBodyObj.author);
+  // make sure the signing key is consistent with the alleged author
+  authorPubring.assertValidKeyAtTime(peekedBodyObj.author, receivedTS,
+                                     'messaging', 'announceSign');
+  return peekedBodyObj;
+};
+
+exports.encryptHumanToHuman = function(obj, nonce,
+                                       authorKeyring, recipPubring) {
+  var jsonStr = JSON.stringify(obj);
+  authorKeyring.boxWith(jsonStr, nonce,
+                        recipPubring.getPublicKeyFor('messaging', 'bodyBox'),
+                        'messaging', 'tellBox');
+};
 
 /**
  *

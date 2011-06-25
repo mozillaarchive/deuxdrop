@@ -484,10 +484,13 @@ RawClientAPI.prototype = {
   // Conversation Mutation
 
   createConversation: function(peeps, messageText, location) {
+    // - create the conversation
+
+    // - generate the invitations for the peeps
   },
   replyToConversation: function(conversation, messageText, location) {
     // - create a signed message payload
-    // this is what the receipients will read/display
+    // this is what the recipients will read/display
 
     // - encrypt the signed message with the conversation's secret key
 

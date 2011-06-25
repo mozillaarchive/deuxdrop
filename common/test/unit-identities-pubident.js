@@ -95,7 +95,7 @@ TD.commonSimple('personSelfIdent creation', function test_personSelfIdent() {
   keyring.incorporateKeyGroup(
     longtermKeyring.issueKeyGroup('messaging', {
         envelope: 'box',
-        payload: 'box',
+        body: 'box',
         announce: 'sign',
         tell: 'box',
       }));

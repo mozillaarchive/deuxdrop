@@ -38,7 +38,8 @@
 /**
  * Public-only keyring representation; they track the known public keys and
  *  their relationships for an external entity.  This is used to hide the
- *  implementation details of authorization chains.
+ *  implementation details of authorization chains or the many many keys people
+ *  can have.
  *
  * Currently this is only done for "person"s and not servers because the
  *  person key situation is (intentionally) much more complicated.
@@ -46,13 +47,27 @@
 
 define(
   [
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
+    $keyops,
     exports
   ) {
 
+const VERSION = 1;
+
+/**
+ * Public-only keyring representation.  Although signed source material is
+ *  maintained, the general operation of this class does not re-verify
+ *  signatuers that by invariant must have already been verified.  This is
+ *  because ECC signature verification is relatively expensive and we are
+ *  assuming a data compromise could be accompanied by a code compromise; the
+ *  solution is for downstream consumers in separate execution universes to
+ *  verify things for themselves.
+ */
 function PersonPubring(persistedBlob) {
+  this.data = persistedBlob;
 }
 PersonPubring.prototype = {
   /**
@@ -67,14 +82,80 @@ PersonPubring.prototype = {
    *  in nonsensical ways.
    */
   assertValidLongtermSigningKey: function(longtermSignPubKey, timestamp) {
+    // XXX we currently do not verify the timestamp stuff.
+    if (this.data.longtermKeys.indexOf(longtermSignPubKey) !== -1)
+      return;
+    throw new $keyops.InvalidAuthorizationError();
+  },
+
+  /**
+   * Get the currently active key from a given group with a given name.
+   */
+  getPublicKeyFor: function(groupName, keyName) {
+    if (!this.data.activeGroups.hasOwnProperty(groupName))
+      throw new Error("No such group: '" + groupName + "'");
+    if (!this.data.activeGroups[groupName].hasOwnProperty(keyName))
+      throw new Error("No such key: '" + keyName + "'");
+
+    return this.data.activeGroups[groupName][keyName];
+  },
+
+  /**
+   * Assert that the observed key was a valid key for the given key (name) in
+   *  the given group (name).
+   *
+   * Care must be taken when providing timestamps to make sure that you are not
+   *  allowing an attacker to choose timestamps that match the keys they have
+   *  compromised.  Ideally, use the timestamp when something was observed or
+   *  received.
+   */
+  assertValidKeyAtTime: function(observedKey, timestamp, groupName, keyName) {
+    // XXX we currently just use activeGroups, not a list of stuff.
+    if (!this.data.activeGroups.hasOwnProperty(groupName))
+      throw new Error("No such group: '" + groupName + "'");
+    if (!this.data.activeGroups[groupName].hasOwnProperty(keyName))
+      throw new Error("No such key: '" + keyName + "'");
+
+    // XXX we are not checking timestamps at all!
+    if (observedKey !== this.data.activeGroups[groupName][keyName])
+      throw new $keyops.InvalidAuthorizationError();
+  },
+
+  __persist: function() {
+    return this.data;
   },
 };
 
-exports.createPersonPubringFromSelfIdent = function() {
 
+
+function commonCreatePersonPubring(selfIdentPayload, selfIdentBlob) {
+  var persistedForm = {
+    v: VERSION,
+    sources: {
+      selfIdents: [selfIdentBlob],
+    },
+    rootPublicKey: selfIdentPayload.root.rootSignPubKey,
+    longtermKeys: [selfIdentPayload.root.longtermSignPubKey],
+    activeGroups: {
+      messaging: {
+        envelopeBox: selfIdentPayload.keys.envelopeBoxPubKey,
+        bodyBox: selfIdentPayload.keys.bodyBoxPubKey,
+        announceSign: selfIdentPayload.keys.announceSignPubKey,
+        tellBox: selfIdentPayload.keys.tellBoxPubKey,
+      },
+    },
+  };
+  return new PersonPubring(persistedForm);
+}
+
+exports.createPersonPubringFromSelfIdentDO_NOT_VERIFY = function(selfIdentBlob) {
+  return commonCreatePersonPubring(
+    JSON.parse($keyops.generalPeekInsideSignatureUtf8(selfIdentBlob)),
+    selfIdentBlob);
 };
 
 exports.loadPersonPubring = function(persistedForm) {
+  return new PersonPubring(persistedForm);
 };
 
 }); // end define

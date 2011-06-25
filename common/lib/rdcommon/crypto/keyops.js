@@ -81,6 +81,33 @@
  * - Secretbox/open.  Secret-key-based authenticated encryption.
  *
  * WE HAVE NO SIGNCRYPTION PRIMITIVE.
+ *
+ * ## Performance numbers
+ * On my machine (using microtime a uS-resolution timer):
+ *
+ * - Boxing is ~44 times faster than signing 1k of data.
+ * - Unboxing is ~115 times faster than verifying 1k of data.
+ *
+ * - Generating boxing keypairs: 0.1 ms
+ * - Boxing 1k of data: ~0.1 ms
+ * - Unboxing 1k of data ~0.1 ms
+ *
+ * - Generating signing keypairs: ~4.4ms
+ * - Signing 1k of data: 4.4 ms
+ * - Verifying 1k of data: 11.5 ms
+ *
+ * Note that box operations can also be potentially further optimized using the
+ *  C precomputation interface.  So, in summary, boxing is stupid fast,
+ *  signatures are comparably slow, verifying them even more so.
+ *
+ * Also note that the nacl signing operations are not especially optimized, so
+ *  if the library is updated, they could get much faster.
+ *
+ * In comparison (again, on my machine) openssl speed concludes:
+ * - RSA 2048 bit signature: ~1.61 ms
+ * - RSA 2048 bit verification: ~0.05 ms
+ * - RSA 4096 bit signature: ~11.38 ms
+ * - RSA 4096 bit verification: ~0.19 ms
  **/
 
 define(
@@ -379,6 +406,7 @@ function makeGeneralSigningKeypair() {
     publicKey: rawPair.pk,
   };
 };
+exports.makeGeneralSigningKeypair = makeGeneralSigningKeypair;
 
 /**
  * Sign an object (that we convert into a JSON string for you) with a longterm
@@ -529,5 +557,13 @@ exports.generalVerifySignature = $nacl.sign_open;
 exports.generalVerifySignatureUtf8 = $nacl.sign_open_utf8;
 exports.generalPeekInsideSignature = $nacl.sign_peek;
 exports.generalPeekInsideSignatureUtf8 = $nacl.sign_peek_utf8;
+
+exports.makeSecretBoxKey = $nacl.secretbox_random_key;
+exports.makeSecretBoxNonce = $nacl.secretbox_random_nonce;
+
+exports.secretBox = $nacl.secretbox;
+exports.secretBoxUtf8 = $nacl.secretbox_utf8;
+exports.secretBoxOpen = $nacl.secretbox_open;
+exports.secretBoxOpenUtf8 = $nacl.secretbox_open_utf8;
 
 }); // end define

@@ -107,17 +107,30 @@
  *   @key[keys @dict[
  *     @key[envelopeBoxPubKey]{
  *       The public key to use to encrypt the envelope of messages to this
- *       person.  This is different from the payload key so that a user can
- *       authorize their mailstore to be able to read the envelope for
- *       processing but not let it see the payload.
+ *       person.  This key will not be used by the user to box things because
+ *       recipients would be unable to know if the mailstore created the
+ *       envelope or if the user created it; the `tellBoxPubKey` is used in that
+ *       case.
+ *
+ *       This is different from the body key so that a user may give their
+ *       mailstore a copy of this key in order to provide benefit but without
+ *       letting the mailstore read the content of the messages.  (The user may
+ *       also give the mailstore a copy of the body key, but this allows them
+ *       to make the choice.)
  *     }
- *     @key[payloadBoxPubKey]{
- *       The public key to use to encrypt the payload of messages to this person.
+ *     @key[bodyBoxPubKey]{
+ *       The public key to use to encrypt the payload of messages to this
+ *       person.  This key will not be used by the user to box things because
+ *       receipients would be unable to know if the mailstore created the
+ *       body; the `tellBoxPubKey` is used in that case.
+ *
+ *       The user may give a copy of this (secret) key so it can provide
+ *       services such as full-text indexing,
  *     }
  *
  *     @key[announceSignPubKey]{
- *       The public key corresponding to the secret key that will be used to sign
- *       messages authored by this identity.
+ *       The public key corresponding to the secret key that will be used to
+ *       sign messages authored by this identity.
  *     }
  *     @key[tellBoxPubKey]{
  *       The public key corresponding to the secret key that will be used to
@@ -209,7 +222,7 @@ exports.generatePersonSelfIdent = function(longtermKeyring,
 
     keys: {
       envelopeBoxPubKey: keyring.getPublicKeyFor("messaging", "envelopeBox"),
-      payloadBoxPubKey: keyring.getPublicKeyFor("messaging", "payloadBox"),
+      bodyBoxPubKey: keyring.getPublicKeyFor("messaging", "bodyBox"),
       announceSignPubKey: keyring.getPublicKeyFor("messaging", "announceSign"),
       tellBoxPubKey: keyring.getPublicKeyFor("messaging", "tellBox"),
     },
@@ -276,7 +289,7 @@ exports.assertGetOtherPersonIdent = function(otherPersonIdentBlob,
     $keyops.generalPeekInsideSignatureUtf8(otherPersonIdentBlob));
   var longtermSignPubKey = peekedPayload.assertedBy;
   $keyops.generalVerifySignatureUtf8(otherPersonIdentBlob, longtermSignPubKey);
-  
+
   if (checkAuthorPubring)
     checkAuthorPubring.assertValidLongtermSigningKey(longtermSignPubKey);
 };

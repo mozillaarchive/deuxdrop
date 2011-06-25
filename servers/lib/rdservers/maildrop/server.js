@@ -67,7 +67,19 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
 
 /**
- * Delivery processing connection.
+ * The delivery conn receives inbound messages targeted at either users (in
+ *  the guise of their mailstore) or daemons.  We operate within an authconn
+ *  connection which means that we know we are talking to the server we think
+ *  we are talking to, not that the server speaks with the same authority as
+ *  one of its users.  For this reason, everything we receive needs to come in
+ *  a transit envelope to us from the user causing things to happen.
+ *
+ * Conversations are a special case because they rely on a fanout daemon which
+ *  exists so that the humans in the system don't have to know all of the
+ *  (eventual) recipients.  In this case we are relying on the fanout server
+ *  to be sure to verify the users sending it messages.  In the event it goes
+ *  rogue, the price of conversation convenience means that it can cram
+ *  (user-)detectable/discardable garbage into specific conversations.
  */
 function ReceiveDeliveryConnection(conn) {
   this.conn = conn;
@@ -76,6 +88,19 @@ ReceiveDeliveryConnection.prototype = {
   INITIAL_STATE: 'root',
 
   _msg_root_deliver: function(msg) {
+    var transitMsg = msg.msg;
+    // - targeted to a user (their mailstore)
+    if (transitMsg.type === "user") {
+    }
+    // - targeted to a user's fanout server
+    // (conversation relayer)
+    else if (transitMsg.type === "fanout") {
+    }
+    // - targeted to a user's fanin server
+    // (conversation subscriber / approver)
+    else if (transitMsg.type === "fanin") {
+    }
+
     return new DeliverTask(msg, this.conn.log);
   },
 };
@@ -146,14 +171,6 @@ var DropServerDef = {
         // we are just checking that they are allowed to talk to us at all
         return $auth_api.checkServerAuth(clientKey);
       }
-    },
-
-    'drop/contacts': {
-      implClass: ContactConnection,
-    },
-
-    'drop/fetch': {
-      implClass: PickupConnection,
     },
   },
 };
