@@ -38,6 +38,18 @@
 /**
  * Authorization DB API; we segregate use-cases so we can optimize for the
  *  differing record counts, access patterns, turnover, etc.
+ *
+ * XXX I believe my rationale for fusing a bunch of separate roles' db
+ *  accesses together was that in the fullpub situation we might be able to
+ *  benefit from reuse.  Namely, in some cases both the halfpub and the halfpriv
+ *  bits want the same info (does this user have an account?) and so we can
+ *  generically handle that in a common bit.  And in the cases where they
+ *  don't want the same info, what the halfpub bit wants is basically a
+ *  sanitized version of what the halfpriv knows, so in a fullpub configuration
+ *  we could just ask the questions of the unsanitized data.
+ * XXX Anywho, the point is this might want to be split out into more
+ *  role-specific classes except for that which can totally be reused.  I am
+ *  keeping things segregated so it's easy to do if we do it.
  **/
 
 define(
@@ -53,12 +65,41 @@ var when = $Q.when;
 
 const TBL_USER_ACCOUNT = "auth:userAccountByRootKey";
 const TBL_CLIENT_AUTH = "auth:clientAuthByClientKey";
+/**
+ * Server auths; row is the server box key.
+ */
+const TBL_SERVER_AUTH = "auth:serverAuthByBoxKey";
+/**
+ * Server-user/server-converation auths from the perspective of our users.
+ *  Row is composite of [server box key, our user key].  Chosen because the
+ *  connections to servers provide inherent locality over the server key
+ *  rather than (our) user locality.
+ */
+const TBL_SERVER_USER_AUTH = "auth:serverUserAuth";
+/**
+ * Conversation authorizations; row is the converation id, cell names are
+ *  "u:SERVERKEY:USERKEY".  Locality is the conversation since things happening
+ *  in a conversation will tend to be bursty.  Since conversation id's are
+ *  randomish this will also tend to avoid hot-spots.
+ */
+const TBL_CONV_AUTH = "auth:convByConvId";
 
+/**
+ * Authorization/authentication/account stuff.
+ *
+ * XXX There is currently no deauthorization, which is clearly bad.
+ * XXX I'm not sure we can expose
+ */
 function AuthApi(serverConfig, dbConn, _logger) {
   this._db = dbConn;
 
   this._db.defineHbaseTable(TBL_USER_ACCOUNT, ["d"]);
   this._db.defineHbaseTable(TBL_CLIENT_AUTH, ["d"]);
+
+  this._db.defineHbaseTable(TBL_SERVER_AUTH, ["s"]);
+  this._db.defineHbaseTable(TBL_SERVER_USER_AUTH, ["u", "c"]);
+
+  this._db.defineHbaseTable(TBL_CONV_AUTH, ["u"]);
 }
 exports.AuthApi = exports.Api = AuthApi;
 AuthApi.prototype = {
@@ -104,7 +145,7 @@ AuthApi.prototype = {
     }
     promises.push(
       this._db.putCells(TBL_USER_ACCOUNT, rootSignPubKey, accountCells));
-    return $Q.wait.apply(null, promises);
+    return $Q.all(promises);
   },
 
   /**
@@ -115,7 +156,9 @@ AuthApi.prototype = {
   serverCheckClientAuth: function(clientPublicKey) {
     return when(
       this._db.getRowCell(TBL_CLIENT_AUTH, clientPublicKey, "d:rootKey"),
-      this._serverCheckClientAuthCallback);
+      this._serverCheckClientAuthCallback
+      // passing through the rejection is fine
+    );
   },
   _serverCheckClientAuthCallback: function(val) {
     return val !== null;
@@ -136,49 +179,111 @@ AuthApi.prototype = {
           function(cells) {
 
           });
-      });
+      }
+      // passing through the rejection is fine
+    );
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Inter-Server Auths
+  //
+  // All of this implies we are the maildrop server.
 
   /**
    * Check if the server is allowed to talk to this server (at all).
    *
    * Implies maildrop.
    */
-  serverCheckServerAuth: function(otherServerIdent) {
+  serverCheckServerAuth: function(otherServerBoxPubKey) {
+    return when(
+      this._db.getRowCell(TBL_SERVER_AUTH, otherServerBoxPubKey, "s:c"),
+      this._serverCheckAuthCallback
+      // passing through the rejection is fine
+    );
+  },
+  _serverCheckAuthCallback: function(count) {
+    if (!count || count <= 0)
+      return false;
+    return true;
+  },
+
+  /**
+   * Mark the server as authorized; this should only be called by other methods
+   *  on this class because a server being authorized is a function of the other
+   *  higher level authorizations and we want to consolidate that bookkeeping in
+   *  here.
+   */
+  _serverAuthorizeServer: function(otherServerBoxPubKey) {
+    return this._db.incrementCell(TBL_SERVER_AUTH, otherServerBoxPubKey, "s:c",
+                                  1);
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Inter-User Authorizations
+  //
+  // Maildrop server implied.
 
-  /**
-   * From the perspective of one of our users, have they authorized the other
-   *  user for a given privilege?  For now, there is only one privilege,
-   *  "contact".
-   */
-  userCheckUserPrivilege: function(ourUserKey, otherUserIdent, privilege) {
+  userCheckServerUser: function(ourUserKey, otherServerBoxPubKey,
+                                otherUserTellBoxPubKey) {
+    return this._db.boolcheckRowCell(TBL_SERVER_USER_AUTH,
+                                     otherServerBoxPubKey + ":" + ourUserKey,
+                                     "u:" + otherUserTellBoxPubKey);
   },
 
   /**
    * From the perspective of one of our users, is this an authorized
    *  conversation?
    */
-  userCheckConversation: function(ourUserKey, conversationIdent) {
+  userCheckServerConversation: function(ourUserKey, otherServerBoxPubKey,
+                                        conversationIdent) {
+    return this._db.boolcheckRowCell(TBL_SERVER_USER_AUTH,
+                                     otherServerBoxPubKey + ":" + ourUserKey,
+                                     "c:" + conversationIdent);
   },
 
   /**
    * Authorize a given user on a given server to send our user messages.
    */
-  userAuthorizeServerUserForContact: function(ourUserKey, serverKey, userKey,
-                                              attestation) {
+  userAuthorizeServerUser: function(ourUserKey, serverKey, userKey) {
+    var cells = {};
+    cells["u:" + userKey] = 1;
+    return $Q.all(
+      this._serverAuthorizeServer(serverKey),
+      this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,
+                        cells));
   },
   /**
    * Authorize a server to send our user messages for a specific conversation.
    */
-  userAuthorizeServerForConversation: function(ourUserKey, serverKey, convKey,
-                                               attestation) {
+  userAuthorizeServerForConversation: function(ourUserKey, serverKey, convKey) {
+    var cells = {};
+    cells["c:" + convKey] = 1;
+    return $Q.all(
+      this._serverAuthorizeServer(serverKey),
+      this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,
+                        cells));
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Authorizations
+  //
+  // Fanout server implied
+
+  convCheckServerUser: function(convId, otherServerBoxPubKey,
+                                otherUserTellBoxPubKey) {
+    return this._db.boolcheckRowCell(TBL_CONV_AUTH,
+                                     convId,
+                                     "u:" + otherServerBoxPubKey + ":" +
+                                       otherUserTellBoxPubKey);
+  },
+
+  convAuthorizeServerUser: function(convId, otherServerBoxPubKey,
+                                    otherUserTellBoxPubKey) {
+    var cells = {};
+    cells["u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey] = 1;
+    return $Q.all(
+      this._serverAuthorizeServer(otherServerBoxPubKey),
+      this._db.putCells(TBL_CONV_AUTH, convId, cells));
   },
 
   //////////////////////////////////////////////////////////////////////////////

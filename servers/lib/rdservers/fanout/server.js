@@ -48,6 +48,23 @@
  *  there is no obvious user benefit to that.  Since the user has to provide the
  *  server with the private key, there is distinctly no benefit to secrecy.
  *
+ * ## NOTE THAT I JUST DECIDED
+ * - I am eliminating the race situation that is concerning and avoiding
+ *    adding extra state by having the inviter send a message to the invitee
+ *    that includes a message to send back to the inviter's server when the
+ *    invitee decides to join the conversation.  The message will include the
+ *    message to dispatch to the conversation server that (under the previous
+ *    theory) would have simultaneously been sent by the user.
+ * - We should consider adding a "convinvited" message still concurrently sent
+ *    to the conversation-hosting fanout server that tells it we invited
+ *    someone so that it/participants could know that the secret keys have
+ *    now been further distributed and/or help avoid people trying to invite
+ *    one person whose server is slow redundantly.
+ * - We could also consider using the same "tell me when done" mechanism to also
+ *    make the workflow involve asking the server if it's okay.  Since we have
+ *    no UX for the server to be able to say no right now, this would be
+ *    superfluous.
+ *
  * ## Notes from conversation with Bryan just now:
  * - I will change the join protocol so it has to go through the fanout server
  *    so the fanout server does not have to deal with bearer bonds.

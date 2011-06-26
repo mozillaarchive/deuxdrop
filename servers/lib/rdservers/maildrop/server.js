@@ -43,14 +43,14 @@ define(
   [
     '../authdb/api',
     'rdcommon/log',
-    'rdcommon/taskidiom',
+    'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'module',
     'exports'
   ],
   function(
     $auth_api,
     $log,
-    $task,
+    $task, $taskerrors,
     $module,
     exports
   ) {
@@ -87,31 +87,81 @@ function ReceiveDeliveryConnection(conn) {
 ReceiveDeliveryConnection.prototype = {
   INITIAL_STATE: 'root',
 
-  _msg_root_deliver: function(msg) {
+  /**
+   * Receive/process a transit message from a user directed to us for
+   *  delivery to our user or our conversation daemon.
+   */
+  _msg_root_deliverTransit: function(msg) {
     var transitMsg = msg.msg;
-    // - targeted to a user (their mailstore)
-    if (transitMsg.type === "user") {
+
+    var outerEnvelope = msg.outerEnvelope, innerEnvelope;
+
+    // -- try and open the inner envelope.
+    // (catch exceptions from the decryption; bad messages can happen)
+    try {
+      innerEnvelope = JSON.parse(
+                        config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
+                                                   outerEnvelope.nonce,
+                                                   outerEnvelope.senderKey));
     }
-    // - targeted to a user's fanout server
-    // (conversation relayer)
-    else if (transitMsg.type === "fanout") {
-    }
-    // - targeted to a user's fanin server
-    // (conversation subscriber / approver)
-    else if (transitMsg.type === "fanin") {
+    catch(ex) {
+      // XXX log that a bad message happened
+      // XXX note bad actor evidence
+      // tell the other server it fed us something gibberishy
+      this.sendMessage
     }
 
-    return new DeliverTask(msg, this.conn.log);
+
+
+    return new DeliverTransitTask({
+                                    outerEnvelope: msg,
+                                    config: this.conn.serverConfig,
+                                    otherServerKey: this.conn.clientPublicKey,
+                                  },
+                                  this.conn.log);
+  },
+
+  /**
+   * Receive/process a message from a fanout server to one of our users
+   *  regarding a conversation our user should be subscribed to.
+   */
+  _msg_root_deliverServer: function(msg) {
   },
 };
 
-var DeliverTask = taskMaster.defineTask({
-  name: "deliver",
+var DeliverTransitTask = taskMaster.defineTask({
+  name: "deliverTransit",
   steps: {
-    retrieve_sender_credentials: function() {
-      // -- retrieve the sender's credentials from the recipient's contacts
-      // (if they aren't there, they aren't an authorized sender.)
-      return checkUserPrivilege
+    /**
+     * The outer envelope names a sending key, open it.  We need to see what's
+     *  written on the inner envelope before we can actually do something
+     *  useful.
+     */
+    open_outer_envelope: function(arg) {
+      this.config = arg.config;
+      var outerEnvelope = arg.outerEnvelope;
+    },
+    /**
+     * Make sure the user is authorized to do whatever they're trying to get
+     *  up to.
+     */
+    check_authorization: function(innerEnvelope) {
+      if (innerEnvelope.type === "user" ||
+          innerEnvelope.type === "joinconv") {
+        return this.config.authApi.userCheckServerUser(
+          innerEnvelope.name, this.arg.otherServerKey,
+          this.arg.outerEnvelope.senderKey);
+      }
+      else if (innerEnvelope.type === "convadd" ||
+               innerEnvelope.type === "convmsg") {
+        return this.config.authApi.convCheckServerUser(
+          innerEnvelope.convId, this.arg.otherServerKey,
+          this.arg.outerEnvelope.senderKey);
+      }
+      else {
+        throw new $taskerrors.MalformedPayloadError(
+          "Bad inner envelope type '" + innerEnvelope.type + "'");
+      }
     },
     verify_transit_envelope_signature: function() {
     },
@@ -169,7 +219,7 @@ var DropServerDef = {
       implClass: ReceiveDeliveryConnection,
       authVerifier: function(endpoint, clientKey) {
         // we are just checking that they are allowed to talk to us at all
-        return $auth_api.checkServerAuth(clientKey);
+        return $auth_api.serverCheckServerAuth(clientKey);
       }
     },
   },

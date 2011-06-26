@@ -126,6 +126,17 @@ RedisDbConn.prototype = {
     return deferred.promise;
   },
 
+  /**
+   * Get the cell and return a truthy value based on the cell value.
+   *
+   * The current implementation strongly assumes you put a numeric 1 in the cell
+   *  previously and that we are redis which retains the boolean-ness.  For
+   *  hbase, this will need custom logic.
+   */
+  boolcheckRowCell: function(tableName, rowId, columnName) {
+    return this.getRowCell(tableName, rowId, columnName);
+  },
+
   getRow: function(tableName, rowId, columnFamilies) {
     var deferred = $Q.defer();
     this._log.getRow(tableName, rowId, columnFamilies);
@@ -148,6 +159,27 @@ RedisDbConn.prototype = {
         deferred.reject(err);
       else
         deferred.resolve(null);
+    });
+    return deferred.promise;
+  },
+
+  /**
+   * Increment the numeric value in a cell.  Keep in mind that in hbase this
+   *  will require a read followed by a write which means this should likely
+   *  only be used for rows that store very little in them and are likely to
+   *  be cached or have extremely limited turnover.
+   *
+   * XXX Although hbase can do increments, I'm not sure stargate exposes it,
+   *  so this might not be totally do-able in an efficient fashion.
+   */
+  incrementCell: function(tableName, rowId, columnName, delta) {
+    var deferred = $Q.defer();
+    this._conn.hincrby(this._prefix + ':' + tableName + ':' + queueName,
+                       columnName, delta, function(err, result) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(result);
     });
     return deferred.promise;
   },
@@ -223,8 +255,10 @@ RedisDbConn.prototype = {
   queueConsume: function(table, queueName, count) {
     var deferred = $Q.defer();
     this._conn.ltrim(this._prefix + ':' + tableName + ':' + queueName,
-                     count, -1, function(status) {
-      if (status === "OK")
+                     count, -1, function(err, status) {
+      if (err)
+        deferred.reject(err);
+      else if (status === "OK")
         deferred.resolve();
       else
         deferred.reject(status);
@@ -265,6 +299,7 @@ exports.makeTestDBConnection = function(uniqueName, _logger) {
 
 exports.cleanupTestDBConnection = function(conn) {
   conn._conn.flushdb();
+  conn.close();
 };
 
 

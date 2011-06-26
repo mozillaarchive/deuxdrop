@@ -45,9 +45,11 @@
 
 define(
   [
+    'q',
     'exports'
   ],
   function(
+    $Q,
     exports
   ) {
 
@@ -55,19 +57,48 @@ define(
  * Local maildrop API.  A maildrop does not keep attestations around; in the
  *  event the set of authorizations becomes suspect, they should be regenerated
  *  by the mailstore from its attestations.
+ *
+ * This class is pretty much a pass-through to the authentication API right now,
+ *  but the remote variant obviously will do more (but do the same thing once
+ *  it receives the messages).
  */
 function MaildropLocalApi(serverConfig, dbConn, _logger) {
   this._authApi = serverConfig.authApi;
 }
 exports.Api = MaildropLocalApi;
 MaildropLocalApi.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Authorization
+
+  /**
+   * Authorize a user known to us by their tellBoxPubKey to send messages to
+   *  our user with the given root public key or join them to conversations.
+   *
+   * This also implicitly creates an authorization for the other server to talk
+   *  to us.
+   */
   authorizeServerUserForContact: function(ourUserRootPubKey,
                                           serverBoxPublicKey,
-                                          serverUser) {
+                                          otherUserTellBoxPubKey) {
+    return this._authApi.userAuthorizeServerUser(
+      ourUserRootPubKey, serverBoxPublicKey, otherUserTellBoxPubKey);
   },
 
-  authorizeServerForConversation: function() {
+  /**
+   * Authorize a server('s fanout daemon) to send our user a messages with the
+   *  given conversation id.
+   *
+   * This also implicitly creates an authorization for the other server to talk
+   *  to us.
+   */
+  authorizeServerForConversation: function(ourUserRootPubKey,
+                                           serverBoxPublicKey,
+                                           convId) {
+    return this._authApi.userAuthorizeServerForConversation(
+      ourUserRootPubKey, serverBoxPublicKey, convId);
   },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 }); // end define

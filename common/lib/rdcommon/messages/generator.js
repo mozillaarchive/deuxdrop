@@ -69,16 +69,99 @@
  *
  * }
  *
- * @typedef[TransitEnvelope @dict[
+ * @typedef[PSTransitOuterEnvelope @dict[
  *   @key[senderKey]{
+ *     The tellBoxPubKey of the sending user.
+ *   }
+ *   @key[nonce]{
+ *     The nonce used for all of the layers of this message composed by the
+ *     user.  Consumers should keep this around; re-published layers should
+ *     get the nonce attached in a new envelope.
+ *   }
+ *   @key[innerEnvelope]
+ * ]{
+ *   Person to Server transit outer envelope; this is what the mailsender can
+ *   see and hands to the other server's maildrop.
+ * }
+ * @typedef[PSTransitInnerEnvelope @dict[
+ *   @key[type @oneof[
+ *     @case["user"]{
+ *       A user; this is a direct message.  `name` will hold the target user's
+ *       root public key.  `payload` will hold the boxed message to the user.
+ *     }
+ *     @case["convadd"]{
+ *       Our fanout server; this is a request to add a user to the conversation.
+ *       `convId` will be the name of the conversation.  `payload` will be the
+ *       attestation chain.
+ *     }
+ *     @case["convmsg"]{
+ *       Our fanout server; this is a message to a conversation.  `name` will
+ *       not be present.  `convId` will be the name of the conversation.
+ *       `payload` will be the message to relay to the conversation.
+ *     }
+ *     @case["joinconv"]{
+ *       Fanin-ish; this is a user asking the target user to join a
+ *       conversation.  `name` will hold the root public key of the target user.
+ *       `convId` will be the name of the conversation.  `payload` will be the
+ *       message to the user that contains the (encrypted conversation info.)
+ *       `tellmeWhenDone` is a message to send back to our server when the
+ *       operation has been completed.
+ *
+ *       This could alternatively have been implemented as an operation a user
+ *       dispatches to their own server's conversation server that asks another
+ *       server synchronously to perform.  We didn't do this because it would
+ *       deviate from all the other one-way stuff we are doing here.  Also,
+ *       it does allow the user to optionally decide to intercede in the flow
+ *       of the joining process.
+ *     }
+ *     @case["joined"]{
+ *       Fanin-ish; the response to a "joinconv" request once it has been
+ *       accomplished.  This was what was in the `tellMeWhenDone` field from
+ *       the "joinconv" request.
+ *     }
+ *   }
+ *   @key[name]
+ *   @key[convId]
+ *   @key[payload]
+ *   @key[tellmeWhenDone #:optional]
+ * ]]{
+ *   Person to server transit inner envelope; its contents are only for the
+ *   receiving maildrop.  It gets boxed by the sending user.
+ *
+ *   Ideally we should split this into a polymorphic doc based on the type.
+ * }
+ *
+ * @typedef[SSTransitEnvelope @dict[
+ *   @key[name]{
+ *     The root public key of the recipient user.
+ *   }
+ *   @key[convId]{
+ *     The conversation this is a message for.
+ *   }
+ *   @key[nonce]
+ *   @key[payload]{
+ *     A message boxed from the fanout server
+ *   }
+ * ]]
+ *
+ * @typedef[PersonTransitEnvelope @dict[
+ *   @key[senderKey]{
+ *     A public boxing key of a person, so an active tellBoxPubKey.  (Although
+ *     we can receive messages from other servers, we currently require direct
+ *     communication with that server, in which case there is no need to
+ *     redundantly box the payload since our transport layer is already boxed
+ *     with the same key authority.)
  *   }
  *   @key[recipKey]{
+ *     This should be the public boxing key of a server.
+ *     XXX This bit is irrelevant to the recipient server and could be stripped.
  *   }
  *   @key[nonce]{
  *     The randomly generated nonce used for all encryption for this message and
  *     sub-parts.  When the transit envelope gets stripped, the payload should
  *     be re-encapsulated with the nonce so lower level consumers have it.
  *   }
+ *   @key[type @oneof["user" "fanout" "fanin"]]
  *   @key[version Integer]{
  *     Schema version for sanity checking; there is no support for inter-version
  *     operation during the development phase, but we want to be able to detect
@@ -88,9 +171,10 @@
  *     Something boxed between the sender and recipient with the given nonce.
  *   }
  * ]]{
- *    A box with the meta-data to identify the sender and recipient so we know
- *    what keys were used in the boxing without having to try multiple keys.
- *    The nonce is also included because we need to know that.
+ *    A box from a person to a server with the meta-data to identify the sender
+ *    and recipient 1) for routing and 2) so we know what keys were used in the
+ *    boxing without having to try multiple keys.  The nonce is also included
+ *    because we need to know that and is used for all the layers.
  * }
  *
  * @typedef[StorageEnvelope @dict[

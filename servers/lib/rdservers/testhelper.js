@@ -55,6 +55,8 @@ var $gendb = require('rdservers/gendb/redis');
 var $signup_server = require('rdservers/signup/server'),
     $authdb_api = require('rdservers/authdb/api'),
     $maildrop_local_api = require('rdservers/maildrop/localapi'),
+    $maildrop_server = require('rdservers/maildrop/server'),
+    $mailsender_local_api = require('rdservers/mailsender/localapi'),
     $mailstore_server = require('rdservers/mailstore/server'),
     $configurer = require('rdservers/configurer');
 
@@ -262,10 +264,10 @@ var SERVER_ROLE_MODULES = {
   },
   drop: { // needs 'auth'
     apiModule: $maildrop_local_api,
-    serverModule: null,
+    serverModule: $maildrop_server,
   },
   sender: {
-    apiModule: null,
+    apiModule: $mailsender_local_api,
     serverModule: null,
   },
   fanout: {
