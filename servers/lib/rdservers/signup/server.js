@@ -254,7 +254,7 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
     },
     doTheSignup: function() {
       return this.arg.conn.serverConfig.authApi.serverCreateUserAccount(
-        this.selfIdentPayload.root.rootSignPubKey,
+        this.selfIdentPayload,
         this.arg.msg.selfIdent,
         this.clientAuthsMap);
     },

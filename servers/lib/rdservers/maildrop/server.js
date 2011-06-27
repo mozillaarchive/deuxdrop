@@ -59,12 +59,78 @@ var AuthAPI = $auth_api;
 
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
-  deliveryConn: {
-  },
 });
 
 
 var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
+
+/**
+ * The actual meat of delivery processing extracted out so that the sender API
+ *  can fast-path messages from a user to their own server.  Currently we
+ *  immediately initiate an asynchronous delivery/processing of the message,
+ *  but in the future we might move to simply enqueueing the message.
+ *
+ * We do synchronously unbox the outer envelope and do not catch any crypto
+ *  exceptions, so callers should be prepared.  Likewise, we will throw on a
+ *  malformed message.
+ *
+ * @return[Task]
+ */
+var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
+      function fauxPersonEnqueueProcessNow(config, outerEnvelope,
+                                           otherServerKey, _logger) {
+
+  var innerEnvelope = JSON.parse(
+                        config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
+                                                   outerEnvelope.nonce,
+                                                   outerEnvelope.senderKey));
+  var arg = {
+    outerEnvelope: outerEnvelope,
+    innerEnvelope: innerEnvelope,
+    otherServerKey: otherServerKey,
+  };
+  switch (innerEnvelope.type) {
+    case "user":
+      return new UserToUserMessageTask(arg, _logger);
+
+    case "joinconv":
+      return new ConversationJoinTask(arg, _logger);
+
+    case "convadd":
+    case "convmsg":
+      return new ConversationMessageTask(arg, _logger);
+
+    default:
+      throw new $taskerrors.MalformedPayloadError(
+                  "Bad inner envelope type '" + innerEnvelope.type + "'");
+  }
+};
+
+/**
+ * Server-to-server messages faux queued processing that instead actually
+ *  happens now.  Does not throw.
+ */
+var fauxServerEnqueueProcessNow = exports.fauxServerEnqueueProcessNow =
+    function fauxServerEnqueueProcessNow(config, envelope,
+                                         otherServerKey, _logger) {
+  switch (envelope.type) {
+    case "joined":
+      return new ConversationJoinedTask({
+        outerEnvelope: outerEnvelope,
+        innerEnvelope: innerEnvelope,
+        otherServerKey: otherServerKey,
+      }, _logger);
+
+    case "fannedmsg":
+      return new FanoutToUserMessageTask({
+        envelope: envelope,
+        otherServerKey: otherServerKey,
+      }, _logger);
+    default:
+      throw new $taskerrors.MalformedPayloadError(
+                  "Bad envelope type '" + envelope.type + "'");
+  }
+};
 
 /**
  * The delivery conn receives inbound messages targeted at either users (in
@@ -92,33 +158,35 @@ ReceiveDeliveryConnection.prototype = {
    *  delivery to our user or our conversation daemon.
    */
   _msg_root_deliverTransit: function(msg) {
-    var transitMsg = msg.msg;
-
-    var outerEnvelope = msg.outerEnvelope, innerEnvelope;
-
     // -- try and open the inner envelope.
     // (catch exceptions from the decryption; bad messages can happen)
     try {
-      innerEnvelope = JSON.parse(
-                        config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
-                                                   outerEnvelope.nonce,
-                                                   outerEnvelope.senderKey));
+      var self = this;
+      return when(fauxPersonEnqueueProcessNow(this.conn.serverConfig,
+                                              msg.msg,
+                                              this.conn.clientPublicKey,
+                                              this.conn.log),
+        function yeaback() {
+          self.sendMessage({type: "ack"});
+          return 'root';
+        },
+        function errback() {
+          // XXX bad actor analysis feeding
+          self.sendMessage({type: "bad"});
+          // the bad message is notable but non-fatal
+          return 'root';
+        });
     }
     catch(ex) {
       // XXX log that a bad message happened
       // XXX note bad actor evidence
-      // tell the other server it fed us something gibberishy
-      this.sendMessage
+      // Tell the other server it fed us something gibberishy so it can
+      //  detect a broken or bad actor in its midst.
+      this.sendMessage({
+        type: "bad",
+      });
+      return 'root';
     }
-
-
-
-    return new DeliverTransitTask({
-                                    outerEnvelope: msg,
-                                    config: this.conn.serverConfig,
-                                    otherServerKey: this.conn.clientPublicKey,
-                                  },
-                                  this.conn.log);
   },
 
   /**
@@ -126,55 +194,158 @@ ReceiveDeliveryConnection.prototype = {
    *  regarding a conversation our user should be subscribed to.
    */
   _msg_root_deliverServer: function(msg) {
+    return when(fauxServerEnqueueProcessNow(this.conn.serverConfig,
+                                            msg.msg,
+                                            this.conn.clientPublicKey,
+                                            this.conn.log),
+      function yeaback() {
+        self.sendMessage({type: "ack"});
+        return 'root';
+      },
+      function errback() {
+        self.sendMessage({type: "bad"});
+        return 'root';
+      });
   },
 };
 
-var DeliverTransitTask = taskMaster.defineTask({
-  name: "deliverTransit",
+/**
+ * Process a message from a fan-out server about a conversation to a user.
+ */
+var FanoutToUserMessageTask = exports.FanoutToUserMessageTask =
+    taskMaster.defineTask({
+  name: "fanoutToUserMessage",
   steps: {
-    /**
-     * The outer envelope names a sending key, open it.  We need to see what's
-     *  written on the inner envelope before we can actually do something
-     *  useful.
-     */
-    open_outer_envelope: function(arg) {
-      this.config = arg.config;
-      var outerEnvelope = arg.outerEnvelope;
-    },
-    /**
-     * Make sure the user is authorized to do whatever they're trying to get
-     *  up to.
-     */
-    check_authorization: function(innerEnvelope) {
-      if (innerEnvelope.type === "user" ||
-          innerEnvelope.type === "joinconv") {
-        return this.config.authApi.userCheckServerUser(
-          innerEnvelope.name, this.arg.otherServerKey,
-          this.arg.outerEnvelope.senderKey);
-      }
-      else if (innerEnvelope.type === "convadd" ||
-               innerEnvelope.type === "convmsg") {
-        return this.config.authApi.convCheckServerUser(
-          innerEnvelope.convId, this.arg.otherServerKey,
-          this.arg.outerEnvelope.senderKey);
-      }
-      else {
-        throw new $taskerrors.MalformedPayloadError(
-          "Bad inner envelope type '" + innerEnvelope.type + "'");
-      }
-    },
-    verify_transit_envelope_signature: function() {
+    check_authorized_conversation: function(arg) {
+      return arg.config.authApi.userCheckServerConversation(
+        arg.envelope.name, arg.otherServerKey, arg.envelope.convId);
     },
     back_end_hand_off: function() {
-      // -- hand off to the back-end for saving and/or forwarding:
-      // (in a standalone drop, we persist and notify any connected listeners)
-      // (in a combo, we hand off to the mailstore)
-
+      var arg = this.arg;
+      return arg.config.storeApi.messageForUser(arg.envelope.name,
+                                                arg.envelope.payload,
+                                                arg.envelope.nonce,
+                                                arg.otherServerKey);
     },
-    ack_now_that_the_message_is_persisted: function() {
-    }
   },
 });
+
+/**
+ * Process a user-to-user message.
+ */
+var UserToUserMessageTask = taskMaster.defineTask({
+  name: "userToUserMessage",
+  steps: {
+    check_authorized_to_talk_to_user: function(arg) {
+      return this.arg.config.authApi.userCheckServerUser(
+        arg.innerEnvelope.name, arg.otherServerKey,
+        arg.outerEnvelope.senderKey);
+    },
+    back_end_hand_off: function() {
+      var arg = this.arg;
+      return arg.config.storeApi.messageForUser(arg.innerEnvelope.name,
+                                                arg.innerEnvelope.payload,
+                                                arg.outerEnvelope.nonce,
+                                                arg.outerEnvelope.senderKey);
+    },
+  },
+});
+
+/**
+ * Fan-in conversation join processing; another user is telling us they are
+ *  inviting us to a conversation and so we should add the auth to receive
+ *  messages and tell them when we have done so.
+ */
+var ConversationJoinTask = taskMaster.defineTask({
+  name: "conversationJoin",
+  steps: {
+    /**
+     * Make sure the user saying this is a friend of our user.
+     */
+    check_authorization: function(arg) {
+      return arg.config.authApi.userCheckServerUser(
+        arg.innerEnvelope.name, arg.otherServerKey,
+        arg.outerEnvelope.senderKey);
+    },
+    /**
+     * Add the authorization for the conversation server to talk to us.
+     */
+    add_auth: function() {
+      var arg = this.arg;
+      return arg.config.authApi.userAuthorizeServerForConversation(
+        arg.innerEnvelope.name, arg.innerEnvelope.serverName,
+        arg.innerEnvelope.serverName, arg.outerEnvelope.senderKey);
+    },
+    /**
+     * Resend the message back to the maildrop of the person inviting us so
+     *  they can finish the add process.
+     */
+    resend_joined: function() {
+      var arg = this.arg;
+      return arg.config.senderApi.sendServerEnvelopeToServer({
+        type: "joined",
+        name: arg.outerEnvelope.senderKey,
+        nonce: arg.outerEnvelope.nonce,
+        payload: arg.innerEnvelope.payload,
+      }, arg.otherServerKey);
+    },
+  },
+});
+
+var ConversationJoinedTask = taskMaster.defineTask({
+  name: "conversationJoined",
+  steps: {
+    /**
+     * Unbox the payload to make sure the named user is consistent.
+     */
+    open_envelope: function(arg) {
+      var outerEnvelope = arg.msg;
+      this.innerEnvelope = JSON.parse(
+                arg.config.keyring.openBoxUtf8(outerEnvelope.payload,
+                                               outerEnvelope.nonce,
+                                               outerEnvelope.name));
+      if (this.innerEnvelope.type !== "resend")
+        throw new $taskerrors.MalformedOrReplayPayloadError(
+                    this.innerEnvelope.type);
+    },
+    check_named_user_is_our_user: function() {
+      return this.arg.config.authApi.serverCheckUserAccountByTellKey(
+               this.arg.msg.name);
+    },
+    resend: function(userRootKey) {
+      return this.arg.config.senderApi.sendPersonEnvelopeToServer(userRootKey,
+        {
+          senderKey: this.arg.msg.name,
+          nonce: this.arg.msg.nonce,
+          innerEnvelope: this.innerEnvelope.payload
+        },
+        this.innerEnvelope.serverName);
+    },
+  },
+});
+
+
+/**
+ * Process messages to the fan-out role.
+ */
+var ConversationMessageTask = taskMaster.defineTask({
+  name: "conversationMessage",
+  steps: {
+    check_already_in_on_conversation: function(arg) {
+      return arg.config.authApi.convCheckServerConversation(
+        arg.innerEnvelope.convId, arg.otherServerKey,
+        arg.outerEnvelope.senderKey);
+    },
+    persist: function() {
+    },
+    get_recipients: function() {
+    },
+    send_to_all_recipients: function() {
+    },
+  },
+});
+
+
 
 /**
  * Connection to let a mailstore/user tell us who they are willing to receive

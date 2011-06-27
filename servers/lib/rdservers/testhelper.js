@@ -57,6 +57,7 @@ var $signup_server = require('rdservers/signup/server'),
     $maildrop_local_api = require('rdservers/maildrop/localapi'),
     $maildrop_server = require('rdservers/maildrop/server'),
     $mailsender_local_api = require('rdservers/mailsender/localapi'),
+    $mailstore_api = require('rdservers/mailstore/api'),
     $mailstore_server = require('rdservers/mailstore/server'),
     $configurer = require('rdservers/configurer');
 
@@ -275,7 +276,7 @@ var SERVER_ROLE_MODULES = {
     serverModule: null,
   },
   store: {
-    apiModule: null,
+    apiModule: $mailstore_api,
     serverModule: $mailstore_server,
   },
 };

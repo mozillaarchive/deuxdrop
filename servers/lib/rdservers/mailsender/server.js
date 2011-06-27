@@ -41,21 +41,59 @@
 
 define(
   [
+    'q',
+    'rdcommon/log',
+    'rdcommon/transport/authconn',
     'exports'
   ],
   function(
+    $Q,
+    $log,
+    $authconn,
     exports
   ) {
 
-function SendDeliveryConnection() {
+/**
+ * One-off message delivery connection instantiated on-the-fly via the
+ *  mailsender API.  This is a stop-gap measure; we want a reliable queue
+ *  that is capable of batching, etc.
+ */
+function SendDeliveryConnection(type, transitMsg,
+                                clientKeyring, serverPublicKey,
+                                serverUrl, _logger) {
+  this._type = type;
+  this._msg = transitMsg;
+
+  this.conn = new $authconn.AuthClientConn(
+                this, clientKeyring, serverPublicKey,
+                serverUrl, 'signup/signup', _logger);
+  this._deferred = $Q.defer();
+  this.promise = this._deferred.promise;
 }
 SendDeliveryConnection.prototype = {
   INITIAL_STATE: 'deliver',
 
-  _msg_deliver_ack: function(msg) {
+  __connected: function() {
+    this.conn.send({
+      type: this._type,
+      msg: this._msg,
+    });
   },
 
-  _msg_deliver_nak: function(msg) {
+  __closed: function() {
+    this._deferred.reject();
+  },
+
+  _msg_deliver_ack: function(msg) {
+    this._deferred.resolve();
+    this.conn.close();
+  },
+
+  _msg_deliver_bad: function(msg) {
+    // if we were not a one-shot connection, we would note the bad message
+    //  for bad actor handling, but otherwise continue on with our job.
+    this._deferred.reject();
+    this.conn.close();
   },
 };
 

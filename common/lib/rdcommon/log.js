@@ -1156,6 +1156,7 @@ exports.CONNECTION = 'connection';
 exports.SERVER = 'server';
 exports.CLIENT = 'client';
 exports.TASK = 'task';
+exports.DAEMON = 'daemon';
 
 exports.TEST_DRIVER = 'testdriver';
 exports.TEST_GROUP = 'testgroup';

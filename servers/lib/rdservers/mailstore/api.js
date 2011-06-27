@@ -35,11 +35,6 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-/**
- * Tasks for messages received from the "web" side of the house, which
- *  translates to the public side of the house.
- **/
-
 define(
   [
     'exports'
@@ -48,57 +43,31 @@ define(
     exports
   ) {
 
-/**
- * We always receive an invite prior to receiving messages for a conversation;
- *  this is a top-level person-to-person message.
- */
-var UserInviteTask = exports.UserInviteTask = taskMaster.defineTask({
-  name: "userInvite",
-  steps: {
-    /**
-     * Get the DB row for our alleged contact
-     */
-    lookupAuthor: function() {
-    },
-    /**
-     * Make sure the contact is allowed to cause us to join...
-     */
-    validateContactAuthority: function() {
-    },
-    /**
-     * Tell our maildrop it's cool to receive messages for this conversation.
-     */
-    authorizeConversation: function() {
-    },
+function MailstoreChooserApi(serverConfig, dbConn, _logger) {
+}
+exports.Api = MailstoreChooserApi;
+MailstoreChooserApi.prototype = {
+  /**
+   * If the user is using us as a fullpub, we pass the message directly to our
+   *  mailstore layer; if not, we queue the message for pickup by the user
+   *  (which could potentially get fast-pathed if their mailstore is currently
+   *  connected).
+   *
+   * XXX right now we are assuming fullpub.
+   *
+   * @args[
+   *   @param[userRootPublicKey]
+   *   @param[boxedMessage]
+   *   @param[nonce]
+   *   @param[senderKey]{
+   *     If the sender is a user, their tell key; if the sender is a (fanout)
+   *     server, the server's public box key.
+   *   }
+   * ]
+   */
+  messageForUser: function(userRootPublicKey, boxedMessage, nonce,
+                           senderKey) {
   },
-});
-
-/**
- * Receive and process a human-message or machine-message in a conversation;
- *  this message must come from the fan-out server responsible for the
- *  conversation.
- *
- * Because the maildrop only lets in messages for conversations we have
- *  explicitly authorized, we should be able to trust that we aren't going to
- *  receive messages about random conversations (unless we revoke auths).
- */
-var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
-  name: "conversationMessage",
-  steps: {
-    /**
-     * Make sure it hits disk.
-     */
-    persistMessage: function() {
-    },
-    /**
-     * Relay to subscribed clients (either actively connected, or their
-     *  reliable queues for when they connect.)
-     */
-    notifySubscribers: function() {
-    },
-  },
-});
-
-
+};
 
 }); // end define

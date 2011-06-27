@@ -63,8 +63,19 @@ define(
   ) {
 var when = $Q.when;
 
+/**
+ * User account by root key.
+ */
 const TBL_USER_ACCOUNT = "auth:userAccountByRootKey";
+/**
+ * User account by tell key; fastcheck it's our user.
+ */
+const TBL_USER_TELLKEY = "auth:userTellKey";
+/**
+ * Client authorizations by client key
+ */
 const TBL_CLIENT_AUTH = "auth:clientAuthByClientKey";
+
 /**
  * Server auths; row is the server box key.
  */
@@ -94,6 +105,8 @@ function AuthApi(serverConfig, dbConn, _logger) {
   this._db = dbConn;
 
   this._db.defineHbaseTable(TBL_USER_ACCOUNT, ["d"]);
+  this._db.defineHbaseTable(TBL_USER_TELLKEY, ["d"]);
+
   this._db.defineHbaseTable(TBL_CLIENT_AUTH, ["d"]);
 
   this._db.defineHbaseTable(TBL_SERVER_AUTH, ["s"]);
@@ -118,10 +131,16 @@ AuthApi.prototype = {
     // no errback, let the outage exception propagate.
     return when(
       this._db.getRowCell(TBL_USER_ACCOUNT, rootSignPubKey, "d:selfIdent"),
-      this._serverCheckUserAccountCallback);
+      this._serverCheckUserAccountCallback
+      // rejection pass-through is fine
+    );
   },
   _serverCheckUserAccountCallback: function(val) {
-    return val !== null;
+    return val != null;
+  },
+
+  serverCheckUserAccountByTellKey: function(tellKey) {
+    return this._db.getRowCell(TBL_USER_TELLKEY, tellKey, "d:rootKey");
   },
 
   /**
@@ -131,8 +150,10 @@ AuthApi.prototype = {
    *  for.  (This may be defined by the self-ident blob, but we want higher
    *  levels to split that out for us and our consumers.)
    */
-  serverCreateUserAccount: function(rootSignPubKey, selfIdentBlob,
+  serverCreateUserAccount: function(selfIdentPayload, selfIdentBlob,
                                     clientAuthsMap) {
+    var rootKey = selfIdentPayload.root.rootKey;
+
     var promises = [];
     var accountCells = {
       "d:selfIdent": selfIdentBlob,
@@ -145,6 +166,9 @@ AuthApi.prototype = {
     }
     promises.push(
       this._db.putCells(TBL_USER_ACCOUNT, rootSignPubKey, accountCells));
+    promises.push(
+      this._db.putCells(TBL_USER_TELLKEY, selfIdentPayload.keys.tellBoxPubKey,
+                        {"d:rootKey": rootKey}));
     return $Q.all(promises);
   },
 
@@ -255,9 +279,10 @@ AuthApi.prototype = {
   /**
    * Authorize a server to send our user messages for a specific conversation.
    */
-  userAuthorizeServerForConversation: function(ourUserKey, serverKey, convKey) {
+  userAuthorizeServerForConversation: function(ourUserKey, serverKey, convKey,
+                                               whoSaysKey) {
     var cells = {};
-    cells["c:" + convKey] = 1;
+    cells["c:" + convKey] = whoSaysKey;
     return $Q.all(
       this._serverAuthorizeServer(serverKey),
       this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,

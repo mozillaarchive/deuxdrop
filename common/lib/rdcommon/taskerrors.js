@@ -41,7 +41,10 @@
  *  process to figure out whether they should be re-scheduled in the future.
  *
  * Sorta decision tree:
- * - Received a malformed data record: `MalformedPayloadError`.
+ * - Received a malformed data record:
+ *   - That could be the result of an attempted replay-style attack:
+ *      `MalformedOrReplayPayloadError`.
+ *   - With no darker reason possible: `MalformedPayloadError`.
  * - Crypto badness (all exposed via `keyops.js`):
  *   - `BadBoxError`: a signcryption box was not valid.  This could be due to
  *     a corrupt ciphertext or the keys/nonce used were not the keys claimed.
@@ -116,6 +119,16 @@ MalformedPayloadError.prototype = {
   __proto__: Error.prototype,
   name: 'MalformedPayloadError',
 };
+
+var MalformedOrReplayPayloadError = exports.MalformedOrReplayPayloadError =
+      function() {
+  Error.captureStackTrace(this, MalformedOrReplayPayloadError);
+};
+MalformedOrReplayPayloadError.prototype = {
+  __proto__: Error.prototype,
+  name: 'MalformedOrReplayPayloadError',
+};
+
 
 /**
  * An exception that can be used by a task to signify to aware parties that the

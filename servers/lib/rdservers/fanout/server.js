@@ -42,11 +42,14 @@
  *  maildrop/mailstore co-located in the same cluster as itself.  For this
  *  reason it is connection-less.
  *
- * The fanout role has no server-specific identity key but instead has a user
- *  provided identity key which the user has duly authorized.  The goal is to
- *  avoid letting the server select keys because then it could reuse keys and
- *  there is no obvious user benefit to that.  Since the user has to provide the
- *  server with the private key, there is distinctly no benefit to secrecy.
+ * THE BELOW CONSISTS OF NOTES ABOUT FIGURING ALL THIS OUT.  IT IS NOT OFFICIAL
+ * DOCS.  THOSE WILL HAPPEN.  I AM NOT SURE HOW TO TURN CAPS OFF AGAIN.  HELP.
+ *
+ * ## AND ANOTHER CHANGE
+ * - We now have the conversation be responsible for reposting the "welcome to
+ *    the conversation" with the conversation crypto keys so there is no
+ *    complicated state or race where the user has been told about the
+ *    conversation but risks sending a message that will not be accepted.
  *
  * ## NOTE THAT I JUST DECIDED
  * - I am eliminating the race situation that is concerning and avoiding

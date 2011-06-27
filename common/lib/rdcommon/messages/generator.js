@@ -102,10 +102,10 @@
  *     @case["joinconv"]{
  *       Fanin-ish; this is a user asking the target user to join a
  *       conversation.  `name` will hold the root public key of the target user.
- *       `convId` will be the name of the conversation.  `payload` will be the
- *       message to the user that contains the (encrypted conversation info.)
- *       `tellmeWhenDone` is a message to send back to our server when the
- *       operation has been completed.
+ *       `convId` will be the name of the conversation.  `serverName` will be
+ *       the public boxing key of the server hosting the conversation. `payload`
+ *       will be the message to send back to our server when the operation has
+ *       been completed.
  *
  *       This could alternatively have been implemented as an operation a user
  *       dispatches to their own server's conversation server that asks another
@@ -114,16 +114,21 @@
  *       it does allow the user to optionally decide to intercede in the flow
  *       of the joining process.
  *     }
- *     @case["joined"]{
- *       Fanin-ish; the response to a "joinconv" request once it has been
- *       accomplished.  This was what was in the `tellMeWhenDone` field from
- *       the "joinconv" request.
+ *     @case["resend"]{
+ *       Retransmit the provided message as part of the "joined" step; this
+ *       value is a required value rather than a dispatch value to avoid
+ *       weird replay attacks.  Note that because the conversation "joined"
+ *       step is currently stateless, a jerk actor can keep telling us the
+ *       "joined" message.  This is effect harmless because conversation
+ *       adding is idempotent, but can have bandwidth/traffic ramifications.
+ *       This can be dealt with by requiring the packet to include an expiration
+ *       date and having us use (tupled) nonce-based replay suppression.
  *     }
  *   }
  *   @key[name]
+ *   @key[serverName]
  *   @key[convId]
  *   @key[payload]
- *   @key[tellmeWhenDone #:optional]
  * ]]{
  *   Person to server transit inner envelope; its contents are only for the
  *   receiving maildrop.  It gets boxed by the sending user.
@@ -132,6 +137,26 @@
  * }
  *
  * @typedef[SSTransitEnvelope @dict[
+ *   @key[type @oneof[
+ *     @case["joined"]{
+ *       Fanin-ish; the response to a "joinconv" request once it has been
+ *       accomplished.  `payload` will be a message that our user composed to
+ *       us as part of the invitation process but we have not previously
+ *       seen.  Also note that this will be the first we have heard of this
+ *       invitation, as the previous step was a direct message from our user
+ *       to the invited user's maildrop/fanout server.  (Accordingly, the
+ *       nonce used can be/is the same as the nonce used for the "joinconv"
+ *       message.)  `name` names the user who issued the joinconv message by
+ *       their tell key and who should be the author of the payload which should
+ *       correspond to an (encrypted) `PSTransitInnerEnvelope`.
+ *     }
+ *     @case["fannedmsg"]{
+ *       A conversation message.  `payload` will be a boxed message from the
+ *       fanout server to the `name`d user.  `convId` will name the
+ *       conversation.
+ *     }
+ *   ]]{
+ *   }
  *   @key[name]{
  *     The root public key of the recipient user.
  *   }
@@ -139,10 +164,11 @@
  *     The conversation this is a message for.
  *   }
  *   @key[nonce]
- *   @key[payload]{
- *     A message boxed from the fanout server
- *   }
- * ]]
+ *   @key[payload]
+ * ]]{
+ *   Server-to-server transit envelope; from the fanout server on the other
+ *   server to a user on our server.
+ * }
  *
  * @typedef[PersonTransitEnvelope @dict[
  *   @key[senderKey]{

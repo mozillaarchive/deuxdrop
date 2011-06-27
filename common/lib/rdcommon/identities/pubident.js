@@ -201,6 +201,25 @@ exports.assertGetServerSelfIdent = function(serverSelfIdentBlob) {
   return $keyops.assertGetRootSelfSignedPayload(serverSelfIdentBlob);
 };
 
+/**
+ * Peek inside the contents of a self-ident and extract the public boxing key
+ *  *without verifying the signature*.  Only do this if you have:
+ * a) definitely previously validated the blob but are not passing around the
+ *    results because it would be ugly/etc. AND
+ * b) just want the key so that you can access some other data-structure where
+ *  the presence of the key in the data-structure indicates the self-ident (or
+ *  comparable) has been validated and that all related data comes from a
+ *  validated self-ident.
+ *
+ * Ideally, you will find it hard to mis-use this because all we tell you is
+ *  the key
+ */
+exports.peekServerSelfIdentBoxingKeyNOVERIFY = function(serverSelfIdentBlob) {
+  var peekedObj =
+    JSON.parse($keyops.generalPeekInsideSignatureUtf8(serverSelfIdentBlob));
+  return peekedObj.publicKey;
+};
+
 
 /**
  * Generate a person self-ident blob.
