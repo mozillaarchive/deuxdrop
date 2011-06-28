@@ -179,6 +179,18 @@ parser.command('nuke-server')
     });
   });
 
+parser.command('fake-in-one')
+  .help("All-in-one fake server with node-hosted crammed-in clients using " +
+        "the fake-server bridge; NEVER USE IN THE REAL WORLD AT ALL.")
+  .opts({
+    listenPort: OPT_LISTEN_PORT
+  })
+  .callback(function(options) {
+    require(['rdservers/fakefakeserver'], function($doublefake) {
+      $doublefake.goForthAndBeFake(options.listenPort);
+    });
+  });
+
 
 parser.command('test')
   .help("Run tests!")
