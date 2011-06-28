@@ -52,11 +52,102 @@ define(
   ) {
 
 /**
- * XXX we currently use a JSON-persistable in-memory store.
- *
+ * Data on peeps, be they a contact or a transitive-acquaintance we heard of
+ *  through a conversation.
+ */
+const TBL_PEEP_DATA = "peepData";
+/**
+ * Conversation data.
+ */
+const TBL_CONV_DATA = "convData";
+/**
+ * The master conversation ordered view; all converations our user is in on.
+ */
+const IDX_ALL_CONVS = "idxConv";
+/**
+ * The per-peep conversation involvement view (for both contact and non-contact
+ *  peeps right now.)
+ */
+const IDX_PEEP_CONV_WRITE_INVOLVEMENT = "idxPeepConvWrite";
+const IDX_PEEP_CONV_ANY_INVOLVEMENT = "idxPeepConvAny";
+/**
+ * The list of peeps ordered by conversation activity recency.
+ */
+const IDX_PEEP_RECENCY = "idxPeepRecency";
+
+/**
+ * XXX We currently assume there is a listener that cares about everything
+ *  because the UI does indeed care about everything right now.
+ */
+function NotificationKing(store) {
+  this._newishMessagesByConvId = {};
+  this._store = store;
+}
+NotificationKing.prototype = {
+  /**
+   * Track a message that appears to be new but we won't know for sure until we
+   *  are done with our update phase.
+   */
+  trackNewishMessage: function(convId, msgIndex, msgData) {
+    var newishForConv;
+    if (!this._newishMessagesByConvId.hasOwnProperty(convId))
+      newishForConv = this._newishMessagesByConvId[convId] = [];
+    else
+      newishForConv = this._newishMessagesByConvId[convId];
+    newishForConv.push({index: msgIndex, data: msgData});
+  },
+
+  /**
+   * Moot potential new message events in the given conversation
+   */
+  mootNewForMessages: function(convId, firstUnreadMessage) {
+    if (!this._newishMessagesByConvId.hasOwnProperty(convId))
+      return;
+    var newishForConv = this._newishMessagesByConvId[convId];
+    var killUntil = 0;
+    while (newishForConv[killUntil].index < firstUnreadMessage) {
+      killUntil++;
+    }
+    if (killUntil === newishForConv.length)
+      delete this._newishMessagesByConvId[convId];
+    else if (killUntil)
+      newishForConv.splice(0, killUntil);
+  },
+
+  /**
+   * We are now up-to-speed and should generate any notifications we were
+   *  holding off on because we were concerned a subsequent update would have
+   *  mooted the notification.
+   *
+   * Update phases are defined as:
+   * - When we first connect to the server until we work through our backlog.
+   */
+  updatePhaseDoneReleaseNotifications: function() {
+    var store = this._store;
+
+    // -- generate new message notifications
+    for (var convId in this._newishMessagesByConvId) {
+      var newishForConv = this._newishMessagesByConvId[convId];
+
+      var msgDataItems = [];
+      for (var i = 0; i < newishForConv.length; i++) {
+        msgDataItems.push(newishForConv[i].data);
+      }
+
+      store.__notifyNewMessagesInConversation(convId, msgDataItems);
+    }
+  },
+};
+
+/**
  * An optimization we are capable of performing is that we do not have to store
  *  things in a particularly encrypted form.  This allows us to potentially
  *  save a lot of CPU/power.
+ *
+ * XXX the below is speculative; we are using our DB abstraction for now and
+ *  will ideally implement one that provides the below characteristics.  We
+ *  are also writing things without thinking out the SSD ramifications too much
+ *  because we are under time pressure.
  *
  * Local storage implementation assuming a SQLite-based backend with a slight
  *  bias towards SSD storage.  More specifically, we are going to try and avoid
@@ -67,34 +158,90 @@ define(
  * Our implementation is problem domain aware.
  */
 function LocalStore(dbConn) {
+  this._db = dbConn;
+
+  this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
+  // conversation data proper: meta, overview, data
+  this._db.defineHbaseTable(TBL_CONV_DATA, ["m", "o", "d"]);
+
+  this._db.defineReorderableIndex(IDX_ALL_CONVS);
+  this._db.defineReorderableIndex(IDX_PEEP_CONV_INVOLVEMENT);
+
+
 }
 LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
+  // Internal Helpers
+
+  _validateAndParseAuthedJSON: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Notifications
+
+  __notifyNewMessagesInConversation: function(convId, msgDataItems) {
+    
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Conversation Lookup
 
-  _loadConversation: function(convId) {
+  loadAndWatchConversationBlurb: function(convId) {
   },
+
+  unwatchConversationBlurb: function(convId) {
+  },
+
+  loadAndWatchConversationInFull: function(convId) {
+  },
+
+  unwatchConversationInFull: function(convId) {
+  },
+
+  /**
+   * Get the list of conversations a user is involved with.
+   *
+   * @args[
+   *   @param[peep]
+   *   @param[filter @oneof[null 'pinned']]
+   * ]
+   */
+  queryAndWatchPeepConversationBlurbs: function(peep, filter) {
+  },
+
+  /**
+   * Request notifications whenever new/unseen messages are added.  This results
+   *  in us providing the specific message record plus the conversation blurb.
+   */
+  subscribeToNewUnseenMessages: function() {
+  },
+
 
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Mutation
 
   /**
-   * A new conversation (from our perspective).  Store the meta-information so
+   * A new conversation (from our perspective) as defined by its metadata; the
+   *  join notifications/etc. come separately .  Store the meta-information so
    *  that we can do things with the conversation in the future.
    */
-  addConversation: function() {
+  addConversation: function(convMeta) {
+    // - generate the conversation table entry
   },
 
   /**
    * Our own meta-data about a conversation (pinned, etc.)
    */
   setConversationMeta: function() {
+    // -- update any subscribed queries on pinned
+    // -- update any blurbs for this conversation
   },
 
   /**
    * Meta-data about a conversation from other participants.
    */
   setConversationPeepMeta: function() {
+    // -- update anyone subscribed to the full conversation
   },
 
   /**
@@ -103,7 +250,21 @@ LocalStore.prototype = {
    * If this is a join notification, we will name-check the added person.
    */
   addConversationMessage: function() {
+    // --- human message
+    // -- write
+    // -- update the all-conversations index
+    // -- update the author's write involvement view
+    // -- for all subscribed peeps, update the any involvement view
 
+    // -- posit potential notification (might be taken back by metadata update)
+
+    // --- metadata message
+    // -- write
+    // -- posit latched notification for active subscribers
+    // -- nuke pending new message notification if our user saw something...
+
+    // --- join message
+    // -- add entry in the joined author's any involvement view
   },
 
   /**
@@ -115,13 +276,25 @@ LocalStore.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Contacts Lookup
+  // Peep Lookup
 
-  _loadContact: function() {
+  /**
+   * @args[
+   *   @param[by @oneof['recency' 'alphabet']]
+   *   @param[filter @oneof[null 'pinned']]
+   * ]
+   */
+  queryAndWatchPeepBlurbs: function(by) {
+  },
+
+  loadAndWatchPeepBlurb: function() {
+  },
+
+  unwatchPeepBlurb: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Contacts Mutation
+  // Peep Mutation
   //
   // "My peeps"; people I have an explicit relationship with and who are allowed
   //  to send me messages
@@ -130,32 +303,35 @@ LocalStore.prototype = {
    * Add a contact to our address book.
    */
   addContact: function() {
+    // -- persist
+    // -- notify peep queries
   },
 
   /**
-   * Set some meta-data about a contact in our address book.
+   * Set some meta-data about a contact in our address book (pinned, etc.)
    */
   setContactMeta: function() {
+    // -- persist
+    // -- notify affected queries
+    // -- notify subscribed blurbs
   },
 
   /**
    * Set some contact-provided meta-data about a contact in our address book.
    */
+  /*
   setContactPeepMeta: function() {
   },
+  */
 
+  /*
   delContact: function() {
   },
+  */
 
 
   //////////////////////////////////////////////////////////////////////////////
   // Peeps
-  //
-  // Differ from contacts in that a contact is "my peep" and as such may have
-  //  much more metadata, whereas there may be no relationship between me and
-  //  another person's peep.
-  // A peep exists in our datastore exactly as long as we have conversations
-  //  referencing the peep in our datastore.
 
   //////////////////////////////////////////////////////////////////////////////
   // Contact/Peep overlap
@@ -165,7 +341,7 @@ LocalStore.prototype = {
    *  but rather a peep, boost the reference count and make note of their
    *  relationship.
    */
-  _nameCheck: function(tellKey) {
+  _nameTrack: function(tellKey, otherPersonSelfIdent) {
   },
 
   /**

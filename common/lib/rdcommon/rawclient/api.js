@@ -66,7 +66,7 @@ define(
     'rdcommon/transport/authconn',
     'rdcommon/crypto/keyring',
     'rdcommon/identities/pubident',
-    '../conversations/generator',
+    '../messages/generator',
     'module',
     'exports'
   ],
@@ -76,7 +76,7 @@ define(
     $authconn,
     $keyring,
     $pubident,
-    $conv_generator,
+    $msg_gen,
     $module,
     exports
   ) {
@@ -201,12 +201,17 @@ MailstoreConn.prototype = {
  *
  * == Relationship With Local Storage, Other Clients, Mailstore  ==
  *
- * All client actions result in attestations which are fed to our LocalStore
- *  and to the mailstore.  The mailstore will process these to affect its
- *  storage and relay them to all other clients to process.  While it is
- *  arguably redundant to have our local client generate an attestation and
- *  then verify it, it does avoid us having to write a second code-path.
- *  XXX actually, maybe we won't be redundant? revisit this doc soon.
+ * All client actions result in either secretboxes or authenticated blobs which
+ *  are fed to our LocalStore and to the mailstore.  The mailstore will process
+ *  these to affect its storage and relay them to all other clients to process.
+ *  The decision between a secretbox and an authenticated blob is made on the
+ *  basis of whether the mailstore gets to know what we did.  In general, it
+ *  gets to know what we did, although the specific details of what we did will
+ *  very likely end up encrypted.
+ *
+ * While it is arguably redundant to have our local client generate an
+ *  authenticator and then verify it, it does avoid us having to write a second
+ *  code-path.
  */
 function RawClientAPI(persistedBlob, _logger) {
   // -- restore keyrings
@@ -483,10 +488,26 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Mutation
 
-  createConversation: function(peeps, messageText, location) {
+  createConversation: function(peeps, messageText, location, inResponseToMsg) {
+    var iPeep;
+    // - validate that all the peeps are actually contacts
+    for (iPeep = 0; iPeep < peeps.length; iPeep++) {
+      if (!peeps[iPeep].isContact)
+        throw new Error("You can't invite a non-contact to a conversation.");
+    }
+
     // - create the conversation
+    var convMeta = $msg_gen.createNewConversation(this._transitServer);
 
     // - generate the invitations for the peeps
+    for (iPeep = 0; iPeep < peeps.length; iPeep++) {
+      var invitation = $msg_gen.createConversationInvitation(
+        this._keyring,
+    }
+
+    // - formulate the message to the fanout role
+
+    // - send the message
   },
   replyToConversation: function(conversation, messageText, location) {
     // - create a signed message payload

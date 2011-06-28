@@ -296,17 +296,9 @@ define(
  * Create a conversation and return the meta-info that all participants need
  *  plus the conversation-starter-only info.
  */
-exports.createNewConversation = function(starterKeyring, serverIdentPayload) {
+exports.createNewConversation = function(serverIdentPayload) {
   // - create the new signing keypair that defines the conversation
   var convKeypair = $keyops.makeGeneralSigningKeypair();
-
-  // XXX we're going to keep the keypair around for now, but it isn't actually
-  //  used for anything.  The attestation checking is too expensive to do
-  //  on the server right now (given there is no real payoff), so there's not
-  //  much point flinging that around.  We are keeping it around just to make
-  //  sure that the conversation starter keeps some extra meta-data so there
-  //  isn't too much of a logistical hassle down the road to bring attestations
-  //  back.
 
   // - create the symmetric secret keys (envelope, body) for the conversation
   var envelopeSharedSecretKey = $keyops.makeSecretBoxKey();
@@ -322,6 +314,8 @@ exports.createNewConversation = function(starterKeyring, serverIdentPayload) {
     //  file.
     transitServerKey: serverIdentPayload.publicKey,
   };
+
+  // - generate the attestation that roots the conversation.
 
   return {
     keypair: convKeypair,
@@ -348,6 +342,9 @@ exports.createConversationInvitation = function(authorKeyring,
                                                 recipPubring) {
   // -- for the conversation participants (not the fanout server)
   // - generate signed attestation to be sent to the list
+  // The attestation is stating that we are explicitly binding this person into
+  //  the conversation and therefore names the conversation.  This avoids
+  //  frame-jobs based on replays, *as long as
 
 
   // - encrypt the attestation with the message key
@@ -369,8 +366,28 @@ exports.createConversationInvitation = function(authorKeyring,
 
 };
 
+/**
+ * @args[
+ *   @param[bodyString String]{
+ *     The plaintext message what for humans to read and comprehend.
+ *   }
+ *   @param[authorKeyring]
+ *   @param[convMeta]
+ *   @param[inResponseToNonce]{
+ *     The nonce that was used for the message sent to the conversation.
+ *   }
+ *   @param[inResponseToSignedBlob]{
+ *     The signed blob that this message is a response to.  This is used to
+ *     compute a hash that we embed in the message in order to reduce the
+ *     probability of successful frame-jobs.  This is not intended to be a
+ *     strong protection at this time; we would want to include more data
+ *   }
+ * ]
+ */
 exports.createConversationHumanMessage = function(bodyString, authorKeyring,
-                                                  convMeta) {
+                                                  convMeta,
+                                                  inResponseToNonce,
+                                                  inResponseToSignedBlob) {
   // (for the conversation participants)
   var now = Date.now();
   var bodyObj = {
