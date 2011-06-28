@@ -483,6 +483,10 @@ moda.on({
     return transport.signIn(id, name, callback);
   };
 
+  moda.signOut = function (callback) {
+    return transport.signOut(callback);
+  };
+
   moda.listUnseen = function () {
     return transport.listUnseen(function (unseen) {
       // TODO: may want to optimize this display at some point

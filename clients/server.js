@@ -1,7 +1,7 @@
 
 //Sample server taken from socket.io examples and hacked up.
 
-/*jslint strict: false, nomen: false, indent: 2 */
+/*jslint strict: false, nomen: false, indent: 2, plusplus: false */
 /*global require: false, process: false, __dirname: false, console: false */
 
 var http = require('http'),
@@ -242,14 +242,23 @@ actions = {
 
       multi.exec(function (err, summaries) {
         // Rehydrate the message
-        summaries.forEach(function (summary) {
-          summary.message = JSON.parse(summary.message);
-        });
+        var results = [],
+            i, summary;
+
+        // There may not be a most current message from the user
+        // for a given conversation, in which case the summary object
+        // will be an empty object. Weed those out.
+        for (i = 0; (summary = summaries[i]); i++) {
+          if (typeof summary.message === 'string') {
+            summary.message = JSON.parse(summary.message);
+            results.push(summary);
+          }
+        }
 
         // Send the response
         clientSend(client, data, {
           action: 'getPeepConversationsResponse',
-          conversations: summaries
+          conversations: results
         });
       });
     });

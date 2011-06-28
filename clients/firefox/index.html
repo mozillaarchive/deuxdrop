@@ -43,30 +43,43 @@
           </form>
         </div>
         <div data-cardid="start" title="Deuxdrop" class="card">
-          <a class="item" href="#peeps">Peeps</a>
-          <a class="item" href="#compose">Compose</a>
-          <div class="newConversationNotifications" data-childclass="newConversation"></div>
+          <div class="scroller">
+            <a class="item" href="#peeps">Peeps</a>
+            <a class="item" href="#compose">Compose</a>
+            <a class="item" data-nonav="nonav" href="#signOut">Sign Out</a>
+            <div class="newConversationNotifications" data-childclass="newConversation"></div>
+          </div>
         </div>
-        <div data-cardid="peeps" title="Peeps" class="card" data-childclass="personLink">
+        <div data-cardid="peeps" title="Peeps" class="card">
+          <div class="scroller" data-childclass="personLink">
+          </div>
         </div>
-        <div data-cardid="listUsersForAddPeep" title="Add Peep" class="card" data-childclass="addPeepLink">
+        <div data-cardid="listUsersForAddPeep" title="Add Peep" class="card">
+          <div class="scroller" data-childclass="addPeepLink">
+          </div>
         </div>
         <div data-cardid="peep" class="card">
-          <div class="peepInfo">
-            <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
-            <span data-bind="name" class="peepInfoName"></span>
+          <div class="scroller">
+            <div class="peepInfo">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+              <span data-bind="name" class="peepInfoName"></span>
+            </div>
+            <div class="peepConversations" data-childclass="convListItem">
+            </div>
+            <form data-class="compose"></form>
           </div>
-          <div class="peepConversations" data-childclass="convListItem">
-          </div>
-          <form data-class="compose"></form>
         </div>
         <div data-cardid="conversation" title="Conversation" class="card">
-          <div class="conversationMessages" data-childclass="message">
+          <div class="scroller">
+            <div class="conversationMessages" data-childclass="message">
+            </div>
+            <form data-class="compose"></form>
           </div>
-          <form data-class="compose"></form>
         </div>
         <div data-cardid="compose" title="Compose" class="card">
-          <form data-class="compose"></form>
+          <div class="scroller">
+            <form data-class="compose"></form>
+          </div>
         </div>
       </div>
     </div>
@@ -91,7 +104,7 @@
 
       <a data-classimpl="personLink" class="item" href="#peep"></a>
 
-      <a data-classimpl="addPeepLink" class="item" href="#back?action=addPeep"></a>
+      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item" href="#addPeep?&id="></a>
 
       <a data-classimpl="addPersonLink" class="item" href="#listUsersForAddPeep">+ Add Peep</a>
 

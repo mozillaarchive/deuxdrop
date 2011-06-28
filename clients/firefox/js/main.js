@@ -36,11 +36,17 @@
 
 /*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false, document: false, setTimeout: false, history: false,
-  setInterval: false */
+  setInterval: false, location: true, window: true */
 
 /**
  * Main JS file, bootstraps the logic.
  */
+
+// If not on the start of the UI, redirect to top of the UI,
+// since the UI cannot build up the correct state for possible substates yet.
+if (location.href.split('#')[1]) {
+  location.replace(location.pathname);
+}
 
 define(function (require) {
   var $ = require('jquery'),
@@ -52,7 +58,12 @@ define(function (require) {
       peeps, update, messageCloneNode, notifyDom, nodelessActions;
 
   function getChildCloneNode(node) {
-    return commonNodes[node.getAttribute('data-childclass')];
+    // Try on the actual node, and if not there, check the scroller node
+    var attr = node.getAttribute('data-childclass');
+    if (!attr) {
+      attr = $('.scroller', node).attr('data-childclass');
+    }
+    return commonNodes[attr];
   }
 
   function updateDom(rootDom, model) {
@@ -167,9 +178,35 @@ define(function (require) {
       dom[0].title = moda.me().id;
     },
 
+    'notify': function (data, dom) {
+      // Clear notification
+      notifyDom.hide();
+
+      // Go back the number of steps to the start card.
+      var cardsDom = cards.allCards(),
+        length = cardsDom.length,
+        index, i, card, jumpLength;
+
+      for (i = 0; (card = cardsDom[i]); i++) {
+        if (card.getAttribute('data-cardid') === 'start') {
+          index = i;
+          break;
+        }
+      }
+
+      jumpLength = -(length - index - 1);
+      history.go(jumpLength);
+    },
+
+    signOut: function () {
+      moda.signOut(function () {
+        location.reload();
+      });
+    },
+
     'peeps': function (data, dom) {
       // Get the node to use for each peep.
-      var clonable = commonNodes[dom.attr('data-childclass')];
+      var clonable = getChildCloneNode(dom[0]);
 
       //Hmm, think of a better way to do this: do same action after
       // loading all peeps or when peeps are already available.
@@ -188,7 +225,7 @@ define(function (require) {
         });
 
         // Update the card.
-        dom.append(frag);
+        dom.find('.scroller').append(frag);
 
         // Refresh card sizes.
         cards.adjustCardSizes();
@@ -205,7 +242,7 @@ define(function (require) {
 
     'listUsersForAddPeep': function (data, dom) {
       // Get the node to use for each peep.
-      var clonable = commonNodes[dom.attr('data-childclass')],
+      var clonable = getChildCloneNode(dom[0]),
           frag = document.createDocumentFragment();
 
       moda.users({}, {
@@ -228,7 +265,7 @@ define(function (require) {
 
           users.forEach(function (user) {
             var node = clonable.cloneNode(true);
-            node.href += '&id=' + encodeURIComponent(user.id);
+            node.href += encodeURIComponent(user.id);
             node.appendChild(document.createTextNode(user.name));
             frag.appendChild(node);
           });
@@ -331,6 +368,8 @@ define(function (require) {
 
       // Wait for messages before showing the messages.
       conversation.withMessages(function (conv) {
+        var scroller;
+
         // Clear out old messages
         messagesNode.innerHTML = '';
 
@@ -345,6 +384,17 @@ define(function (require) {
 
         // Let the server know the messages have been seen
         conversation.setSeen();
+
+        // TODO: best to do this ontransition end instead of guessing when it
+        // ends.
+        setTimeout(function () {
+          scroller = cards.getIScroller(dom);
+          if (scroller) {
+            scroller.scrollToElement(dom.find('.compose')[0], 200);
+          } else {
+            dom[0].scrollTop = dom[0].scrollHeight;
+          }
+        }, 300);
       });
 
       // Set up compose area
@@ -377,7 +427,12 @@ define(function (require) {
 
         // Scroll to the bottom of the conversation
         setTimeout(function () {
-          card[0].scrollTop = card[0].scrollHeight;
+          var scroller = cards.getIScroller(card);
+          if (scroller) {
+            scroller.scrollToElement(card.find('.compose')[0], 200);
+          } else {
+            card[0].scrollTop = card[0].scrollHeight;
+          }
 
           // Let the server know the messages have been seen
           moda.conversation({
@@ -424,27 +479,29 @@ define(function (require) {
     cards($('#cardContainer'));
 
     nodelessActions = {
-      'back': true,
-      'notify': true
+      'addPeep': true,
+      'notify': true,
+      'signOut': true
     };
 
     // Listen for nav items.
     cards.onNav = function (templateId, data) {
-      var cardNode;
+      var cardDom;
+
       if (nodelessActions[templateId]) {
         // A "back" action that could modify the data in a previous card.
-        if (data.action && update[data.action]) {
-          update[data.action](data);
+        if (update[templateId]) {
+          update[templateId](data);
         }
       } else {
         // A new action that will generate a new card.
-        cardNode = $(cards.templates[templateId].cloneNode(true));
+        cardDom = $(cards.templates[templateId].cloneNode(true));
 
         if (update[templateId]) {
-          update[templateId](data, $(cardNode));
+          update[templateId](data, cardDom);
         }
 
-        cards.add(cardNode);
+        cards.add(cardDom);
 
         if (templateId !== 'start' && templateId !== 'signIn') {
           cards.forward();
@@ -458,28 +515,6 @@ define(function (require) {
     };
 
     $('body')
-      .delegate('#notify', 'click', function (evt) {
-        evt.preventDefault();
-
-        // Clear notification
-        notifyDom.hide();
-
-        // Go back the number of steps to the start card.
-        var cardsDom = cards.allCards(),
-          length = cardsDom.length,
-          index, i, card, jumpLength;
-
-        for (i = 0; (card = cardsDom[i]); i++) {
-          if (card.getAttribute('data-cardid') === 'start') {
-            index = i;
-            break;
-          }
-        }
-
-        jumpLength = -(length - index - 1);
-        history.go(jumpLength);
-      })
-
       // Handle sign in form
       .delegate('.signInForm', 'submit', function (evt) {
         evt.preventDefault();

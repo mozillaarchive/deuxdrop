@@ -26,12 +26,17 @@
   location: false, history: false, setTimeout: false */
 'use strict';
 
-define([ 'jquery', 'blade/url', 'blade/array', 'text!./cardsHeader.html'],
+define([ 'jquery', 'blade/url', 'blade/array', 'text!./cardsHeader.html',
+        'iscroll'],
 function ($,        url,         array,         headerTemplate) {
   var cards, header, display, back, nlCards,
-    cardPosition = 0,
-    headerText = '',
-    cardTitles = [];
+      cardPosition = 0,
+      headerText = '',
+      cardTitles = [],
+      scrollCounter = 0,
+      scrollRegistry = {},
+      //iScroll just defines a global, bind to it here
+      IScroll = window.iScroll;
 
   function adjustCardSizes() {
     var cardWidth = display.outerWidth(),
@@ -56,6 +61,15 @@ function ($,        url,         array,         headerTemplate) {
 
     //Reset the scroll correctly.
     cards.scroll();
+
+    //Update the scrollers.
+    nlCards.find('[data-scrollid]').each(function (i, node) {
+      var scrollId = node.getAttribute('data-scrollid'),
+          scroller = scrollRegistry[scrollId];
+      if (scroller) {
+        scroller.refresh();
+      }
+    });
   }
 
   function parseUrl(node) {
@@ -181,7 +195,17 @@ function ($,        url,         array,         headerTemplate) {
         // example, if that now works in everywhere we want, and we are
         // using CSS3 transitions.
         setTimeout(function () {
-          cardsDom.slice(index + 1).remove();
+          var removed = cardsDom.slice(index + 1).remove();
+
+          // Remove scrollers.
+          removed.each(function (i, node) {
+            var scrollId = node.getAttribute('data-scrollid'),
+                scroller = scrollRegistry[scrollId];
+            if (scroller) {
+              scroller.destroy();
+              delete scrollRegistry[scrollId];
+            }
+          });
         }, 300);
       }, false);
 
@@ -225,9 +249,21 @@ function ($,        url,         array,         headerTemplate) {
   /**
    * Adds a card node to the list.
    */
-  cards.add = function (node) {
-    nlCards.append(node);
+  cards.add = function (nodeOrDom) {
+    var scrollId = 'id' + (scrollCounter++),
+      dom = $(nodeOrDom);
+
+    nlCards.append(nodeOrDom);
     adjustCardSizes();
+
+    // Set up scroller.
+    scrollRegistry[scrollId] = new IScroll(dom[0]);
+    dom.attr('data-scrollid', scrollId);
+  };
+
+  cards.getIScroller = function (nodeOrDom) {
+    var dom = $(nodeOrDom);
+    return scrollRegistry[dom.attr('data-scrollid')];
   };
 
   cards.back = function () {
@@ -260,6 +296,8 @@ function ($,        url,         array,         headerTemplate) {
 
     var left = display.outerWidth() * cardPosition;
 
+/*
+    // Non-css transition route.
     nlCards.animate(
       {
         left: '-' + left + 'px'
@@ -268,13 +306,13 @@ function ($,        url,         array,         headerTemplate) {
         easing: 'linear'
       }
     );
+*/
 
-/*
-    Was used for CSS -webkit-transition
+    // Relies on CSS transitions for animation.
     nlCards.css({
       left: '-' + left + 'px'
     });
-*/
+
     //Hide/Show back button as appropriate
     back.css('display', !cardPosition ? 'none' : '');
   };

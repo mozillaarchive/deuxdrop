@@ -284,6 +284,16 @@ define(function (require, exports) {
     }
   };
 
+  transport.signOut = function (callback) {
+    delete localStorage.me;
+    me = undefined;
+    localMeCheck = false;
+
+    if (callback) {
+      callback();
+    }
+  };
+
   makePerCallPassThroughApi('peeps', ['query'], 'items');
   makePerCallPassThroughApi('users', ['query'], 'items');
   makePerCallPassThroughApi('peep', ['peepId'], 'peep');

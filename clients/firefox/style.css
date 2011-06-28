@@ -48,8 +48,12 @@ button {
 
 #header {
   display: block;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 41px;
+  z-index: 100;
   overflow: hidden;
   background-color: #fff;
   padding: 10px;
@@ -96,20 +100,42 @@ button {
 }
 
 #cardContainer {
-  overflow: hidden;
   position: relative;
+  top: 40px;
+  left: 0;
+  overflow: hidden;
 }
 
 #cards {
   position: absolute;
   top: 0;
   left: 0;
+  transition-property: left;
+  transition-duration: 300ms;
+  transition-timing-function: linear;
+  -moz-transition-property: left;
+  -moz-transition-duration: 300ms;
+  -moz-transition-timing-function: linear;
+  -webkit-transition-property: left;
+  -webkit-transition-duration: 300ms;
+  -webkit-transition-timing-function: linear;
+  -o-transition-property: left;
+  -o-transition-duration: 300ms;
+  -otransition-timing-function: linear;
+
+  /* To trigger hardward acceleration for webkit:
+     http://www.html5rocks.com/en/tutorials/speed/quick/#toc-hwaccel
+     May need to remove */
+  -webkit-transform: translateZ(0);
 }
 
 .card {
   float: left;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.scroller {
 }
 
 a.item {
@@ -152,8 +178,12 @@ a.item.selected {
 
 
 .compose {
-  padding: 10px 10px 0 10px;
-  height: 20px;
+  padding: 10px 10px 41px 10px;
+  height: 22px;
+
+  -webkit-box-sizing: content-box;
+     -moz-box-sizing: content-box;
+          box-sizing: content-box;
 }
 
 .compose textarea {
