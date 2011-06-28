@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script>
+      var console;
+      if (!console)
+        console = {
+          log: function() {},
+          error: function() {},
+          info: function() {},
+          warn: function() {},
+      };
+      function dump(aMsgWithNewline) {
+        console.log(aMsgWithNewline.replace("\n", "", "g"));
+      }
+    </script>
+    <script src="../deps/require.js"></script>
+    <script>
+      require(
+        {
+          baseUrl: '../deps',
+          paths: {
+            'socket.io': '/socket.io/socket.io'
+          }
+        },
+        ['../firefox/js/main']
+      );
+    </script>
+  </head>
+  <body>
+
+    <div id="cardContainer">
+      <div id="cards">
+        <div data-cardid="signIn" title="Sign In" class="card">
+          <form class="signInForm">
+            <div>Email: <input name="id" type="email" required></div>
+            <div>Name: <input name="name" type="text" required></div>
+            <button name="submit">Sign In</button>
+          </form>
+        </div>
+        <div data-cardid="start" title="Deuxdrop" class="card">
+          <div class="scroller">
+            <a class="item" href="#peeps">Peeps</a>
+            <a class="item" href="#compose">Compose</a>
+            <a class="item" data-nonav="nonav" href="#signOut">Sign Out</a>
+            <div class="newConversationNotifications" data-childclass="newConversation"></div>
+          </div>
+        </div>
+        <div data-cardid="peeps" title="Peeps" class="card">
+          <div class="scroller" data-childclass="personLink">
+          </div>
+        </div>
+        <div data-cardid="listUsersForAddPeep" title="Add Peep" class="card">
+          <div class="scroller" data-childclass="addPeepLink">
+          </div>
+        </div>
+        <div data-cardid="peep" class="card">
+          <div class="scroller">
+            <div class="peepInfo">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+              <span data-bind="name" class="peepInfoName"></span>
+            </div>
+            <div class="peepConversations" data-childclass="convListItem">
+            </div>
+            <form data-class="compose"></form>
+          </div>
+        </div>
+        <div data-cardid="conversation" title="Conversation" class="card">
+          <div class="scroller">
+            <div class="conversationMessages" data-childclass="message">
+            </div>
+            <form data-class="compose"></form>
+          </div>
+        </div>
+        <div data-cardid="compose" title="Compose" class="card">
+          <div class="scroller">
+            <form data-class="compose"></form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start standard UI elements -->
+    <div id="common" class="hidden">
+
+      <form data-classimpl="compose" class="compose hbox">
+        <input type="hidden" name="from" value="">
+        <input type="hidden" name="to" value="">
+        <input type="hidden" name="convId" value="">
+        <textarea name="text" class="boxFlex"></textarea>
+        <button>Send</button>
+      </form>
+
+      <a href="#conversation?id=" data-classimpl="newConversation" class="newConversation">
+        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
+        <span class="newConversationPeep" data-bind="from.name"></span>
+        <span class="newConversationText" data-bind="text"></span>
+        <span class="newConversationTime"></span>
+      </a>
+
+      <a data-classimpl="personLink" class="item" href="#peep"></a>
+
+      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item" href="#addPeep?&id="></a>
+
+      <a data-classimpl="addPersonLink" class="item" href="#listUsersForAddPeep">+ Add Peep</a>
+
+      <a data-classimpl="convListItem" class="item" href="#conversation?id="><span class="meta">
+          </span></a>
+
+      <div data-classimpl="message"  class="bubble">
+        <a href='#peep?id=' class="sender">
+          <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
+          <span class="name" data-bind="from.name"></span>
+        </a>
+        <div class="body">
+          <div class="meta">
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- End standard UI elements -->
+  </body>
+</html>

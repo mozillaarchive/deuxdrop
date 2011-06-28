@@ -7,3 +7,6 @@
 [submodule "servers/node_modules/websocket"]
 	path = servers/node_modules/websocket
 	url = git://github.com/asutherland/WebSocket-Node.git
+[submodule "clients/deps/wmsy"]
+	path = clients/deps/wmsy
+	url = https://github.com/asutherland/wmsy.git
