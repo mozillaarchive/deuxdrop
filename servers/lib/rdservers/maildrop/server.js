@@ -41,6 +41,8 @@
 
 define(
   [
+    'q',
+    'rdcommon/crypto/keyops',
     '../authdb/api',
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
@@ -48,6 +50,8 @@ define(
     'exports'
   ],
   function(
+    $Q,
+    $keyops,
     $auth_api,
     $log,
     $task, $taskerrors,
@@ -90,15 +94,24 @@ var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
     otherServerKey: otherServerKey,
   };
   switch (innerEnvelope.type) {
+    // - other user to user
     case "user":
       return new UserToUserMessageTask(arg, _logger);
 
+    // - other user to user's maildrop
     case "joinconv":
       return new ConversationJoinTask(arg, _logger);
 
     case "convadd":
+      return new ConversationAddTask(arg, _logger);
     case "convmsg":
       return new ConversationMessageTask(arg, _logger);
+    case "convmeta":
+      return new ConversationMetaTask(arg, _logger);
+
+    // - user to their own maildrop
+    case "createconv":
+      return new CreateConversationTask(arg, _logger);
 
     default:
       throw new $taskerrors.MalformedPayloadError(
@@ -217,7 +230,7 @@ var FanoutToUserMessageTask = exports.FanoutToUserMessageTask =
   name: "fanoutToUserMessage",
   steps: {
     check_authorized_conversation: function(arg) {
-      return arg.config.authApi.userCheckServerConversation(
+      return arg.config.authApi.userAssertServerConversation(
         arg.envelope.name, arg.otherServerKey, arg.envelope.convId);
     },
     back_end_hand_off: function() {
@@ -237,7 +250,7 @@ var UserToUserMessageTask = taskMaster.defineTask({
   name: "userToUserMessage",
   steps: {
     check_authorized_to_talk_to_user: function(arg) {
-      return this.arg.config.authApi.userCheckServerUser(
+      return this.arg.config.authApi.userAssertServerUser(
         arg.innerEnvelope.name, arg.otherServerKey,
         arg.outerEnvelope.senderKey);
     },
@@ -263,7 +276,7 @@ var ConversationJoinTask = taskMaster.defineTask({
      * Make sure the user saying this is a friend of our user.
      */
     check_authorization: function(arg) {
-      return arg.config.authApi.userCheckServerUser(
+      return arg.config.authApi.userAssertServerUser(
         arg.innerEnvelope.name, arg.otherServerKey,
         arg.outerEnvelope.senderKey);
     },
@@ -309,10 +322,12 @@ var ConversationJoinedTask = taskMaster.defineTask({
                     this.innerEnvelope.type);
     },
     check_named_user_is_our_user: function() {
-      return this.arg.config.authApi.serverCheckUserAccountByTellKey(
+      return this.arg.config.authApi.serverGetUserAccountByTellKey(
                this.arg.msg.name);
     },
     resend: function(userRootKey) {
+      if (!userRootKey)
+        throw new $taskerrors.UnauthorizedUserError(userRootKey);
       return this.arg.config.senderApi.sendPersonEnvelopeToServer(userRootKey,
         {
           senderKey: this.arg.msg.name,
@@ -324,23 +339,193 @@ var ConversationJoinedTask = taskMaster.defineTask({
   },
 });
 
+var CreateConversationTask = taskMaster.defineTask({
+  name: 'createConversation',
+  steps: {
+    check_from_our_user_from_our_server: function(arg) {
+      if (arg.otherServerKey !== arg.config.keyring.boxingPublicKey)
+        throw new Error($taskerrors.UnauthorizedUserError("not our server"));
+      return arg.config.authApi.serverGetUserAccountByTellKey(
+               arg.outerEnvelope.senderKey);
+    },
+    verify_our_user: function(isOurUser) {
+      if (!isOurUser)
+        throw new $taskerrors.UnauthorizedUserError("not our user");
+    },
+    /**
+     * Create the conversation, potentially failing if there is somehow already
+     *  such a conversation.
+     *
+     * XXX since this is an asynchronous thing, we need to handle the failure
+     *  in a way that we send something back to the user.
+     * XXX also, bad/broken actor entropy
+     */
+    create_conversation_race: function() {
+
+    },
+    send_welcome_to_initial_recipients: function() {
+    },
+  },
+});
+
+function conversationSendToAllRecipients(config, convId, message,
+                                         usersAndServers) {
+  var keyring = config.keyring,
+      senderApi = config.senderApi,
+      nonce = $keyops.makeBoxNonce();
+  // XXX we are basically doing this in parallel; might not be advisable;
+  //  revisit once we actually start using queues.
+  var promises = [];
+  for (var i = 0; i < usersAndServers.length; i++) {
+    var userAndServer = usersAndServers[i];
+
+    // - box the fanout message for the user
+    var boxed = keyring.box(message, nonce,
+                            userAndServer.userEnvelopeKey);
+    // - create the server-to-server envelope
+    var serverEnvelope = {
+      type: 'fannedmsg',
+      name: userAndServer.userTellKey,
+      convId: convId,
+      payload: boxed,
+    };
+    promises.push(
+      senderApi.sendServerEnvelopeToServer(serverEnvelope,
+                                           userAndServer.serverKey));
+  }
+  return $Q.all(promises);
+}
 
 /**
- * Process messages to the fan-out role.
+ * The user has sent a message to the conversation...
  */
 var ConversationMessageTask = taskMaster.defineTask({
   name: "conversationMessage",
   steps: {
-    check_already_in_on_conversation: function(arg) {
-      return arg.config.authApi.convCheckServerConversation(
+    assert_author_in_on_conversation: function(arg) {
+      return arg.config.authApi.convAssertServerConversation(
         arg.innerEnvelope.convId, arg.otherServerKey,
         arg.outerEnvelope.senderKey);
     },
-    persist: function() {
+    formulate_fanout_message_and_persist: function() {
+      this.fanoutMessage = {
+        type: 'message',
+        sentBy: this.arg.outerEnvelope.senderKey,
+        receivedAt: Date.now(),
+        // the message/envelope are encrypted with the same nonce as what we
+        //  received.
+        nonce: arg.outerEnvelope.nonce,
+        payload: this.arg.innerEnvelope.payload,
+      };
+      return this.arg.config.fanoutApi.addMessageToConversation(
+               this.fanoutMessage);
     },
     get_recipients: function() {
+      return this.arg.config.authApi.convGetParticipants(
+               this.arg.innerEnvelope.convId);
     },
-    send_to_all_recipients: function() {
+    send_to_all_recipients: function(usersAndServers) {
+      return conversationSendToAllRecipients(this.arg.config,
+                                             this.innerEnvelope.convId,
+                                             this.fanoutMessage,
+                                             usersAndServers);
+    },
+  },
+});
+
+/**
+ * Process the final step of the "add a user to a conversation" process; the
+ *  inviter should have already gotten confirmation from the invitee that they
+ *  have added the authorization on their server to receive messages from this
+ *  conversation.
+ */
+var ConversationAddTask = taskMaster.defineTask({
+  name: "conversationAdd",
+  steps: {
+    assert_inviter_in_on_conversation: function(arg) {
+      return arg.config.authApi.convAssertServerConversation(
+        arg.innerEnvelope.convId, arg.otherServerKey,
+        arg.outerEnvelope.senderKey);
+    },
+    add_authorization_or_reject_if_already_authorized: function() {
+      var arg = this.arg;
+      return arg.config.authApi.convAuthorizeServerUser( // auto-rejects
+               arg.innerEnvelope.convId, arg.innerEnvelope.serverName,
+               arg.innerEnvelope.name,
+               arg.innerEnvelope.payload.userEnvelopeKey);
+    },
+    fetch_backlog: function() {
+      return this.arg.config.fanoutApi.getAllConversationData(
+               arg.innerEnvelope.convId);
+    },
+    welcome_invitee: function(allConvData) {
+      var backfillMessage = {
+        type: 'welcome',
+        sentBy: this.arg.outerEnvelope.senderKey,
+        receivedAt: Date.now(),
+        nonce: this.arg.outerEnvelope.nonce,
+        payload: {
+          boxedMeta: this.arg.innerEnvelope.payload.inviteePayload,
+          backlog: allConvData,
+        },
+      };
+    },
+    formulate_fanout_join_message_and_persist: function() {
+      this.fanoutMessage = {
+        type: 'join',
+        sentBy: this.arg.outerEnvelope.senderKey,
+        receivedAt: Date.now(),
+        // the message/envelope are encrypted with the same nonce as what we
+        //  received.
+        nonce: arg.outerEnvelope.nonce,
+        payload: this.arg.innerEnvelope.payload.attestationPayload,
+      };
+      return this.arg.config.fanoutApi.addMessageToConversation(
+               this.fanoutMessage);
+    },
+    get_recipients: function() {
+      return this.arg.config.authApi.convGetParticipants(
+               this.arg.innerEnvelope.convId);
+    },
+    send_to_all_recipients: function(usersAndServers) {
+      return conversationSendToAllRecipients(this.arg.config,
+                                             this.innerEnvelope.convId,
+                                             this.fanoutMessage,
+                                             usersAndServers);
+    },
+  },
+});
+
+var ConversationMetaTask = taskMaster.defineTask({
+  name: "conversationMeta",
+  steps: {
+    check_already_in_on_conversation: function(arg) {
+      return arg.config.authApi.convAssertServerConversation(
+        arg.innerEnvelope.convId, arg.otherServerKey,
+        arg.outerEnvelope.senderKey);
+    },
+    formulate_fanout_message_and_persist: function() {
+      this.fanoutMessage = {
+        type: 'meta',
+        sentBy: this.arg.outerEnvelope.senderKey,
+        receivedAt: Date.now(),
+        // the message/envelope are encrypted with the same nonce as what we
+        //  received.
+        nonce: arg.outerEnvelope.nonce,
+        payload: this.arg.innerEnvelope.payload,
+      };
+      return this.arg.config.fanoutApi.updateConvPerUserMetadata(
+               this.arg.innerEnvelope.convId, this.fanoutMessage);
+    },
+    get_recipients: function() {
+      return this.arg.config.authApi.convGetParticipants(
+               this.arg.innerEnvelope.convId);
+    },
+    send_to_all_recipients: function(usersAndServers) {
+      return conversationSendToAllRecipients(this.arg.config,
+                                             this.innerEnvelope.convId,
+                                             this.fanoutMessage,
+                                             usersAndServers);
     },
   },
 });
@@ -353,6 +538,7 @@ var ConversationMessageTask = taskMaster.defineTask({
  *
  * XXX notyet, mailstore can handle direct
  */
+/*
 function ContactConnection(server, sock) {
 };
 ContactConnection.prototype = {
@@ -363,6 +549,7 @@ ContactConnection.prototype = {
   _msg_root_delContact: function(msg) {
   },
 };
+*/
 
 /**
  * Message retrieval (fetch) from a maildrop by a mailstore.
@@ -377,12 +564,14 @@ ContactConnection.prototype = {
  *
  * XXX notyet, mailstore can handle direct
  */
+/*
 function PickupConnection(server, sock) {
 };
 PickupConnection.prototype = {
   _msg_wantAck_ack: function(msg) {
   },
 };
+*/
 
 var DropServerDef = {
   endpoints: {

@@ -128,13 +128,23 @@ RedisDbConn.prototype = {
 
   /**
    * Get the cell and return a truthy value based on the cell value.
-   *
-   * The current implementation strongly assumes you put a numeric 1 in the cell
-   *  previously and that we are redis which retains the boolean-ness.  For
-   *  hbase, this will need custom logic.
    */
   boolcheckRowCell: function(tableName, rowId, columnName) {
-    return this.getRowCell(tableName, rowId, columnName);
+    return when(this.getRowCell(tableName, rowId, columnName),
+                Boolean
+                // rejection pass-through is fine
+               );
+  },
+
+  assertBoolcheckRowCell: function(tableName, rowId, columnName, exClass) {
+    return when(this.getRowCell(tableName, rowId, columnName),
+      function(val) {
+        if (!val)
+          throw new exClass();
+        return Boolean(val);
+      }
+      // rejection pass-through is fine
+    );
   },
 
   getRow: function(tableName, rowId, columnFamilies) {
@@ -182,6 +192,33 @@ RedisDbConn.prototype = {
         deferred.resolve(result);
     });
     return deferred.promise;
+  },
+
+  /**
+   * Create a row only if it does not exist.  If it does exist, issue a
+   *  rejection.  The mechanism by which this operates is implementation
+   *  dependent; to help out implementations that don't make this super easy,
+   *  you must provide the name of a probe cell that we can use to perform
+   *  an increment on and that we will leave around as long as the row exists.
+   */
+  raceCreateRow: function(tableName, rowId, probeCellName, cells) {
+    var self = this;
+    return when(this.incrementCell(tableName, rowId, probeCellName, 1),
+      function(valAfterIncr) {
+        // - win
+        if (valAfterIncr === 1) {
+          return self.putCells(tableName, rowId, cells);
+        }
+        // - lose
+        else {
+          // XXX we should perhaps return a boolean as to whether we won to the
+          //  caller and leave it up to them to generate a more appropriate
+          //  exception, if any.
+          throw new Error("lost race");
+        }
+      }
+      // rejection pass-through is fine, although is ambiguous versus the above
+    );
   },
 
   //////////////////////////////////////////////////////////////////////////////

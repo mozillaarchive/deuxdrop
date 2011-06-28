@@ -62,8 +62,6 @@
  *     than its tagged purpose.
  *   - General key mismatch catch-all: `KeyMismatchError`
  * - Legitimate-seeming user trying to do something they're not allowed to do:
- *   - But this is sorta-expected because of a designed-in protocol race which
- *      could be happening in this context: `NotYetAuthorizedError`.
  *   - And they knew about something they shouldn't know about:
  *     `UnauthorizedUserDataLeakError`.
  *   - Otherwise: `UnauthorizedUserError`.
@@ -264,34 +262,6 @@ var UnauthorizedUserDataLeakError = exports.UnauthorizedUserDataLeakError =
 UnauthorizedUserDataLeakError.prototype = {
   __proto__: UnauthorizedUserError.prototype,
   name: 'UnauthorizedUserDataLeakError',
-};
-
-/**
- * Signify to aware parties that there is a designed-in implementation race that
- *  we expect to converge into a (mutually) authorized state in a timely
- *  fashion, but we have not converged.
- *
- * This is intended to be used for cases where entity C tells entities A and B
- *  that they should be friends, and does so by simultaneously sending them
- *  both messages which entails one or both of them contacting the other, but
- *  where A and B will ignore the other until they receive the message saying
- *  they should be friends.  Accordingly, if A or B receives the message and
- *  tries to contact the other before the other has processed their message
- *  then they will encounter a failure that will be resolved when the other
- *  processes their message.
- * The alternative is to use a mechanism where C requires an acknowledgement
- *  from one or both of the parties before telling anyone to attempt to
- *  initiate contact.  The downside of the alternative is the additional
- *  set of messages that are required.  As such, this exception will only
- *  be used by logic that thinks the tradeoff is worth it.
- */
-var NotYetAuthorizedError = exports.NotYetAuthorizedError =
-    function() {
-  Error.captureStackTrace(this, NotYetAuthorizedError);
-};
-NotYetAuthorizedError.prototype = {
-  __proto__: Error.prototype,
-  name: 'NotYetAuthorizedError',
 };
 
 }); // end define

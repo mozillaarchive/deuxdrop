@@ -78,7 +78,7 @@
  *     user.  Consumers should keep this around; re-published layers should
  *     get the nonce attached in a new envelope.
  *   }
- *   @key[innerEnvelope]
+ *   @key[innerEnvelope @naclBoxed[PSTransitInnerEnvelope]]
  * ]{
  *   Person to Server transit outer envelope; this is what the mailsender can
  *   see and hands to the other server's maildrop.
@@ -95,9 +95,15 @@
  *       attestation chain.
  *     }
  *     @case["convmsg"]{
- *       Our fanout server; this is a message to a conversation.  `name` will
- *       not be present.  `convId` will be the name of the conversation.
+ *       Our fanout server; this is a human message to a conversation.  `name`
+ *       will not be present.  `convId` will be the name of the conversation.
  *       `payload` will be the message to relay to the conversation.
+ *     }
+ *     @case["convmeta"]{
+ *       Our fanout server; this is a per-user metadata update for a
+ *       conversation.  `name` will not be present.  `convId` will be the name
+ *       of the conversation.  `payload` will be the message to relay to the
+ *       conversation.
  *     }
  *     @case["joinconv"]{
  *       Fanin-ish; this is a user asking the target user to join a
@@ -136,6 +142,22 @@
  *   Ideally we should split this into a polymorphic doc based on the type.
  * }
  *
+ * @typedef[ConvAddPayload @dict[
+ *   @key[userEnvelopeKey]{
+ *     The user's envelope key for encrypting fanout messages to the user (so
+ *     that their mailstore can process the messages).
+ *   }
+ *   @key[inviteePayload]{
+ *     The boxed message containing the conversation metadata from the inviter
+ *     to the invitee to be delivered as part of the welcome payload.
+ *   }
+ *   @key[attestationPayload]{
+ *     A conversation encrypted message containing the identity information of
+ *     the person being added.  This is unreadable by the fanout server because
+ *     it does not need to know the details of who this person is.
+ *   }
+ * ]]
+ *
  * @typedef[SSTransitEnvelope @dict[
  *   @key[type @oneof[
  *     @case["joined"]{
@@ -158,7 +180,7 @@
  *   ]]{
  *   }
  *   @key[name]{
- *     The root public key of the recipient user.
+ *     The tell public box key of the recipient user.
  *   }
  *   @key[convId]{
  *     The conversation this is a message for.
@@ -170,86 +192,77 @@
  *   server to a user on our server.
  * }
  *
- * @typedef[PersonTransitEnvelope @dict[
- *   @key[senderKey]{
- *     A public boxing key of a person, so an active tellBoxPubKey.  (Although
- *     we can receive messages from other servers, we currently require direct
- *     communication with that server, in which case there is no need to
- *     redundantly box the payload since our transport layer is already boxed
- *     with the same key authority.)
- *   }
- *   @key[recipKey]{
- *     This should be the public boxing key of a server.
- *     XXX This bit is irrelevant to the recipient server and could be stripped.
- *   }
- *   @key[nonce]{
- *     The randomly generated nonce used for all encryption for this message and
- *     sub-parts.  When the transit envelope gets stripped, the payload should
- *     be re-encapsulated with the nonce so lower level consumers have it.
- *   }
- *   @key[type @oneof["user" "fanout" "fanin"]]
- *   @key[version Integer]{
- *     Schema version for sanity checking; there is no support for inter-version
- *     operation during the development phase, but we want to be able to detect
- *     such an attempt and fail-fast.
- *   }
- *   @key[payload BoxedPayload]{
- *     Something boxed between the sender and recipient with the given nonce.
- *   }
+ * @typedef[ConversationWelcomeMessage @dict[
+ *   @key[boxedMeta]
+ *   @key[backlog @listof[ConversationFanoutEnvelope]]
  * ]]{
- *    A box from a person to a server with the meta-data to identify the sender
- *    and recipient 1) for routing and 2) so we know what keys were used in the
- *    boxing without having to try multiple keys.  The nonce is also included
- *    because we need to know that and is used for all the layers.
+ *   Contains the conversation meta-data from the inviter in a boxed message
+ *   from the inviter, plus all of the conversation backlog.
  * }
  *
- * @typedef[StorageEnvelope @dict[
- *   @key[convId]{
- *     Conversation-id, an opaque randomly generated identifier for the
- *     conversation.
- *   }
- *   @key[composedAt DateMS]{
- *     Composition date of the message.
- *   }
- *   @key[payload EncMessagePayload]{
- *   }
- * ]]{
- *   The storage envelope contains meta-data about the message that is for use
- *   by the mailstore (and friends) to be able to classify/prioritize the mail
- *   without needing to see the actual message contents in the `MessagePayload`.
- * }
+ * @typedef[ConversationFanoutEnvelope @dict[
+ *   @key[type @oneof[
+ *     @case["message"]{
+ *       A human-readable conversation to the message by one of the
+ *       participants.
+ *     }
+ *     @case["join"]{
+ *       A join notification for a new participant; contains the attestation
+ *       (authored by the inviter) about who the invitee is (to the inviter).
+ *     }
+ *     @case["usermeta"]{
+ *       User metadata about the conversation as a whole, likely their
+ *       watermarks.  This is made known to the fan-out server as an
+ *       optimization so that it does not need to replay meta-data to joining
+ *       participants that is obsolete.  (This could also contain metadata
+ *       about specific messages embedded in it if it wants.)
+ *     }
+ *     @case["welcome"]{
+ *       The recipient is being added to the conversation just now and
+ *       `payload` contains an array of `ConversationFanoutEnvelope` instances.
  *
- * @typedef[MessagePayload @dict[
- *   @key[subject #:optional String]{
- *     Proposed (new) subject for the conversation, if present.
+ *       This exists as a hybrid of an optimization (less message traffic, fewer
+ *       crypto operations) and an attempt to expose less information about the
+ *       conversation to the invitee's server.  Note that without padding, the
+ *       size of the aggregate may still reveal a lot of information.  It may
+ *       make sense to nuke this special case.
+ *     }
+ *   ]]
+ *   @key[sentBy]{
+ *     The tell key of the sending user.
  *   }
- *   @key[body String]{
- *     The message payload, presently plaintext, eventually simplified HTML
- *     (most likely).
- *   }
+ *   @key[receivedAt DateMS]
+ *   @key[nonce]
+ *   @key[payload ConversationEnvelopeEncrypted]
  * ]]{
- *   The message payload contains the actual contents of the message.
+ *   The (boxed) envelope from the fanout server to each participant in the
+ *   conversation for things sent to the conversation.  This names the
+ *   sender's key rather than having the conversation envelope name it because
+ *   only the fanout server is able to perform such a verification (unless we
+ *   use a public signature, which is too expensive for us at this time.)
  * }
+ * @typedef[ConversationFanoutEnvelopeEncrypted
+ *          @naclBoxed[ConversationFanoutEnvelope serverBox userEnvelopeBox]]
  *
- * @typedef[ConversationFanoutEnvelopePayload @dict[
- *   @key[sentBy]
- *   @key[envelope ConversationEnvelopeEncrypted]
- * ]]{
- *   The (boxed) envelope for things sent to the conversation.  This has the
- *   sender's key rather than the inner envelope because we are depending on
- *   the fanout server to truthfully tell us which depends on it doing the
- *   boxing to us.
- * }
- *
- * @typedef[ConversationEnvelopePayload @dict[
+ * @typedef[ConversationEnvelope @dict[
  *   @key[body ConversationBodyEncrypted]
  * ]]{
  *   The conversation envelope is encrypted with the conversation's envelope
  *   (symmetric) secret key using the nonce providing in one the containing
  *   objects.
- * }
  *
- * @typedef[ConversationBodyPayload @dict[
+ *   Although this block is not signed, we have a optimistically reliable
+ *   indicator of the author of this message thanks to the enclosing
+ *   `ConversationFanoutEnvelope` and its boxing.
+ *
+ *   XXX This may be an unneeded level of wrapping.  We would put stuff in here
+ *   that the participants in the conversation don't want the fan-out server
+ *   to see in terms of envelope data.
+ * }
+ * @typedef[ConversationEnvelopeEncrypted
+ *          @naclSecretBoxed[ConversationEnvelope convEnvelopeSecretKey]]
+ *
+ * @typedef[ConversationBody @dict[
  *   @key[author AnnounceSignPubKey]
  *   @key[convId]
  *   @key[composedAt DateMS]{
@@ -263,7 +276,8 @@
  *   The body signed by the author using
  * }
  *
- * @typedef[ConversationBodyEncrypted @naclSecretBoxed[ConversationBodySigned]]{
+ * @typedef[ConversationBodyEncrypted
+ *          @naclSecretBoxed[ConversationBodySigned convBodySecretKey]]{
  * }
  **/
 
@@ -278,17 +292,21 @@ define(
   ) {
 
 
-
+/**
+ * Create a conversation and return the meta-info that all participants need
+ *  plus the conversation-starter-only info.
+ */
 exports.createNewConversation = function(starterKeyring, serverIdentPayload) {
   // - create the new signing keypair that defines the conversation
   var convKeypair = $keyops.makeGeneralSigningKeypair();
 
-  // - create the converation attestation
-  var convAttestPayload = {
-    type: "conversation",
-    convId: convKeypair.publicKey,
-    starter: starterKeyring.rootPublicKey,
-  };
+  // XXX we're going to keep the keypair around for now, but it isn't actually
+  //  used for anything.  The attestation checking is too expensive to do
+  //  on the server right now (given there is no real payoff), so there's not
+  //  much point flinging that around.  We are keeping it around just to make
+  //  sure that the conversation starter keeps some extra meta-data so there
+  //  isn't too much of a logistical hassle down the road to bring attestations
+  //  back.
 
   // - create the symmetric secret keys (envelope, body) for the conversation
   var envelopeSharedSecretKey = $keyops.makeSecretBoxKey();
@@ -305,6 +323,10 @@ exports.createNewConversation = function(starterKeyring, serverIdentPayload) {
     transitServerKey: serverIdentPayload.publicKey,
   };
 
+  return {
+    keypair: convKeypair,
+    participantMeta: convMeta,
+  };
 };
 
 /**
@@ -314,26 +336,33 @@ exports.createNewConversation = function(starterKeyring, serverIdentPayload) {
  *     The author's previously generated signature that states who the person
  *     is to us.
  *   }
+ *   @param[convMeta]{
+ *     The information all participants needs.
+ *   }
  *   @param[recipPubring PersonPubring]
  * ]
  */
 exports.createConversationInvitation = function(authorKeyring,
                                                 otherPersonIdent,
+                                                convMeta,
                                                 recipPubring) {
-  // --- to the fanout server
   // -- for the conversation participants (not the fanout server)
   // - generate signed attestation to be sent to the list
+
+
   // - encrypt the attestation with the message key
 
-  // -- for the fanout server itself
-
-  // --- to the invitee
   // -- for the invitee
   // (sekret detailz about the conversation)
   // - encrypt the shared secret keys into
 
-  // -- for their fanin server
+  // -- for the fanout server itself (includes both of the above)
+  // - create this invitation, jerk.
+
+  // -- for their fanin server (nests the above)
   // - tell the server to authorize incoming messages for the conversation
+
+
   // - give it the encrypted conversation details to feed to the user
 
 

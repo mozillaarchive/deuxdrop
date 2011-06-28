@@ -59,6 +59,7 @@ var $signup_server = require('rdservers/signup/server'),
     $mailsender_local_api = require('rdservers/mailsender/localapi'),
     $mailstore_api = require('rdservers/mailstore/api'),
     $mailstore_server = require('rdservers/mailstore/server'),
+    $fanout_api = require('rdservers/fanout/api'),
     $configurer = require('rdservers/configurer');
 
 var TestClientActorMixins = {
@@ -272,7 +273,7 @@ var SERVER_ROLE_MODULES = {
     serverModule: null,
   },
   fanout: {
-    apiModule: null,
+    apiModule: $fanout_api,
     serverModule: null,
   },
   store: {

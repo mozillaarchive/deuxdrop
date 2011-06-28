@@ -66,14 +66,21 @@ define(
  *
  * Our implementation is problem domain aware.
  */
-function LocalStore() {
+function LocalStore(dbConn) {
 }
 LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
-  // Conversation
+  // Conversation Lookup
+
+  _loadConversation: function(convId) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Mutation
 
   /**
-   * A new conversation (from our perspective).
+   * A new conversation (from our perspective).  Store the meta-information so
+   *  that we can do things with the conversation in the future.
    */
   addConversation: function() {
   },
@@ -92,8 +99,11 @@ LocalStore.prototype = {
 
   /**
    * Add a message (human or machine) to a conversation.
+   *
+   * If this is a join notification, we will name-check the added person.
    */
   addConversationMessage: function() {
+
   },
 
   /**
@@ -104,9 +114,17 @@ LocalStore.prototype = {
   outghostAddConversationMessage: function() {
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Contacts Lookup
+
+  _loadContact: function() {
+  },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Contacts
+  // Contacts Mutation
+  //
+  // "My peeps"; people I have an explicit relationship with and who are allowed
+  //  to send me messages
 
   /**
    * Add a contact to our address book.
@@ -128,6 +146,35 @@ LocalStore.prototype = {
 
   delContact: function() {
   },
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Peeps
+  //
+  // Differ from contacts in that a contact is "my peep" and as such may have
+  //  much more metadata, whereas there may be no relationship between me and
+  //  another person's peep.
+  // A peep exists in our datastore exactly as long as we have conversations
+  //  referencing the peep in our datastore.
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Contact/Peep overlap
+
+  /**
+   * A person was added in a conversation; if the person is not a contact
+   *  but rather a peep, boost the reference count and make note of their
+   *  relationship.
+   */
+  _nameCheck: function(tellKey) {
+  },
+
+  /**
+   * A previously namechecked name is no longer relevant because the conversation
+   *  is being expired, etc.
+   */
+  _nameGone: function() {
+  },
+
 
   //////////////////////////////////////////////////////////////////////////////
 };

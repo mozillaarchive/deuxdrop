@@ -55,13 +55,17 @@
 define(
   [
     'q',
+    'keyops',
     'exports'
   ],
   function(
     $Q,
+    $keyops,
     exports
   ) {
 var when = $Q.when;
+
+const BOX_PUB_KEYSIZE = $keyops.boxPublicKeyLength;
 
 /**
  * User account by root key.
@@ -128,18 +132,11 @@ AuthApi.prototype = {
    * ]
    */
   serverCheckUserAccount: function(rootSignPubKey) {
-    // no errback, let the outage exception propagate.
-    return when(
-      this._db.getRowCell(TBL_USER_ACCOUNT, rootSignPubKey, "d:selfIdent"),
-      this._serverCheckUserAccountCallback
-      // rejection pass-through is fine
-    );
-  },
-  _serverCheckUserAccountCallback: function(val) {
-    return val != null;
+    return this._db.assertBoolcheckRowCell(
+      TBL_USER_ACCOUNT, rootSignPubKey, "d:selfIdent");
   },
 
-  serverCheckUserAccountByTellKey: function(tellKey) {
+  serverGetUserAccountByTellKey: function(tellKey) {
     return this._db.getRowCell(TBL_USER_TELLKEY, tellKey, "d:rootKey");
   },
 
@@ -247,22 +244,22 @@ AuthApi.prototype = {
   //
   // Maildrop server implied.
 
-  userCheckServerUser: function(ourUserKey, otherServerBoxPubKey,
+  userAssertServerUser: function(ourUserKey, otherServerBoxPubKey,
                                 otherUserTellBoxPubKey) {
-    return this._db.boolcheckRowCell(TBL_SERVER_USER_AUTH,
-                                     otherServerBoxPubKey + ":" + ourUserKey,
-                                     "u:" + otherUserTellBoxPubKey);
+    return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
+             otherServerBoxPubKey + ":" + ourUserKey,
+             "u:" + otherUserTellBoxPubKey);
   },
 
   /**
    * From the perspective of one of our users, is this an authorized
    *  conversation?
    */
-  userCheckServerConversation: function(ourUserKey, otherServerBoxPubKey,
+  userAssertServerConversation: function(ourUserKey, otherServerBoxPubKey,
                                         conversationIdent) {
-    return this._db.boolcheckRowCell(TBL_SERVER_USER_AUTH,
-                                     otherServerBoxPubKey + ":" + ourUserKey,
-                                     "c:" + conversationIdent);
+    return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
+             otherServerBoxPubKey + ":" + ourUserKey,
+             "c:" + conversationIdent);
   },
 
   /**
@@ -294,21 +291,75 @@ AuthApi.prototype = {
   //
   // Fanout server implied
 
-  convCheckServerUser: function(convId, otherServerBoxPubKey,
+  /**
+   * Is the user in question, identified by their tell box key, authorized to
+   *  participate in the given conversation?
+   *
+   * @return[@promise[Boolean]]
+   */
+  convAssertServerUser: function(convId, otherServerBoxPubKey,
                                 otherUserTellBoxPubKey) {
-    return this._db.boolcheckRowCell(TBL_CONV_AUTH,
-                                     convId,
-                                     "u:" + otherServerBoxPubKey + ":" +
-                                       otherUserTellBoxPubKey);
+    return this._db.assertBoolcheckRowCell(TBL_CONV_AUTH, convId,
+             "u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey);
   },
 
+  convAssertServerUser: function(convId, otherServerBoxPubKey,
+                                 otherUserTellBoxPubKey) {
+    return this._db.assertBoolcheckRowCell(TBL_CONV_AUTH,
+             convId,
+             "u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey);
+  },
+
+  /**
+   * Get the list of all participants, namely their tell box key and server,
+   *  for a given conversation.
+   */
+  convGetParticipants: function(convId) {
+    return when(this._db.getRow(TBL_CONV_AUTH, convId), function(cells) {
+        // key is u:SERVERKEY:TELLKEY, both are boxing keys of known fixed
+        //  length.
+        var usersAndServers = [];
+        for (var key in cells) {
+          var serverKey = key.substring(2, 2 + BOX_PUB_KEYSIZE);
+          var userTellKey = key.substring(
+            2 + BOX_PUB_KEYSIZE + 1,
+            2 + BOX_PUB_KEYSIZE + 1 + BOX_PUB_KEYSIZE);
+          usersAndServers.push({userTellKey: userTellKey,
+                                userEnvelopeKey: cells[key],
+                                serverKey: serverKey});
+        }
+        return usersAndServers;
+      }
+      // rejection pass-through is fine
+    );
+  },
+
+  /**
+   * Authorize a user, identified by their tell box key, to participate in the
+   *  given conversation.
+   *
+   * Rejects if the user is already authorized; we do not provide race semantics
+   *  so the caller must ensure they have serialized calls to this API.
+   */
   convAuthorizeServerUser: function(convId, otherServerBoxPubKey,
-                                    otherUserTellBoxPubKey) {
-    var cells = {};
-    cells["u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey] = 1;
-    return $Q.all(
-      this._serverAuthorizeServer(otherServerBoxPubKey),
-      this._db.putCells(TBL_CONV_AUTH, convId, cells));
+                                    otherUserTellBoxPubKey,
+                                    otherUserEnvelopeBoxPubKey) {
+    var self = this;
+    var columnName = "u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey;
+    return when(this._db.boolcheckRowCell(TBL_CONV_AUTH, convId, columnName),
+      function(curVal) {
+        // reject if already authorized
+        if (curVal)
+          throw new Error("user already authorized"); // XXX better class wanted
+        // authorize since not
+        var cells = {};
+        cells[columnName] = otherUserTellBoxPubKey;
+        return $Q.all(
+          self._serverAuthorizeServer(otherServerBoxPubKey),
+          self._db.putCells(TBL_CONV_AUTH, convId, cells));
+      }
+      // rejection pass-through is fine
+    );
   },
 
   //////////////////////////////////////////////////////////////////////////////

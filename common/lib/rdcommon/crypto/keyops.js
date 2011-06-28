@@ -558,6 +558,8 @@ exports.generalVerifySignatureUtf8 = $nacl.sign_open_utf8;
 exports.generalPeekInsideSignature = $nacl.sign_peek;
 exports.generalPeekInsideSignatureUtf8 = $nacl.sign_peek_utf8;
 
+exports.makeBoxNonce = $nacl.box_random_nonce;
+
 exports.makeSecretBoxKey = $nacl.secretbox_random_key;
 exports.makeSecretBoxNonce = $nacl.secretbox_random_nonce;
 
@@ -565,5 +567,10 @@ exports.secretBox = $nacl.secretbox;
 exports.secretBoxUtf8 = $nacl.secretbox_utf8;
 exports.secretBoxOpen = $nacl.secretbox_open;
 exports.secretBoxOpenUtf8 = $nacl.secretbox_open_utf8;
+
+exports.boxPublicKeyLength = nacl.box_PUBLICKEYBYTES;
+exports.boxSecretKeyLength = nacl.box_SECRETKEYBYTES;
+exports.secretboxKeyLength = nacl.secretbox_KEYBYTES;
+exports.authKeyLength = nacl.auth_KEYBYTES;
 
 }); // end define

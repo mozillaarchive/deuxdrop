@@ -184,9 +184,15 @@ MailsenderLocalApi.prototype = {
     );
   },
 
+  /**
+   * @args[
+   *   @param[envelope SSTransitEnvelope]
+   *   @param[serverPublicBoxKey]
+   * ]
+   */
   sendServerEnvelopeToServer: function(envelope, serverPublicBoxKey) {
     if (serverPublicBoxKey === this._config.keyring.boxingPublicKey) {
-      // XXX we should idealy not be directly accessing the task
+      // XXX we should ideally not be directly accessing the task
       return new $maildrop_server.FanoutToUserMessageTask({
           envelope: envelope,
           otherServerKey: serverPublicBoxKey,
@@ -197,7 +203,7 @@ MailsenderLocalApi.prototype = {
     return when(this.getServerUrl(serverPublicBoxKey), function(url) {
        var deliveryConn = new $mailsender_server.SendDeliveryConnection(
                                 'deliverServer',
-                                outerEnvelope, this._config.keyring,
+                                envelope, this._config.keyring,
                                 serverPublicBoxKey, url, self._log);
        return when(deliveryConn.promise,
          null, // pass-through fulfillment is fine
