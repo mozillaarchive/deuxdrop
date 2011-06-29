@@ -479,8 +479,8 @@ moda.on({
     transport.startConversation(args);
   };
 
-  moda.signIn = function (id, name, callback) {
-    return transport.signIn(id, name, callback);
+  moda.signIn = function (assertion, callback) {
+    return transport.signIn(assertion, callback);
   };
 
   moda.signOut = function (callback) {

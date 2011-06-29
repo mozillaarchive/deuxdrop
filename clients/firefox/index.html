@@ -24,7 +24,8 @@
         {
           baseUrl: '../deps',
           paths: {
-            'socket.io': '/socket.io/socket.io'
+            'socket.io': '/socket.io/socket.io',
+            'browserId': 'https://browserid.org/include',
           }
         },
         ['../firefox/js/main']
@@ -36,11 +37,9 @@
     <div id="cardContainer">
       <div id="cards">
         <div data-cardid="signIn" title="Sign In" class="card">
-          <form class="signInForm">
-            <div>Email: <input name="id" type="email" required></div>
-            <div>Name: <input name="name" type="text" required></div>
-            <button name="submit">Sign In</button>
-          </form>
+          <div class="scroller">
+            <a class="item" data-nonav="nonav" href="#browserIdSignIn"><img src="https://browserid.org/i/sign_in_blue.png" align="absmiddle">Sign In With BrowserID</a>
+          </div>
         </div>
         <div data-cardid="start" title="Deuxdrop" class="card">
           <div class="scroller">

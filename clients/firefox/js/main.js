@@ -36,7 +36,8 @@
 
 /*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false, document: false, setTimeout: false, history: false,
-  setInterval: false, location: true, window: true */
+  setInterval: false, location: true, window: true, navigator: false,
+  alert: false */
 
 /**
  * Main JS file, bootstraps the logic.
@@ -53,9 +54,13 @@ define(function (require) {
       cards = require('cards'),
       moda = require('moda'),
       friendly = require('friendly'),
+      browserId = require('browserId'),
 
       commonNodes = {},
       peeps, update, messageCloneNode, notifyDom, nodelessActions;
+
+  // Browser ID is not actually a module, get a handle on it now.
+  browserId = navigator.id;
 
   function getChildCloneNode(node) {
     // Try on the actual node, and if not there, check the scroller node
@@ -173,6 +178,22 @@ define(function (require) {
 
   // Set up card update actions.
   update = {
+    'browserIdSignIn': function (data, dom) {
+      browserId.getVerifiedEmail(function (assertion) {
+        if (assertion) {
+          moda.signIn(assertion, function (me) {
+            // Remove the sign in card
+            $('[data-cardid="signIn"]', '#cardContainer').remove();
+
+            // Show the start card
+            cards.onNav('start', {});
+          });
+        } else {
+          // Do not do anything. User stays on sign in screen.
+        }
+      });
+    },
+
     'start': function (data, dom) {
       // Use user ID as the title
       dom[0].title = moda.me().id;
@@ -416,6 +437,13 @@ define(function (require) {
       moda.listUnseen();
     },
 
+    'signedOut': function () {
+      // User signed out/no longer valid.
+      // Clear out all the cards and go back to start
+      // TODO handle better.
+      alert('got signed out');
+    },
+
     'message': function (message) {
       var card = cards.currentCard();
 
@@ -481,6 +509,7 @@ define(function (require) {
     nodelessActions = {
       'addPeep': true,
       'notify': true,
+      'browserIdSignIn': true,
       'signOut': true
     };
 
@@ -515,23 +544,6 @@ define(function (require) {
     };
 
     $('body')
-      // Handle sign in form
-      .delegate('.signInForm', 'submit', function (evt) {
-        evt.preventDefault();
-
-        var formDom = $(evt.target),
-            id = formDom.find('[name="id"]').val(),
-            name = formDom.find('[name="name"]').val();
-
-        moda.signIn(id, name, function (me) {
-          // Remove the sign in card
-          $('[data-cardid="signIn"]', '#cardContainer').remove();
-
-          // Show the start card
-          cards.onNav('start', {});
-        });
-      })
-
       // Handle compose from a peep screen.
       .delegate('[data-cardid="peep"] .compose', 'submit', function (evt) {
         evt.preventDefault();
