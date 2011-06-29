@@ -1,5 +1,35 @@
 
+define(function(require, exports) {
+
 //Sample server taken from socket.io examples and hacked up.
+
+/**
+ * The double-fake server.  In a nutshell, it is a "server AND clients in a box"
+ * configuration.  Specifically, we run the 'smart' client here in the server
+ * and use the existing UI fake-server protocol that backs the UI speculative
+ * moda implementation to expose that to the user.
+ *
+ * This operational mode does not correspond to any planned early deliverables.
+ * While we do want to support an operational mode where the user can log-in
+ * using just a web browser, this is not how we want to accomplish it.
+ *
+ * Changes from single-fake server, in short:
+ * - All our storage in this file uses our gendb abstraction talking to redis
+ *    on redis database #3 (select(3)) which we are requiring no one else to
+ *    touch.  We namespace our use in this file with "FAKE", we namespace the
+ *    server with "SERVER", and clients with "CLIENT:<NAME>".
+ *
+ * - On startup we spin-up a fullpub configuration server.  Its identity is
+ *    persisted to/from our redis store.
+ *
+ * - On sign-in we create a rawclient instance using a per-user blob that we
+ *    store in redis.  (In reality, this would come from the device's local
+ *    storage somehow.)  Each rawclient is provided with a namespaced redis
+ *    db connection.
+ *
+ * - All existing operations that used direct redis operations are now
+ *    implemented in terms of rawclient.
+ **/
 
 /*jslint strict: false, nomen: false, indent: 2, plusplus: false */
 /*global require: false, process: false, __dirname: false, console: false */
@@ -10,12 +40,13 @@ var http = require('http'),
     path = require('path'),
     sys = require(process.binding('natives').util ? 'util' : 'sys'),
     io = require('socket.io'),
-    redisLib = require('redis'),
     paperboy = require('paperboy'),
-    md5 = require('md5'),
-    clients = {},
+    md5 = require('md5');
+
+var $gendb = require('rdservers/gendb/redis');
+
+var clients = {},
     convCache = {},
-    redis = redisLib.createClient(),
     server, actions, listener;
 
 function send(id, message) {
@@ -448,42 +479,46 @@ actions = {
 
 };
 
-server = http.createServer(function (req, res) {
-  //Normal HTTP server stuff
-  var ip = req.connection.remoteAddress;
-  paperboy
-    .deliver(path.join(__dirname, '.'), req, res)
-    .addHeader('Expires', 300)
-    .error(function (statCode, msg) {
-      res.writeHead(statCode, {'Content-Type': 'text/plain'});
-      res.end("Error " + statCode);
-      console.log(statCode, req.url, ip, msg);
-    })
-    .otherwise(function (err) {
-      res.writeHead(404, {'Content-Type': 'text/plain'});
-      res.end("Error 404: File not found");
-      console.log(404, req.url, ip, err);
+exports.goForthAndBeFake = function(listenPort) {
+  server = http.createServer(function (req, res) {
+    //Normal HTTP server stuff
+    var ip = req.connection.remoteAddress;
+    paperboy
+      .deliver(path.join(__dirname, '.'), req, res)
+      .addHeader('Expires', 300)
+      .error(function (statCode, msg) {
+        res.writeHead(statCode, {'Content-Type': 'text/plain'});
+        res.end("Error " + statCode);
+        console.log(statCode, req.url, ip, msg);
+      })
+      .otherwise(function (err) {
+        res.writeHead(404, {'Content-Type': 'text/plain'});
+        res.end("Error 404: File not found");
+        console.log(404, req.url, ip, err);
+      });
+  });
+
+  server.listen(listenPort);
+
+  listener = io.listen(server, {
+    transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+  });
+
+  listener.sockets.on('connection', function (client) {
+    //client.send({ buffer: buffer });
+    //client.broadcast({ announcement: client.sessionId + ' connected' });
+
+    client.on('serverMessage', function (message) {
+      message = JSON.parse(message);
+
+      actions[message.action](message, client);
+      //client.broadcast(msg);
     });
-});
 
-server.listen(process.env.PORT || 8888);
-
-listener = io.listen(server, {
-  transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-});
-
-listener.sockets.on('connection', function (client) {
-  //client.send({ buffer: buffer });
-  //client.broadcast({ announcement: client.sessionId + ' connected' });
-
-  client.on('serverMessage', function (message) {
-    message = JSON.parse(message);
-
-    actions[message.action](message, client);
-    //client.broadcast(msg);
+    client.on('disconnect', function () {
+      actions.disconnect({}, client);
+    });
   });
+};
 
-  client.on('disconnect', function () {
-    actions.disconnect({}, client);
-  });
-});
+}); // end define
