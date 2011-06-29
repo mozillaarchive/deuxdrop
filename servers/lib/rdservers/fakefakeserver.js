@@ -41,13 +41,16 @@ var http = require('http'),
     sys = require(process.binding('natives').util ? 'util' : 'sys'),
     io = require('socket.io'),
     paperboy = require('paperboy'),
-    md5 = require('md5');
+    md5 = require('md5'),
+    $Q = require('q');
 
-var $gendb = require('rdservers/gendb/redis');
+var $gendb = require('rdservers/gendb/redis'),
+    $configurer = require('rdservers/configurer');
 
 var clients = {},
     convCache = {},
-    server, actions, listener;
+    server, actions, listener,
+    dbFake, dbServer;
 
 function send(id, message) {
   var clientList = clients[id];
@@ -117,6 +120,24 @@ actions = {
               md5.hex_md5(id.trim().toLowerCase());
 
     client._deuxUserId = id;
+
+    function fallbackMakeClient() {
+      var poco = {
+        displayName: name,
+      };
+      var rawClient = $rawclient.makeClientForNewIdentity(poco, db, null);
+      client._rawClient = rawClient;
+    };
+    var db = makeDbConn('CLIENT:' + id);
+    $Q.when($rawclient.getClientForExistingIdentityFromStorage(db, null),
+      function(rawClient) {
+        if (rawClient)
+          client._rawClient = rawClient;
+        else
+          fallbackMakeClient();
+      },
+      fallbackMakeClient
+    );
 
     //Add the user ID to the list of users.
     redis.sadd('users', id);
@@ -479,12 +500,26 @@ actions = {
 
 };
 
-exports.goForthAndBeFake = function(listenPort) {
+function makeDbConn(prefix) {
+  var db = new $gendb.RedisDbConn({host: '127.0.0.1', port: 6379}, prefix);
+  db._conn.select(3);
+  return db;
+}
+
+const FAKE_IN_ONE_SERVER_URL = 'localhost:7999';
+exports.goForthAndBeFake = function(webPort) {
+  dbFake = makeDbConn('FAKE');
+  dbServer = makeDbConn('SERVER');
+
+  // note: this asynchronously creates
+  $configurer.loadOrCreateAndPersistServerJustMakeItGo(
+    dbServer, FAKE_IN_ONE_SERVER_URL);
+
   server = http.createServer(function (req, res) {
     //Normal HTTP server stuff
     var ip = req.connection.remoteAddress;
     paperboy
-      .deliver(path.join(__dirname, '.'), req, res)
+      .deliver(path.join(__dirname, '../../clients'), req, res)
       .addHeader('Expires', 300)
       .error(function (statCode, msg) {
         res.writeHead(statCode, {'Content-Type': 'text/plain'});
@@ -498,10 +533,11 @@ exports.goForthAndBeFake = function(listenPort) {
       });
   });
 
-  server.listen(listenPort);
+  server.listen(webPort);
 
   listener = io.listen(server, {
-    transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+    transports: ['websocket', 'htmlfile', 'xhr-multipart',
+                 'xhr-polling', 'jsonp-polling']
   });
 
   listener.sockets.on('connection', function (client) {

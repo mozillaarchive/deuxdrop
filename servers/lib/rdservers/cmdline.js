@@ -153,7 +153,7 @@ parser.command('define-server')
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
-      $configurer.createConfig(ops.configDir, opts);
+      $configurer.cmdCreateConfig(ops.configDir, opts);
     });
   });
 
@@ -164,7 +164,7 @@ parser.command('run-server')
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
-      $configurer.runConfig(opts.configDir);
+      $configurer.cmdRunConfig(opts.configDir);
     });
   });
 
@@ -175,7 +175,7 @@ parser.command('nuke-server')
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
-      $configurer.nukeConfig(opts.configDir);
+      $configurer.cmdNukeConfig(opts.configDir);
     });
   });
 
@@ -183,11 +183,15 @@ parser.command('fake-in-one')
   .help("All-in-one fake server with node-hosted crammed-in clients using " +
         "the fake-server bridge; NEVER USE IN THE REAL WORLD AT ALL.")
   .opts({
-    listenPort: OPT_LISTEN_PORT
+    webPort: {
+      string: "--web-port",
+      default: 8888,
+      help: "What port should we listen on to be fake on?",
+    },
   })
   .callback(function(options) {
     require(['rdservers/fakefakeserver'], function($doublefake) {
-      $doublefake.goForthAndBeFake(options.listenPort);
+      $doublefake.goForthAndBeFake(options.webPort);
     });
   });
 

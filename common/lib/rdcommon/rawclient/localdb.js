@@ -166,9 +166,8 @@ function LocalStore(dbConn) {
 
   this._db.defineReorderableIndex(IDX_ALL_CONVS);
   this._db.defineReorderableIndex(IDX_PEEP_CONV_INVOLVEMENT);
-
-
 }
+exports.LocalStore = LocalStore;
 LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Internal Helpers
@@ -180,7 +179,7 @@ LocalStore.prototype = {
   // Notifications
 
   __notifyNewMessagesInConversation: function(convId, msgDataItems) {
-    
+
   },
 
   //////////////////////////////////////////////////////////////////////////////

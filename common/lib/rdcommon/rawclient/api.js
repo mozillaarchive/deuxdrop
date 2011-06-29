@@ -67,6 +67,7 @@ define(
     'rdcommon/crypto/keyring',
     'rdcommon/identities/pubident',
     '../messages/generator',
+    './localdb',
     'module',
     'exports'
   ],
@@ -77,6 +78,7 @@ define(
     $keyring,
     $pubident,
     $msg_gen,
+    $localdb,
     $module,
     exports
   ) {
@@ -213,7 +215,10 @@ MailstoreConn.prototype = {
  *  authenticator and then verify it, it does avoid us having to write a second
  *  code-path.
  */
-function RawClientAPI(persistedBlob, _logger) {
+function RawClientAPI(persistedBlob, dbConn, _logger) {
+  this._dbConn = dbConn;
+  this._store = new $localdb.LocalStore(dbConn);
+
   // -- restore keyrings
   this._rootKeyring = $keyring.loadPersonRootSigningKeyring(
                         persistedBlob.keyrings.root);
@@ -606,10 +611,13 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
 };
 
+const TBL_IDENTITY_STORAGE = 'rawClient:persisted';
+
 /**
- * Create a new identity using the provided portable contacts schema.
+ * Create a new identity using the provided portable contacts schema and using
+ *  the provided db connection for persistance.
  */
-exports.makeClientForNewIdentity = function(poco, _logger) {
+exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
   // -- keys
   // - create the keyrings.
   var rootKeyring, longtermKeyring, keyring;
@@ -649,11 +657,36 @@ exports.makeClientForNewIdentity = function(poco, _logger) {
     otherClientAuths: [],
   };
 
-  return new RawClientAPI(persistedBlob, _logger);
+  return new RawClientAPI(persistedBlob, dbConn, _logger);
 };
 
-exports.getClientForExistingIdentity = function(persistedBlob, _logger) {
-  return new RawClientAPI(persistedBlob, _logger);
+/**
+ * Create a new client from a pre-existing blob; this is intended only for
+ *  weird cloning variations and `getClientForExistingIdentityFromStorage` is
+ *  probably what you want to use if you are on a device.
+ */
+exports.getClientForExistingIdentity = function(persistedBlob, dbConn,
+                                                _logger) {
+  return new RawClientAPI(persistedBlob, dbConn, _logger);
+};
+
+/**
+ * Create client instance using its persisted state from storage on the given
+ *  connection.  If there is no persisted state, returns null in which case
+ *  you want to use `makeClientForNewIdentity`.
+ * This returns a promise since database access is always async.
+ *
+ * XXX not currently implemented but desired
+ */
+exports.getClientForExistingIdentityFromStorage = function(dbConn, _logger) {
+  return $Q.when(dbConn.getRowCell(TBL_IDENTITY_STORAGE, 'me', 'p:me'),
+    function(jsonStr) {
+      if (!jsonStr)
+        return null;
+      return new RawClientAPI(JSON.parse(jsonStr, dbConn, _logger));
+    }
+    // rejection pass-through is fine
+  );
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {

@@ -44,22 +44,58 @@
  *  to make sure we don't get too unit test specific.
  **/
 
-define(
-  [
-    'fs', 'path',
-    'exports'
-  ],
-  function(
-    $fs, $path,
-    exports
-  ) {
+define(function(require, exports) {
 
-const CONFIG_DIR_MODE = parseInt("700", 8);
-const CONFIG_FILE_NAME = 'config.json';
+var $fs = require('fs'), $path = require('path'),
+    $Q = require('q');
 
-function ServerConfig(keyring, selfIdentBlob) {
+var $keyring = require('rdcommon/crypto/keyring'),
+    $pubident = require('rdcommon/identities/pubident');
+
+var $signup_server = require('rdservers/signup/server'),
+    $authdb_api = require('rdservers/authdb/api'),
+    $maildrop_local_api = require('rdservers/maildrop/localapi'),
+    $maildrop_server = require('rdservers/maildrop/server'),
+    $mailsender_local_api = require('rdservers/mailsender/localapi'),
+    $mailstore_api = require('rdservers/mailstore/api'),
+    $mailstore_server = require('rdservers/mailstore/server'),
+    $fanout_api = require('rdservers/fanout/api');
+
+/**
+ * Server roles in a weakly ordered sequence.
+ */
+var SERVER_ROLE_MODULES = {
+  auth: {
+    apiModule: $authdb_api,
+    serverModule: null,
+  },
+  signup: {
+    apiModule: null,
+    serverModule: $signup_server,
+  },
+  drop: { // needs 'auth'
+    apiModule: $maildrop_local_api,
+    serverModule: $maildrop_server,
+  },
+  sender: {
+    apiModule: $mailsender_local_api,
+    serverModule: null,
+  },
+  fanout: {
+    apiModule: $fanout_api,
+    serverModule: null,
+  },
+  store: {
+    apiModule: $mailstore_api,
+    serverModule: $mailstore_server,
+  },
+};
+
+function ServerConfig(keyring, selfIdentBlob, dbConn) {
   this.keyring = keyring;
   this.selfIdentBlob = selfIdentBlob;
+  this.db = db;
+  this._serverModules = [];
 }
 ServerConfig.prototype = {
   toJSON: function() {
@@ -67,15 +103,110 @@ ServerConfig.prototype = {
       type: 'ServerConfig',
     };
   },
+
+  __registerServers: function(server) {
+    for (var i = 0; i < this._serverModules.length; i++) {
+      server.registerServer(
+        this._serverModules[i].makeServerDef(this));
+    }
+  },
 };
 
-function saveConfig(config, configDir) {
+var FULLPUB_ROLES = exports.FULLPUB_ROLES =
+  ['auth', 'signup', 'drop', 'sender', 'fanout', 'store'];
+
+function createServerConfigFromScratch(url, dbConn, _logger) {
+  var rootKeyring = $keyring.createNewServerRootKeyring(),
+      keyring = rootKeyring.issueLongtermBoxingKeyring();
+
+  var details = {
+    tag: 'server:fakefake',
+    url: url,
+  };
+  var signedSelfIdent =
+    $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
+
+  // yes, we are throwing away the root ring.
+  return populateTestConfig(keyring, signedSelfIdent, dbConn,
+                            FULLPUB_ROLES, _logger);
+}
+
+const TBL_SERVER_IDENTITY = 'server:identity';
+
+/**
+ * Stop-gap serving starting mechanism driven by the fake-in-one server's need
+ *  to create a persistent server.
+ */
+exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, url,
+                                                            _logger) {
+  return $Q.when(dbConn.getRowCell(TBL_SERVER_IDENTITY, 'me', 'p:me'),
+    function(jsonStr) {
+      var serverConfig;
+      if (!jsonStr) {
+        serverConfig = createServerConfigFromScratch(url, dbConn, _logger);
+        dbConn.putCells(TBL_SERVER_IDENTITY, 'me',
+          {
+            'p:me': {
+              keyring: serverConfig.data,
+              selfIdentBlob: serverConfig.selfIdentBlob,
+            }
+          });
+      }
+      else {
+        var persisted = JSON.parse(jsonStr);
+        serverConfig = populateTestConfig(
+                         $keyring.loadLongtermBoxingKeyring(persisted.keyring),
+                         persisted.selfIdentBlob,
+                         dbConn,
+                         FULLPUB_ROLES,
+                         _logger);
+      }
+
+      return serverConfig;
+    },
+    function() {
+      console.error("DB problem loading server information.");
+    });
+};
+
+/**
+ * Populate a `ServerConfig` for a unit test that has already done most of the
+ *  legwork itself.  This exists because unit tests take whatever port they
+ *  can get and can't know it a priori.
+ */
+var populateTestConfig = exports.__populateTestConfig =
+    function populateTestConfig(keyring,
+                                                           selfIdentBlob,
+                                                           dbConn,
+                                                           roles, _logger) {
+  var serverConfig = new ServerConfig(keyring, selfIdentBlob);
+
+  for (var iRole = 0; iRole < roles.length; iRole++) {
+    var roleName = roles[iRole];
+    var serverRoleInfo = SERVER_ROLE_MODULES[roleName];
+    if (serverRoleInfo.apiModule) {
+      serverConfig[roleName + 'Api'] =
+        new serverRoleInfo.apiModule.Api(serverConfig, dbConn, _logger);
+    }
+    if (serverRoleInfo.serverModule)
+      serverConfig._serverModules.push(serverRoleInfo.serverModule);
+  }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Directory-Based Persistence
+
+const CONFIG_DIR_MODE = parseInt("700", 8);
+const CONFIG_FILE_NAME = 'config.json';
+
+function saveConfigToDir(config, configDir) {
   var jsonConfig = JSON.stringify(config, null, 2);
   var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
   $fs.writeFileSync(configFilePath, jsonConfig);
 }
 
-function loadConfig(configDir) {
+function loadConfigFromDir(configDir) {
   var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
   if (!$path.existsSync(configFilePath))
     throw new Error("The configuration file '" + configFilePath +
@@ -85,10 +216,15 @@ function loadConfig(configDir) {
   return JSON.parse(jsonConfig);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Command-Line Commands
+//
+// Speculative commands already speculatively called by the command-line.
+
 /**
  * Create a server configuration from scratch.
  */
-exports.createConfig = function createConfig(configDir, opts) {
+exports.cmdCreateConfig = function createConfig(configDir, opts) {
   // -- explode if the directory already exists
   if ($path.existsSync(configDir))
     throw new Error("configuration directory '" + configDir +
@@ -99,20 +235,11 @@ exports.createConfig = function createConfig(configDir, opts) {
 
   // - create the keys / identity
 
-  saveConfig(config, configDir);
+  saveConfigToDir(config, configDir);
 };
 
-/**
- * Populate a `ServerConfig` for a unit test that has already done most of the
- *  legwork itself.
- */
-exports.__populateTestConfig = function populateTestConfig(keyring,
-                                                           selfIdentBlob) {
-  return new ServerConfig(keyring, selfIdentBlob);
-};
-
-exports.runConfig = function runConfig(configDir) {
-  var config = loadConfig(configDir);
+exports.cmdRunConfig = function runConfig(configDir) {
+  var config = loadConfigFromDir(configDir);
 
   // -- instantiate the server
 
@@ -120,10 +247,12 @@ exports.runConfig = function runConfig(configDir) {
   // -- bundle up the endpoints for the server def
 };
 
-exports.nukeConfig = function nukeConfig(configDir) {
-  var config = loadConfig(configDir);
+exports.cmdNukeConfig = function nukeConfig(configDir) {
+  var config = loadConfigFromDir(configDir);
 
   // -- perform hbase cleanup
 };
+
+////////////////////////////////////////////////////////////////////////////////
 
 }); // end define

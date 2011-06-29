@@ -50,16 +50,7 @@ var $log = require('rdcommon/log'),
     $keyring = require('rdcommon/crypto/keyring'),
     $pubident = require('rdcommon/identities/pubident');
 
-var $gendb = require('rdservers/gendb/redis');
-
-var $signup_server = require('rdservers/signup/server'),
-    $authdb_api = require('rdservers/authdb/api'),
-    $maildrop_local_api = require('rdservers/maildrop/localapi'),
-    $maildrop_server = require('rdservers/maildrop/server'),
-    $mailsender_local_api = require('rdservers/mailsender/localapi'),
-    $mailstore_api = require('rdservers/mailstore/api'),
-    $mailstore_server = require('rdservers/mailstore/server'),
-    $fanout_api = require('rdservers/fanout/api'),
+var $gendb = require('rdservers/gendb/redis'),
     $configurer = require('rdservers/configurer');
 
 var TestClientActorMixins = {
@@ -252,36 +243,6 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
 };
 
-/**
- * Server roles in a weakly ordered sequence.
- */
-var SERVER_ROLE_MODULES = {
-  auth: {
-    apiModule: $authdb_api,
-    serverModule: null,
-  },
-  signup: {
-    apiModule: null,
-    serverModule: $signup_server,
-  },
-  drop: { // needs 'auth'
-    apiModule: $maildrop_local_api,
-    serverModule: $maildrop_server,
-  },
-  sender: {
-    apiModule: $mailsender_local_api,
-    serverModule: null,
-  },
-  fanout: {
-    apiModule: $fanout_api,
-    serverModule: null,
-  },
-  store: {
-    apiModule: $mailstore_api,
-    serverModule: $mailstore_server,
-  },
-};
-
 var TestServerActorMixins = {
   __constructor: function(self, opts) {
     self._eServer = self.T.actor('server', self.__name, null, self);
@@ -320,24 +281,11 @@ var TestServerActorMixins = {
       var signedSelfIdent = self.__signedSelfIdentBlob =
         $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
 
-      var serverConfig = self._config = $configurer.__populateTestConfig(
-                                         keyring, signedSelfIdent);
-
       // -- create api's, bind server definitions
-      var roles = opts.roles;
-      for (var iRole = 0; iRole < roles.length; iRole++) {
-        var roleName = roles[iRole];
-        var serverRoleInfo = SERVER_ROLE_MODULES[roleName];
-        if (serverRoleInfo.apiModule) {
-          serverConfig[roleName + 'Api'] =
-            new serverRoleInfo.apiModule.Api(serverConfig,
-                                             self._db, self._logger);
-        }
-        if (serverRoleInfo.serverModule) {
-          self._server.registerServer(
-            serverRoleInfo.serverModule.makeServerDef(serverConfig));
-        }
-      }
+      var serverConfig = self._config =
+          $configurer.__populateTestConfig(keyring, signedSelfIdent,
+                                           self._db, opts.roles, self._logger);
+      serverConfig.__registerServers(self._server);
     });
     self.T.convenienceDeferredCleanup(self, 'cleans up, killing', self._eServer,
                                       'shutting down', self._eDb,

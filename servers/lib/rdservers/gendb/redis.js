@@ -319,7 +319,7 @@ const TEST_DB_OFFSET = 16;
 /**
  * Create a test connection to a test database.
  *
- * XXX theory, not done, just using db 2 for now...
+ * XXX theory, not done due to resource fears, just using db 2 for now...
  * To ensure tests get their own
  *  little world to play in, we use the process pid as a uniqueifying
  *  constraint.  Callers are still required to provide a unique name to
