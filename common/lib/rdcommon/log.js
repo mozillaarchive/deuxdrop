@@ -377,6 +377,11 @@ var TestLogProtoBase = {
     this._entries[iEntry] = entry;
   },
 
+  __mismatchEntry: function(iEntry, expected, actual) {
+    var entry = ['!mismatch', expected, actual];
+    this._entries[iEntry] = entry;
+  },
+
   __failedExpectation: function(exp) {
     var entry = ['!failedexp', exp, $microtime.now(), gSeq++];
     this._entries.push(entry);
@@ -468,6 +473,10 @@ var TestActorProtoBase = {
         this._logger.__unexpectedEntry(this._iEntry - 1, entry);
       }
       else if(!this['_verify_' + expy[0]](expy, entry)) {
+        this._logger.__mismatchEntry(this._iEntry - 1, expy, entry);
+        // things did line up correctly though, so boost the expecation number
+        //  so we don't convert subsequent expecations into unexpected ones.
+        this._iExpectation++;
       }
       else {
         this._iExpectation++;

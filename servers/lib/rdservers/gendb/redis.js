@@ -67,6 +67,7 @@ define(
     $module,
     exports
   ) {
+var when = $Q.when;
 
 function RedisDbConn(connInfo, nsprefix, _logger) {
   this._conn = $redis.createClient(connInfo.port, connInfo.host);
@@ -219,6 +220,28 @@ RedisDbConn.prototype = {
       }
       // rejection pass-through is fine, although is ambiguous versus the above
     );
+  },
+
+  /**
+   * XXX unacceptable performance characteristics on redis, non-conformant
+   *  as it relates to hbase semantics... all kinds of issues.
+   */
+  XXX_scanTableBatch_rowNames: function(tableName) {
+    var deferred = $Q.defer();
+    var prefixBase = this._prefix + ':' + tableName + ':';
+    this._conn.keys(prefixBase + '*',
+                    function(err, keynames) {
+      if (err) {
+        deferred.reject(err);
+        return;
+      }
+      var rowNames = [], offset = prefixBase.length;
+      for (var i = 0; i < keynames.length; i++) {
+        rowNames.push(keynames[i].substring(offset));
+      }
+      deferred.resolve(rowNames);
+    });
+    return deferred.promise;
   },
 
   //////////////////////////////////////////////////////////////////////////////

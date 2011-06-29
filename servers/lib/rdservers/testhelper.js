@@ -53,6 +53,8 @@ var $log = require('rdcommon/log'),
 var $gendb = require('rdservers/gendb/redis'),
     $configurer = require('rdservers/configurer');
 
+var $signup_server = require('rdservers/signup/server');
+
 var TestClientActorMixins = {
   /**
    * Automatically create an identity; a client is not much use without one.
@@ -83,10 +85,13 @@ var TestClientActorMixins = {
       self._logger = LOGFAB.testClient(self, null, self.__name);
       self._logger._actor = self;
 
+      self._db = $gendb.makeTestDBConnection(self.__name, self._logger);
+
       if (opts && opts.clone) {
         // - fork an identity with a new client keypair
         self._rawClient = $rawclient_api.getClientForExistingIdentity(
             opts.clone._rawClient.__forkNewPersistedIdentityForNewClient(),
+            self._db,
             self._logger);
         // (This leaves the thing we are cloning knowing about us, and we know
         //  about it.  But this is a pairwise thing so any other clones should
@@ -99,6 +104,7 @@ var TestClientActorMixins = {
           displayName: self.__name,
         };
         self._rawClient = $rawclient_api.makeClientForNewIdentity(poco,
+                                                                  self._db,
                                                                   self._logger);
 
         // - bind names to our public keys (so the logs are less gibberish)
@@ -290,6 +296,9 @@ var TestServerActorMixins = {
     self.T.convenienceDeferredCleanup(self, 'cleans up, killing', self._eServer,
                                       'shutting down', self._eDb,
                               function() {
+      // if we did not initialize, just bail
+      if (!self._server)
+        return;
       self._server.shutdown();
       $gendb.cleanupTestDBConnection(self._db);
 

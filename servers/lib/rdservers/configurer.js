@@ -50,7 +50,8 @@ var $fs = require('fs'), $path = require('path'),
     $Q = require('q');
 
 var $keyring = require('rdcommon/crypto/keyring'),
-    $pubident = require('rdcommon/identities/pubident');
+    $pubident = require('rdcommon/identities/pubident'),
+    $authconn = require('rdcommon/transport/authconn');
 
 var $signup_server = require('rdservers/signup/server'),
     $authdb_api = require('rdservers/authdb/api'),
@@ -94,7 +95,7 @@ var SERVER_ROLE_MODULES = {
 function ServerConfig(keyring, selfIdentBlob, dbConn) {
   this.keyring = keyring;
   this.selfIdentBlob = selfIdentBlob;
-  this.db = db;
+  this.db = dbConn;
   this._serverModules = [];
 }
 ServerConfig.prototype = {
@@ -137,8 +138,9 @@ const TBL_SERVER_IDENTITY = 'server:identity';
  * Stop-gap serving starting mechanism driven by the fake-in-one server's need
  *  to create a persistent server.
  */
-exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, url,
-                                                            _logger) {
+exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, hostname,
+                                                            port, _logger) {
+  var url = 'ws://' + hostname + ':' + port + '/';
   return $Q.when(dbConn.getRowCell(TBL_SERVER_IDENTITY, 'me', 'p:me'),
     function(jsonStr) {
       var serverConfig;
@@ -160,6 +162,10 @@ exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, url,
                          dbConn,
                          FULLPUB_ROLES,
                          _logger);
+
+        var server = serverConfig.__server =
+          new $authconn.AuthorizingServer(_logger);
+        server.listen(port);
       }
 
       return serverConfig;
@@ -191,6 +197,7 @@ var populateTestConfig = exports.__populateTestConfig =
     if (serverRoleInfo.serverModule)
       serverConfig._serverModules.push(serverRoleInfo.serverModule);
   }
+  return serverConfig;
 };
 
 

@@ -43,16 +43,20 @@
 define(
   [
     'q',
+    'rdcommon/log',
     'rdcommon/identities/pubident',
     'rdservers/maildrop/server',
     './server',
+    'module',
     'exports'
   ],
   function(
     $Q,
+    $log,
     $pubident,
     $maildrop_server,
     $mailsender_server,
+    $module,
     exports
   ) {
 var when = $Q.when;

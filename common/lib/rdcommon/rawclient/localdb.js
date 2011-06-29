@@ -165,7 +165,8 @@ function LocalStore(dbConn) {
   this._db.defineHbaseTable(TBL_CONV_DATA, ["m", "o", "d"]);
 
   this._db.defineReorderableIndex(IDX_ALL_CONVS);
-  this._db.defineReorderableIndex(IDX_PEEP_CONV_INVOLVEMENT);
+  this._db.defineReorderableIndex(IDX_PEEP_CONV_WRITE_INVOLVEMENT);
+  this._db.defineReorderableIndex(IDX_PEEP_CONV_ANY_INVOLVEMENT);
 }
 exports.LocalStore = LocalStore;
 LocalStore.prototype = {
@@ -286,7 +287,7 @@ LocalStore.prototype = {
   queryAndWatchPeepBlurbs: function(by) {
   },
 
-  loadAndWatchPeepBlurb: function() {
+  loadAndWatchPeepBlurb: function(id) {
   },
 
   unwatchPeepBlurb: function() {

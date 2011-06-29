@@ -37,6 +37,7 @@
 
 
 var DEATH_PRONE = false;
+var SUPER_DEBUG = false;
 
 var ErrorTrapper = {
   _trappedErrors: null,
@@ -47,8 +48,8 @@ var ErrorTrapper = {
     this._trappedErrors = [];
   },
   yoAnError: function(err, moduleName) {
-    if (this._trappedErrors == null) {
-      console.error("==== REQUIREJS ERR ====");
+    if (this._trappedErrors == null || SUPER_DEBUG) {
+      console.error("==== REQUIREJS ERR ====", moduleName);
       console.error(err.message);
       console.error(err.stack);
       if (DEATH_PRONE)
@@ -128,17 +129,17 @@ var OPT_CONFIG_DIR = {
   help: "The directory that holds/should hold server (configuration) data"
 };
 var OPT_SERVER_TYPE = {
-  string: "--server-type",
+  string: "--server-type=TYPE",
   default: "fullpub",
   help: "One of: fullpub, halfpub, halfpriv"
 };
 var OPT_HBASE_PREFIX = {
-  string: "--hbase-prefix",
+  string: "--hbase-prefix=PREFIX",
   default: "",
   help: "Optional namespacing prefix for the hbase table names",
 };
 var OPT_LISTEN_PORT = {
-  string: "--listen-port",
+  string: "--listen-port=PORT",
   required: true,
   help: "The port the server should listen on.",
 };
@@ -204,12 +205,22 @@ parser.command('test')
       default: null,
       help: "(optional: The require name of a specific test to run)",
     },
+    superDebug: {
+      string: "--super-debug",
+      default: false,
+      help: "Should we crank the logging up so that it emits to the console?",
+    },
   })
   .callback(function(options) {
     process.on('exit', function(code) {
       debugger;
       console.log("EXIT EVENT", code);
     });
+
+    if (options.superDebug) {
+      console.error("SUPER DEBUG");
+      SUPER_DEBUG = true;
+    }
 
     // Ideally we could slurp this from requirejs... and maybe we can, but for
     //  now...

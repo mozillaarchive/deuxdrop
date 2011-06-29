@@ -55,7 +55,7 @@
 define(
   [
     'q',
-    'keyops',
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
@@ -132,7 +132,7 @@ AuthApi.prototype = {
    * ]
    */
   serverCheckUserAccount: function(rootSignPubKey) {
-    return this._db.assertBoolcheckRowCell(
+    return this._db.boolcheckRowCell(
       TBL_USER_ACCOUNT, rootSignPubKey, "d:selfIdent");
   },
 
@@ -159,10 +159,10 @@ AuthApi.prototype = {
       accountCells["d:c:" + clientKey] = clientAuthsMap[clientKey];
       promises.push(
         this._db.putCells(TBL_CLIENT_AUTH, clientKey,
-                          {"d:rootKey": rootSignPubKey}));
+                          {"d:rootKey": rootKey}));
     }
     promises.push(
-      this._db.putCells(TBL_USER_ACCOUNT, rootSignPubKey, accountCells));
+      this._db.putCells(TBL_USER_ACCOUNT, rootKey, accountCells));
     promises.push(
       this._db.putCells(TBL_USER_TELLKEY, selfIdentPayload.keys.tellBoxPubKey,
                         {"d:rootKey": rootKey}));
@@ -182,7 +182,7 @@ AuthApi.prototype = {
     );
   },
   _serverCheckClientAuthCallback: function(val) {
-    return val !== null;
+    return !!val;
   },
 
   /**

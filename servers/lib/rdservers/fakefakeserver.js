@@ -115,9 +115,7 @@ actions = {
   'signIn': function (data, client) {
     var id = data.userId,
         name = data.userName,
-        clientList = clients[id] || (clients[id] = []),
-        pic = 'http://www.gravatar.com/avatar/' +
-              md5.hex_md5(id.trim().toLowerCase());
+        clientList = clients[id] || (clients[id] = []);
 
     client._deuxUserId = id;
 
@@ -127,6 +125,8 @@ actions = {
       };
       var rawClient = $rawclient.makeClientForNewIdentity(poco, db, null);
       client._rawClient = rawClient;
+
+      stashSelfIdent(id, rawClient._selfIdentBlob);
     };
     var db = makeDbConn('CLIENT:' + id);
     $Q.when($rawclient.getClientForExistingIdentityFromStorage(db, null),
@@ -139,21 +139,11 @@ actions = {
       fallbackMakeClient
     );
 
-    //Add the user ID to the list of users.
-    redis.sadd('users', id);
-
-    //Add the user to the store
-    redis.hmset(id, 'id', id, 'name', name, 'pic', pic);
-
     clientList.push(client);
 
     clientSend(client, data, {
       action: 'signInComplete',
-      user: {
-        id: id,
-        name: name,
-        pic: pic
-      }
+      user: userBlobify(id, name),
     });
   },
 
@@ -176,34 +166,22 @@ actions = {
   },
 
   'users': function (data, client) {
-    //Pull a list of users from redis.
-    redis.smembers('users', function (err, list) {
-      var multi;
-      if (list) {
-        list = multiBulkToStringArray(list);
-        list.sort(peepSort);
-
-        //Fetch individual user records.
-        multi = redis.multi();
-        list.forEach(function (id) {
-          multi.hgetall(id);
-        });
-        multi.exec(function (err, hashes) {
-          clientSend(client, data, {
-            action: 'usersResponse',
-            items: hashes
-          });
-        });
-      } else {
-        clientSend(client, data, {
-          action: 'usersResponse',
-          items: []
-        });
-      }
+    $Q.when(getAllUserIds(), function(userIds) {
+      clientSend(client, data, {
+        action: 'usersResponse',
+        items: userIds.map(userBlobifyId)
+      });
     });
   },
 
   'peeps': function (data, client) {
+    $Q.when(client._rawClient.store.queryAndWatchPeepBlurbs('recency'),
+            function(liveList) {
+      clientSend(client, data, {
+        action: 'peepsResponse',
+        items:
+      });
+    });
     var userId = client._deuxUserId;
 
     redis.smembers('peeps:' + userId, function (err, list) {
@@ -254,6 +232,11 @@ actions = {
     var peepId = data.peepId,
         userId = client._deuxUserId,
         multi;
+
+    // -- lookup the self-ident blob for the user
+
+    // -- issue the add request
+    client._rawClient.connectToPeepUsingSelfIdent(
 
     // Add the list to the data store
     redis.sadd('peeps:' + userId, peepId);
@@ -506,14 +489,53 @@ function makeDbConn(prefix) {
   return db;
 }
 
-const FAKE_IN_ONE_SERVER_URL = 'localhost:7999';
+const TBL_USERS = 'fake:users';
+function stashSelfIdent(id, selfIdentBlob) {
+  dbServer.putCells(TBL_USERS, id, {'d:selfIdent': selfIdentBlob});
+}
+function getSelfIdent(id) {
+  return dbServer.getRowCell(TBL_USERS, id, 'd:selfIdent');
+}
+function getAllUserIds() {
+ return dbServer.XXX_scanTableBatch_rowNames(TBL_USERS);
+}
+
+/**
+ * Generate the data structure the UI expects to describe a peep/user.  This
+ *  is code reuse to support our cop-out user-list.
+ */
+function userBlobify(id, name) {
+  var pic = 'http://www.gravatar.com/avatar/' +
+              md5.hex_md5(id.trim().toLowerCase());
+  if (name)
+    return {
+      id: id,
+      name: name,
+      pic: pic,
+    };
+  else
+    return {
+      id: id,
+      name: id,
+      pic: pic
+    };
+}
+// .map provides too many arguments; would confuse us without discard
+function userBlobifyId(id) {return userBlobify(id);};
+
+function uiifyPeepBlurb(peepBlurb) {
+}
+
+
+const FAKE_IN_ONE_SERVER_HOST = 'localhost',
+      FAKE_IN_ONE_SERVER_PORT = '7999';
 exports.goForthAndBeFake = function(webPort) {
   dbFake = makeDbConn('FAKE');
   dbServer = makeDbConn('SERVER');
 
   // note: this asynchronously creates
   $configurer.loadOrCreateAndPersistServerJustMakeItGo(
-    dbServer, FAKE_IN_ONE_SERVER_URL);
+    dbServer, FAKE_IN_ONE_SERVER_HOST, FAKE_IN_ONE_SERVER_PORT);
 
   server = http.createServer(function (req, res) {
     //Normal HTTP server stuff

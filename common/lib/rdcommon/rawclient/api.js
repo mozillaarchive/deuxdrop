@@ -217,7 +217,7 @@ MailstoreConn.prototype = {
  */
 function RawClientAPI(persistedBlob, dbConn, _logger) {
   this._dbConn = dbConn;
-  this._store = new $localdb.LocalStore(dbConn);
+  this.store = new $localdb.LocalStore(dbConn);
 
   // -- restore keyrings
   this._rootKeyring = $keyring.loadPersonRootSigningKeyring(
@@ -506,8 +506,8 @@ RawClientAPI.prototype = {
 
     // - generate the invitations for the peeps
     for (iPeep = 0; iPeep < peeps.length; iPeep++) {
-      var invitation = $msg_gen.createConversationInvitation(
-        this._keyring,
+      //var invitation = $msg_gen.createConversationInvitation(
+      //  this._keyring,
     }
 
     // - formulate the message to the fanout role
@@ -630,7 +630,7 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
   keyring.incorporateKeyGroup(
     longtermKeyring.issueKeyGroup('messaging', {
         envelope: 'box',
-        payload: 'box',
+        body: 'box',
         announce: 'sign',
         tell: 'box',
       }));

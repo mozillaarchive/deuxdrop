@@ -3,11 +3,11 @@
   "description": "Raindrop Servers",
   "version": "0.0.1",
   "dependencies": {
-    "q": ">= 0.5.2",
-    "nomnom": ">= 0.0.1",
-    "microtime": ">= 0.0.1",
-    "redis": ">= 0.0.1",
+    "q": ">= 0.6.0",
+    "nomnom": ">= 0.4.2",
+    "microtime": ">= 0.1.3-1",
+    "redis": ">= 0.6.0",
     "socket.io": ">= 0.7",
-    "paperboy": ">= 0.0.1"
+    "paperboy": ">= 0.0.2"
   }
 }
