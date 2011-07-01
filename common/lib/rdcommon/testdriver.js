@@ -506,6 +506,7 @@ console.error("  itAllGood()");
 
   ErrorTrapper.trapErrors();
   require([testModuleName], function(tmod) {
+console.error("IN TEST MODULE INVOC");
     // If there was a problem, tmod will be null (and we will have trapped
     //  an error.)
     var trappedErrors = ErrorTrapper.gobbleAndStopTrappingErrors();

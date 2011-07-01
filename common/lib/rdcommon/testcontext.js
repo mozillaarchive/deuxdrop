@@ -66,7 +66,7 @@ define(
 /**
  * Data-record class for test steps; no built-in logic.
  */
-function TestStep(_log, kind, descBits, actors, testFunc, isBoring) {
+function TestStep(_log, kind, descBits, actors, testFunc, isBoring, groupName) {
   this.kind = kind;
   this.descBits = descBits;
   this.actors = actors;
@@ -74,6 +74,8 @@ function TestStep(_log, kind, descBits, actors, testFunc, isBoring) {
 
   this.log = LOGFAB.testStep(this, _log, descBits);
   this.log.boring(isBoring);
+  if (groupName)
+    this.log.group(groupName);
 }
 TestStep.prototype = {
 };
@@ -102,6 +104,14 @@ function TestContext(testCase, permutationIndex) {
   // this is a known-but-null-by-default thing that gets copied to the JSON
   //  blob when present.
   this._log._named = {};
+
+  /**
+   * The name of the step group we are currently defining.  This is intended
+   *  as a lightweight tagging mechanism for steps so that we can use a wmsy
+   *  interposing viewslice to delineate separate groups without having to
+   *  add another layer of explicit hierarchy.
+   */
+  this._definingGroup = null;
 
   this._actors = [];
 }
@@ -261,7 +271,7 @@ TestContext.prototype = {
     }
     var testFunc = args[iArg];
     var step = new TestStep(this._log, kind, descBits, actors, testFunc,
-                            isBoring);
+                            isBoring, this._definingGroup);
     this.__steps.push(step);
     return step;
   },
@@ -280,6 +290,10 @@ TestContext.prototype = {
       }
       this._deferredSteps = null;
     }
+  },
+
+  group: function group(groupName) {
+    this._definingGroup = groupName;
   },
 
   /**
@@ -544,6 +558,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     latchState: {
       boring: false,
       result: false,
+      group: false,
     },
     errors: {
       timeout: {},
