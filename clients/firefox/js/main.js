@@ -178,20 +178,28 @@ define(function (require) {
 
   // Set up card update actions.
   update = {
-    'browserIdSignIn': function (data, dom) {
-      browserId.getVerifiedEmail(function (assertion) {
-        if (assertion) {
-          moda.signIn(assertion, function (me) {
-            // Remove the sign in card
-            $('[data-cardid="signIn"]', '#cardContainer').remove();
+    'signIn': function (data, dom) {
 
-            // Show the start card
-            cards.onNav('start', {});
+      // Create an explicit click handler to help some iphone devices,
+      // event bubbling does not allow the window to open.
+      dom.find('.browserSignIn')
+        .click(function (evt) {
+          browserId.getVerifiedEmail(function (assertion) {
+            if (assertion) {
+              moda.signIn(assertion, function (me) {
+                // Remove the sign in card
+                $('[data-cardid="signIn"]', '#cardContainer').remove();
+
+                // Show the start card
+                cards.onNav('start', {});
+              });
+            } else {
+              // Do not do anything. User stays on sign in screen.
+            }
           });
-        } else {
-          // Do not do anything. User stays on sign in screen.
-        }
-      });
+          evt.preventDefault();
+          evt.stopPropagation();
+        });
     },
 
     'start': function (data, dom) {
@@ -219,7 +227,7 @@ define(function (require) {
       history.go(jumpLength);
     },
 
-    signOut: function () {
+    'signOut': function () {
       moda.signOut(function () {
         location.reload();
       });
