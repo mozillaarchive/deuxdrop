@@ -48,9 +48,11 @@
 
 define(
   [
+    'require',
     'exports'
   ],
   function(
+    require,
     exports
   ) {
 
@@ -73,7 +75,7 @@ if (false) {
 }
 else {
   require(['path'], function($path) {
-    baseUrl = $path.resolve('.');
+    baseUrl = $path.resolve('../..');
   });
 }
 

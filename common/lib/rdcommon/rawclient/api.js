@@ -82,15 +82,17 @@ define(
     $module,
     exports
   ) {
+var when = $Q.when;
 
 /**
  * Connect to the server, give it the signup bundle, expose our result via a
  *  promise.
  */
-function ClientSignupConn(selfIdentBlob, clientAuthBlobs,
+function ClientSignupConn(selfIdentBlob, clientAuthBlobs, storeKeyringPersisted,
                           clientKeyring, serverPublicKey, serverUrl, _logger) {
   this._selfIdentBlob = selfIdentBlob;
   this._clientAuthBlobs = clientAuthBlobs;
+  this._storeKeyringPersisted = storeKeyringPersisted;
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
@@ -138,6 +140,7 @@ ClientSignupConn.prototype = {
       type: 'signup',
       selfIdent: this._selfIdentBlob,
       clientAuths: this._clientAuthBlobs,
+      storeKeyring: this._storeKeyringPersisted,
       because: {
       },
     });
@@ -147,9 +150,10 @@ ClientSignupConn.prototype = {
 /**
  * Long-duration mailstore connection.
  *
- * The connection itself is largely stateless; we send a 'deviceCheckin'
- *  whenever we (re)connect so the server knows the device's state.  Otherwise,
- *  the device maintains
+ * This connection if a friend/puppet of the `RawClientAPI` and provides no
+ *  meaningful abstraction itself.  We aren't taking much advantage of the
+ *  authconn abstraction because it is the client that holds the state and
+ *  it must outlive the connection.
  */
 function MailstoreConn(boxingKeyring, serverPublicKey, serverUrl,
                        owner, clientReplicaInfo, _logger) {
@@ -158,6 +162,12 @@ function MailstoreConn(boxingKeyring, serverPublicKey, serverUrl,
                 serverUrl, 'mailstore/mailstore', _logger);
   this._owner = owner;
   this._replicaInfo = clientReplicaInfo;
+
+  // temporary flow control
+  this.pendingAction = false;
+
+  this._bound_ackProcessedReplicaBlock =
+    this._needsbind_ackProcessedReplicaBlock.bind(this);
 }
 MailstoreConn.prototype = {
   INITIAL_STATE: 'root',
@@ -177,22 +187,42 @@ MailstoreConn.prototype = {
     this._owner._mailstoreDisconnected(this);
   },
 
+  sendAction: function(actionMsg) {
+    if (this.pendingAction)
+      throw new Error("an action was already in-flight!");
+    this.pendingAction = true;
+    this.conn.writeMessage(actionMsg);
+  },
+
   /**
    * Server acknowledging completion of a request we issued.
    */
   _msg_root_ackRequest: function() {
+    this.pendingAction = false;
+    this._owner._actionCompleted();
+    return 'root';
   },
 
   /**
    * Server pushing updates to our subscribed replicas.
    */
-  _msg_root_replicaData: function() {
+  _msg_root_replicaBlock: function(msg) {
+    return when(this._owner.store.consumeReplicaBlock(msg.block),
+                this._bound_ackProcessedReplicaBlock
+                // rejection pass-through is fine
+               );
+  },
+  _needsbind_ackProcessedReplicaBlock: function() {
+    this.conn.writeMessage({type: 'ackReplica'});
+    return 'root';
   },
 
   /**
    * Server telling us we are caught up to what it believes to be realtime.
    */
   _msg_root_replicaCaughtUp: function() {
+    this._owner._replicaCaughtUp();
+    return 'root';
   },
 };
 
@@ -217,7 +247,6 @@ MailstoreConn.prototype = {
  */
 function RawClientAPI(persistedBlob, dbConn, _logger) {
   this._dbConn = dbConn;
-  this.store = new $localdb.LocalStore(dbConn);
 
   // -- restore keyrings
   this._rootKeyring = $keyring.loadPersonRootSigningKeyring(
@@ -226,6 +255,9 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
                             persistedBlob.keyrings.longterm);
   this._keyring = $keyring.loadDelegatedKeyring(
                              persistedBlob.keyrings.general);
+
+  // -- create store
+  this.store = new $localdb.LocalStore(dbConn, this._keyring);
 
   // -- copy self-ident-blob, verify it, extract canon bits
   // (The poco bit is coming from here.)
@@ -293,12 +325,17 @@ RawClientAPI.prototype = {
                    this, {/*XXX replica Info */}, this._log);
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // MailstoreConn notifications
+
   /**
    * A notification from our `MailstoreConn` friend that it is connected and
    *  we can cram it full of stuff.
    */
   _mailstoreConnected: function() {
     this._log.connected();
+    if (this._actionQueue.length && !this._conn.pendingAction)
+      this._conn.sendAction(this._actionQueue[0]);
   },
 
   /**
@@ -314,8 +351,30 @@ RawClientAPI.prototype = {
     }
   },
 
-  _enqueueAction: function(msg) {
+  _actionCompleted: function() {
+    // we only eat the action now that it's completed
+    this._actionQueue.shift();
+    if (this._actionQueue.length)
+      this._conn.sendAction(this._actionQueue[0]);
+    else
+      this._log.allActionsProcessed();
+  },
 
+  _replicaCaughtUp: function() {
+    this._log.replicaCaughtUp();
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Actions
+
+  _enqueueAction: function(msg) {
+    this._actionQueue.push(msg);
+    if (!this._conn.pendingAction)
+      this._conn.sendAction(this._actionQueue[0]);
+  },
+
+  get hasPendingActions() {
+    return this._actionQueue.length > 0;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -327,6 +386,10 @@ RawClientAPI.prototype = {
 
   get longtermSigningPublicKey() {
     return this._keyring.signingPublicKey;
+  },
+
+  get tellBoxKey() {
+    return this._keyring.getPublicKeyFor('messaging', 'tellBox');
   },
 
   /**
@@ -409,6 +472,8 @@ RawClientAPI.prototype = {
       .concat(this._otherClientAuths);
     this._signupConn = new ClientSignupConn(
                          this._selfIdentBlob, clientAuthBlobs,
+                         this._keyring.exportKeypairForAgentUse('messaging',
+                                                                'envelopeBox'),
                          this._keyring.exposeSimpleBoxingKeyringFor('client',
                                                                     'connBox'),
                          serverSelfIdent.publicKey,
@@ -462,21 +527,33 @@ RawClientAPI.prototype = {
   },
 
   connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco) {
-    // generate an OtherPersonIdentPayload
+    var identPayload = $pubident.assertGetPersonSelfIdent(personSelfIdentBlob);
+
+    // generate and secretbox an OtherPersonIdentPayload for replica purposes
     var otherPersonIdentBlob = $pubident.generateOtherPersonIdent(
       this._longtermKeyring, personSelfIdentBlob, localPoco);
 
+    var replicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
+      'addContact',
+      {
+        rootKey: identPayload.root.rootSignPubKey,
+        oident: otherPersonIdentBlob,
+      });
+
     this._enqueueAction({
       type: 'addContact',
-      otherPersonIdent: otherPersonIdentBlob,
+      userRootKey: identPayload.root.rootSignPubKey,
+      userTellKey: identPayload.keys.tellBoxPubKey,
+      serverSelfIdent: identPayload.transitServerIdent,
+      replicaBlock: replicaBlock
     });
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Peep Mutation
 
-  pinPeep: function() {
-    // - retrieve the existing meta-data blob
+  pinPeep: function(peep) {
+    // (we already have the meta-data for the peep)
     // - modify the blob
     // - generate a new attestation
   },
@@ -639,6 +716,12 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
   keyring.incorporateKeyGroup(
     longtermKeyring.issueKeyGroup('client', {conn: 'box'}, 'client'));
 
+  // - create the client replica keys
+  keyring.incorporateSecretBoxKey(
+    longtermKeyring.generateSecretBoxKey('replicaSbox'));
+  keyring.incorporateAuthKey(
+    longtermKeyring.generateAuthKey('replicaAuth'));
+
   // -- create the server-less self-ident
   var personSelfIdentBlob = $pubident.generatePersonSelfIdent(
                               longtermKeyring, keyring,
@@ -715,6 +798,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       connecting: {},
       connected: {},
       disconnected: {},
+
+      allActionsProcessed: {},
+      replicaCaughtUp: {},
     },
     errors: {
       signupFailure: {},

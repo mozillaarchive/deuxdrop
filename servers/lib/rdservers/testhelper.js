@@ -46,6 +46,7 @@ var $Q = require('q'),
 
 var $log = require('rdcommon/log'),
     $rawclient_api = require('rdcommon/rawclient/api'),
+    $client_localdb = require('rdcommon/rawclient/localdb'),
     $authconn = require('rdcommon/transport/authconn'),
     $keyring = require('rdcommon/crypto/keyring'),
     $pubident = require('rdcommon/identities/pubident');
@@ -108,14 +109,17 @@ var TestClientActorMixins = {
                                                                   self._logger);
 
         // - bind names to our public keys (so the logs are less gibberish)
-        self.T.thing('key', self.__name + ' root',
-                     self._rawClient.rootPublicKey);
-        self.T.thing('key', self.__name + ' longterm',
-                     self._rawClient.longtermSigningPublicKey);
+        self.T.ownedThing(self, 'key', self.__name + ' root',
+                          self._rawClient.rootPublicKey);
+        self.T.ownedThing(self, 'key', self.__name + ' longterm',
+                          self._rawClient.longtermSigningPublicKey);
+
+        self.T.ownedThing(self, 'key', self.__name + ' tell',
+                          self._rawClient.tellBoxKey);
       }
 
-      self.T.thing('key', self.__name + ' client',
-                   self._rawClient.clientPublicKey);
+      self.T.ownedThing(self, 'key', self.__name + ' client',
+                        self._rawClient.clientPublicKey);
     });
   },
 
@@ -164,12 +168,20 @@ var TestClientActorMixins = {
   // Mailstore Connection
 
   /**
-   * Connect to the mailstore and generate an appropriate expectation.
+   * Connect to the mailstore, expecting the connection to succeed and
+   *  deviceCheckin to complete including all replica data to be received.
    */
   connect: function() {
     this.RT.reportActiveActorThisStep(this._eRawClient);
+    this.RT.reportActiveActorThisStep(this._usingServer._eServer);
+
     this._eRawClient.expect_connecting();
     this._eRawClient.expect_connected();
+    this._eRawClient.expect_replicaCaughtUp();
+
+    this._usingServer._eServer.expect_request('mailstore/mailstore');
+    this._usingServer._eServer.expect_endpointConn('mailstore/mailstore');
+
     this._rawClient._connect();
   },
 
@@ -184,9 +196,52 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Contacts
 
+  /**
+   * Add another client as a contact of ours *using magical self-ident knowing*
+   *  as the means of knowing the other contact's identity.
+   *
+   * We place our expectation on our mailstore server acknowledging the
+   *  completion of our request.
+   */
   addContact: function(other) {
-    this._eRawClient.connectToPeepUsingSelfIdent(
-      other._eRawClient._selfIdentBlob);
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eRawClient.expect_allActionsProcessed();
+
+    this._rawClient.connectToPeepUsingSelfIdent(
+      other._rawClient._selfIdentBlob);
+  },
+
+  setup_addContact: function(other) {
+    var self = this;
+    return this.T.convenienceSetup(self, 'add contact of', other, function() {
+      self.addContact(other);
+      //focal._usingServer.expect_clientAddedContact(focal, other);
+    });
+  },
+
+  expectReplicaUpdate: function() {
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eRawClient.expect_replicaCaughtUp();
+  },
+
+  /**
+   * Assert that the client, per its local store, has a contact for the user
+   *  represented by the provided client.
+   */
+  assertClientHasContact: function(other) {
+    var userRootKey = this._rawClient.rootPublicKey,
+        otherRootKey = other._rawClient.rootPublicKey;
+
+    var storeDb = this._rawClient.store._db;
+    this.expect_localStoreContactCheck(userRootKey, otherRootKey, true);
+
+    var self = this;
+    when(storeDb.getRowCell($client_localdb._DB_NAMES.TBL_PEEP_DATA,
+                            otherRootKey, "d:oident"),
+         function(val) {
+           self._logger.localStoreContactCheck(userRootKey, otherRootKey,
+                                               val != null);
+         });
   },
 
   /**
@@ -195,27 +250,20 @@ var TestClientActorMixins = {
    */
   setup_superFriends: function(friends) {
     var tofriend = friends.concat([this]);
-    return this.T.convenienceSetup(
-        'setup mutual friend relationships among:', tofriend,
-        function() {
       // (the destructive mutation is fine)
-      while (tofriend.length >= 2) {
-        var focal = tofriend.pop();
-        for (var i = 0; i < tofriend.length; i++) {
-          var other = tofriend[i];
-          focal.addContact(other);
-          focal._usingServer.expect_clientAddedContact(focal, other);
-
-          other.addContact(focal);
-          other._usingServer.expect_clientAddedContact(other, focal);
-        }
+    while (tofriend.length >= 2) {
+      var focal = tofriend.pop();
+      for (var i = 0; i < tofriend.length; i++) {
+        var other = tofriend[i];
+        focal.setup_addContact(other);
+        other.setup_addContact(focal);
       }
-    });
+    }
   },
 
-  assert_superFriends: function(friends) {
+  check_superFriends: function(friends) {
     var tocheck = friends.concat([this]);
-    return this.T.convenienceSetup(
+    return this.T.check(
         'assert mutual friend relationships among:', tocheck,
         function() {
       // (the destructive mutation is fine)
@@ -277,8 +325,10 @@ var TestServerActorMixins = {
       var rootKeyring = $keyring.createNewServerRootKeyring(),
           keyring = rootKeyring.issueLongtermBoxingKeyring();
 
-      self.T.thing('key', self.__name + ' root', keyring.rootPublicKey);
-      self.T.thing('key', self.__name + ' longterm', keyring.boxingPublicKey);
+      self.T.ownedThing(self, 'key', self.__name + ' root',
+                        keyring.rootPublicKey);
+      self.T.ownedThing(self, 'key', self.__name + ' longterm',
+                        keyring.boxingPublicKey);
 
       var details = {
         tag: 'server:dummy',
@@ -307,13 +357,6 @@ var TestServerActorMixins = {
     });
   },
 
-  /**
-   * Add expectations that ensure that client's addition of the contact hit
-   *  all the relevant pieces of the server.
-   */
-  expect_clientAddedContact: function(userClient, otherUserClient) {
-
-  },
 
   assertUserHasContact: function(userClient, otherUserClient) {
   },
@@ -347,6 +390,11 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.CLIENT,
+
+    events: {
+      localStoreContactCheck: {userRootKey: 'key', otherUserRootKey: 'key',
+                               present: true},
+    },
   },
   testServer: {
     // we are a client/server client, even if we are smart for one

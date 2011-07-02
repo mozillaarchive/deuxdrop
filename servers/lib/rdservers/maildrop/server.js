@@ -573,16 +573,18 @@ PickupConnection.prototype = {
 };
 */
 
-var DropServerDef = {
-  endpoints: {
-    'drop/deliver': {
-      implClass: ReceiveDeliveryConnection,
-      authVerifier: function(endpoint, clientKey) {
-        // we are just checking that they are allowed to talk to us at all
-        return $auth_api.serverCheckServerAuth(clientKey);
-      }
+exports.makeServerDef = function(serverConfig) {
+  return {
+    endpoints: {
+      'drop/deliver': {
+        implClass: ReceiveDeliveryConnection,
+        authVerifier: function(endpoint, clientKey) {
+          // we are just checking that they are allowed to talk to us at all
+          return serverConfig.authApi.serverCheckServerAuth(clientKey);
+        }
+      },
     },
-  },
+  };
 };
 
 }); // end define

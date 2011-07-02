@@ -181,11 +181,9 @@ exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, hostname,
  *  can get and can't know it a priori.
  */
 var populateTestConfig = exports.__populateTestConfig =
-    function populateTestConfig(keyring,
-                                                           selfIdentBlob,
-                                                           dbConn,
-                                                           roles, _logger) {
-  var serverConfig = new ServerConfig(keyring, selfIdentBlob);
+    function populateTestConfig(keyring, selfIdentBlob, dbConn, roles,
+                                _logger) {
+  var serverConfig = new ServerConfig(keyring, selfIdentBlob, dbConn);
 
   for (var iRole = 0; iRole < roles.length; iRole++) {
     var roleName = roles[iRole];

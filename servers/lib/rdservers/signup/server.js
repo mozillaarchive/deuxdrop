@@ -71,6 +71,7 @@
  *     behalf (signed by the `longtermSignPubKey`).  The first entry must be
  *     the client that is attempting to perform the signup operation.
  *   }
+ *   @key[storeKeyring PersistedSimpleBoxingKeyring]
  *   @key[because SignupBecause]{
  *     The client's reason we should sign it up.
  *   }
@@ -256,7 +257,8 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
       return this.arg.conn.serverConfig.authApi.serverCreateUserAccount(
         this.selfIdentPayload,
         this.arg.msg.selfIdent,
-        this.clientAuthsMap);
+        this.clientAuthsMap,
+        this.arg.msg.storeKeyring);
     },
     tellThemTheyAreSignedUp: function() {
       this.arg.conn.writeMessage({

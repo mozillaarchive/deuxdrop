@@ -42,13 +42,79 @@
 define(
   [
     'q',
+    'rdcommon/log',
+    'rdcommon/identities/pubident',
     'exports'
   ],
   function(
     $Q,
+    $log,
+    $pubident,
     exports
   ) {
 var when = $Q.when;
+
+const TBQ_CLIENT_REPLICAS = "store:clientQueues";
+
+/**
+ * Really simple class to track connections.  We do this for:
+ *
+ * - To let multiple client connections for a single user be aware of each other
+ *    for minizming replica latency.  This might eventually be mooted by just
+ *    having a message queue abstraction that will perform async notifications
+ *    on its own.
+ * - To detect multiple concurrent connections from a client and kill the old
+ *    ones automatically.  We expect this to happen in cases where a device
+ *    changes IPs or something similar that causes our TCP connection with them
+ *    to go into a mode that will take a long time to die on its own.  This
+ *    may also occur in malicious situations with attackers.  Malicious
+ *    situations would ideally be revealed by the new device indicating a
+ *    device state inconsistent with the device we just bumped.
+ */
+function UserConnectionsTracker() {
+  this.liveByRootKey = {};
+}
+UserConnectionsTracker.prototype = {
+  born: function(conn) {
+    var rootKey = conn.userEffigy.rootPublicKey, conns;
+    if (!this.liveByRootKey.hasOwnProperty(rootKey)) {
+      conns = this.liveByRootKey[rootKey] = [];
+    }
+    // check for any other connections by this already-existing client.
+    else {
+      conns = this.liveByRootKey[rootKey];
+      for (var i = 0; i < conns.length; i++) {
+        var othConn = conns[i];
+        // found another connection; close it.
+        if (othConn.conn.clientPublicKey === conn.conn.clientPublicKey) {
+          // XXX log something about this probably
+          othConn.conn.close();
+        }
+      }
+    }
+    this.liveByRootKey[rootKey].push(conn);
+  },
+
+  died: function(conn) {
+    var rootKey = conn.userEffigy.rootPublicKey;
+    var conns = this.liveByRootKey[rootKey];
+    conns.splice(conns.indexOf(conn), 1);
+    if (!conns.length)
+      delete this.liveByRootKey[rootKey];
+  },
+
+  notifyOthersOfReplicaBlock: function(conn, replicaBlock) {
+    var rootKey = conn.userEffigy.rootPublicKey;
+    var conns = this.liveByRootKey[rootKey];
+    for (var i = 0; i < conns.length; i++) {
+      var othConn = conns[i];
+      if (othConn !== conn)
+        othConn.otherClientGeneratedReplicaBlock(replicaBlock);
+    }
+  },
+};
+
+var gConnTracker = new UserConnectionsTracker();
 
 /**
  * Receives requests from the client and services them in a synchronous fashion.
@@ -87,19 +153,67 @@ var when = $Q.when;
  *  objects that may either directly effect the requested changes (locally
  *  hosted) or do an reliable RPC-type thing (remote hosted).
  */
-function ClientServicingConnection(conn) {
+function ClientServicingConnection(conn, userEffigy) {
   this.conn = conn;
   this.config = conn.serverConfig;
+  this.userEffigy = userEffigy;
+  this.clientPublicKey = this.conn.clientPublicKey;
+
+  this.db = conn.serverConfig.db;
+
+  gConnTracker.born(this, userEffigy);
+
+  // start out backlogged until we get a deviceCheckin at least.
+  this._replicaBacklog = true;
+  this._replicaInFlight = false;
+
+  this._bound_ackAction = this._needsbind_ackAction.bind(this);
+  this._bound_peekHandler = this._needsbind_peekHandler.bind(this);
 }
 ClientServicingConnection.prototype = {
   INITIAL_STATE: 'init',
 
+  __closed: function() {
+    gConnTracker.died(this, this.userEffigy);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Action Processing
+  _needsbind_ackAction: function() {
+    this.conn.writeMessage({type: 'ackRequest'});
+    return 'root';
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Replica Issues
+
   /**
    * The device tells us its current sequence id and its replication level so we
    *  know when its last update was and whether we need to force a re-sync.
+   *
+   * XXX currently we don't have the client tell us anything; we likely want
+   *  to have them tell us the last nonce or auth we told them, depending on the
+   *  replica block type.
    */
   _msg_init_deviceCheckin: function(msg) {
-    // XXX connect to persistent subscriptions feed.
+    return when(this.db.queuePeek(TBQ_CLIENT_REPLICAS, this.clientPublicKey, 1),
+                this._bound_peekHandler
+                // rejection pass-through is fine
+               );
+  },
+
+  _needsbind_peekHandler: function(plist) {
+    if (plist.length) {
+      this.conn.writeMessage({type: 'replicaBlock', block: plist[0]});
+      this._replicaInFlight = true;
+      // (the ack will trigger another fetch, etc.)
+    }
+    else {
+      // there was nothing, there must be no backlog
+      this._replicaBacklog = false;
+      this.conn.writeMessage({type: 'replicaCaughtUp'});
+    }
+    return 'root';
   },
 
 
@@ -111,9 +225,47 @@ ClientServicingConnection.prototype = {
    *  unacked updates we can have outstanding to not cause queue overflow
    *  in the authconn, especially if the client is pipelining its actions.
    */
-  _msg_root_ackFeed: function(msg) {
-    return 'root';
+  _msg_root_ackReplica: function(msg) {
+    this._replicaInFlight = false;
+    return when(this.db.queueConsumeAndPeek(
+                  TBQ_CLIENT_REPLICAS, this.clientPublicKey, 1, 1),
+                this._bound_peekHandler
+                // rejection pass-through is fine
+                );
   },
+
+  otherClientGeneratedReplicaBlock: function(block) {
+    if (this._replicaBacklog)
+      return;
+    if (this._replicaInFlight) {
+      this._replicaBacklog = true;
+      return;
+    }
+    this.conn.writeMessage({type: 'replicaBlock', block: block});
+    this._replicaInFlight = true;
+  },
+
+  sendReplicaBlockToOtherClients: function(block) {
+    if (!this.userEffigy.otherClientKeys.length)
+      return true;
+
+    // - enqueue it for all other replicas
+    var otherClientKeys = this.userEffigy.otherClientKeys;
+    var promises = [];
+    for (var i = 0; i < otherClientKeys.length; i++) {
+      promises.push(this.db.queueAppend(TBQ_CLIENT_REPLICAS, otherClientKeys[i],
+                                        [block]));
+    }
+
+    // - notify any lives ones about the enqueueing
+    var self = this;
+    return when($Q.all(promises), function() {
+                  gConnTracker.notifyOthersOfReplicaBlock(self, block);
+                });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Persistent Query Brainings
 
   /**
    * Request a conversation index, such as:
@@ -167,19 +319,38 @@ ClientServicingConnection.prototype = {
    *
    * @args[
    *   @param[msg @dict[
-   *     @key[otherPersonIdent OtherPersonIdentBlob]
+   *     @key[userRootKey]{
+   *       The root key of the user we are adding.
+   *     }
+   *     @key[userTellKey]{
+   *       The tell key of the user we are adding.
+   *     }
+   *     @key[serverSelfIdent]{
+   *       The server self-ident of the server we are
+   *     }
+   *     @key[replicaBlock ReplicaCryptoBlock]
    *   ]]
    * ]
    */
   _msg_root_addContact: function(msg) {
-    // - verify the attestation
+    // -
+    var serverKey =
+      $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(msg.serverSelfIdent);
 
-    // - persist the attestation to our random-access store
-
-    // - enqueue for other (existing) clients
-
-    // - perform maildrop/fanout authorization
-    this.config.dropApi.authorizeServerUserForContact();
+    return $Q.join(
+      // persist the data to our random-access store
+      this.db.putCells(TBL_USER_CONTACTS,
+                       this.userEffigy.rootPublicKey + ":" + msg.userRootKey,
+                       {'d:addBlock': msg.replicaBlock}),
+      // enqueue for other (existing) clients
+      this.sendReplicaBlockToOtherClients(msg.replicaBlock),
+      // perform maildrop/fanout authorization
+      this.config.dropApi.authorizeServerUserForContact(
+        this.userEffigy.rootPublicKey, serverKey, msg.userTellKey),
+      // ensure the sending layer knows how to talk to that user too
+      this.config.senderApi.setServerUrlUsingSelfIdent(msg.serverSelfIdent),
+      this._bound_ackAction
+    );
   },
 
   /**
@@ -202,7 +373,13 @@ ClientServicingConnection.prototype = {
 };
 exports.ClientServicingConnection = ClientServicingConnection;
 
+const TBL_USER_CONTACTS = 'store:userContacts';
+
 exports.makeServerDef = function(serverConfig) {
+  // initialize our db
+  var db = serverConfig.db;
+  db.defineHbaseTable(TBL_USER_CONTACTS, ["d"]);
+
   return {
     endpoints: {
       'mailstore/mailstore': {

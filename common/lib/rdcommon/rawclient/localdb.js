@@ -45,9 +45,11 @@
 
 define(
   [
+    'rdcommon/crypto/keyops',
     'exports'
   ],
   function(
+    $keyops,
     exports
   ) {
 
@@ -74,6 +76,14 @@ const IDX_PEEP_CONV_ANY_INVOLVEMENT = "idxPeepConvAny";
  * The list of peeps ordered by conversation activity recency.
  */
 const IDX_PEEP_RECENCY = "idxPeepRecency";
+
+exports._DB_NAMES = {
+  TBL_PEEP_DATA: TBL_PEEP_DATA,
+  TBL_CONV_DATA: TBL_CONV_DATA,
+  IDX_ALL_CONVS: IDX_ALL_CONVS,
+  IDX_PEEP_CONV_WRITE_INVOLVEMENT: IDX_PEEP_CONV_WRITE_INVOLVEMENT,
+  IDX_PEEP_CONV_ANY_INVOLVEMENT: IDX_PEEP_CONV_ANY_INVOLVEMENT,
+};
 
 /**
  * XXX We currently assume there is a listener that cares about everything
@@ -157,23 +167,96 @@ NotificationKing.prototype = {
  *
  * Our implementation is problem domain aware.
  */
-function LocalStore(dbConn) {
+function LocalStore(dbConn, keyring) {
   this._db = dbConn;
+  this._keyring = keyring;
 
   this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
   // conversation data proper: meta, overview, data
   this._db.defineHbaseTable(TBL_CONV_DATA, ["m", "o", "d"]);
 
-  this._db.defineReorderableIndex(IDX_ALL_CONVS);
-  this._db.defineReorderableIndex(IDX_PEEP_CONV_WRITE_INVOLVEMENT);
-  this._db.defineReorderableIndex(IDX_PEEP_CONV_ANY_INVOLVEMENT);
+  this._db.defineReorderableIndex(TBL_CONV_DATA, IDX_ALL_CONVS);
+
+  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+                                  IDX_PEEP_CONV_WRITE_INVOLVEMENT);
+  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+                                  IDX_PEEP_CONV_ANY_INVOLVEMENT);
 }
 exports.LocalStore = LocalStore;
 LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
-  // Internal Helpers
+  // Replica API
 
-  _validateAndParseAuthedJSON: function() {
+  _generateReplicaCryptoBlock: function(command, payload) {
+    var block = {
+      cmd: command,
+      when: Date.now(),
+      data: payload
+    };
+    var blockStr = JSON.stringify(block);
+    var nonce = $keyops.makeSecretBoxNonce();
+    var sboxed = this._keyring.secretBoxUtf8With(
+                   blockStr, nonce, 'replicaSbox');
+    // while we could also concatenate, in theory we would eventually cram
+    //  some minor metadata in here, like an indicator of what key we are using
+    //  or the like.  some of that could be overloaded into the nonce.
+    return JSON.stringify({nonce: nonce, sboxed: sboxed});
+  },
+
+  _generateReplicaAuthBlock: function(command, payload) {
+    var block = {
+      cmd: command,
+      when: Date.now(),
+      data: payload
+    };
+    var blockStr = JSON.stringify(block);
+    var authed = this._keyring.authUtf8With(blockStr, 'replicaAuth');
+    // while we could also concatenate, in theory we would eventually cram
+    //  some minor metadata in here, like an indicator of what key we are using
+    //  or the like.  some of that could be overloaded into the nonce.
+    return JSON.stringify({block: blockStr, auth: authed});
+  },
+
+  /**
+   * Consume and process either a crypto or auth replica block; we eat both!
+   */
+  consumeReplicaBlock: function(serialized) {
+    var mform = JSON.parse(serialized), block;
+    if (mform.hasOwnProperty("nonce")) {
+      block = JSON.parse(this._keyring.openSecretBoxUtf8With(
+                  mform.sboxed, mform.nonce, 'replicaSbox'));
+    }
+    else {
+      this._keyring.verifyAuthUtf8With(mform.auth, mform.block, 'replicaAuth');
+      block = JSON.parse(mform.block);
+    }
+    this._performReplicaCommand(block.cmd, block.data);
+  },
+
+  /**
+   * Perform a replica command.
+   *
+   * Note that we do not differentiate between whether the command came to us
+   *  via a secret-boxed or authenticated block.
+   */
+  _performReplicaCommand: function(command, payload) {
+    var implCmdName = "_cmd_" + command;
+    if (!(implCmdName in this)) {
+      throw new Error("no command for '" + block.cmd + "'");
+    }
+    this[implCmdName](payload);
+  },
+
+  generateAndPerformReplicaCryptoBlock: function(command, payload) {
+    var serialized = this._generateReplicaCryptoBlock(command, payload);
+    this._performReplicaCommand(command, payload);
+    return serialized;
+  },
+
+  generateAndPerformReplicaAuthBlock: function(command, payload) {
+    var serialized = this._generateReplicaAuthBlock(command, payload);
+    this._performReplicaCommand(command, payload);
+    return serialized;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -225,14 +308,14 @@ LocalStore.prototype = {
    *  join notifications/etc. come separately .  Store the meta-information so
    *  that we can do things with the conversation in the future.
    */
-  addConversation: function(convMeta) {
+  _cmd_addConversation: function(convMeta) {
     // - generate the conversation table entry
   },
 
   /**
    * Our own meta-data about a conversation (pinned, etc.)
    */
-  setConversationMeta: function() {
+  _cmd_setConversationMeta: function() {
     // -- update any subscribed queries on pinned
     // -- update any blurbs for this conversation
   },
@@ -240,7 +323,7 @@ LocalStore.prototype = {
   /**
    * Meta-data about a conversation from other participants.
    */
-  setConversationPeepMeta: function() {
+  _cmd_setConversationPeepMeta: function() {
     // -- update anyone subscribed to the full conversation
   },
 
@@ -249,7 +332,7 @@ LocalStore.prototype = {
    *
    * If this is a join notification, we will name-check the added person.
    */
-  addConversationMessage: function() {
+  _cmd_addConversationMessage: function() {
     // --- human message
     // -- write
     // -- update the all-conversations index
@@ -272,7 +355,7 @@ LocalStore.prototype = {
    *  but be ready to nuke it when the actual message successfully hits the
    *  conversation.
    */
-  outghostAddConversationMessage: function() {
+  _cmd_outghostAddConversationMessage: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -301,16 +384,33 @@ LocalStore.prototype = {
 
   /**
    * Add a contact to our address book.
+   *
+   * @designCall[clarkbw]{
+   *   Adding a contact acts like the user you sent you a message at that
+   *   instant.  We may eventually add fake messages 'like "Andrew and you
+   *   are connected.  Here's everything you know about him now..."'.
+   * }
    */
-  addContact: function() {
+  _cmd_addContact: function(data) {
+    var now = Date.now();
+    var peepRootKey = data.rootKey;
+
     // -- persist
+    this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
+      'd:oident': data.oident,
+    });
+    // -- bump indices
+    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_CONV_ANY_INVOLVEMENT,
+                              peepRootKey, now);
+    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_CONV_WRITE_INVOLVEMENT,
+                              peepRootKey, now);
     // -- notify peep queries
   },
 
   /**
    * Set some meta-data about a contact in our address book (pinned, etc.)
    */
-  setContactMeta: function() {
+  _cmd_setContactMeta: function() {
     // -- persist
     // -- notify affected queries
     // -- notify subscribed blurbs
@@ -320,12 +420,12 @@ LocalStore.prototype = {
    * Set some contact-provided meta-data about a contact in our address book.
    */
   /*
-  setContactPeepMeta: function() {
+  _cmd_setContactPeepMeta: function() {
   },
   */
 
   /*
-  delContact: function() {
+  _cmd_delContact: function() {
   },
   */
 

@@ -78,7 +78,7 @@ function RedisDbConn(connInfo, nsprefix, _logger) {
   this._conn.on('error', this._onError.bind(this));
   this._conn.on('end', this._onClosed.bind(this));
 
-  this._log = LOGFAB.gendbConn(this, _logger, [connInfo.host, connInfo.port]);
+  this._log = LOGFAB.gendbConn(this, _logger, [nsprefix]);
 
   this._prefix = nsprefix;
 }
@@ -151,8 +151,8 @@ RedisDbConn.prototype = {
   getRow: function(tableName, rowId, columnFamilies) {
     var deferred = $Q.defer();
     this._log.getRow(tableName, rowId, columnFamilies);
-    this._conn.hgetall(this._prefix + ':' + tableName + ':' + rowId, columnName,
-                     function(err, result) {
+    this._conn.hgetall(this._prefix + ':' + tableName + ':' + rowId,
+                       function(err, result) {
       if (err)
         deferred.reject(err);
       else
@@ -185,7 +185,7 @@ RedisDbConn.prototype = {
    */
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
-    this._conn.hincrby(this._prefix + ':' + tableName + ':' + queueName,
+    this._conn.hincrby(this._prefix + ':' + tableName + ':' + rowId,
                        columnName, delta, function(err, result) {
       if (err)
         deferred.reject(err);
@@ -253,7 +253,7 @@ RedisDbConn.prototype = {
   //  to reflect this into hbase that will need analysis.  (We will likely use
   //  a naive stopgap for hbase initially.)
 
-  defineReorderableIndex: function(tableName) {
+  defineReorderableIndex: function(tableName, indexName) {
   },
   /**
    * Scan index using the (ordered) values as our keypoints; although redis
@@ -270,17 +270,20 @@ RedisDbConn.prototype = {
   },
 
   /**
-   * Update the value associated with an objectName for the given index for the
-   *  given (index) table.
+   * Add/update the value associated with an objectName for the given index for
+   *  the given (index) table.
    */
   updateIndexValue: function(tableName, indexName, objectName, newValue,
                              oldValueIfKnown) {
     this._conn.zadd(this._prefix + ':' + tableName + ':' + indexName,
-                    value, objectName);
+                    newValue, objectName);
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Queue Abstraction
+
+  defineQueueTable: function(tableName) {
+  },
 
   queueAppend: function(tableName, queueName, values) {
     var multi = this._conn.multi();
@@ -298,9 +301,8 @@ RedisDbConn.prototype = {
     return deferred.promise;
   },
 
-  queuePeek: function(table, queueName, count) {
+  queuePeek: function(tableName, queueName, count) {
     var deferred = $Q.defer();
-
     this._conn.lrange(this._prefix + ':' + tableName + ':' + queueName,
                       0, count - 1, function(err, multibulk) {
       if (err)
@@ -308,11 +310,10 @@ RedisDbConn.prototype = {
       else
         deferred.resolve(multibulk);
     });
-
     return deferred.promise;
   },
 
-  queueConsume: function(table, queueName, count) {
+  queueConsume: function(tableName, queueName, count) {
     var deferred = $Q.defer();
     this._conn.ltrim(this._prefix + ':' + tableName + ':' + queueName,
                      count, -1, function(err, status) {
@@ -322,6 +323,26 @@ RedisDbConn.prototype = {
         deferred.resolve();
       else
         deferred.reject(status);
+    });
+    return deferred.promise;
+  },
+
+  /**
+   * Consume some number of queue entries, then immediately peek for some
+   *  other number of queue entries.
+   */
+  queueConsumeAndPeek: function(tableName, queueName, consumeCount, peekCount) {
+    var deferred = $Q.defer();
+    var multi = this._conn.multi();
+    multi.ltrim(this._prefix + ':' + tableName + ':' + queueName,
+                consumeCount, -1);
+    multi.lrange(this._prefix + ':' + tableName + ':' + queueName,
+                 0, peekCount - 1);
+    multi.exec(function(err, replies) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(replies[1]);
     });
     return deferred.promise;
   },
@@ -368,10 +389,6 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     //implClass: AuthClientConn,
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
-    semanticIdent: {
-      host: 'host',
-      port: 'port',
-    },
     events: {
       connected: {},
       closed: {},

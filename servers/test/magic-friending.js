@@ -65,6 +65,8 @@ var TD = exports.TD = $tc.defineTestsFor($module, null,
 
 TD.commonCase('have two contacts be friends using magic rendezvous',
               function(T) {
+  T.group('setup');
+
   var client_a = T.actor('testClient', 'A'),
       client_b = T.actor('testClient', 'B');
 
@@ -75,9 +77,28 @@ TD.commonCase('have two contacts be friends using magic rendezvous',
   client_a.setup_useServer(server_x);
   client_b.setup_useServer(server_y);
 
+  client_a.setup_connect();
+  client_b.setup_connect();
+
+  T.group('add contacts');
+
   // Establish the friendship relationship on the basis of cheaty action at
   //  a distance of the self-ident blobs.
-  client_a.setup_superFriends([client_b]).log.boring(false);
+  client_a.setup_addContact(client_b).log.boring(false);
+  client_b.setup_addContact(client_a).log.boring(false);
+
+  // Verify the clients and their servers
+  T.group('verify');
+
+  T.check(client_a, 'has contact', client_b, function() {
+    client_a.assertClientHasContact(client_b);
+  });
+  T.check(client_b, 'has contact', client_a, function() {
+    client_b.assertClientHasContact(client_a);
+  });
+
+
+  T.group('cleanup');
 });
 
 }); // end define

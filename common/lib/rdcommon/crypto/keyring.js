@@ -247,6 +247,8 @@ function LongtermSigningKeyring(persistedForm, creationForm) {
       rootPublicKey: creationForm.rootPublicKey,
       longtermSignBundle: creationForm.longtermSignBundle,
       issuedGroups: {},
+      issuedSecretBoxKeys: {},
+      issuedAuthKeys: {},
     };
   }
   else {
@@ -316,6 +318,32 @@ LongtermSigningKeyring.prototype = {
   },
 
   /**
+   * Generate a secretbox key, remember it, and return a representation that
+   *  can be provided to a delegated keyring.
+   */
+  generateSecretBoxKey: function(keyName) {
+    var key = $keyops.makeSecretBoxKey();
+    var issued = this.data.issuedSecretBoxKeys;
+    if (!issued.hasOwnProperty(keyName))
+      issued[keyName] = [];
+    issued[keyName].push(key);
+    return {name: keyName, key: key};
+  },
+
+  /**
+   * Generate a (secret) authentication key, remember it, and return a
+   *  representation that can be provided to a delegated keyring.
+   */
+  generateAuthKey: function(keyName) {
+    var key = $keyops.makeAuthKey();
+    var issued = this.data.issuedAuthKeys;
+    if (!issued.hasOwnProperty(keyName))
+      issued[keyName] = [];
+    issued[keyName].push(key);
+    return {name: keyName, key: key};
+  },
+
+  /**
    * Low-level operation to sign a JSON object with our long-term signing key.
    *  Do not use this willy-nilly, try and use other higher level mechanisms
    *  like attestation generation.
@@ -357,6 +385,8 @@ function DelegatedKeyring(persistedForm, creationForm) {
       //  at a time, but that we might know about previous generations or other
       //  sets...
       activeGroups: {},
+      activeSecretBoxKeys: {},
+      activeAuthKeys: {},
     };
   }
   else {
@@ -399,6 +429,32 @@ DelegatedKeyring.prototype = {
 
   incorporateKeyGroup: function(groupBundle) {
     this.data.activeGroups[groupBundle.groupName] = groupBundle;
+  },
+
+  incorporateSecretBoxKey: function(secretBoxKeyBundle) {
+    this.data.activeSecretBoxKeys[secretBoxKeyBundle.name] =
+      secretBoxKeyBundle.key;
+  },
+
+  incorporateAuthKey: function(authKeyBundle) {
+    this.data.activeAuthKeys[authKeyBundle.name] = authKeyBundle.key;
+  },
+
+  /**
+   * Export keypair from a group in this keyring to hand it to something acting
+   *  as an agent on our behalf.  *This exposes a secret key* so be sure you
+   *  don't just intend to expose the public key; use `getPublicKeyFor` or
+   *  `getPublicAuthFor` in those cases.
+   *
+   * This should be passed to `loadSimpleBoxingKeyring` to create a simple
+   *  boxing keyring.
+   */
+  exportKeypairForAgentUse: function(groupName, keyName) {
+    var keypair = this._gimmeKeypair(groupName, keyName);
+    return {
+      rootPublicKey: this.rootPublicKey,
+      keypair: keypair,
+    };
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -455,6 +511,71 @@ DelegatedKeyring.prototype = {
                         groupName, keyName) {
     return $keyops.generalOpenBoxUtf8(boxedMessage, nonce, senderKey,
                                       this._gimmeKeypair(groupName, keyName));
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // SecretBox Operations
+
+  secretBoxWith: function(msg, nonce, keyName) {
+    var keymap = this.data.activeSecretBoxKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No secret box key with name '" + keyName + "'");
+    return $keyops.secretBox(msg, nonce, keymap[keyName]);
+  },
+
+  secretBoxUtf8With: function(msg, nonce, keyName) {
+    var keymap = this.data.activeSecretBoxKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No secret box key with name '" + keyName + "'");
+    return $keyops.secretBoxUtf8(msg, nonce, keymap[keyName]);
+  },
+
+
+  openSecretBoxWith: function(sboxed, nonce, keyName) {
+    var keymap = this.data.activeSecretBoxKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No secret box key with name '" + keyName + "'");
+    return $keyops.secretBoxOpen(sboxed, nonce, keymap[keyName]);
+  },
+
+  openSecretBoxUtf8With: function(sboxed, nonce, keyName) {
+    var keymap = this.data.activeSecretBoxKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No secret box key with name '" + keyName + "'");
+    return $keyops.secretBoxOpenUtf8(sboxed, nonce, keymap[keyName]);
+  },
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Auth Operations
+
+  authWith: function(msg, keyName) {
+    var keymap = this.data.activeAuthKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No auth key with name '" + keyName + "'");
+    return $keyops.auth(msg, keymap[keyName]);
+  },
+
+  authUtf8With: function(msg, keyName) {
+    var keymap = this.data.activeAuthKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No auth key with name '" + keyName + "'");
+    return $keyops.authUtf8(msg, keymap[keyName]);
+  },
+
+
+  verifyAuthWith: function(auth, msg, keyName) {
+    var keymap = this.data.activeAuthKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No auth key with name '" + keyName + "'");
+    return $keyops.authVerify(auth, msg, keymap[keyName]);
+  },
+
+  verifyAuthUtf8With: function(auth, msg, keyName) {
+    var keymap = this.data.activeAuthKeys;
+    if (!keymap.hasOwnProperty(keyName))
+      throw new Error("No auth key with name '" + keyName + "'");
+    return $keyops.authVerifyUtf8(auth, msg, keymap[keyName]);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -531,6 +652,11 @@ exports.loadDelegatedKeyring = function(persistedForm) {
 
 exports.createNewServerRootKeyring = function() {
   return new ServerRootSigningKeyring();
+};
+
+exports.loadSimpleBoxingKeyring = function(persistedForm) {
+  return new ExposedSimpleBoxingKeyring(persistedForm.rootPublicKey,
+                                        persistedForm.keypair);
 };
 
 }); // end define

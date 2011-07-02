@@ -247,6 +247,14 @@ TestContext.prototype = {
     return thang;
   },
 
+  ownedThing: function ownedThing(actor, type, humanName, digitalName) {
+    var thang = $log.__makeThing(type, humanName, digitalName);
+    if (!actor._logger._named)
+      actor._logger._named = {};
+    actor._logger._named[thang._uniqueName] = thang;
+    return thang;
+  },
+
   _newStep: function(kind, args, isBoring) {
     var actors = [], descBits = [];
     // args[:-1] are actors/description intermixed, args[-1] is the testfunc

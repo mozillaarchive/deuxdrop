@@ -56,14 +56,39 @@ define(
   [
     'q',
     'rdcommon/crypto/keyops',
+    'rdcommon/crypto/keyring',
+    'rdcommon/crypto/pubring',
     'exports'
   ],
   function(
     $Q,
     $keyops,
+    $keyring,
+    $pubring,
     exports
   ) {
 var when = $Q.when;
+
+/**
+ * Server agency representation of a user; holds a pubring and any private
+ *  keyrings the user has endowed us with *which are required for the use
+ *  case of this effigy*.  Specifically, we do not want to load keyrings
+ *  that are not required by our use-case.
+ *
+ * XXX we do not update the list of other client keys on-the-fly; this is okay
+ *  because there is no way to dynamically authorize new clients, but we
+ *  obviously need to make sure we take care of that.
+ */
+function UserEffigy(pubring, clientPublicKey, otherClientKeys) {
+  this.pubring = pubring;
+  this.clientPublicKey = clientPublicKey;
+  this.otherClientKeys = otherClientKeys;
+}
+UserEffigy.prototype = {
+  get rootPublicKey() {
+    return this.pubring.rootPublicKey;
+  },
+};
 
 const BOX_PUB_KEYSIZE = $keyops.boxPublicKeyLength;
 
@@ -103,7 +128,6 @@ const TBL_CONV_AUTH = "auth:convByConvId";
  * Authorization/authentication/account stuff.
  *
  * XXX There is currently no deauthorization, which is clearly bad.
- * XXX I'm not sure we can expose
  */
 function AuthApi(serverConfig, dbConn, _logger) {
   this._db = dbConn;
@@ -148,12 +172,13 @@ AuthApi.prototype = {
    *  levels to split that out for us and our consumers.)
    */
   serverCreateUserAccount: function(selfIdentPayload, selfIdentBlob,
-                                    clientAuthsMap) {
-    var rootKey = selfIdentPayload.root.rootKey;
+                                    clientAuthsMap, storeKeyring) {
+    var rootKey = selfIdentPayload.root.rootSignPubKey;
 
     var promises = [];
     var accountCells = {
       "d:selfIdent": selfIdentBlob,
+      "d:store:keyring": storeKeyring,
     };
     for (var clientKey in clientAuthsMap) {
       accountCells["d:c:" + clientKey] = clientAuthsMap[clientKey];
@@ -196,9 +221,35 @@ AuthApi.prototype = {
       this._db.getRowCell(TBL_CLIENT_AUTH, clientPublicKey, "d:rootKey"),
       function(rootKey) {
         return when(
-          self._db.getRow(TBL_USER_ACCOUNT, rootSignPubKey, "d"),
+          self._db.getRow(TBL_USER_ACCOUNT, rootKey, "d"),
           function(cells) {
+            if (!cells.hasOwnProperty("d:selfIdent"))
+              throw new Error("I am to be needing a selfIdent record");
 
+            var pubring =
+              $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                cells["d:selfIdent"]);
+
+            var otherClientKeys = [];
+            for (var key in cells) {
+              if (/^d:c:/.test(key)) {
+                var candClientKey = key.substring(4);
+                if (candClientKey !== clientPublicKey)
+                  otherClientKeys.push(candClientKey);
+              }
+            }
+
+            var effigy = new UserEffigy(pubring, clientPublicKey,
+                                        otherClientKeys);
+
+            // - envelope keyring (if we are mailstore)
+            if (serverRole === "store" &&
+                cells.hasOwnProperty("d:store:keyring")) {
+              effigy.storeEnvelopeKeyring =
+                $keyring.loadSimpleBoxingKeyring(cells["d:store:keyring"]);
+            }
+
+            return effigy;
           });
       }
       // passing through the rejection is fine
@@ -245,7 +296,7 @@ AuthApi.prototype = {
   // Maildrop server implied.
 
   userAssertServerUser: function(ourUserKey, otherServerBoxPubKey,
-                                otherUserTellBoxPubKey) {
+                                 otherUserTellBoxPubKey) {
     return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
              otherServerBoxPubKey + ":" + ourUserKey,
              "u:" + otherUserTellBoxPubKey);
@@ -256,7 +307,7 @@ AuthApi.prototype = {
    *  conversation?
    */
   userAssertServerConversation: function(ourUserKey, otherServerBoxPubKey,
-                                        conversationIdent) {
+                                         conversationIdent) {
     return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
              otherServerBoxPubKey + ":" + ourUserKey,
              "c:" + conversationIdent);
@@ -268,10 +319,11 @@ AuthApi.prototype = {
   userAuthorizeServerUser: function(ourUserKey, serverKey, userKey) {
     var cells = {};
     cells["u:" + userKey] = 1;
-    return $Q.all(
+    return $Q.all([
       this._serverAuthorizeServer(serverKey),
       this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,
-                        cells));
+                        cells)
+    ]);
   },
   /**
    * Authorize a server to send our user messages for a specific conversation.
@@ -280,10 +332,11 @@ AuthApi.prototype = {
                                                whoSaysKey) {
     var cells = {};
     cells["c:" + convKey] = whoSaysKey;
-    return $Q.all(
+    return $Q.all([
       this._serverAuthorizeServer(serverKey),
       this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,
-                        cells));
+                        cells)
+    ]);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -354,9 +407,10 @@ AuthApi.prototype = {
         // authorize since not
         var cells = {};
         cells[columnName] = otherUserTellBoxPubKey;
-        return $Q.all(
+        return $Q.all([
           self._serverAuthorizeServer(otherServerBoxPubKey),
-          self._db.putCells(TBL_CONV_AUTH, convId, cells));
+          self._db.putCells(TBL_CONV_AUTH, convId, cells)
+        ]);
       }
       // rejection pass-through is fine
     );

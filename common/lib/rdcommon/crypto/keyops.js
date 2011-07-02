@@ -563,10 +563,36 @@ exports.makeBoxNonce = $nacl.box_random_nonce;
 exports.makeSecretBoxKey = $nacl.secretbox_random_key;
 exports.makeSecretBoxNonce = $nacl.secretbox_random_nonce;
 
+exports.makeAuthKey = $nacl.auth_random_key;
+
+////////////////////////////////////////////////////////////////////////////////
+// Secret Boxes: Secret-key authenticated encryption
+//
+// These aren't defensively wrapped like the public-key stuff because secret
+//  keys are islands; it's pretty hard to build trust graphs or the like that
+//  can be compromised by the mis-use of a key for the wrong thing.  Which is
+//  to say, there is no subtle gradient of screw-ups; you either leak the key
+//  or you don't.
+//
+// It's still suggested that you use keyring operations for everything, however.
+
 exports.secretBox = $nacl.secretbox;
 exports.secretBoxUtf8 = $nacl.secretbox_utf8;
 exports.secretBoxOpen = $nacl.secretbox_open;
 exports.secretBoxOpenUtf8 = $nacl.secretbox_open_utf8;
+
+////////////////////////////////////////////////////////////////////////////////
+// Secret-Key Message Authentication
+//
+// Like secret-box operations, we don't add guard wrappers because screwing up
+//  is rather boolean when it comes to handling secret keys.
+
+exports.auth = $nacl.auth;
+exports.authUtf8 = $nacl.auth_utf8;
+exports.authVerify = $nacl.auth_verify;
+exports.authVerifyUtf8 = $nacl.auth_verify_utf8;
+
+////////////////////////////////////////////////////////////////////////////////
 
 exports.boxPublicKeyLength = $nacl.box_PUBLICKEYBYTES;
 exports.boxSecretKeyLength = $nacl.box_SECRETKEYBYTES;

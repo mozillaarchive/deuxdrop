@@ -131,7 +131,11 @@ TD.commonCase('working loopback authconn connection', function(T) {
     // XXX this really needs to go in some test helping logic
     serverRootRing = $keyring.createNewServerRootKeyring();
     serverKeyring = serverRootRing.issueLongtermBoxingKeyring();
-    serverConfig = $configurer.__populateTestConfig(serverKeyring, null);
+    serverConfig = $configurer.__populateTestConfig(
+                     serverKeyring,
+                     /* no ident blob needed */ null,
+                     /* no db needed */ null,
+                     /* no roles needed */ []);
 
     T.thing('key', 'S root', serverKeyring.rootPublicKey);
     T.thing('key', 'S longterm', serverKeyring.boxingPublicKey);

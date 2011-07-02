@@ -70,6 +70,10 @@ function PersonPubring(persistedBlob) {
   this.data = persistedBlob;
 }
 PersonPubring.prototype = {
+  get rootPublicKey() {
+    return this.data.rootPublicKey;
+  },
+
   /**
    * Assert that the longterm signing public key was valid for this person at
    *  the given timestamp, throwing an exception if the key is either unknown

@@ -59,6 +59,7 @@ var TD = exports.TD = $tc.defineTestsFor($module, null,
   [$th_rdservers.TESTHELPER], ['replica']);
 
 TD.commonCase('clone client has state matching the mutator', function(T) {
+  T.group("setup");
   // usual client
   var client = T.actor('testClient', 'C');
   // a different client for the same user
@@ -71,6 +72,7 @@ TD.commonCase('clone client has state matching the mutator', function(T) {
   var server = T.actor('testServer', 'S', serverOpts);
 
   // signup
+  T.group("signup, connect");
   client.setup_useServer(server);
   clone.setup_assumeUsingServer(server);
 
@@ -78,16 +80,33 @@ TD.commonCase('clone client has state matching the mutator', function(T) {
            'are both signed up', function() {
     server.assertClientAuthorizationState(client, true);
     server.assertClientAuthorizationState(clone, true);
-  }).log.boring(true);
+  }).log.boring(false);
+
+  // alice needs to signup somewhere so we can have a server self-ident.
+  alice.setup_useServer(server); // ...and the same server is fine.
 
   client.setup_connect();
   clone.setup_connect();
 
-  // -- contact propagation
-/*
-  T.action('have', client, 'add a contact', function() {
+  T.group("contact addition");
+
+  T.action('have', client, 'add', alice, 'as a contact,', clone,
+           'gets a replica update', function() {
+    clone.expectReplicaUpdate();
+    client.addContact(alice);
   });
-*/
+  client.setup_addContact(alice).log.boring(false);
+
+  T.group("verify");
+
+  T.check(client, 'knows about the contact it just added', function() {
+    client.assertClientHasContact(alice);
+  });
+  T.check(clone, 'knows about the contact too!', function() {
+    clone.assertClientHasContact(alice);
+  });
+
+  T.group("cleanup");
 });
 
 }); // end define

@@ -120,11 +120,11 @@ MailsenderLocalApi.prototype = {
         // - not coherently present, store it.
         if (!cells["u:url"] || !cells["u:ident"]) {
           var identPayload = $pubident.assertGetServerSelfIdent(serverSelfIdent);
-          var write = {
+          var writeCells = {
             "u:url": identPayload.url,
             "u:ident": serverSelfIdent
           };
-          return self.putCells(TBL_SERVER_URL, boxingPublicKey, writeCells);
+          return self._db.putCells(TBL_SERVER_URL, boxingPublicKey, writeCells);
         }
         // - mismatch, be concerned.
         // (this covers a url mismatch too)
