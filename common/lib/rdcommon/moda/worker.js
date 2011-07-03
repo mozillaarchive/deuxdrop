@@ -36,8 +36,16 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Tasks for messages received from the "web" side of the house, which
- *  translates to the public side of the house.
+ * Implements the moda worker-thread logic that handles communicating with the
+ *  mailstore server and local storage of data on the device.  It owns a
+ *  rawclient instance and exposes it to the UI thread which uses the ModaBridge
+ *  exposed API.
+ *
+ * Note that depending on the execution model, this logic may actually be
+ *  time-sliced with the ui-thread logic.  Additionally, even if this logic does
+ *  end up in a worker thread, it may have to rely on the UI-thread for all
+ *  of its I/O.  This will be required on Firefox, at least until WebSockets and
+ *  IndexedDB get exposed to workers.
  **/
 
 define(
@@ -47,57 +55,6 @@ define(
   function(
     exports
   ) {
-
-/**
- * We always receive an invite prior to receiving messages for a conversation;
- *  this is a top-level person-to-person message.
- */
-var UserInviteTask = exports.UserInviteTask = taskMaster.defineTask({
-  name: "userInvite",
-  steps: {
-    /**
-     * Get the DB row for our alleged contact
-     */
-    lookupAuthor: function() {
-    },
-    /**
-     * Make sure the contact is allowed to cause us to join...
-     */
-    validateContactAuthority: function() {
-    },
-    /**
-     * Tell our maildrop it's cool to receive messages for this conversation.
-     */
-    authorizeConversation: function() {
-    },
-  },
-});
-
-/**
- * Receive and process a human-message or machine-message in a conversation;
- *  this message must come from the fan-out server responsible for the
- *  conversation.
- *
- * Because the maildrop only lets in messages for conversations we have
- *  explicitly authorized, we should be able to trust that we aren't going to
- *  receive messages about random conversations (unless we revoke auths).
- */
-var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
-  name: "conversationMessage",
-  steps: {
-    /**
-     * Make sure it hits disk.
-     */
-    persistMessage: function() {
-    },
-    /**
-     * Relay to subscribed clients (either actively connected, or their
-     *  reliable queues for when they connect.)
-     */
-    notifySubscribers: function() {
-    },
-  },
-});
 
 
 

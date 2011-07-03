@@ -96,9 +96,45 @@ ConversationInFull.prototype = {
 /**
  * An ordered set (aka list).
  */
-function LiveOrderedSet() {
+function LiveOrderedSet(name, query) {
+  this._name = name;
+  this.query = query;
 }
 LiveOrderedSet.prototype = {
+};
+
+function ModaBridge(channelId) {
+  this._chanId = channelId;
+
+  this._nextName = 1;
+
+  /**
+   *
+   */
+  this._nameMap = {};
+}
+ModaBridge.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Internals
+
+  _send: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Queries
+  queryPeeps: function(query) {
+    var name = this._nextName++;
+    var liveset = new LiveOrderedSet(name, query);
+    this._nameMap[name] = liveset;
+    this._send('queryPeeps', name, query);
+    return liveset;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Actions
+
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 }); // end define

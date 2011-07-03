@@ -66,6 +66,7 @@ const TBL_CONV_DATA = "convData";
  * The master conversation ordered view; all converations our user is in on.
  */
 const IDX_ALL_CONVS = "idxConv";
+
 /**
  * The per-peep conversation involvement view (for both contact and non-contact
  *  peeps right now.)
@@ -78,11 +79,13 @@ const IDX_PEEP_CONV_ANY_INVOLVEMENT = "idxPeepConvAny";
 const IDX_PEEP_RECENCY = "idxPeepRecency";
 
 exports._DB_NAMES = {
-  TBL_PEEP_DATA: TBL_PEEP_DATA,
   TBL_CONV_DATA: TBL_CONV_DATA,
   IDX_ALL_CONVS: IDX_ALL_CONVS,
   IDX_PEEP_CONV_WRITE_INVOLVEMENT: IDX_PEEP_CONV_WRITE_INVOLVEMENT,
   IDX_PEEP_CONV_ANY_INVOLVEMENT: IDX_PEEP_CONV_ANY_INVOLVEMENT,
+
+  TBL_PEEP_DATA: TBL_PEEP_DATA,
+  IDX_PEEP_RECENCY: IDX_PEEP_RECENCY,
 };
 
 /**
@@ -92,6 +95,8 @@ exports._DB_NAMES = {
 function NotificationKing(store) {
   this._newishMessagesByConvId = {};
   this._store = store;
+
+
 }
 NotificationKing.prototype = {
   /**
@@ -147,7 +152,24 @@ NotificationKing.prototype = {
       store.__notifyNewMessagesInConversation(convId, msgDataItems);
     }
   },
+
+  namespaceItemAdded: function(namespace, name, item) {
+  },
+
+  namespaceItemModified: function(namespace, name, item) {
+  },
+  namespaceItemDeleted: function(namespace, name, item) {
+  },
+
+  registerNamespaceQuery: function(namespace, name, query) {
+  },
+  discardNamespaceQuery: function(namespace, name) {
+  },
+
+
 };
+
+const NS_PEEPS = 'peeps';
 
 /**
  * An optimization we are capable of performing is that we do not have to store
@@ -170,6 +192,7 @@ NotificationKing.prototype = {
 function LocalStore(dbConn, keyring) {
   this._db = dbConn;
   this._keyring = keyring;
+  this._notif = new NotificationKing(this);
 
   this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
   // conversation data proper: meta, overview, data
@@ -262,7 +285,7 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Notifications
 
-  __notifyNewMessagesInConversation: function(convId, msgDataItems) {
+  _notifyNewMessagesInConversation: function(convId, msgDataItems) {
 
   },
 
@@ -367,7 +390,8 @@ LocalStore.prototype = {
    *   @param[filter @oneof[null 'pinned']]
    * ]
    */
-  queryAndWatchPeepBlurbs: function(by) {
+  queryAndWatchPeepBlurbs: function(by, filter) {
+
   },
 
   loadAndWatchPeepBlurb: function(id) {
@@ -404,7 +428,10 @@ LocalStore.prototype = {
                               peepRootKey, now);
     this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_CONV_WRITE_INVOLVEMENT,
                               peepRootKey, now);
+
     // -- notify peep queries
+    this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
+                                   {oident: data.oident});
   },
 
   /**

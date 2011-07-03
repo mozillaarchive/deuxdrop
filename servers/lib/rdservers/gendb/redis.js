@@ -87,7 +87,7 @@ RedisDbConn.prototype = {
     this._log.connected();
   },
   _onError: function(err) {
-    this._log.error(err);
+    this._log.dbErr(err);
   },
   _onClosed: function() {
     this._log.closed();
@@ -401,7 +401,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       putCells: {cells: $log.JSONABLE},
     },
     errors: {
-      error: {err: false},
+      dbErr: {err: $log.EXCEPTION},
     },
     LAYER_MAPPING: {
       layer: "db",

@@ -179,7 +179,7 @@ actions = {
             function(liveList) {
       clientSend(client, data, {
         action: 'peepsResponse',
-        items:
+        items: [],
       });
     });
     var userId = client._deuxUserId;
@@ -230,13 +230,19 @@ actions = {
 
   'addPeep': function (data, client) {
     var peepId = data.peepId,
-        userId = client._deuxUserId,
-        multi;
+        userId = client._deuxUserId;
 
     // -- lookup the self-ident blob for the user
+    $Q.when(getSelfIdent(peepId), function(selfIdentBlob) {
+        client._rawClient.connectToPeepUsingSelfIdent(selfIdentBlob);
+        return $Q.when(
+        clientSend(client, data, {
+          action: 'addPeepResponse',
+          peep: items[0]
+        });
+      });
 
     // -- issue the add request
-    client._rawClient.connectToPeepUsingSelfIdent(
 
     // Add the list to the data store
     redis.sadd('peeps:' + userId, peepId);
@@ -246,10 +252,6 @@ actions = {
               .multi()
               .hgetall(peepId)
               .exec(function (err, items) {
-                clientSend(client, data, {
-                  action: 'addPeepResponse',
-                  peep: items[0]
-                });
               });
   },
 

@@ -122,7 +122,20 @@ function deathClock(timeout, nonfatal) {
 }
 
 var parser = $nomnom.globalOpts({
+  superDebug: {
+    string: "--super-debug",
+    default: false,
+    help: "Should we crank the logging up so that it emits to the console?",
+  },
 });
+
+function applyGlobalOptions(options) {
+  if (options.superDebug) {
+    console.error("SUPER DEBUG");
+    SUPER_DEBUG = true;
+  }
+};
+
 
 var OPT_CONFIG_DIR = {
   position: 1,
@@ -191,6 +204,7 @@ parser.command('fake-in-one')
     },
   })
   .callback(function(options) {
+    applyGlobalOptions(options);
     require(['rdservers/fakefakeserver'], function($doublefake) {
       $doublefake.goForthAndBeFake(options.webPort);
     });
@@ -205,11 +219,6 @@ parser.command('test')
       default: null,
       help: "(optional: The require name of a specific test to run)",
     },
-    superDebug: {
-      string: "--super-debug",
-      default: false,
-      help: "Should we crank the logging up so that it emits to the console?",
-    },
   })
   .callback(function(options) {
     process.on('exit', function(code) {
@@ -217,10 +226,7 @@ parser.command('test')
       console.log("EXIT EVENT", code);
     });
 
-    if (options.superDebug) {
-      console.error("SUPER DEBUG");
-      SUPER_DEBUG = true;
-    }
+    applyGlobalOptions(options);
 
     // Ideally we could slurp this from requirejs... and maybe we can, but for
     //  now...

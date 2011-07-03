@@ -95,7 +95,6 @@ TD.commonCase('clone client has state matching the mutator', function(T) {
     clone.expectReplicaUpdate();
     client.addContact(alice);
   });
-  client.setup_addContact(alice).log.boring(false);
 
   T.group("verify");
 

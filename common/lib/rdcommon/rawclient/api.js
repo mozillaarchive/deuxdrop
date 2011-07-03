@@ -43,20 +43,25 @@
  *  UI's current "focus".
  *
  * "Reliable" in this sense means that the consumer of the API does not need to
- *  build its own layer to make sure we do the things it asks.  At the current
- *  time, we in fact do not bother persisting anything, but at some point we
- *  will.
- *
- * The raw client is not responsible for persisting/caching anything (at this
- *  time), although it does maintain a blob of internal state that it will
- *  provide for the client to persist its state and to give it when creating
- *  a new instance of the client API.
+ *  build its own layer to make sure we do the things it asks.
  *
  * Abstracting away key management concerns also roughly translates to
  *  "our consumers never touch crypto keys knowing they are crypto keys".  We
  *  may give them crypto keys as unique identifiers for simplicity/consistency,
  *  but at any point we could replace them with meaningless distinct identifiers
  *  and nothing should break.
+ *
+ * The in-memory representation divide goes something like this: the UI-thread
+ *  wants the human-readable details on things plus related context and does not
+ *  need nor should it have the crypto data.  The worker thread needs all the
+ *  crypto stuff.
+ * The memory caching trade-off goes like this: we usually don't need the crypto
+ *  bits as they are only required when we are performing actions.  On the other
+ *  hand, since the plan is always that the UI is never looking at a lot of data
+ *  at a time, even moderate overhead on a small number of things is still a
+ *  small amount of memory.  The counter-argument to that is that this also
+ *  implies lower caching levels may be still be hot or warm enough that there's
+ *  no need for us to be greedy and grab the data up-front.
  **/
 
 define(
@@ -570,7 +575,15 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Mutation
 
-  createConversation: function(peeps, messageText, location, inResponseToMsg) {
+  /**
+   * Create a new conversation with an initial set of participants and an
+   *  initial message sent to the conversation.  Under the hood this gets
+   *  broken down into atomic ops: create conversation, invite+, send message.
+   *
+   *
+   */
+  createConversation: function(peepOIdents, messageText, location,
+                               inResponseToMsg) {
     var iPeep;
     // - validate that all the peeps are actually contacts
     for (iPeep = 0; iPeep < peeps.length; iPeep++) {
