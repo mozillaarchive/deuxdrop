@@ -351,7 +351,7 @@ AuthApi.prototype = {
    * @return[@promise[Boolean]]
    */
   convAssertServerUser: function(convId, otherServerBoxPubKey,
-                                otherUserTellBoxPubKey) {
+                                 otherUserTellBoxPubKey) {
     return this._db.assertBoolcheckRowCell(TBL_CONV_AUTH, convId,
              "u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey);
   },
@@ -406,7 +406,7 @@ AuthApi.prototype = {
           throw new Error("user already authorized"); // XXX better class wanted
         // authorize since not
         var cells = {};
-        cells[columnName] = otherUserTellBoxPubKey;
+        cells[columnName] = otherUserEnvelopeBoxPubKey;
         return $Q.all([
           self._serverAuthorizeServer(otherServerBoxPubKey),
           self._db.putCells(TBL_CONV_AUTH, convId, cells)
@@ -414,6 +414,32 @@ AuthApi.prototype = {
       }
       // rejection pass-through is fine
     );
+  },
+
+  /**
+   * Perform initial conversation authorization of multiple users.  Because this
+   *  is the initial conversation, we do not perform any checking for prior
+   *  authorizations like `convAuthorizeServerUser` does.  Additionally, because
+   *  conversations can only be initiated by the starting user's own contacts,
+   *  we do not need to perform any server authorization since it is guaranteed
+   *  to already be authorized.
+   *
+   * @args[
+   *   @param[convId]
+   *   @param[serverUserInfos @listof[@dict[
+   *     @key[tellKey]
+   *     @key[envelopeKey]
+   *     @key[serverKey]
+   *   ]]]
+   * ]
+   */
+  convInitialAuthorizeMultipleUsers: function(convId, serverUserInfos) {
+    var cells = {};
+    for (var i = 0; i < serverUserInfos.length; i++) {
+      var info = serverUserInfos[i];
+      cells["u:" + info.serverKey + ":" + info.tellKey] = info.envelopeKey;
+    }
+    return this._db.putCells(TBL_CONV_AUTH, convId, cells);
   },
 
   //////////////////////////////////////////////////////////////////////////////

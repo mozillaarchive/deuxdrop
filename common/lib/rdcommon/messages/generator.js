@@ -92,7 +92,7 @@
  *     @case["convadd"]{
  *       Our fanout server; this is a request to add a user to the conversation.
  *       `convId` will be the name of the conversation.  `payload` will be the
- *       attestation chain.
+ *       attestation chain.  `name` will be the added user's tell pub key.
  *     }
  *     @case["convmsg"]{
  *       Our fanout server; this is a human message to a conversation.  `name`
@@ -104,6 +104,10 @@
  *       conversation.  `name` will not be present.  `convId` will be the name
  *       of the conversation.  `payload` will be the message to relay to the
  *       conversation.
+ *     }
+ *     @case["createconv"]{
+ *       Our fanout server from our user; request to create a conversation.
+ *       Thi
  *     }
  *     @case["joinconv"]{
  *       Fanin-ish; this is a user asking the target user to join a
@@ -156,6 +160,21 @@
  *     the person being added.  This is unreadable by the fanout server because
  *     it does not need to know the details of who this person is.
  *   }
+ * ]]
+ *
+ * @typedef[ConvCreatePayload @dict[
+ *   @key[addPayloads @listof[@dict[
+ *     @key[nonce]
+ *     @key[tellKey]
+ *     @key[envelopeKey]
+ *     @key[serverKey]
+ *     @key[inviteePayload]
+ *     @key[attestationPayload]
+ *   ]]]{
+ *     Note that this dict's fields are assumed by
+ *     `convInitialAuthorizeMultipleUsers`.
+ *   }
+ *   @key[msgPayload]
  * ]]
  *
  * @typedef[SSTransitEnvelope @dict[

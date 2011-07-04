@@ -56,15 +56,17 @@ define(
 var TD = exports.TD = $tc.defineTestsFor($module, null,
   [$th_rdservers.TESTHELPER], ['app']);
 
-TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
+TD.commonCase('group messaging upgrade from one-on-one', function(T) {
+  T.group('setup');
+
   // clients are test helper entities that have convenience functions.
-  var client_a = T.actor('client', 'A'),
-      client_b = T.actor('client', 'B'),
-      client_c = T.actor('client', 'C');
+  var client_a = T.actor('testClient', 'A'),
+      client_b = T.actor('testClient', 'B'),
+      client_c = T.actor('testClient', 'C');
   // servers have no helpers because they never originate actions.
-  var server_x = T.actor('combo', 'X'),
-      server_y = T.actor('combo', 'Y'),
-      server_z = T.actor('combo', 'Z');
+  var server_x = T.actor('testServer', 'X'),
+      server_y = T.actor('testServer', 'Y'),
+      server_z = T.actor('testServer', 'Z');
   // (all of the above entities have their own initialization steps)
   // the messages in play...
   var conv = T.thing('conversation', 'conv'),
@@ -83,6 +85,8 @@ TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
   //  explicit step (to invite someone who is not a friend of everyone else)
   client_a.setup_superFriends([client_b, client_c]);
 
+  T.group("conversation");
+
   // -- actual testing stuff
   T.action(client_a, 'initiates one-on-one conversation with', client_b,
            'by sending message', msg_a1, function() {
@@ -96,17 +100,18 @@ TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
     msg_b1.expect_receivedBy([client_a]);
   });
 
+  /*
   T.permutation([
     T.action('The conversation hoster,', client_a, 'invites superfriend',
              client_c, 'to the conversation', function() {
       client_a.inviteToConv([client_c], conv);
-    }),
+    }),*/
     T.action('A participant in the coversation,', client_b,
              'invites superfriend', client_c, 'to the conversation',
              function() {
       client_b.inviteToConv([client_c], conv);
-    }),
-  ]);
+    })/*,
+  ])*/;
 
   T.action(client_c, 'joins', conv, 'and receives the earlier messages:',
            msg_a1, msg_b1, function() {
@@ -128,6 +133,8 @@ TD.DISABLED_commonCase('group messaging upgrade from one-on-one', function(T) {
     client_c.replyToMessageWith(msg_b2, msg_c1);
     msg_c1.expect_receivedBy([client_a, client_b]);
   });
+
+  T.group('cleanup');
 });
 
 }); // end define

@@ -235,7 +235,8 @@ var FanoutToUserMessageTask = exports.FanoutToUserMessageTask =
     },
     back_end_hand_off: function() {
       var arg = this.arg;
-      return arg.config.storeApi.messageForUser(arg.envelope.name,
+      return arg.config.storeApi.messageForUser('fanout',
+                                                arg.envelope.name,
                                                 arg.envelope.payload,
                                                 arg.envelope.nonce,
                                                 arg.otherServerKey);
@@ -256,7 +257,8 @@ var UserToUserMessageTask = taskMaster.defineTask({
     },
     back_end_hand_off: function() {
       var arg = this.arg;
-      return arg.config.storeApi.messageForUser(arg.innerEnvelope.name,
+      return arg.config.storeApi.messageForUser('user',
+                                                arg.innerEnvelope.name,
                                                 arg.innerEnvelope.payload,
                                                 arg.outerEnvelope.nonce,
                                                 arg.outerEnvelope.senderKey);
@@ -348,27 +350,113 @@ var CreateConversationTask = taskMaster.defineTask({
       return arg.config.authApi.serverGetUserAccountByTellKey(
                arg.outerEnvelope.senderKey);
     },
-    verify_our_user: function(isOurUser) {
-      if (!isOurUser)
+    verify_our_user: function(userRootKey) {
+      if (!userRootKey)
         throw new $taskerrors.UnauthorizedUserError("not our user");
+      this.userRootKey = userRootKey;
+    },
+    /**
+     * We require that the user generates an add for themselves as the first
+     *  add and that they be adding at least one other person.
+     */
+    verify_add_constraints: function() {
+      var addPayloads = this.arg.innerEnvelope.payload.addPayloads;
+      if (addPayloads.length < 2)
+        throw new $taskerrors.MalformedPayloadError('Not enough adds');
+      if (addPayloads[0].tellKey !== this.arg.outerEnvelope.senderKey)
+        throw new $taskerrors.MalformedPayloadError('Did not add self first');
+    },
+    /**
+     * Create 'join' and 'message' fanout messages from the payload; these will
+     *  be sent in a single backlog message to all initial participants.
+     */
+    formulate_initial_fanout_messages: function() {
+      var convPayload = this.arg.innerEnvelope.payload;
+      var fanouts = this.initialFanouts = [];
+      var now = this.now = Date.now(),
+          senderKey = this.arg.outerEnvelope.senderKey;
+      // - joins
+      for (var iAdd = 0; iAdd < convPayload.addPayloads.length; iAdd++) {
+        var addPayload = convPayload.addPayloads[iAdd];
+        fanouts.push({
+          type: 'join',
+          sentBy: senderKey,
+          receivedAt: now,
+          nonce: addPayload.nonce,
+          addPayload: addPayload.attestationPayload,
+        });
+      }
+      // - message
+      fanouts.push({
+        type: 'message',
+        sentBy: senderKey,
+        receivedAt: now,
+        nonce: this.arg.outerEnvelope.nonce,
+      });
     },
     /**
      * Create the conversation, potentially failing if there is somehow already
      *  such a conversation.
      *
+     * XXX we do not currently validate possession of the private key because of
+     *  signature verification costs.  It's not a major risk because the
+     *  conversation id space is a huge huge keyspace where the chance of
+     *  accidental collision should be stupidly low.  And in the case of
+     *  intentional collision, the request simply fails.
      * XXX since this is an asynchronous thing, we need to handle the failure
      *  in a way that we send something back to the user.
      * XXX also, bad/broken actor entropy
      */
     create_conversation_race: function() {
-
+      return arg.config.fanoutApi.createConversation(
+               arg.innerEnvelope.convId, this.userRootKey, this.initialFanouts);
     },
+
+    authorize_all_participants_including_creator: function() {
+      return arg.config.authApi.convInitialAuthorizeMultipleUsers(
+        this.arg.innerEnvelope.convId,
+        this.arg.innerEnvelope.payload.addPayloads);
+    },
+
     send_welcome_to_initial_recipients: function() {
+      var convPayload = this.arg.innerEnvelope.payload,
+          convId = this.arg.innerEnvelope.convId,
+          senderKey = this.arg.outerEnvelope.senderKey,
+          senderNonce = this.arg.outerEnvelope.nonce,
+          nowish = this.now,
+          promises = [],
+          config = this.arg.config, senderApi = config.senderApi;
+      // nonce for our pairwise unique welcome messages, so nonce reuse is fine
+      var ourNonce = $keyops.makeBoxNonce();
+      for (var iAdd = 0; iAdd < convPayload.addPayloads.length; iAdd++) {
+        var addPayload = convPayload.addPayloads[iAdd];
+
+        var welcomeMsg = {
+          type: 'welcome',
+          sentBy: senderKey,
+          receivedAt: nowish,
+          nonce: senderNonce, // (we are not boxing using this nonce)
+          payload: {
+            boxedMeta: addPayload.inviteePayload,
+            backlog: this.initialFanouts,
+          },
+        };
+        var boxedWelcomeMsg = config.keyring.box(
+          JSON.stringify(welcomeMsg), ourNonce, addPayload.envelopeKey);
+        promises.push(senderApi.sendServerEnvelopeToServer({
+            type: 'fannedmsg',
+            name: addPayload.tellKey,
+            convId: convId,
+            nonce: ourNonce,
+            payload: boxedWelcomeMsg
+          }));
+      }
+      return $Q.all(promises);
     },
   },
 });
 
-function conversationSendToAllRecipients(config, convId, message,
+function conversationSendToAllRecipients(config, convId, messageStr,
                                          usersAndServers) {
   var keyring = config.keyring,
       senderApi = config.senderApi,
@@ -380,13 +468,14 @@ function conversationSendToAllRecipients(config, convId, message,
     var userAndServer = usersAndServers[i];
 
     // - box the fanout message for the user
-    var boxed = keyring.box(message, nonce,
+    var boxed = keyring.box(messageStr, nonce,
                             userAndServer.userEnvelopeKey);
     // - create the server-to-server envelope
     var serverEnvelope = {
       type: 'fannedmsg',
       name: userAndServer.userTellKey,
       convId: convId,
+      nonce: nonce,
       payload: boxed,
     };
     promises.push(
@@ -469,6 +558,18 @@ var ConversationAddTask = taskMaster.defineTask({
           backlog: allConvData,
         },
       };
+      var nonce = $keyops.makeBoxNonce();
+      // boxed to the user's envelope key so their mailstore can read it
+      var boxedBackfillMessage = this.arg.config.keyring.box(
+        JSON.stringify(backfillMessage), nonce,
+        this.arg.innerEnvelope.payload.userEnvelopeKey);
+      return this.arg.config.senderApi.sendServerEnvelopeToServer({
+          type: 'fannedmsg',
+          name: this.arg.innerEnvelope.name,
+          convId: this.arg.innerEnvelope.convId,
+          nonce: nonce,
+          payload: boxedBackfillMessage,
+        }, this.arg.innerEnvelope.serverName);
     },
     formulate_fanout_join_message_and_persist: function() {
       this.fanoutMessage = {
@@ -488,9 +589,10 @@ var ConversationAddTask = taskMaster.defineTask({
                this.arg.innerEnvelope.convId);
     },
     send_to_all_recipients: function(usersAndServers) {
+      var fanoutMessageStr = JSON.stringify(this.fanoutMessage);
       return conversationSendToAllRecipients(this.arg.config,
                                              this.innerEnvelope.convId,
-                                             this.fanoutMessage,
+                                             fanoutMessageStr,
                                              usersAndServers);
     },
   },

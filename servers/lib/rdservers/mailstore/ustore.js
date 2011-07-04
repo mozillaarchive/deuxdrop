@@ -35,6 +35,10 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
+/**
+ * Mailstore user-behalf data storage.
+ **/
+
 define(
   [
     'exports'
@@ -43,32 +47,27 @@ define(
     exports
   ) {
 
-function MailstoreChooserApi(serverConfig, dbConn, _logger) {
-}
-exports.Api = MailstoreChooserApi;
-MailstoreChooserApi.prototype = {
-  /**
-   * If the user is using us as a fullpub, we pass the message directly to our
-   *  mailstore layer; if not, we queue the message for pickup by the user
-   *  (which could potentially get fast-pathed if their mailstore is currently
-   *  connected).
-   *
-   * XXX right now we are assuming fullpub.
-   *
-   * @args[
-   *   @param[userRootPublicKey]
-   *   @param[boxedMessage]
-   *   @param[nonce]
-   *   @param[senderKey]{
-   *     If the sender is a user, their tell key; if the sender is a (fanout)
-   *     server, the server's public box key.
-   *   }
-   * ]
-   */
-  messageForUser: function(type, userRootPublicKey, boxedMessage, nonce,
-                           senderKey) {
+const TBL_USER_CONTACTS = 'store:userContacts';
 
-  },
+const TBQ_CLIENT_REPLICAS = "store:clientQueues";
+
+
+/**
+ * User data stored on behalf of the user.
+ *
+ * @args[
+ *   @param[userRowBit]{
+ *     What identifier to use for this user in row names.  Initially we are
+ *     just going to use the user's root key.  We may eventually want to opt for
+ *     a slightly more compact representation for efficiency reasons.  (nb: A
+ *     straight-up incrementing value is probably not a better choice.)
+ *   }
+ * ]
+ */
+function UserBehalfDataStore(userRowBit, dbConn) {
+  this._db = dbConn;
+}
+UserBehalfDataStore.prototype = {
 };
 
 }); // end define

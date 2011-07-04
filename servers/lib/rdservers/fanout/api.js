@@ -74,10 +74,16 @@ FanoutApi.prototype = {
   /**
    *
    */
-  createConversation: function(convId, ownerRootKey) {
+  createConversation: function(convId, ownerRootKey, initialMessages) {
     var cells = {
       "o:owner": ownerRootKey,
+      // maintains high 1-based index (we use the post-increment on add)
+      "m:m": initialMessages.length,
     };
+    for (var i = 0; i < initialMessages.length; i++) {
+      // our message index is 1-based
+      cells["m:m" + (i + 1)] = initialMessages[i];
+    }
     return this._db.raceCreateRow(TBL_CONV_DATA, convId, "o:race", cells);
   },
 

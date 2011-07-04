@@ -54,6 +54,8 @@ define(
   ) {
 var when = $Q.when;
 
+const TBL_USER_CONTACTS = 'store:userContacts';
+
 const TBQ_CLIENT_REPLICAS = "store:clientQueues";
 
 /**
@@ -291,8 +293,19 @@ ClientServicingConnection.prototype = {
   // Conversation Mutation
 
   /**
+   * Conversation creation primarily consists of resending data to the fanout
+   *  role (right now).  We do archive the replica block that contains the
+   *  private key, but otherwise we just wait for the fanout server to parrot
+   *  what we tell it back to us.  In the future we will probably use this to
+   *  persist some "ghost" data so the user can see that they started a
+   *  conversation if the server is taking a while, but it's not required in
+   *  our initial fullpub configuration.
    */
   _msg_root_createConversation: function(msg) {
+    return $Q.join(
+      // create a new conversation with the metadata
+      this._bound_ackAction
+    );
   },
 
   /**
@@ -373,12 +386,12 @@ ClientServicingConnection.prototype = {
 };
 exports.ClientServicingConnection = ClientServicingConnection;
 
-const TBL_USER_CONTACTS = 'store:userContacts';
 
 exports.makeServerDef = function(serverConfig) {
   // initialize our db
   var db = serverConfig.db;
   db.defineHbaseTable(TBL_USER_CONTACTS, ["d"]);
+  db.defineQueueTable(TBQ_CLIENT_REPLICAS);
 
   return {
     endpoints: {
