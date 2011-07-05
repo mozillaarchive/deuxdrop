@@ -210,9 +210,44 @@ AuthApi.prototype = {
     return !!val;
   },
 
+  serverFetchUserEffigyUsingRootKey: function(rootKey, serverRole,
+                                              clientPublicKey) {
+    return when(
+      this._db.getRow(TBL_USER_ACCOUNT, rootKey, "d"),
+      function(cells) {
+        if (!cells.hasOwnProperty("d:selfIdent"))
+          throw new Error("I am to be needing a selfIdent record");
+
+        var pubring =
+          $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+            cells["d:selfIdent"]);
+
+        var otherClientKeys = [];
+        for (var key in cells) {
+          if (/^d:c:/.test(key)) {
+            var candClientKey = key.substring(4);
+            if (candClientKey !== clientPublicKey)
+              otherClientKeys.push(candClientKey);
+          }
+        }
+
+        var effigy = new UserEffigy(pubring, clientPublicKey,
+                                    otherClientKeys);
+
+        // - envelope keyring (if we are mailstore)
+        if (serverRole === "store" &&
+            cells.hasOwnProperty("d:store:keyring")) {
+          effigy.storeEnvelopeKeyring =
+            $keyring.loadSimpleBoxingKeyring(cells["d:store:keyring"]);
+        }
+
+        return effigy;
+      });
+  },
+
   /**
    * Retrieve the information for a user account relevant to a specific server
-   *  role.
+   *  role given their client key.
    */
   serverFetchUserEffigyUsingClient: function(clientPublicKey, serverRole) {
     // get the user's root public key given the client key
@@ -220,40 +255,22 @@ AuthApi.prototype = {
     return when(
       this._db.getRowCell(TBL_CLIENT_AUTH, clientPublicKey, "d:rootKey"),
       function(rootKey) {
-        return when(
-          self._db.getRow(TBL_USER_ACCOUNT, rootKey, "d"),
-          function(cells) {
-            if (!cells.hasOwnProperty("d:selfIdent"))
-              throw new Error("I am to be needing a selfIdent record");
-
-            var pubring =
-              $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-                cells["d:selfIdent"]);
-
-            var otherClientKeys = [];
-            for (var key in cells) {
-              if (/^d:c:/.test(key)) {
-                var candClientKey = key.substring(4);
-                if (candClientKey !== clientPublicKey)
-                  otherClientKeys.push(candClientKey);
-              }
-            }
-
-            var effigy = new UserEffigy(pubring, clientPublicKey,
-                                        otherClientKeys);
-
-            // - envelope keyring (if we are mailstore)
-            if (serverRole === "store" &&
-                cells.hasOwnProperty("d:store:keyring")) {
-              effigy.storeEnvelopeKeyring =
-                $keyring.loadSimpleBoxingKeyring(cells["d:store:keyring"]);
-            }
-
-            return effigy;
-          });
+        return self.serverFetchUserEffigyUsingRootKey(rootKey, serverRole,
+                                                      clientPublicKey);
       }
       // passing through the rejection is fine
     );
+  },
+
+  /**
+   * Retrieve the information for a user account relevant to a specific server
+   *  role given their tell key.
+   */
+  serverFetchUserEffigyUsingTellKey: function(tellKey, serverRole) {
+    var self = this;
+    return when(this.serverGetUserAccountByTellKey(tellKey), function(rootKey) {
+      return self.serverFetchUserEffigyUsingRootKey(rootKey, serverRole, null);
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -295,10 +312,10 @@ AuthApi.prototype = {
   //
   // Maildrop server implied.
 
-  userAssertServerUser: function(ourUserKey, otherServerBoxPubKey,
+  userAssertServerUser: function(ourUserRootKey, otherServerBoxPubKey,
                                  otherUserTellBoxPubKey) {
     return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
-             otherServerBoxPubKey + ":" + ourUserKey,
+             otherServerBoxPubKey + ":" + ourUserRootKey,
              "u:" + otherUserTellBoxPubKey);
   },
 
@@ -306,35 +323,35 @@ AuthApi.prototype = {
    * From the perspective of one of our users, is this an authorized
    *  conversation?
    */
-  userAssertServerConversation: function(ourUserKey, otherServerBoxPubKey,
+  userAssertServerConversation: function(ourUserRootKey, otherServerBoxPubKey,
                                          conversationIdent) {
     return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
-             otherServerBoxPubKey + ":" + ourUserKey,
+             otherServerBoxPubKey + ":" + ourUserRootKey,
              "c:" + conversationIdent);
   },
 
   /**
    * Authorize a given user on a given server to send our user messages.
    */
-  userAuthorizeServerUser: function(ourUserKey, serverKey, userKey) {
+  userAuthorizeServerUser: function(ourUserRootKey, serverKey, userTellKey) {
     var cells = {};
-    cells["u:" + userKey] = 1;
+    cells["u:" + userTellKey] = 1;
     return $Q.all([
       this._serverAuthorizeServer(serverKey),
-      this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,
+      this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserRootKey,
                         cells)
     ]);
   },
   /**
    * Authorize a server to send our user messages for a specific conversation.
    */
-  userAuthorizeServerForConversation: function(ourUserKey, serverKey, convKey,
-                                               whoSaysKey) {
+  userAuthorizeServerForConversation: function(ourUserRootKey, serverKey,
+                                               convKey, whoSaysTellKey) {
     var cells = {};
-    cells["c:" + convKey] = whoSaysKey;
+    cells["c:" + convKey] = whoSaysTellKey;
     return $Q.all([
       this._serverAuthorizeServer(serverKey),
-      this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserKey,
+      this._db.putCells(TBL_SERVER_USER_AUTH, serverKey + ":" + ourUserRootKey,
                         cells)
     ]);
   },

@@ -37,13 +37,33 @@
 
 define(
   [
+    'q',
+    'rdcommon/log',
+    'rdcommon/taskidiom', 'rdcommon/taskerrors',
+    './uproc',
+    'module',
     'exports'
   ],
   function(
+    $Q,
+    $log,
+    $task, $taskerrors,
+    $store_uproc,
+    $module,
     exports
   ) {
 
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+});
+
+var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
+
+
 function MailstoreChooserApi(serverConfig, dbConn, _logger) {
+  this._parentLogger = _logger;
+
+  this.procRegistry = new $store_uproc.UserProcessorRegistry(serverConfig,
+                                                             dbConn, _logger);
 }
 exports.Api = MailstoreChooserApi;
 MailstoreChooserApi.prototype = {
@@ -53,10 +73,19 @@ MailstoreChooserApi.prototype = {
    *  (which could potentially get fast-pathed if their mailstore is currently
    *  connected).
    *
-   * XXX right now we are assuming fullpub.
+   * XXX right now we are assuming fullpub and directly embedding the
+   *  processing.
+   * XXX furthermore, we are immediately processing, which can result in races,
+   *  versus using a processing queue to enforce serialized processing.  This
+   *  is reasonably safe in our unit testing model but not remotely a good idea
+   *  for anything approaching reality.
+   *
+   * In all cases we should be receiving a message boxed to the user's envelope
+   *  key
    *
    * @args[
-   *   @param[userRootPublicKey]
+   *   @param[type @oneof["fanout" "user"]]
+   *   @param[userTellPubKey]
    *   @param[boxedMessage]
    *   @param[nonce]
    *   @param[senderKey]{
@@ -65,9 +94,8 @@ MailstoreChooserApi.prototype = {
    *   }
    * ]
    */
-  messageForUser: function(type, userRootPublicKey, boxedMessage, nonce,
-                           senderKey) {
-
+  convMessageForUser: function(stransitEnv, otherServerKey) {
+    return this.procRegistry.convMessageForUser(stransitEnv, otherServerKey);
   },
 };
 

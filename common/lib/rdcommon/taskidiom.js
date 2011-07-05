@@ -201,6 +201,14 @@ var EarlyReturnTaskProto = exports.EarlyReturnTaskProto = {
  * }
  * @typedef[TaskDef @dict[
  *   @key[name String]
+ *   @key[args #:optional @listof[keyNames]]{
+ *     If present, the creation argument is assumed to be a dictionary and this
+ *     list of args is a white-list of keys whose values should be copied onto
+ *     the object instance.
+ *
+ *     The decision to add this was made after "this.arg" started showing up
+ *     like it was "this".
+ *   }
  *   @key[steps @dictof[
  *     @key[stepName String]{
  *     }
@@ -271,10 +279,22 @@ TaskMaster.prototype = {
       for (var implKey in taskDef.impl)
         proto[implKey] = taskDef.impl[implKey];
     }
+    var args;
+    if ("args" in taskDef)
+      args = taskDef.args;
+    else
+      args = null;
 
     var logfab = this._logfab;
     var taskConstructor = function $TaskConstructor(arg, _logger) {
       this.arg = arg;
+      if (args) {
+        for (var i = 0; i < args.length; i++) {
+          var key = args[i];
+          this[key] = arg[key];
+        }
+      }
+
       // XXX currently tasks are unnamed; we probably want to let a task def
       //  providing a naming description that gets passed through to the logging
       //  layer and a function that can extract the name from the arg payload.

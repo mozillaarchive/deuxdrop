@@ -44,19 +44,18 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/identities/pubident',
+    './ustore', // note: cannot include uproc; it uses us for gConnTracker...
     'exports'
   ],
   function(
     $Q,
     $log,
     $pubident,
+    $ustore,
     exports
   ) {
 var when = $Q.when;
 
-const TBL_USER_CONTACTS = 'store:userContacts';
-
-const TBQ_CLIENT_REPLICAS = "store:clientQueues";
 
 /**
  * Really simple class to track connections.  We do this for:
@@ -114,9 +113,19 @@ UserConnectionsTracker.prototype = {
         othConn.otherClientGeneratedReplicaBlock(replicaBlock);
     }
   },
+
+  notifyAllOfReplicaBlock: function(rootKey, replicaBlock) {
+    if (!this.liveByRootKey.hasOwnProperty(rootKey))
+      return;
+    var conns = this.liveByRootKey[rootKey];
+    for (var i = 0; i < conns.length; i++) {
+      // XXX otherClientGeneratedReplicaBlock is a misnomer in this case
+      conns[i].otherClientGeneratedReplicaBlock(replicaBlock);
+    }
+  },
 };
 
-var gConnTracker = new UserConnectionsTracker();
+var gConnTracker = exports.gConnTracker = new UserConnectionsTracker();
 
 /**
  * Receives requests from the client and services them in a synchronous fashion.
@@ -159,9 +168,10 @@ function ClientServicingConnection(conn, userEffigy) {
   this.conn = conn;
   this.config = conn.serverConfig;
   this.userEffigy = userEffigy;
+  // note: this is not the same instance as a `UserMessageProcessor` holds.
+  this.store = new $ustore.UserBehalfDataStore(userEffigy.rootPublicKey,
+                                               conn.serverConfig.db);
   this.clientPublicKey = this.conn.clientPublicKey;
-
-  this.db = conn.serverConfig.db;
 
   gConnTracker.born(this, userEffigy);
 
@@ -198,7 +208,7 @@ ClientServicingConnection.prototype = {
    *  replica block type.
    */
   _msg_init_deviceCheckin: function(msg) {
-    return when(this.db.queuePeek(TBQ_CLIENT_REPLICAS, this.clientPublicKey, 1),
+    return when(this.store.clientQueuePeek(this.clientPublicKey),
                 this._bound_peekHandler
                 // rejection pass-through is fine
                );
@@ -229,8 +239,7 @@ ClientServicingConnection.prototype = {
    */
   _msg_root_ackReplica: function(msg) {
     this._replicaInFlight = false;
-    return when(this.db.queueConsumeAndPeek(
-                  TBQ_CLIENT_REPLICAS, this.clientPublicKey, 1, 1),
+    return when(this.store.clientQueueConsumeAndPeek(this.clientPublicKey),
                 this._bound_peekHandler
                 // rejection pass-through is fine
                 );
@@ -255,8 +264,7 @@ ClientServicingConnection.prototype = {
     var otherClientKeys = this.userEffigy.otherClientKeys;
     var promises = [];
     for (var i = 0; i < otherClientKeys.length; i++) {
-      promises.push(this.db.queueAppend(TBQ_CLIENT_REPLICAS, otherClientKeys[i],
-                                        [block]));
+      promises.push(this.store.clientQueuePush(otherClientKeys[i], block));
     }
 
     // - notify any lives ones about the enqueueing
@@ -351,10 +359,8 @@ ClientServicingConnection.prototype = {
       $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(msg.serverSelfIdent);
 
     return $Q.join(
+      this.store.newContact(msg.userRootKey, msg.replicaBlock),
       // persist the data to our random-access store
-      this.db.putCells(TBL_USER_CONTACTS,
-                       this.userEffigy.rootPublicKey + ":" + msg.userRootKey,
-                       {'d:addBlock': msg.replicaBlock}),
       // enqueue for other (existing) clients
       this.sendReplicaBlockToOtherClients(msg.replicaBlock),
       // perform maildrop/fanout authorization

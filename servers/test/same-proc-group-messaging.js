@@ -69,6 +69,7 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
       server_z = T.actor('testServer', 'Z');
   // (all of the above entities have their own initialization steps)
   // the messages in play...
+
   var conv = T.thing('conversation', 'conv'),
       msg_a1 = T.thing('message', 'a1'),
       msg_b1 = T.thing('message', 'b1'),
@@ -106,13 +107,16 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
              client_c, 'to the conversation', function() {
       client_a.inviteToConv([client_c], conv);
     }),*/
-    T.action('A participant in the coversation,', client_b,
+/*    T.action('A participant in the coversation,', client_b,
              'invites superfriend', client_c, 'to the conversation',
              function() {
       client_b.inviteToConv([client_c], conv);
-    })/*,
+    })
+*/
+  /*,
   ])*/;
 
+/*
   T.action(client_c, 'joins', conv, 'and receives the earlier messages:',
            msg_a1, msg_b1, function() {
     client_c.joinConv(join_msg, conv);
@@ -133,7 +137,7 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
     client_c.replyToMessageWith(msg_b2, msg_c1);
     msg_c1.expect_receivedBy([client_a, client_b]);
   });
-
+*/
   T.group('cleanup');
 });
 

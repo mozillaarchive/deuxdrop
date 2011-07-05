@@ -74,6 +74,10 @@ PersonPubring.prototype = {
     return this.data.rootPublicKey;
   },
 
+  get transitServerPublicKey() {
+    return this.data.transitServerPublicKey;
+  },
+
   /**
    * Assert that the longterm signing public key was valid for this person at
    *  the given timestamp, throwing an exception if the key is either unknown
@@ -148,6 +152,9 @@ function commonCreatePersonPubring(selfIdentPayload, selfIdentBlob) {
         tellBox: selfIdentPayload.keys.tellBoxPubKey,
       },
     },
+    transitServerPublicKey:
+      $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(
+        selfIdentPayload.transitServerIdent),
   };
   return new PersonPubring(persistedForm);
 }

@@ -107,7 +107,6 @@
  *     }
  *     @case["createconv"]{
  *       Our fanout server from our user; request to create a conversation.
- *       Thi
  *     }
  *     @case["joinconv"]{
  *       Fanin-ish; this is a user asking the target user to join a
@@ -133,6 +132,16 @@
  *       adding is idempotent, but can have bandwidth/traffic ramifications.
  *       This can be dealt with by requiring the packet to include an expiration
  *       date and having us use (tupled) nonce-based replay suppression.
+ *
+ *       `name` and `convId` are not needed since this is just wrapping
+ *       a transit message and `serverName` tell us all we need to know.
+ *       We add a `nonce` because of the potential for nonce reuse in the
+ *       case where we are trying to resend a message to ourself.  In such
+ *       a case we could instead special-case self-detection and assume and
+ *       require that the nested payload is not encrypted, but for now, this
+ *       is simplest.  (Note that nonce reuse in the case of self-nested
+ *       payloads is probably safe because the decrypted nested payload is only
+ *       exposed to us, but better safe than sorry.)
  *     }
  *   }
  *   @key[name]
@@ -147,7 +156,7 @@
  * }
  *
  * @typedef[ConvAddPayload @dict[
- *   @key[userEnvelopeKey]{
+ *   @key[envelopeKey]{
  *     The user's envelope key for encrypting fanout messages to the user (so
  *     that their mailstore can process the messages).
  *   }
@@ -160,16 +169,29 @@
  *     the person being added.  This is unreadable by the fanout server because
  *     it does not need to know the details of who this person is.
  *   }
- * ]]
+ * ]]{
+ *   Similar to the items in the `ConvCreatePayload` addPayloads entry, but
+ *   without fields that are implicit from the containing envelope.
+ * }
  *
  * @typedef[ConvCreatePayload @dict[
  *   @key[addPayloads @listof[@dict[
  *     @key[nonce]
  *     @key[tellKey]
- *     @key[envelopeKey]
+ *     @key[envelopeKey]{
+ *       The user's envelope key for encrypting fanout messages to the user (so
+ *       that their mailstore can process the messages).
+ *     }
  *     @key[serverKey]
- *     @key[inviteePayload]
- *     @key[attestationPayload]
+ *     @key[inviteePayload]{
+ *       The boxed message containing the conversation metadata from the inviter
+ *       to the invitee to be delivered as part of the welcome payload.
+ *     }
+ *     @key[attestationPayload]{
+ *       A conversation encrypted message containing the identity information of
+ *       the person being added.  This is unreadable by the fanout server because
+ *       it does not need to know the details of who this person is.
+ *     }
  *   ]]]{
  *     Note that this dict's fields are assumed by
  *     `convInitialAuthorizeMultipleUsers`.
@@ -212,7 +234,7 @@
  * }
  *
  * @typedef[ConversationWelcomeMessage @dict[
- *   @key[boxedMeta]
+ *   @key[boxedInvite]
  *   @key[backlog @listof[ConversationFanoutEnvelope]]
  * ]]{
  *   Contains the conversation meta-data from the inviter in a boxed message
@@ -228,6 +250,8 @@
  *     @case["join"]{
  *       A join notification for a new participant; contains the attestation
  *       (authored by the inviter) about who the invitee is (to the inviter).
+ *       `sentBy` contains the tell key of the inviter, `invitee` contains the
+ *       tell key of the invited.
  *     }
  *     @case["usermeta"]{
  *       User metadata about the conversation as a whole, likely their
@@ -250,6 +274,7 @@
  *   @key[sentBy]{
  *     The tell key of the sending user.
  *   }
+ *   @key[invitee #:optional]{Only present for 'join' notifications}
  *   @key[receivedAt DateMS]
  *   @key[nonce]
  *   @key[payload ConversationEnvelopeEncrypted]
@@ -315,13 +340,23 @@ define(
  * Create a conversation and return the meta-info that all participants need
  *  plus the conversation-starter-only info.
  */
-exports.createNewConversation = function(serverIdentPayload) {
+exports.createNewConversation = function(authorKeyring, serverIdentPayload) {
   // - create the new signing keypair that defines the conversation
   var convKeypair = $keyops.makeGeneralSigningKeypair();
 
   // - create the symmetric secret keys (envelope, body) for the conversation
   var envelopeSharedSecretKey = $keyops.makeSecretBoxKey();
   var bodySharedSecretKey = $keyops.makeSecretBoxKey();
+
+  // - generate the attestation that roots the conversation.
+  var attestPayload = {
+    id: convKeypair.publicKey,
+    createdAt: Date.now(),
+    author: authorKeyring.rootPublicKey,
+    transitServer: serverIdentPayload.publicKey,
+  };
+  var signedAttestation = $keyops.generalSignUtf8(
+                            JSON.stringify(attestPayload), convKeypair);
 
   // the actual information required to participate in the conversation...
   var convMeta = {
@@ -332,13 +367,12 @@ exports.createNewConversation = function(serverIdentPayload) {
     //  bind the url into the conversation info; the mailsender will have it on
     //  file.
     transitServerKey: serverIdentPayload.publicKey,
+    attestation: signedAttestation,
   };
-
-  // - generate the attestation that roots the conversation.
 
   return {
     keypair: convKeypair,
-    participantMeta: convMeta,
+    meta: convMeta,
   };
 };
 
@@ -356,33 +390,108 @@ exports.createNewConversation = function(serverIdentPayload) {
  * ]
  */
 exports.createConversationInvitation = function(authorKeyring,
+                                                ourServerKey,
                                                 otherPersonIdent,
                                                 convMeta,
                                                 recipPubring) {
+  var now = Date.now();
+  var attestSNonce = $keyops.makeSecretBoxNonce(),
+      inviteNonce = $keyops.makeBoxNonce(),
+      // required since in the case our own transit server is the fanout server
+      //  we would end up reusing a nonce which is forbidden.
+      resendNonce = $keyops.makeBoxNonce();
+
   // -- for the conversation participants (not the fanout server)
   // - generate signed attestation to be sent to the list
   // The attestation is stating that we are explicitly binding this person into
   //  the conversation and therefore names the conversation.  This avoids
-  //  frame-jobs based on replays, *as long as
+  //  some frame-jobs based on replays; obviously, if someone creates a
+  //  conversation with the same name, that's insufficient.
+  var attestPayload = {
+    issuedAt: now,
+    convId: convMeta.id,
+    oident: otherPersonIdent
+  };
+  var signedAttestation = authorKeyring.signUtf8With(
+                            JSON.stringify(attestPayload),
+                            'messaging', 'announceSign');
 
-
-  // - encrypt the attestation with the message key
+  // - encrypt the attestation with the conv body key
+  var sboxedAttestation = $keyops.secretBox(signedAttestation, attestSNonce,
+                                            convMeta.bodySharedSecretKey);
 
   // -- for the invitee
   // (sekret detailz about the conversation)
-  // - encrypt the shared secret keys into
+  // - body key layer
+  var inviteBody = {
+    bodySharedSecretKey: convMeta.bodySharedSecretKey,
+  };
+  var boxedInviteBody = authorKeyring.boxUtf8With(
+                          JSON.stringify(inviteBody), inviteNonce,
+                          recipPubring.getPublicKeyFor('messaging', 'bodyBox'),
+                          'messaging', 'tellBox');
+
+  // - envelope key layer
+  var inviteEnv = {
+    convId: convMeta.id,
+    transitServerKey: convMeta.transitServerKey,
+    enevelopeSharedSecretKey: convMeta.envelopeSharedSecretKey,
+    payload: boxedInviteBody,
+  };
+  var boxedInviteEnv = authorKeyring.boxUtf8With(
+                         JSON.stringify(inviteEnv), inviteNonce,
+                         recipPubring.getPublicKeyFor('messaging',
+                                                      'envelopeBox'),
+                         'messaging', 'tellbox');
 
   // -- for the fanout server itself (includes both of the above)
-  // - create this invitation, jerk.
+  // - convadd request
+  var convAddInnerEnv = {
+    type: 'convadd',
+    name: recipPubring.getPublicKeyFor('messaging', 'tellBox'),
+    serverName: recipPubring.transitServerPublicKey,
+    convId: convMeta.id,
+    payload: {
+      envelopeKey: recipPubring.getPublicKeyFor('messaging', 'envelopeBox'),
+      inviteePayload: boxedInviteEnv,
+      attestationPayload: sboxedAttestation,
+    }
+  };
+
+  // - which gets boxed to the transit server
+  var boxedConvAdd = authorKeyring.boxUtf8With(
+                       JSON.stringify(convAddInnerEnv), inviteNonce,
+                       convMeta.transitServerKey,
+                       'messaging', 'tellBox');
+
+  // -- for our fanin server to resend to the transit server (nests the above)
+  var resend = {
+    type: 'resend',
+    serverName: convMeta.transitServerKey,
+    nonce: inviteNonce,
+    payload: boxedConvAdd,
+  };
+  var boxedResend = authorKeyring.boxUtf8With(
+                      JSON.stringify(resend), resendNonce,
+                      ourServerKey,
+                      'messaging', 'tellBox');
 
   // -- for their fanin server (nests the above)
-  // - tell the server to authorize incoming messages for the conversation
+  // - "joinconv" message to their maildrop
+  var joinConv = {
+    type: 'joinconv',
+    name: recipPubring.rootPublicKey,
+    serverName: convMeta.transitServerKey,
+    convId: convMeta.id,
+    payload: boxedResend,
+  };
 
+  var boxedJoinConv = authorKeyring.boxUtf8With(
+                        JSON.stringify(joinConv), inviteNonce,
+                        recipPubring.transitServerPublicKey,
+                        'messaging', 'tellBox');
 
-  // - give it the encrypted conversation details to feed to the user
-
-
-
+  return boxedJoinConv;
 };
 
 /**
@@ -420,8 +529,8 @@ exports.createConversationHumanMessage = function(bodyString, authorKeyring,
                                           'messaging', 'announceSign');
 
   var nonce = $keyops.makeSecretBoxNonce();
-  var bodyEncrypted = $keyops.secretBoxUtf8(bodySigned, nonce,
-                                            convMeta.bodySharedSecretKey);
+  var bodyEncrypted = $keyops.secretBox(bodySigned, nonce,
+                                        convMeta.bodySharedSecretKey);
 
   var envelopeObj = {
     // so, ideally there would be something interesting that could go in here,

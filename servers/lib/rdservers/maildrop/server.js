@@ -235,11 +235,8 @@ var FanoutToUserMessageTask = exports.FanoutToUserMessageTask =
     },
     back_end_hand_off: function() {
       var arg = this.arg;
-      return arg.config.storeApi.messageForUser('fanout',
-                                                arg.envelope.name,
-                                                arg.envelope.payload,
-                                                arg.envelope.nonce,
-                                                arg.otherServerKey);
+      return arg.config.storeApi.convMessageForUser(arg.envelope,
+                                                    arg.otherServerKey);
     },
   },
 });
@@ -333,7 +330,7 @@ var ConversationJoinedTask = taskMaster.defineTask({
       return this.arg.config.senderApi.sendPersonEnvelopeToServer(userRootKey,
         {
           senderKey: this.arg.msg.name,
-          nonce: this.arg.msg.nonce,
+          nonce: this.innerEnvelope.nonce,
           innerEnvelope: this.innerEnvelope.payload
         },
         this.innerEnvelope.serverName);
@@ -381,6 +378,7 @@ var CreateConversationTask = taskMaster.defineTask({
         fanouts.push({
           type: 'join',
           sentBy: senderKey,
+          invitee: addPayload.tellKey,
           receivedAt: now,
           nonce: addPayload.nonce,
           addPayload: addPayload.attestationPayload,
@@ -437,7 +435,7 @@ var CreateConversationTask = taskMaster.defineTask({
           receivedAt: nowish,
           nonce: senderNonce, // (we are not boxing using this nonce)
           payload: {
-            boxedMeta: addPayload.inviteePayload,
+            boxedInvite: addPayload.inviteePayload,
             backlog: this.initialFanouts,
           },
         };
@@ -456,6 +454,9 @@ var CreateConversationTask = taskMaster.defineTask({
   },
 });
 
+/**
+ * Send a message to all
+ */
 function conversationSendToAllRecipients(config, convId, messageStr,
                                          usersAndServers) {
   var keyring = config.keyring,
@@ -530,67 +531,68 @@ var ConversationMessageTask = taskMaster.defineTask({
  */
 var ConversationAddTask = taskMaster.defineTask({
   name: "conversationAdd",
+  args: ['config', 'innerEnvelope', 'outerEnvelope', 'otherServerKey'],
   steps: {
-    assert_inviter_in_on_conversation: function(arg) {
-      return arg.config.authApi.convAssertServerConversation(
-        arg.innerEnvelope.convId, arg.otherServerKey,
-        arg.outerEnvelope.senderKey);
+    assert_inviter_in_on_conversation: function() {
+      return this.config.authApi.convAssertServerConversation(
+        this.innerEnvelope.convId, this.otherServerKey,
+        this.outerEnvelope.senderKey);
     },
     add_authorization_or_reject_if_already_authorized: function() {
-      var arg = this.arg;
-      return arg.config.authApi.convAuthorizeServerUser( // auto-rejects
-               arg.innerEnvelope.convId, arg.innerEnvelope.serverName,
-               arg.innerEnvelope.name,
-               arg.innerEnvelope.payload.userEnvelopeKey);
+      return this.config.authApi.convAuthorizeServerUser( // auto-rejects
+               this.innerEnvelope.convId, this.innerEnvelope.serverName,
+               this.innerEnvelope.name,
+               this.innerEnvelope.payload.envelopeKey);
     },
     fetch_backlog: function() {
-      return this.arg.config.fanoutApi.getAllConversationData(
-               arg.innerEnvelope.convId);
+      return this.config.fanoutApi.getAllConversationData(
+               this.innerEnvelope.convId);
     },
     welcome_invitee: function(allConvData) {
       var backfillMessage = {
         type: 'welcome',
-        sentBy: this.arg.outerEnvelope.senderKey,
+        sentBy: this.outerEnvelope.senderKey,
         receivedAt: Date.now(),
-        nonce: this.arg.outerEnvelope.nonce,
+        nonce: this.outerEnvelope.nonce,
         payload: {
-          boxedMeta: this.arg.innerEnvelope.payload.inviteePayload,
+          boxedMeta: this.innerEnvelope.payload.inviteePayload,
           backlog: allConvData,
         },
       };
       var nonce = $keyops.makeBoxNonce();
       // boxed to the user's envelope key so their mailstore can read it
-      var boxedBackfillMessage = this.arg.config.keyring.box(
+      var boxedBackfillMessage = this.config.keyring.box(
         JSON.stringify(backfillMessage), nonce,
-        this.arg.innerEnvelope.payload.userEnvelopeKey);
-      return this.arg.config.senderApi.sendServerEnvelopeToServer({
+        this.innerEnvelope.payload.envelopeKey);
+      return this.config.senderApi.sendServerEnvelopeToServer({
           type: 'fannedmsg',
-          name: this.arg.innerEnvelope.name,
-          convId: this.arg.innerEnvelope.convId,
+          name: this.innerEnvelope.name,
+          convId: this.innerEnvelope.convId,
           nonce: nonce,
           payload: boxedBackfillMessage,
-        }, this.arg.innerEnvelope.serverName);
+        }, this.innerEnvelope.serverName);
     },
     formulate_fanout_join_message_and_persist: function() {
       this.fanoutMessage = {
         type: 'join',
-        sentBy: this.arg.outerEnvelope.senderKey,
+        sentBy: this.outerEnvelope.senderKey,
+        invitee: this.innerEnvelope.name,
         receivedAt: Date.now(),
         // the message/envelope are encrypted with the same nonce as what we
         //  received.
-        nonce: arg.outerEnvelope.nonce,
-        payload: this.arg.innerEnvelope.payload.attestationPayload,
+        nonce: this.outerEnvelope.nonce,
+        payload: this.innerEnvelope.payload.attestationPayload,
       };
-      return this.arg.config.fanoutApi.addMessageToConversation(
+      return this.config.fanoutApi.addMessageToConversation(
                this.fanoutMessage);
     },
     get_recipients: function() {
-      return this.arg.config.authApi.convGetParticipants(
-               this.arg.innerEnvelope.convId);
+      return this.config.authApi.convGetParticipants(
+               this.innerEnvelope.convId);
     },
     send_to_all_recipients: function(usersAndServers) {
       var fanoutMessageStr = JSON.stringify(this.fanoutMessage);
-      return conversationSendToAllRecipients(this.arg.config,
+      return conversationSendToAllRecipients(this.config,
                                              this.innerEnvelope.convId,
                                              fanoutMessageStr,
                                              usersAndServers);
@@ -600,31 +602,32 @@ var ConversationAddTask = taskMaster.defineTask({
 
 var ConversationMetaTask = taskMaster.defineTask({
   name: "conversationMeta",
+  args: ['config', 'innerEnvelope', 'outerEnvelope', 'otherServerKey'],
   steps: {
-    check_already_in_on_conversation: function(arg) {
-      return arg.config.authApi.convAssertServerConversation(
-        arg.innerEnvelope.convId, arg.otherServerKey,
-        arg.outerEnvelope.senderKey);
+    check_already_in_on_conversation: function() {
+      return this.config.authApi.convAssertServerConversation(
+        this.innerEnvelope.convId, this.otherServerKey,
+        this.outerEnvelope.senderKey);
     },
     formulate_fanout_message_and_persist: function() {
       this.fanoutMessage = {
         type: 'meta',
-        sentBy: this.arg.outerEnvelope.senderKey,
+        sentBy: this.outerEnvelope.senderKey,
         receivedAt: Date.now(),
         // the message/envelope are encrypted with the same nonce as what we
         //  received.
-        nonce: arg.outerEnvelope.nonce,
-        payload: this.arg.innerEnvelope.payload,
+        nonce: this.outerEnvelope.nonce,
+        payload: this.innerEnvelope.payload,
       };
-      return this.arg.config.fanoutApi.updateConvPerUserMetadata(
-               this.arg.innerEnvelope.convId, this.fanoutMessage);
+      return this.config.fanoutApi.updateConvPerUserMetadata(
+               this.innerEnvelope.convId, this.fanoutMessage);
     },
     get_recipients: function() {
-      return this.arg.config.authApi.convGetParticipants(
-               this.arg.innerEnvelope.convId);
+      return this.config.authApi.convGetParticipants(
+               this.innerEnvelope.convId);
     },
     send_to_all_recipients: function(usersAndServers) {
-      return conversationSendToAllRecipients(this.arg.config,
+      return conversationSendToAllRecipients(this.config,
                                              this.innerEnvelope.convId,
                                              this.fanoutMessage,
                                              usersAndServers);

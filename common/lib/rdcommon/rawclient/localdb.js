@@ -59,6 +59,22 @@ define(
  */
 const TBL_PEEP_DATA = "peepData";
 /**
+ * Peeps by recency of messages they have written to conversations (the user is
+ *  involved in).
+ */
+const IDX_PEEP_WRITE_INVOLVEMENT = "idxPeepWrite";
+/**
+ * Peeps by recency of messages the user have written to conversations they are
+ *  in.
+ */
+const IDX_PEEP_RECIP_INVOLVEMENT = "idxPeepRecip";
+/**
+ * Peeps by recency of activity in any conversation they are involved in,
+ *  even if it was just a third party in the coversation posting a message.
+ */
+const IDX_PEEP_ANY_INVOLVEMENT = "idxPeepAny";
+
+/**
  * Conversation data.
  */
 const TBL_CONV_DATA = "convData";
@@ -71,21 +87,24 @@ const IDX_ALL_CONVS = "idxConv";
  * The per-peep conversation involvement view (for both contact and non-contact
  *  peeps right now.)
  */
-const IDX_PEEP_CONV_WRITE_INVOLVEMENT = "idxPeepConvWrite";
-const IDX_PEEP_CONV_ANY_INVOLVEMENT = "idxPeepConvAny";
-/**
- * The list of peeps ordered by conversation activity recency.
- */
-const IDX_PEEP_RECENCY = "idxPeepRecency";
+const IDX_CONV_PEEP_WRITE_INVOLVEMENT = "idxPeepConvWrite";
+const IDX_CONV_PEEP_ANY_INVOLVEMENT = "idxPeepConvAny";
 
+/**
+ * Database table names are exposed for use by `testhelper.js` instances so
+ *  they can issue checks on database state that do not make sense to expose
+ *  via explicit API's.
+ */
 exports._DB_NAMES = {
   TBL_CONV_DATA: TBL_CONV_DATA,
   IDX_ALL_CONVS: IDX_ALL_CONVS,
-  IDX_PEEP_CONV_WRITE_INVOLVEMENT: IDX_PEEP_CONV_WRITE_INVOLVEMENT,
-  IDX_PEEP_CONV_ANY_INVOLVEMENT: IDX_PEEP_CONV_ANY_INVOLVEMENT,
+  IDX_CONV_PEEP_WRITE_INVOLVEMENT: IDX_CONV_PEEP_WRITE_INVOLVEMENT,
+  IDX_CONV_PEEP_ANY_INVOLVEMENT: IDX_CONV_PEEP_ANY_INVOLVEMENT,
 
   TBL_PEEP_DATA: TBL_PEEP_DATA,
-  IDX_PEEP_RECENCY: IDX_PEEP_RECENCY,
+  IDX_PEEP_WRITE_INVOLVEMENT: IDX_PEEP_WRITE_INVOLVEMENT,
+  IDX_PEEP_RECIP_INVOLVEMENT: IDX_PEEP_RECIP_INVOLVEMENT,
+  IDX_PEEP_ANY_INVOLVEMENT: IDX_PEEP_ANY_INVOLVEMENT,
 };
 
 /**
@@ -195,14 +214,17 @@ function LocalStore(dbConn, keyring) {
   this._notif = new NotificationKing(this);
 
   this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
+  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+                                  IDX_PEEP_WRITE_INVOLVEMENT);
+
   // conversation data proper: meta, overview, data
   this._db.defineHbaseTable(TBL_CONV_DATA, ["m", "o", "d"]);
 
   this._db.defineReorderableIndex(TBL_CONV_DATA, IDX_ALL_CONVS);
 
-  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+  this._db.defineReorderableIndex(TBL_CONV_DATA,
                                   IDX_PEEP_CONV_WRITE_INVOLVEMENT);
-  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+  this._db.defineReorderableIndex(TBL_CONV_DATA,
                                   IDX_PEEP_CONV_ANY_INVOLVEMENT);
 }
 exports.LocalStore = LocalStore;
@@ -241,19 +263,31 @@ LocalStore.prototype = {
   },
 
   /**
-   * Consume and process either a crypto or auth replica block; we eat both!
+   * Consume and process one of the many varieties of replica blocks:
+   * - crypted block issued by a client (trustworthy)
+   * - authenticated block issued by a client (trustworthy)
+   * - conversation data from the mailstore (needs validation of nougat)
    */
   consumeReplicaBlock: function(serialized) {
-    var mform = JSON.parse(serialized), block;
-    if (mform.hasOwnProperty("nonce")) {
-      block = JSON.parse(this._keyring.openSecretBoxUtf8With(
-                  mform.sboxed, mform.nonce, 'replicaSbox'));
+    // XXX temporarily add slack in whether we marshal it on the way down
+    var mform = (typeof(serialized) === "string") ? JSON.parse(serialized)
+                                                  : serialized,
+        authed, block;
+    if (mform.hasOwnProperty("fanmsg")) {
+      return this._proc_fanmsg(mform);
     }
     else {
-      this._keyring.verifyAuthUtf8With(mform.auth, mform.block, 'replicaAuth');
-      block = JSON.parse(mform.block);
+      if (mform.hasOwnProperty("nonce")) {
+        block = JSON.parse(this._keyring.openSecretBoxUtf8With(
+                    mform.sboxed, mform.nonce, 'replicaSbox'));
+      }
+      else {
+        this._keyring.verifyAuthUtf8With(mform.auth, mform.block,
+                                         'replicaAuth');
+        block = JSON.parse(mform.block);
+      }
+      return this._performReplicaCommand(block.cmd, block.data);
     }
-    this._performReplicaCommand(block.cmd, block.data);
   },
 
   /**
@@ -267,7 +301,7 @@ LocalStore.prototype = {
     if (!(implCmdName in this)) {
       throw new Error("no command for '" + block.cmd + "'");
     }
-    this[implCmdName](payload);
+    return this[implCmdName](payload);
   },
 
   generateAndPerformReplicaCryptoBlock: function(command, payload) {
@@ -324,7 +358,36 @@ LocalStore.prototype = {
 
 
   //////////////////////////////////////////////////////////////////////////////
-  // Conversation Mutation
+  // Conversation Processing
+
+  _proc_fanmsg: function(fanmsg) {
+    // - invite?
+    // (This gets to be the root of the conversation on the mailstore; it comes
+    //  from the welcome message, which, for consistency reasons, the mailstore
+    //  breaks apart and pretends does not exist to us.)
+    if (fanmsg.hasOwnProperty("sentBy")) {
+      return this._proc_convInvite(fanmsg);
+    }
+    // - fanout message
+    else {
+    }
+  },
+
+  _proc_convInvite: function(fanmsg) {
+    // - unbox the invite envelopeb
+    var inviteEnv = JSON.parse(
+                      this._keyring.openBoxUtf8With(
+                        fanmsg.fanmsg, fanmsg.nonce, fanmsg.senderKey,
+                        'messaging', 'envelopeBox'));
+
+    // - unbox the invite payload
+    var inviteBody = JSON.parse(
+                       this._keyring.openBoxUtf8With(
+                         inviteEnv, fanmsg.nonce, fanmgs.senderKey,
+                         'messaging', 'bodyBox'));
+
+
+  },
 
   /**
    * A new conversation (from our perspective) as defined by its metadata; the
@@ -378,8 +441,10 @@ LocalStore.prototype = {
    *  but be ready to nuke it when the actual message successfully hits the
    *  conversation.
    */
+  /*
   _cmd_outghostAddConversationMessage: function() {
   },
+  */
 
   //////////////////////////////////////////////////////////////////////////////
   // Peep Lookup
@@ -472,8 +537,8 @@ LocalStore.prototype = {
   },
 
   /**
-   * A previously namechecked name is no longer relevant because the conversation
-   *  is being expired, etc.
+   * A previously namechecked name is no longer relevant because the
+   *  conversation is being expired, etc.
    */
   _nameGone: function() {
   },

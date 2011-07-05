@@ -47,13 +47,45 @@ define(
     exports
   ) {
 
-const TBL_USER_CONTACTS = 'store:userContacts';
+const TBL_CONTACTS = 'store:userContacts';
 
 const TBQ_CLIENT_REPLICAS = "store:clientQueues";
 
+const TBL_CONVERSATIONS = 'store:userConversations';
+
+const IDX_PEEP_WRITE_INVOLVEMENT = "store:idxPeepWrite";
+const IDX_PEEP_RECIP_INVOLVEMENT = "store:idxPeepRecip";
+// XXX this could be problematic with large converation sizes...
+const IDX_PEEP_ANY_INVOLVEMENT = "store:idxPeepAny";
+
+const IDX_CONV_PEEP_WRITE_INVOLVEMENT = "store:idxPeepConvWrite";
+const IDX_CONV_PEEP_ANY_INVOLVEMENT = "store:idxPeepConvAny";
+
+
+exports.initializeUserTable = function(dbConn) {
+  dbConn.defineHbaseTable(TBL_CONTACTS, ["d"]);
+
+  dbConn.defineReorderableIndex(TBL_CONTACTS,
+                                IDX_PEEP_WRITE_INVOLVEMENT);
+  dbConn.defineReorderableIndex(TBL_CONTACTS,
+                                IDX_PEEP_RECIP_INVOLVEMENT);
+  dbConn.defineReorderableIndex(TBL_CONTACTS,
+                                IDX_PEEP_ANY_INVOLVEMENT);
+
+  dbConn.defineHbaseTable(TBL_CONVERSATIONS, ["m", "d"]);
+  dbConn.defineReorderableIndex(TBL_CONVERSATIONS,
+                                IDX_CONV_PEEP_WRITE_INVOLVEMENT);
+  dbConn.defineReorderableIndex(TBL_CONVERSATIONS,
+                                IDX_CONV_PEEP_ANY_INVOLVEMENT);
+
+  dbConn.defineQueueTable(TBQ_CLIENT_REPLICAS);
+};
 
 /**
- * User data stored on behalf of the user.
+ * User data stored on behalf of the user by the mailstore (which can only see
+ *  envelope data in an unencrypted form).  Data is generally intended to be
+ *  regurgitated to a smart-ish client which has a copy of the body encryption
+ *  key and can decrypt everything into a presentation state using that.
  *
  * @args[
  *   @param[userRowBit]{
@@ -65,9 +97,122 @@ const TBQ_CLIENT_REPLICAS = "store:clientQueues";
  * ]
  */
 function UserBehalfDataStore(userRowBit, dbConn) {
+  this._userRowBit = userRowBit;
   this._db = dbConn;
 }
+exports.UserBehalfDataStore = UserBehalfDataStore;
 UserBehalfDataStore.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Client Queues
+
+  clientQueuePeek: function(clientPublicKey) {
+    return this._db.queuePeek(TBQ_CLIENT_REPLICAS, clientPublicKey, 1);
+  },
+
+  clientQueueConsumeAndPeek: function(clientPublicKey) {
+    return this._db.queueConsumeAndPeek(
+                  TBQ_CLIENT_REPLICAS, clientPublicKey, 1, 1);
+  },
+  clientQueuePush: function(clientPublicKey, payload) {
+    var listy = [payload];
+    return this._db.queueAppend(TBQ_CLIENT_REPLICAS, listy);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Contacts
+
+  newContact: function(contactRootKey, replicaAddBlock) {
+    return this._db.putCells(TBL_CONTACTS,
+                             this._userRowBit + contactRootKey,
+                             {'d:addBlock': replicaAddBlock});
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversations
+  //
+  // We store everything in the boxed fanout message from the transit server as
+  //  it was received.  We do this just to leave the messages on-disk in an
+  //  encrypted format.  This does not provide the user or clients with any
+  //  guarantee that the outer envelopes we have access to have not been
+  //  forged; because of the box semantics, we ourselves (or anyone who
+  //  compromises us in a way that gains them access to the envelope secret key)
+  //  can forge these (or new) outer boxes.
+  //
+  // Row: [user prefix, conversation id]
+  //
+  // Cells:
+  // - m:i - The invitation envelope and required context data.
+  // - m:m - The current high message number.
+  // - m:p### - Indicate the involvement of user tell key '###' in the
+  //    conversation.
+  // - d:m# - Message number '#'; this covers all non-conversation-level
+  //    metadata.
+  // - d:e### - Per-user metadata for tell key '###'.
+
+  /**
+   * Store the
+   */
+  newConversationRace: function(conversationId, invitationEnvContext) {
+    return this._db.raceCreateRow(TBL_CONVERSATIONS,
+                                  this._userRowBit + conversationId,
+                                  {"m:i": invitationEnvContext});
+  },
+
+  /**
+   * Retrieve the
+   */
+  getConversationRootMeta: function(conversationId) {
+    return this._db.getRow(TBL_CONVERSATIONS,
+                           this._userRowBit + conversationId, "m");
+  },
+
+  /**
+   * Add a message to the conversation, optionally boosting peep index values.
+   */
+  addConversationMessage: function(conversationId, highMsgNum,
+                                   rawMsgWithContext) {
+    var cells = {
+      "m:m": highMsgNum + 1,
+    };
+    cells["d:m" + highMsgNum] = rawMsgWithContext;
+    return this._db.putCells(TBL_CONVERSATIONS,
+                             this._userRowBit + conversationId,
+                             cells);
+  },
+
+  /**
+   * Update the per-peep conversation view indices; in other words, update the
+   *  ordered lists of conversations the peep is involved in.
+   */
+  touchConvPeepsRecencies: function(conversationId, timestamp,
+                                    writerPeepId,
+                                    recipientPeepIds) {
+    var promises = [];
+    // - writer
+    promises.push(this._db.maximizeIndexValue(
+      TBL_CONVERSATIONS, IDX_CONV_PEEP_WRITE_INVOLVEMENT, writerPeepId,
+      conversationId, timestamp));
+    // - recipients
+    for (var iRecip = 0; iRecip < recipientPeepIds.length; iRecip++) {
+      var recipPeepId = recipientPeepIds[iRecip];
+      promises.push(this._db.maximizeIndexValue(
+        TBL_CONVERSATIONS, IDX_CONV_PEEP_ANY_INVOLVEMENT, recipPeepId,
+        conversationId, timestamp));
+    }
+
+    return $Q.all(promises);
+  },
+
+  setConversationPerUserMetadata: function(conversationId, tellKey,
+                                           rawMsgWithContext) {
+    var cells = {};
+    cells["d:e" + tellKey] = rawMsgWithContext;
+    return this._db.putCells(TBL_CONVERSATIONS,
+                             this._userRowBit + conversationId,
+                             cells);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 }); // end define

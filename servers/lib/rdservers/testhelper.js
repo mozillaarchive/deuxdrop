@@ -281,7 +281,7 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Messaging
 
-  writeMessage: function(conv, outMsgThing, recipients) {
+  startConversation: function(conv, outMsgThing, recipients) {
   },
 
   replyToMessageWith: function(msgReplyingTo, outMsgThing) {

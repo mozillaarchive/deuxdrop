@@ -40,7 +40,11 @@
  *  server while abstracting away key management concerns.  It is intended to
  *  exist on a background (non-UI) thread on the client device.  Interaction
  *  with the UI thread should be handled at a higher level that is aware of the
- *  UI's current "focus".
+ *  UI's current "focus".  The UI API is being provided by the "moda" layer
+ *  which operates as a cross-process bridge.
+ *
+ * It's a weak goal to try and make sure that the `RawClientAPI` can be used
+ *  on its own without requiring the moda layer.
  *
  * "Reliable" in this sense means that the consumer of the API does not need to
  *  build its own layer to make sure we do the things it asks.
@@ -61,7 +65,9 @@
  *  at a time, even moderate overhead on a small number of things is still a
  *  small amount of memory.  The counter-argument to that is that this also
  *  implies lower caching levels may be still be hot or warm enough that there's
- *  no need for us to be greedy and grab the data up-front.
+ *  no need for us to be greedy and grab the data up-front.  Right now we
+ *  opt for keeping everything around in-memory because it simplifies the logic
+ *  and we are under development time pressure.
  **/
 
 define(
@@ -582,8 +588,7 @@ RawClientAPI.prototype = {
    *
    *
    */
-  createConversation: function(peepOIdents, messageText, location,
-                               inResponseToMsg) {
+  createConversation: function(peepOIdents, messageText, location) {
     var iPeep;
     // - validate that all the peeps are actually contacts
     for (iPeep = 0; iPeep < peeps.length; iPeep++) {
@@ -592,17 +597,24 @@ RawClientAPI.prototype = {
     }
 
     // - create the conversation
-    var convMeta = $msg_gen.createNewConversation(this._transitServer);
+    var convBits = $msg_gen.createNewConversation(this._keyring,
+                                                  this._transitServer);
+    var convKeypair = convBits.keypair,
+        convMeta = convBits.meta;
 
     // - generate the invitations for the peeps
-    for (iPeep = 0; iPeep < peeps.length; iPeep++) {
-      //var invitation = $msg_gen.createConversationInvitation(
-      //  this._keyring,
+    for (iPeep = 0; iPeep < peepOIdents.length; iPeep++) {
+      var invitation = $msg_gen.createConversationInvitation(
+        this._keyring, this._transitServer.publicKey,
+        peepOIdents[iPeep], convMeta,
     }
 
     // - formulate the message to the fanout role
 
     // - send the message
+    this._enqueueAction({
+
+    });
   },
   replyToConversation: function(conversation, messageText, location) {
     // - create a signed message payload

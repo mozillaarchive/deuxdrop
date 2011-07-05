@@ -58,13 +58,15 @@ PeepCard.prototype = {
 /**
  * Provides summary information about the peep's activities as they relate to
  *  our user: # of unread messages from the user, # of conversations involving
- *  the user.
+ *  the user, meta-data our user has annotated them with (ex: pinned).
  *
  * Contains a copy of the `PeepCard` for the user in question to name them.
  */
 function PeepBlurb() {
 }
 PeepBlurb.prototype = {
+  get pinned() {
+  },
 };
 
 /**
@@ -88,9 +90,12 @@ ConversationBlurb.prototype = {
 /**
  * All of the data about a conversation, including its messages.
  */
-function ConversationInFull() {
+function ConversationInFull(_bridge) {
+  this._bridge = bridge;
 }
 ConversationInFull.prototype = {
+  writeMessage: function(text) {
+  },
 };
 
 /**
@@ -108,16 +113,22 @@ function ModaBridge(channelId) {
 
   this._nextName = 1;
 
-  /**
-   *
-   */
   this._nameMap = {};
 }
 ModaBridge.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Internals
 
-  _send: function() {
+  _send: function(cmd, thisSideName, payload) {
+    var str = JSON.stringify({cmd: cmd, name: thisSideName, payload: payload});
+    // XXX obviously not proper bridging...
+
+  },
+
+  /**
+   * Normalize a list of peeps to their id's for transit to the back-end.
+   */
+  _normalizePeepsToIds: function(peeps) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -133,6 +144,23 @@ ModaBridge.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Actions
 
+  /**
+   * @args[
+   *   @param[args @dict[
+   *     @key[peeps]
+   *     @key[text String]
+   *     @key[location #:optional String]
+   *   ]]
+   * ]
+   */
+  createConversation: function(args) {
+    var outArgs = {
+      peeps: this._normalizePeepsToIds(args.peeps),
+      messageText: args.text,
+    };
+    this._send('createConversation', null, outArgs);
+    // XXX ideally we would want to return a blurb...
+  },
 
   //////////////////////////////////////////////////////////////////////////////
 };

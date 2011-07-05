@@ -264,7 +264,7 @@ RedisDbConn.prototype = {
    *  the relevant infinity.  Passing null for an object name means to use the
    *  relevant first/last value.
    */
-  scanIndex: function(tableName, indexName,
+  scanIndex: function(tableName, indexName, indexParam,
                       lowValue, lowObjectName, lowInclusive,
                       highValue, highObjectName, highInclusive) {
   },
@@ -273,10 +273,38 @@ RedisDbConn.prototype = {
    * Add/update the value associated with an objectName for the given index for
    *  the given (index) table.
    */
-  updateIndexValue: function(tableName, indexName, objectName, newValue,
-                             oldValueIfKnown) {
-    this._conn.zadd(this._prefix + ':' + tableName + ':' + indexName,
-                    newValue, objectName);
+  updateIndexValue: function(tableName, indexName, indexParam,
+                             objectName, newValue, oldValueIfKnown) {
+    var deferred = $Q.defer();
+    this._conn.zadd(
+      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+      newValue, objectName, function(err, result) {
+        if (err)
+          deferred.reject(err);
+        else
+          deferred.resolve(result);
+      });
+    return deferred.promise;
+  },
+
+  /**
+   * Set the value associated with an objectName for the given index to the
+   *  maximum of its current value and the value we are providing.
+   *
+   * XXX COPOUT! this does not actually maximize! this just updates!
+   */
+  maximizeIndexValue: function(tableName, indexName, indexParam,
+                               objectName, newValue) {
+    var deferred = $Q.defer();
+    this._conn.zadd(
+      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+      newValue, objectName, function(err, result) {
+        if (err)
+          deferred.reject(err);
+        else
+          deferred.resolve(result);
+      });
+    return deferred.promise;
   },
 
   //////////////////////////////////////////////////////////////////////////////
