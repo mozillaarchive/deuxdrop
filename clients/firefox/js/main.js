@@ -53,9 +53,14 @@ define(function (require) {
       cards = require('cards'),
       moda = require('moda'),
       friendly = require('friendly'),
+      IScroll = require('iscroll'),
 
       commonNodes = {},
-      peeps, update, messageCloneNode, notifyDom, nodelessActions;
+      peeps, update, messageCloneNode, notifyDom, nodelessActions,
+      newMessageIScroll, newConversationNodeWidth;
+
+  //iScroll just defines a global, bind to it here
+  IScroll = window.iScroll;
 
   function getChildCloneNode(node) {
     // Try on the actual node, and if not there, check the scroller node
@@ -96,6 +101,11 @@ define(function (require) {
     var metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
     metaNode.setAttribute('data-time', message.time);
     metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
+  }
+
+  function adjustNewScrollerWidth(convScrollerDom) {
+    convScrollerDom = convScrollerDom || $('.newConversationScroller');
+    convScrollerDom.css('width', (convScrollerDom.children().length * newConversationNodeWidth) + 'px');
   }
 
   function makeMessageBubble(node, message) {
@@ -139,6 +149,7 @@ define(function (require) {
 
   function insertUnseenMessage(message) {
     var convNotificationDom = $('.newConversationNotifications'),
+        convScrollerDom = convNotificationDom.find('.newConversationScroller'),
         convNode, convCloneNode, node, nodeDom;
 
     // Add a conversation box to the start card, but only if there is not
@@ -161,8 +172,20 @@ define(function (require) {
       // Add the conversation ID to the node
       node.setAttribute('data-convid', message.convId);
 
-      convNode.appendChild(node);
+      convScrollerDom.prepend(node);
+
+      if (!newConversationNodeWidth) {
+        newConversationNodeWidth = node.getBoundingClientRect().width;
+      }
+
+      // Figure out how big to make the horizontal scrolling area.
+      adjustNewScrollerWidth(convScrollerDom);
+
       cards.adjustCardSizes();
+
+      if (newMessageIScroll) {
+        newMessageIScroll.refresh();
+      }
 
       // Activate new notification, but only if not already on start page.
       if (cards.currentCard().attr('data-cardid') !== 'start') {
@@ -176,6 +199,12 @@ define(function (require) {
     'start': function (data, dom) {
       // Use user ID as the title
       dom[0].title = moda.me().id;
+
+      // Bind the iscroll to allow horizontal scrolling of new messages.
+      newMessageIScroll = new IScroll(dom.find('.newConversationNotifications')[0], {
+        hScrollbar: true,
+        vScrollbar: false
+      });
     },
 
     'notify': function (data, dom) {
@@ -219,8 +248,11 @@ define(function (require) {
         // Generate nodes for each person.
         peeps.items.forEach(function (peep) {
           var node = clonable.cloneNode(true);
+
+          updateDom($(node), peep);
+
           node.href += '?id=' + encodeURIComponent(peep.id);
-          node.appendChild(document.createTextNode(peep.name));
+
           frag.appendChild(node);
         });
 
@@ -569,6 +601,14 @@ define(function (require) {
         // after transition has happened.
         setTimeout(function () {
           node.parentNode.removeChild(node);
+          adjustNewScrollerWidth();
+
+          // Adjust the new conversation list scroll to be back at zero,
+          // otherwise it can look weird when going "back" to the start card.
+          if (newMessageIScroll) {
+            newMessageIScroll.scrollTo(0, 0);
+          }
+
           cards.adjustCardSizes();
         }, 1000);
 

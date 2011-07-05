@@ -257,8 +257,10 @@ function ($,        url,         array,         headerTemplate) {
     adjustCardSizes();
 
     // Set up scroller.
-    scrollRegistry[scrollId] = new IScroll(dom[0]);
-    dom.attr('data-scrollid', scrollId);
+    if (!dom.hasClass('noiscroll')) {
+      scrollRegistry[scrollId] = new IScroll(dom[0]);
+      dom.attr('data-scrollid', scrollId);
+    }
   };
 
   cards.getIScroller = function (nodeOrDom) {
