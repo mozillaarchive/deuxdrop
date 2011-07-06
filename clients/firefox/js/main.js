@@ -175,7 +175,8 @@ define(function (require) {
       convScrollerDom.prepend(node);
 
       if (!newConversationNodeWidth) {
-        newConversationNodeWidth = node.getBoundingClientRect().width;
+        // Lame. adding extra 20px. TODO fix this.
+        newConversationNodeWidth = $(node).outerWidth() + 20;
       }
 
       // Figure out how big to make the horizontal scrolling area.
@@ -192,6 +193,22 @@ define(function (require) {
         notifyDom.show();
       }
     }
+  }
+
+  function adjustCardScroll(card) {
+    // Scroll to the bottom of the conversation
+    setTimeout(function () {
+      // If the message contents are longer than the containing element,
+      // scroll down.
+      if (card.innerHeight() < card.find('.scroller').innerHeight()) {
+        var scroller = cards.getIScroller(card);
+        if (scroller) {
+          scroller.scrollToElement(card.find('.compose')[0], 200);
+        } else {
+          card[0].scrollTop = card[0].scrollHeight;
+        }
+      }
+    }, 300);
   }
 
   // Set up card update actions.
@@ -417,16 +434,7 @@ define(function (require) {
         // Let the server know the messages have been seen
         conversation.setSeen();
 
-        // TODO: best to do this ontransition end instead of guessing when it
-        // ends.
-        setTimeout(function () {
-          scroller = cards.getIScroller(dom);
-          if (scroller) {
-            scroller.scrollToElement(dom.find('.compose')[0], 200);
-          } else {
-            dom[0].scrollTop = dom[0].scrollHeight;
-          }
-        }, 300);
+        adjustCardScroll(dom);
       });
 
       // Set up compose area
@@ -457,24 +465,15 @@ define(function (require) {
         card.find('.conversationMessages').append(makeMessageBubble(messageCloneNode.cloneNode(true), message));
         cards.adjustCardSizes();
 
-        // Scroll to the bottom of the conversation
-        setTimeout(function () {
-          var scroller = cards.getIScroller(card);
-          if (scroller) {
-            scroller.scrollToElement(card.find('.compose')[0], 200);
-          } else {
-            card[0].scrollTop = card[0].scrollHeight;
-          }
+        adjustCardScroll(card);
 
-          // Let the server know the messages have been seen
-          moda.conversation({
-            by: 'id',
-            filter: message.convId
-          }).withMessages(function (conv) {
-            conv.setSeen();
-          });
+        // Let the server know the messages have been seen
+        moda.conversation({
+          by: 'id',
+          filter: message.convId
+        }).withMessages(function (conv) {
+          conv.setSeen();
         });
-
       } else if (message.from.id === moda.me().id) {
         // If message is from me, it means I wanted to start a new conversation.
         cards.nav('conversation?id=' + message.convId);
