@@ -48,10 +48,12 @@
 define(
   [
     'rdcommon/crypto/keyops',
+    'rdcommon/identities/pubident',
     'exports'
   ],
   function(
     $keyops,
+    $pubident,
     exports
   ) {
 
@@ -100,6 +102,11 @@ PersonPubring.prototype = {
    * Get the currently active key from a given group with a given name.
    */
   getPublicKeyFor: function(groupName, keyName) {
+    // XXX this is a normalizing hack whose invocation usage will likely
+    //  have a timestamp available and should just stop using us as its means
+    //  of getting keys, etc.  Upstream callers may also need love.
+    if (groupName === 'LONGTERM' && keyName === 'LONGTERM')
+      return this.data.longtermKeys[0];
     if (!this.data.activeGroups.hasOwnProperty(groupName))
       throw new Error("No such group: '" + groupName + "'");
     if (!this.data.activeGroups[groupName].hasOwnProperty(keyName))
@@ -129,6 +136,55 @@ PersonPubring.prototype = {
       throw new $keyops.InvalidAuthorizationError();
   },
 
+  /**
+   * Assert the validity of a signed blob, returning its results if valid.
+   *
+   * @args[
+   *   @param[signedObjBlob String]{
+   *     The signed object blob.
+   *   }
+   *   @param[observedTimestamp DateMS]{
+   *     The timestamp of the first reliable instance we (or someone we trust)
+   *     observed the signed blob.
+   *   }
+   *   @param[keyNamingField String]{
+   *     The field in the signed object that names the key used to sign it.
+   *   }
+   *   @param[timestampNamingField #:optional String]{
+   *     The field in the signed object that names the date of signing.  This
+   *     is intended to be used in conjunction with the `observedTimestamp` and
+   *     key validity ranges to make sure we are not dealing with backdated
+   *     signatures with compromised keys, replay attacks, or other
+   *     maliciousness.
+   *
+   *     XXX entirely speculative and unimplemented at this point.
+   *   }
+   *   @param[groupName]{
+   *     The group name the signing key should belong to.
+   *   }
+   *   @param[keyName]{
+   *     The key name in the group the signing key should correspond to.
+   *   }
+   * ]
+   */
+  assertGetSignedSelfNamingPayload: function(signedObjBlob,
+                                             observedTimestamp,
+                                             keyNamingField,
+                                             timestampNamingField,
+                                             groupName, keyName) {
+    // XXX we do *nothing* with the timestamp stuff. *NOTHING*
+    var expectedSigningKey = this.getPublicKeyFor(groupName, keyName);
+
+    var peeked = JSON.parse(
+                   $keyops.generalPeekInsideSignatureUtf8(signedObjBlob));
+    var actualSigningKey = peeked[keyNamingField];
+    if (expectedSigningKey !== actualSigningKey)
+      throw new $keyops.KeyMismatchError();
+
+    $keyops.generalVerifySignatureUtf8(signedObjBlob, expectedSigningKey);
+    return peeked;
+  },
+
   __persist: function() {
     return this.data;
   },
@@ -152,17 +208,40 @@ function commonCreatePersonPubring(selfIdentPayload, selfIdentBlob) {
         tellBox: selfIdentPayload.keys.tellBoxPubKey,
       },
     },
-    transitServerPublicKey:
+    transitServerPublicKey: (selfIdentPayload.transitServerIdent ?
       $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(
-        selfIdentPayload.transitServerIdent),
+        selfIdentPayload.transitServerIdent) : null),
   };
   return new PersonPubring(persistedForm);
 }
 
+/**
+ * Given a self-ident blob that has been reliably checked elsewhere, peek inside
+ *  it and use its payload to initialize a pubring.
+ *
+ * Under no circumstances should this be used on a self-ident blob that has not
+ *  been previously checked.
+ */
 exports.createPersonPubringFromSelfIdentDO_NOT_VERIFY = function(selfIdentBlob) {
   return commonCreatePersonPubring(
     JSON.parse($keyops.generalPeekInsideSignatureUtf8(selfIdentBlob)),
     selfIdentBlob);
+};
+
+/**
+ * Given an other-person-ident blob that has been reliably checked elsewhere,
+ *  peek inside it and use its payload to initialize a pubring.
+ *
+ * Under no circumstances should this be used on a oth-ident blob that has not
+ *  been previously checked.
+ */
+exports.createPersonPubringFromOthIdentDO_NOT_VERIFY = function(othIdentBlob) {
+  var othIdentPayload = JSON.parse($keyops.generalPeekInsideSignatureUtf8(
+                                     othIdentBlob));
+  var selfIdentBlob = othIdentBlob.personSelfIdent;
+  var selfIdentPayload = JSON.parse($keyops.generalPeekInsideSignatureUtf8(
+                                      selfIdentBlob));
+  return commonCreatePersonPubring(selfIdentPayload, selfIdentBlob);
 };
 
 exports.loadPersonPubring = function(persistedForm) {

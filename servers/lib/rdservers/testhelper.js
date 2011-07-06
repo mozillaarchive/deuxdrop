@@ -78,6 +78,7 @@ var TestClientActorMixins = {
   __constructor: function(self, opts) {
     // -- define the raw client and its setup step
     self._eRawClient = self.T.actor('rawClient', self.__name, null, self);
+    self._eLocalStore = self.T.actor('localStore', self.__name, null, self);
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
         function() {
       // - create our self-corresponding logger the manual way
@@ -201,7 +202,9 @@ var TestClientActorMixins = {
    *  as the means of knowing the other contact's identity.
    *
    * We place our expectation on our mailstore server acknowledging the
-   *  completion of our request.
+   *  completion of our request.  If the mailstore is living on its own, we
+   *  would want to also place an expectation on the permission hitting the
+   *  maildrop.
    */
   addContact: function(other) {
     this.RT.reportActiveActorThisStep(this._eRawClient);
@@ -281,7 +284,30 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Messaging
 
-  startConversation: function(conv, outMsgThing, recipients) {
+  startConversation: function(tConv, tMsgThing, recipients) {
+    var iRecip;
+
+    for (iRecip = 0; iRecip < recipients.length; iRecip++) {
+      var recipTestClient = recipients[iRecip];
+    }
+
+    // - create the conversation
+    // (we have to do this before the expectations because we don't know what
+    //  to expect until we invoke this)
+    var convInfo = this._rawClient.createConversation();
+
+    tConv.digitalName = convInfo.convId;
+    tMsgThing.digitalName = convInfo.msgNonce;
+
+    // - expectations
+    // we'll call it done when it hits the clients
+    for (iRecip = 0; iRecip < recipients.length; iRecip++) {
+      var recipTestClient = recipients[iRecip];
+
+      recipTestClient._eLocalStore.expect_newConversation(convInfo.convId);
+      recipTestClient._eLocalStore.expect_conversationMessage(
+        convInfo.convId, convInfo.msgNonce);
+    }
   },
 
   replyToMessageWith: function(msgReplyingTo, outMsgThing) {
@@ -412,7 +438,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
 exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB,
-    $authconn.LOGFAB, $rawclient_api.LOGFAB,
+    $authconn.LOGFAB, $rawclient_api.LOGFAB, $client_localdb.LOGFAB,
     $signup_server.LOGFAB, $gendb.LOGFAB,
   ],
 

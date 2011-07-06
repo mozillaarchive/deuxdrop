@@ -77,6 +77,7 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
       join_msg = T.thing('message', 'join'),
       msg_c1 = T.thing('message', 'c1');
 
+
   client_a.setup_useServer(server_x);
   client_b.setup_useServer(server_y);
   client_c.setup_useServer(server_z);
@@ -91,16 +92,15 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   // -- actual testing stuff
   T.action(client_a, 'initiates one-on-one conversation with', client_b,
            'by sending message', msg_a1, function() {
-    client_a.writeMessage(conv, msg_a1, [client_b]);
-    msg_a1.expect_receivedBy([client_b]);
+    client_a.startConversation(conv, msg_a1, [client_b]);
   });
-
+/*
   T.action(client_b, 'responds to the messsage', msg_a1, 'of', client_a, 'with',
            msg_b1, function() {
     client_b.replyToMessageWith(msg_a1, msg_b1);
     msg_b1.expect_receivedBy([client_a]);
   });
-
+*/
   /*
   T.permutation([
     T.action('The conversation hoster,', client_a, 'invites superfriend',

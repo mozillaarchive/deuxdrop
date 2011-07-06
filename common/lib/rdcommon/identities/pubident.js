@@ -156,6 +156,9 @@
  *     This could vary from just a nickname to a wholesale set of contact
  *     attributes.
  *   }
+ *   @key[assertedBy]{
+ *     The long-term key of the person asserting this.
+ *   }
  * ]]{
  *   Data structure to be signed by person B to describe their world view of
  *   person A in a form that snapshots person A's self-ident.  Snapshotting
@@ -300,17 +303,17 @@ exports.generateOtherPersonIdent = function(longtermKeyring,
 
 /**
  * Verify an other-person ident, returning the nested self-ident payload and
- *  localPoco, and asserter's key (which is optionally checked.)
+ *  localPoco, and asserter's key (which is optionally checked.)  This does NOT
+ *  check the validity of the self-ident blob; it is assumed you are going to
+ *  do that next.
  */
 exports.assertGetOtherPersonIdent = function(otherPersonIdentBlob,
-                                             checkAuthorPubring) {
-  var peekedPayload = JSON.parse(
-    $keyops.generalPeekInsideSignatureUtf8(otherPersonIdentBlob));
-  var longtermSignPubKey = peekedPayload.assertedBy;
-  $keyops.generalVerifySignatureUtf8(otherPersonIdentBlob, longtermSignPubKey);
-
-  if (checkAuthorPubring)
-    checkAuthorPubring.assertValidLongtermSigningKey(longtermSignPubKey);
+                                             checkAuthorPubring,
+                                             timestamp) {
+  return checkAuthorPubring.assertGetSignedSelfNamingPayload(
+          otherPersonIdentBlob, timestamp,
+          'assertedBy', 'issuedAt',
+          'LONGTERM', 'LONGTERM');
 };
 
 }); // end define

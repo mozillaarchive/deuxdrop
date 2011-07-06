@@ -311,6 +311,11 @@ ClientServicingConnection.prototype = {
    */
   _msg_root_createConversation: function(msg) {
     return $Q.join(
+      this.config.senderApi.sendPersonEnvelopeToServer(
+        this.userEffigy.rootPublicKey,
+        msg.payload,
+        // is there a better way to know this?
+        this.userEffigy.pubring.transitServerPublicKey),
       // create a new conversation with the metadata
       this._bound_ackAction
     );
@@ -395,9 +400,8 @@ exports.ClientServicingConnection = ClientServicingConnection;
 
 exports.makeServerDef = function(serverConfig) {
   // initialize our db
-  var db = serverConfig.db;
-  db.defineHbaseTable(TBL_USER_CONTACTS, ["d"]);
-  db.defineQueueTable(TBQ_CLIENT_REPLICAS);
+
+  $ustore.initializeUserTable(serverConfig.db);
 
   return {
     endpoints: {

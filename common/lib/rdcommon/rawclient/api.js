@@ -76,7 +76,7 @@ define(
     'rdcommon/log',
     'rdcommon/transport/authconn',
     'rdcommon/crypto/keyring',
-    'rdcommon/identities/pubident',
+    'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
     '../messages/generator',
     './localdb',
     'module',
@@ -87,7 +87,7 @@ define(
     $log,
     $authconn,
     $keyring,
-    $pubident,
+    $pubident, $pubring,
     $msg_gen,
     $localdb,
     $module,
@@ -267,8 +267,12 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
   this._keyring = $keyring.loadDelegatedKeyring(
                              persistedBlob.keyrings.general);
 
+  this._log = LOGFAB.rawClient(this, _logger,
+    ['user', this._keyring.rootPublicKey,
+     'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
+
   // -- create store
-  this.store = new $localdb.LocalStore(dbConn, this._keyring);
+  this.store = new $localdb.LocalStore(dbConn, this._keyring, this._log);
 
   // -- copy self-ident-blob, verify it, extract canon bits
   // (The poco bit is coming from here.)
@@ -276,6 +280,8 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
   var selfIdentPayload = $pubident.assertGetPersonSelfIdent(
                            this._selfIdentBlob,
                            this._keyring.rootPublicKey);
+  this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                    this._selfIdentBlob);
 
   this._otherClientAuths = persistedBlob.otherClientAuths;
 
@@ -287,9 +293,6 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
     this._transitServer = null;
   this._poco = selfIdentPayload.poco;
 
-  this._log = LOGFAB.rawClient(this, _logger,
-    ['user', this._keyring.rootPublicKey,
-     'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
 
   /**
    * Signup connection; it should only be in play when signing up.
@@ -476,6 +479,8 @@ RawClientAPI.prototype = {
     this._selfIdentBlob = $pubident.generatePersonSelfIdent(
                             this._longtermKeyring, this._keyring,
                             this._poco, serverSelfIdentBlob);
+    this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                      this._selfIdentBlob);
 
     // - signup!
     this._log.signup_begin();
@@ -569,14 +574,6 @@ RawClientAPI.prototype = {
     // - generate a new attestation
   },
 
-  //////////////////////////////////////////////////////////////////////////////
-  // Peep Querying
-
-  // all/pinned, time-ordered/alphabetical
-  queryPeeps: function() {
-    // (this should all already be locally available in the localstore)
-  },
-
 
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Mutation
@@ -586,9 +583,14 @@ RawClientAPI.prototype = {
    *  initial message sent to the conversation.  Under the hood this gets
    *  broken down into atomic ops: create conversation, invite+, send message.
    *
-   *
+   * @return[@dict[
+   *   @key[convId]
+   *   @key[msgNonce]{
+   *     The nonce used for the message payload.
+   *   }
+   * ]]
    */
-  createConversation: function(peepOIdents, messageText, location) {
+  createConversation: function(peepOIdents, peepPubrings, messageText, location) {
     var iPeep;
     // - validate that all the peeps are actually contacts
     for (iPeep = 0; iPeep < peeps.length; iPeep++) {
@@ -602,19 +604,69 @@ RawClientAPI.prototype = {
     var convKeypair = convBits.keypair,
         convMeta = convBits.meta;
 
+    var addPayloads = [];
+
+    var useOIdents = [null].concat(peepOIdents),
+        useRecipPubrings = [this._pubring].concat(peepPubrings);
+
+
     // - generate the invitations for the peeps
-    for (iPeep = 0; iPeep < peepOIdents.length; iPeep++) {
-      var invitation = $msg_gen.createConversationInvitation(
-        this._keyring, this._transitServer.publicKey,
-        peepOIdents[iPeep], convMeta,
+    for (iPeep = 0; iPeep < useOIdents.length; iPeep++) {
+      var otherPersonIdent = useOIdents[iPeep],
+          recipPubring = useRecipPubrings[iPeep];
+      var inviteInfo = $msg_gen.createConversationInvitation(
+        this._keyring, otherPersonIdent, convMeta, recipPubring);
+      var inviteProofInfo = $msg_gen.createInviteProof(
+        this._keyring, convMeta, recipPubring);
+
+      addPayloads.push({
+        nonce: inviteInfo.nonce,
+        tellKey: recipPubring.getPublicKeyFor('messaging', 'tellBox'),
+        envelopeKey: recipPubring.getPublicKeyFor('messaging', 'envelopeBox'),
+        serverKey: recipPubring.transitServerPublicKey,
+        inviteePayload: inviteInfo.boxedInvite,
+        attestationPayload: inviteInfo.signedAttestation,
+        inviteProof: inviteProofInfo.boxedInviteProof,
+        proofNonce: inviteProofInfo.nonce,
+      });
     }
 
+    // - create the message
+    var msgInfo = $msg_gen.createConversationHumanMessage(
+                    messageText, this._keyring, convMeta);
+
     // - formulate the message to the fanout role
+    var convCreatePayload = {
+      addPayloads: addPayloads,
+      msgNonce: msgInfo.nonce,
+      msgPayload: msgInfo.payload,
+    };
+    var ccpsNonce = $keyops.makeBoxNonce();
+    var ccpsInnerEnvelope = {
+      type: 'createconv',
+      convId: metaConv.id,
+      payload: convCreatePayload,
+    };
+    var ccpsOuterEnvelope = {
+      senderKey: this._keyring.getPublicKeyFor('messaging', 'tellBox'),
+      nonce: ccpsNonce,
+      innerEnvelope: this._keyring.boxUtf8With(
+                       JSON.stringify(ccpsInnerEnvelope),
+                       ccpsNonce,
+                       convMeta.transitKey,
+                       'messaging', 'tellBox'),
+    };
 
     // - send the message
     this._enqueueAction({
-
+      type: 'createConversation',
+      toTransit: ccpsOuterEnvelope
     });
+
+    return {
+      convId: convMeta.id,
+      msgNonce: msgInfo.nonce,
+    };
   },
   replyToConversation: function(conversation, messageText, location) {
     // - create a signed message payload
@@ -636,14 +688,6 @@ RawClientAPI.prototype = {
   },
 
   deleteConversation: function(conversation) {
-  },
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Conversation Querying
-
-  // involving-peep/all-peeps, time-ordered, pinned...
-  queryConversations: function() {
-    // this may require instantiating a new persistent subscription
   },
 
   //////////////////////////////////////////////////////////////////////////////

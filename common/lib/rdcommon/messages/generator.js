@@ -42,32 +42,6 @@
  * be converted into avro representations (or other efficiently packed
  * representations) eventually.
  *
- * @typedef[CryptoConversationAnchor @dict[
- *   @key[rootAttestation ConvAttestation]{
- *     The current self-attestation that defines the conversation public key and
- *     fanout server contact info.
- *   }
- *   @key[membershipChain AliasingAuthorization]{
- *     The authorization that loops us into the conversation.  This will
- *     likely include the `rootAttestation` as the root of the authorization
- *     chain.  The reason for the potential redundancy is future-fodder
- *     endpoint change support.
- *
- *     The authorization is aliasing which is to say that part of each link
- *     provides a human readable alias which will be used under the SDSI model
- *     (bob's jim's tom) as fallback if the key is not already known.
- *   }
- *   @key[convEnvKey PubEncSecretKey]{
- *     The shared secret key used for the envelope, encrypted with one of our
- *     active identity envelope public keys.
- *   }
- *   @key[convBodyKey PubEncSecretKey]{
- *     The shared secret key used for the conversation, encrypted with one of
- *     our active identity body public keys.  Names key hashes.
- *   }
- * ]]{
- *
- * }
  *
  * @typedef[PSTransitOuterEnvelope @dict[
  *   @key[senderKey]{
@@ -192,11 +166,23 @@
  *       the person being added.  This is unreadable by the fanout server because
  *       it does not need to know the details of who this person is.
  *     }
+ *     @key[inviteProof]{
+ *       A boxed message analogus to a join request from the conversation
+ *       creator to the transit server of the recipient.
+ *     }
+ *     @key[proofNonce]{
+ *       The nonce the proof was boxed with.
+ *     }
  *   ]]]{
+ *     Add payloads of the people the creator is adding to the conversation,
+ *     but not for the creator themselves.  (The metadata about the creator
+ *     comes in the root conversation attestation.)
+ *
  *     Note that this dict's fields are assumed by
  *     `convInitialAuthorizeMultipleUsers`.
  *   }
- *   @key[msgPayload]
+ *   @key[msgNonce]
+ *   @key[msgPayload ConversationEnvelopeEncrypted]
  * ]]
  *
  * @typedef[SSTransitEnvelope @dict[
@@ -213,6 +199,14 @@
  *       their tell key and who should be the author of the payload which should
  *       correspond to an (encrypted) `PSTransitInnerEnvelope`.
  *     }
+ *     @case["initialfan"]{
+ *       A conversation welcome message authenticated on the basis of the
+ *       initiating user's relationship with the contact rather than
+ *       a pre-existing per-conversation authorization (induced by a "join"
+ *       message.)  It will include `senderKey` denoting the sender (tell key)
+ *       for this purpose and `proof` which is the conversation id boxed by said
+ *       sender to the transit server as proof of it being their request.
+ *     }
  *     @case["fannedmsg"]{
  *       A conversation message.  `payload` will be a boxed message from the
  *       fanout server to the `name`d user.  `convId` will name the
@@ -226,6 +220,8 @@
  *   @key[convId]{
  *     The conversation this is a message for.
  *   }
+ *   @key[senderKey #:optional]
+ *   @key[proof #:optional]
  *   @key[nonce]
  *   @key[payload]
  * ]]{
@@ -284,6 +280,10 @@
  *   sender's key rather than having the conversation envelope name it because
  *   only the fanout server is able to perform such a verification (unless we
  *   use a public signature, which is too expensive for us at this time.)
+ *
+ *   The conversation id is explicitly provided in the wrapping
+ *   `SSTransitEnvelope` and should be re-boxed along with the nonce when being
+ *   provided to the user, etc.
  * }
  * @typedef[ConversationFanoutEnvelopeEncrypted
  *          @naclBoxed[ConversationFanoutEnvelope serverBox userEnvelopeBox]]
@@ -323,6 +323,33 @@
  * @typedef[ConversationBodyEncrypted
  *          @naclSecretBoxed[ConversationBodySigned convBodySecretKey]]{
  * }
+ *
+ * @typedef[ConversationAttestation @dict[
+ *   @key[id]
+ *   @key[createdAt DateMS]
+ *   @key[creatorSelfIdent]
+ *   @key[transitServer]
+ * ]]
+ *
+ * @typedef[ConverationInviteAttestation @dict[
+ *   @key[issuedAt DateMS]
+ *   @key[signingKey]{
+ *     The announceSign key used by the inviter.
+ *   }
+ *   @key[convId]
+ *   @key[oident]
+ * ]]{
+ *   The signed attestation provided to the members of a conversation that
+ *   serves to name the invitee and say who invited them in a strong way that
+ *   a rogue fanout server cannot fake.
+ *
+ *   Note that the attestation is signed by the 'announceSign' signature key
+ *   rather than a longterm key (which *is* used to sign the other person
+ *   ident).  This is consistent with our use of the 'announceSign' key to sign
+ *   content messages to the conversation issued by the user.  (And that choice
+ *   is part of our design decision to keep the longterm key fairly precious and
+ *   rarely needed.)
+ * }
  **/
 
 define(
@@ -335,12 +362,27 @@ define(
     exports
   ) {
 
+/**
+ * @typedef[ConvMeta @dict[
+ *   @key[id]
+ *   @key[envelopeSharedSecretKey]
+ *   @key[bodySharedSecretKey]
+ *   @key[transitServerKey]
+ *   @key[signedAttestation ConversationAttestation]
+ * ]]
+ **/
 
 /**
  * Create a conversation and return the meta-info that all participants need
  *  plus the conversation-starter-only info.
+ *
+ * @return[@dict[
+ *   @key[keypair]
+ *   @key[convMeta ConvMeta]
+ * ]]
  */
-exports.createNewConversation = function(authorKeyring, serverIdentPayload) {
+exports.createNewConversation = function(authorKeyring, authorSelfIdentBlob,
+                                         serverIdentPayload) {
   // - create the new signing keypair that defines the conversation
   var convKeypair = $keyops.makeGeneralSigningKeypair();
 
@@ -352,7 +394,7 @@ exports.createNewConversation = function(authorKeyring, serverIdentPayload) {
   var attestPayload = {
     id: convKeypair.publicKey,
     createdAt: Date.now(),
-    author: authorKeyring.rootPublicKey,
+    creatorSelfIdent: authorSelfIdentBlob,
     transitServer: serverIdentPayload.publicKey,
   };
   var signedAttestation = $keyops.generalSignUtf8(
@@ -367,7 +409,7 @@ exports.createNewConversation = function(authorKeyring, serverIdentPayload) {
     //  bind the url into the conversation info; the mailsender will have it on
     //  file.
     transitServerKey: serverIdentPayload.publicKey,
-    attestation: signedAttestation,
+    signedAttestation: signedAttestation,
   };
 
   return {
@@ -377,6 +419,32 @@ exports.createNewConversation = function(authorKeyring, serverIdentPayload) {
 };
 
 /**
+ * Verify the self-validity of a conversation attestation and matches our
+ *  expectations.  Specifically:
+ * - it is a valid self-signed blob
+ * - that the signing key is consistent with the conversation id as named outside
+ *    the blob
+ * - that it contains a valid self-ident for the creator of the conversation
+ */
+exports.assertGetConversationAttestation = function(signedAttestation,
+                                                    checkConversationId) {
+  // verify its self-validity
+  var peeked = $keyops.generalPeekInsideSignatureUtf8(signedAttestation);
+  $keyops.generalVerifySignatureUtf8(signedAttestation, peeked.id);
+  // verify it matches the expected conversation id
+  if (checkConversationId !== peeked.id)
+    throw new Error('Conversation id mismatch!');
+  // verify it contains a valid self-attestation of the creator
+  $pubident.assertGetPersonSelfIdent(peeked.creatorSelfIdent);
+
+  return peeked;
+};
+
+/**
+ * Generate a conversation add request.  This is used both at the start of the
+ *  conversation and to add later, but `createConversationJoinWrapper` must
+ *  be used to wrap late-additions.
+ *
  * @args[
  *   @param[authorKeyring DelegatedKeyring]
  *   @param[otherPersonIdentSigned OtherPersonIdentSigned]{
@@ -390,7 +458,6 @@ exports.createNewConversation = function(authorKeyring, serverIdentPayload) {
  * ]
  */
 exports.createConversationInvitation = function(authorKeyring,
-                                                ourServerKey,
                                                 otherPersonIdent,
                                                 convMeta,
                                                 recipPubring) {
@@ -409,6 +476,7 @@ exports.createConversationInvitation = function(authorKeyring,
   //  conversation with the same name, that's insufficient.
   var attestPayload = {
     issuedAt: now,
+    signingKey: authorKeyring.getPublicKeyFor('messaging', 'announceSign'),
     convId: convMeta.id,
     oident: otherPersonIdent
   };
@@ -425,6 +493,7 @@ exports.createConversationInvitation = function(authorKeyring,
   // - body key layer
   var inviteBody = {
     bodySharedSecretKey: convMeta.bodySharedSecretKey,
+    signedAttestation: convMeta.signedAttestation,
   };
   var boxedInviteBody = authorKeyring.boxUtf8With(
                           JSON.stringify(inviteBody), inviteNonce,
@@ -444,6 +513,43 @@ exports.createConversationInvitation = function(authorKeyring,
                                                       'envelopeBox'),
                          'messaging', 'tellbox');
 
+  return {
+    nonce: inviteNonce,
+    boxedInvite: boxedInviteEnv,
+    signedAttestation: signedAttestation,
+  };
+};
+
+/**
+ * Box the conversation id and invitee name from the conversation author to the
+ *  transit server of the invitee as proof of invitation for freshly created
+ *  conversations.  This allows us to avoid the extra round-trips of the join
+ *  mechanism.
+ */
+exports.createInviteProof = function(authorKeyring, convMeta, recipPubring) {
+  var inviteProofPayload = {
+    name: recipPubring.rootPublicKey,
+    convId: convMeta.id,
+  };
+  var nonce = $keyops.makeBoxNonce();
+  var boxedInviteProof = authorKeyring.boxUtf8With(
+                           JSON.stringify(inviteProofPayload), nonce,
+                           recipPubring.transitServerPublicKey,
+                           'messaging', 'tellBox');
+  return {nonce: nonce, boxedInviteProof: boxedInviteProof};
+};
+
+/**
+ * Create a conversation add request wrapped in a join request.  The join
+ *  request gets sent to the person to add so that they pre-authorize their
+ *  server, then they resend what's inside back afterwards which is the actual
+ *  add request.
+ */
+exports.createConversationAddJoin = function(authorKeyring,
+                                             ourServerKey,
+                                             convMeta,
+                                             recipPubring,
+                                             invitePair) {
   // -- for the fanout server itself (includes both of the above)
   // - convadd request
   var convAddInnerEnv = {
@@ -453,14 +559,15 @@ exports.createConversationInvitation = function(authorKeyring,
     convId: convMeta.id,
     payload: {
       envelopeKey: recipPubring.getPublicKeyFor('messaging', 'envelopeBox'),
-      inviteePayload: boxedInviteEnv,
+      inviteePayload: invitePair.boxedInvite,
       attestationPayload: sboxedAttestation,
     }
   };
 
   // - which gets boxed to the transit server
   var boxedConvAdd = authorKeyring.boxUtf8With(
-                       JSON.stringify(convAddInnerEnv), inviteNonce,
+                       JSON.stringify(convAddInnerEnv),
+                       invitePair.nonce,
                        convMeta.transitServerKey,
                        'messaging', 'tellBox');
 
@@ -495,6 +602,35 @@ exports.createConversationInvitation = function(authorKeyring,
 };
 
 /**
+ * Check a conversation invite attestation, verifying the attestation signature,
+ *  the enclosed other ident, and the self-ident inside of that.
+ *
+ * @args[
+ *   @param[signedAttestation ConversationInviteAttestationSigned]
+ *   @param[checkAuthorPubring Pubring]
+ *   @param[convId]
+ *   @param[timestamp DateMS]
+ * ]
+ * @return[OtherPersonIdentPayload]
+ */
+exports.assertCheckConversationInviteAttestation =
+    function(signedAttestation, checkAuthorPubring, convId, timestamp) {
+  var attestPayload = checkAuthorPubring.assertGetSignedSelfNamingPayload(
+                        signedAttestation, timestamp,
+                        'signingKey', 'issuedAt',
+                        'messaging', 'announceSign');
+  if (attestPayload.convId !== convId)
+    throw new $keyops.MalformedOrReplayPayloadError();
+  var oidentPayload = $pubident.assertGetOtherPersonIdent(attestPayload.oident,
+                                      checkAuthorPubring, timestamp);
+  var selfIdentPayload = $pubident.assertGetPersonSelfIdent(
+                           oidentPayload.personSelfIdent);
+  return oidentPayload;
+};
+
+/**
+ * XXX I have not done anything with the inResponse stuff posited...
+ *
  * @args[
  *   @param[bodyString String]{
  *     The plaintext message what for humans to read and comprehend.
@@ -542,6 +678,8 @@ exports.createConversationHumanMessage = function(bodyString, authorKeyring,
   var envelopeEncrypted = $keyops.secretBoxUtf8(
                             envelopeJsonStr, nonce,
                             convMeta.envelopeSharedSecretKey);
+
+  return {nonce: nonce, payload: envelopeEncrypted};
 };
 
 exports.assertGetConversationHumanMessageEnvelope = function(envelopeEncrypted,

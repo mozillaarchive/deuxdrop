@@ -92,6 +92,7 @@ UserMessageProcessor.prototype = {
       effigy: this.effigy,
       store: this.store,
       uproc: this,
+      convId: stransitEnv.convId,
       fanoutMsg: fanoutMsg,
       fanoutNonce: stransitEnv.nonce,
       fanoutMsgRaw: stransitEnv.payload,
@@ -186,7 +187,7 @@ UserProcessorRegistry.prototype = {
  */
 var UserConvWelcomeTask = taskMaster.defineTask({
   name: "userConvWelcome",
-  args: ['effigy', 'store', 'uproc',
+  args: ['effigy', 'store', 'uproc', 'convId',
          'fanoutMsg', 'fanoutNonce', 'transitServerKey'],
   steps: {
     verify_conversation_validity: function() {
@@ -197,7 +198,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
                           this.fanoutNonce,
                           this.fanoutMsg.sentBy));
 
-      if (inviteEnv.convId !== this.fanoutMsg.convId)
+      if (inviteEnv.convId !== this.convId)
         throw new $taskerrors.MalformedOrReplayPayloadError('convId mismatch');
     },
     /**
@@ -216,7 +217,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
         sentBy: this.fanoutMsg.sentBy,
         nonce: this.fanoutNonce,
       };
-      return this.store.newConversationRace(this.fanoutMsg.convId,
+      return this.store.newConversationRace(this.convId,
                                             this.replicaBlock);
     },
     relay: function() {
@@ -233,6 +234,8 @@ var UserConvWelcomeTask = taskMaster.defineTask({
       var arg = {
         effigy: this.effigy,
         store: this.store,
+        uproc: this.uproc,
+        convId: this.convId,
         fanoutMsg: null,
         fanoutNonce: null,
         fanoutMsgRaw: null,
@@ -292,7 +295,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
  * - The list of all participants
  */
 function commonLoadConversationRoot() {
-  return this.store.getConversationRootMeta(this.fanoutMsg.convId);
+  return this.store.getConversationRootMeta(this.convId);
 }
 const RE_PARTICIPANT = /^m:p/;
 function commonProcessConversationRoot(cells) {
@@ -320,7 +323,7 @@ function commonProcessConversationRoot(cells) {
  */
 var UserConvJoinTask = taskMaster.defineTask({
   name: "userConvJoin",
-  args: ['effigy', 'store', 'uproc',
+  args: ['effigy', 'store', 'uproc', 'convId',
          'fanoutMsg', 'fanoutNonce', 'fanoutMsgRaw', 'transitServerKey'],
   steps: {
     load_conversation_root: commonLoadConversationRoot,
@@ -329,11 +332,12 @@ var UserConvJoinTask = taskMaster.defineTask({
       this.replicaBlock = {
         nonce: this.fanoutNonce,
         fanmsg: this.fanoutMsgRaw,
+        convId: this.convId,
         transit: this.transitServerKey,
       };
       var extraCells = {};
       extraCells["u:" + this.fanoutMsg.invitee] = 1;
-      return this.store.addConversationMessage(this.fanoutMsg.convId, {
+      return this.store.addConversationMessage(this.convId, {
             // we don't need the transit server's key, it's implicit
             nonce: this.fanoutNonce,
             msg: this.fanoutMsg
@@ -347,7 +351,7 @@ var UserConvJoinTask = taskMaster.defineTask({
 
 var UserConvMessageTask = taskMaster.defineTask({
   name: "userConvMessage",
-  args: ['effigy', 'store', 'uproc',
+  args: ['effigy', 'store', 'uproc', 'convId',
          'fanoutMsg', 'fanoutNonce', 'fanoutMsgRaw', 'transitServerKey'],
   steps: {
     load_conversation_root: commonLoadConversationRoot,
@@ -356,13 +360,14 @@ var UserConvMessageTask = taskMaster.defineTask({
       this.replicaBlock = {
         nonce: this.fanoutNonce,
         fanmsg: this.fanoutMsgRaw,
+        convId: this.convId,
         transit: this.transitServerKey,
       };
       return $Q.wait(null,
-        this.store.addConversationMessage(this.fanoutMsg.convId,
+        this.store.addConversationMessage(this.convId,
                                           this.highMessageNumber,
                                           this.replicaBlock),
-        this.store.touchConvPeepRecencies(this.fanoutMsg.convId,
+        this.store.touchConvPeepRecencies(this.convId,
                                           this.fanoutMsg.receivedAt,
                                           this.fanoutMsg.sentBy,
                                           this.participants)
@@ -384,7 +389,6 @@ var UserConvMessageTask = taskMaster.defineTask({
  */
 var UserConvMetaTask = taskMaster.defineTask({
   name: "userConvMeta",
-  args: ['effigy', 'store', 'fanoutMsg', 'fanoutNonce'],
   steps: {
     // XXX yes, we should implement the metadata bit too!
     explode: function() {throw new Error("XXX I DID NOT DO THIS BIT YET");},

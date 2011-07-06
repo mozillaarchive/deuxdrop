@@ -491,6 +491,12 @@ exports.generateLongtermBaseKeyAttestation = function(longtermSigningKeypair,
  *
  * XXX we are not checking authorization time intervals, etc. etc. etc.
  *  this is a serious bad one and suggests we strongly need more chain info.
+ *
+ * Note: `Pubring.assertGetSignedSelfNamingPayload` is a higher-level
+ *  mechanism that is available for dealing with signed blobs.  It's not as
+ *  targeted at SDSI/SPKI usages, but we're kinda bailing on the chain of
+ *  signatures model right now given their processing cost with our
+ *  currently used primitives.
  */
 exports.assertCheckGetAttestation = function(attestationBlob,
                                              authorizedFor,

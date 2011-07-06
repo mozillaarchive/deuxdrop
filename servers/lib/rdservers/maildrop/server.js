@@ -89,6 +89,7 @@ var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
                                                    outerEnvelope.nonce,
                                                    outerEnvelope.senderKey));
   var arg = {
+    config: this.config,
     outerEnvelope: outerEnvelope,
     innerEnvelope: innerEnvelope,
     otherServerKey: otherServerKey,
@@ -102,6 +103,7 @@ var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
     case "joinconv":
       return new ConversationJoinTask(arg, _logger);
 
+    // - (other) user to user's fanout role
     case "convadd":
       return new ConversationAddTask(arg, _logger);
     case "convmsg":
@@ -126,19 +128,19 @@ var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
 var fauxServerEnqueueProcessNow = exports.fauxServerEnqueueProcessNow =
     function fauxServerEnqueueProcessNow(config, envelope,
                                          otherServerKey, _logger) {
+  var arg = {
+    config: config,
+    envelope: envelope,
+    otherServerKey: otherServerKey,
+  };
   switch (envelope.type) {
     case "joined":
-      return new ConversationJoinedTask({
-        outerEnvelope: outerEnvelope,
-        innerEnvelope: innerEnvelope,
-        otherServerKey: otherServerKey,
-      }, _logger);
+      return new ConversationJoinedTask(arg, _logger);
 
+    case "initialfan":
+      return new InitialFanoutToUserMessageTask(arg, _logger);
     case "fannedmsg":
-      return new FanoutToUserMessageTask({
-        envelope: envelope,
-        otherServerKey: otherServerKey,
-      }, _logger);
+      return new FanoutToUserMessageTask(arg, _logger);
     default:
       throw new $taskerrors.MalformedPayloadError(
                   "Bad envelope type '" + envelope.type + "'");
@@ -222,21 +224,65 @@ ReceiveDeliveryConnection.prototype = {
   },
 };
 
+
+var InitialFanoutToUserMessageTask = exports.InitialFanoutToUserMessageTask =
+    taskMaster.defineTask({
+  name: "initialFanoutToUserMessage",
+  args: ['config', 'envelope', 'otherServerKey'],
+  steps: {
+    /**
+     * The other fanout server isn't supposed to see our user's root key in
+     *  the clear, so the best it can do is tell key.  (note that I'm not sure
+     *  that's going to be a long-lived invariant.)
+     */
+    verify_map_our_user_tell_key_to_root: function() {
+      return this.config.authApi.serverGetUserAccountByTellKey(
+               this.envelope.name);
+    },
+    /**
+     * Now check that the alleged sending key is authorized to talk to our
+     *  user.
+     */
+    check_authorized_to_talk_to_user: function(ourUserRootKey) {
+      this.ourUserRootKey = ourUserRootKey;
+      return this.config.authApi.userAssertServerUser(
+        ourUserRootKey, this.otherServerKey, this.envelope.senderKey);
+    },
+    check_proof_and_authorize_conversation: function() {
+      var proofPayload = JSON.parse(
+                           this.config.keyring.openBoxUtf8(
+                             this.envelope.proof,
+                             this.envelope.proofNonce,
+                             this.envelope.senderKey));
+      if (proofPayload.convId !== this.envelope.convId ||
+          proofPayload.name !== this.ourUserRootKey)
+        throw new $keyops.MalformedOrReplayPayloadError();
+      return this.config.authApi.userAuthorizeServerForConversation(
+        this.ourUserRootKey, this.otherServerKey, this.envelope.convId,
+        this.envelope.senderKey);
+    },
+    back_end_hand_off: function() {
+      return this.config.storeApi.convMessageForUser(this.envelope,
+                                                     this.otherServerKey);
+    },
+  },
+});
+
 /**
  * Process a message from a fan-out server about a conversation to a user.
  */
 var FanoutToUserMessageTask = exports.FanoutToUserMessageTask =
     taskMaster.defineTask({
   name: "fanoutToUserMessage",
+  args: ['config', 'envelope', 'otherServerKey'],
   steps: {
     check_authorized_conversation: function(arg) {
-      return arg.config.authApi.userAssertServerConversation(
-        arg.envelope.name, arg.otherServerKey, arg.envelope.convId);
+      return this.config.authApi.userAssertServerConversation(
+        this.envelope.name, this.otherServerKey, this.envelope.convId);
     },
     back_end_hand_off: function() {
-      var arg = this.arg;
-      return arg.config.storeApi.convMessageForUser(arg.envelope,
-                                                    arg.otherServerKey);
+      return this.config.storeApi.convMessageForUser(this.envelope,
+                                                     this.otherServerKey);
     },
   },
 });
@@ -270,66 +316,66 @@ var UserToUserMessageTask = taskMaster.defineTask({
  */
 var ConversationJoinTask = taskMaster.defineTask({
   name: "conversationJoin",
+  args: ['config', 'outerEnvelope', 'innerEnvelope', 'otherServerKey'],
   steps: {
     /**
      * Make sure the user saying this is a friend of our user.
      */
-    check_authorization: function(arg) {
-      return arg.config.authApi.userAssertServerUser(
-        arg.innerEnvelope.name, arg.otherServerKey,
-        arg.outerEnvelope.senderKey);
+    check_authorization: function() {
+      return this.config.authApi.userAssertServerUser(
+        this.innerEnvelope.name, this.otherServerKey,
+        this.outerEnvelope.senderKey);
     },
     /**
      * Add the authorization for the conversation server to talk to us.
      */
     add_auth: function() {
-      var arg = this.arg;
-      return arg.config.authApi.userAuthorizeServerForConversation(
-        arg.innerEnvelope.name, arg.innerEnvelope.serverName,
-        arg.innerEnvelope.serverName, arg.outerEnvelope.senderKey);
+      return this.config.authApi.userAuthorizeServerForConversation(
+        this.innerEnvelope.name, this.innerEnvelope.serverName,
+        this.innerEnvelope.serverName, this.outerEnvelope.senderKey);
     },
     /**
      * Resend the message back to the maildrop of the person inviting us so
      *  they can finish the add process.
      */
     resend_joined: function() {
-      var arg = this.arg;
-      return arg.config.senderApi.sendServerEnvelopeToServer({
+      return this.config.senderApi.sendServerEnvelopeToServer({
         type: "joined",
-        name: arg.outerEnvelope.senderKey,
-        nonce: arg.outerEnvelope.nonce,
-        payload: arg.innerEnvelope.payload,
-      }, arg.otherServerKey);
+        name: this.outerEnvelope.senderKey,
+        nonce: this.outerEnvelope.nonce,
+        payload: this.innerEnvelope.payload,
+      }, this.otherServerKey);
     },
   },
 });
 
 var ConversationJoinedTask = taskMaster.defineTask({
   name: "conversationJoined",
+  args: ['config', 'envelope', 'otherServerKey'],
   steps: {
     /**
      * Unbox the payload to make sure the named user is consistent.
      */
-    open_envelope: function(arg) {
-      var outerEnvelope = arg.msg;
+    open_envelope: function() {
+      var outerEnvelope = this.envelope;
       this.innerEnvelope = JSON.parse(
-                arg.config.keyring.openBoxUtf8(outerEnvelope.payload,
-                                               outerEnvelope.nonce,
-                                               outerEnvelope.name));
+                this.config.keyring.openBoxUtf8(outerEnvelope.payload,
+                                                outerEnvelope.nonce,
+                                                outerEnvelope.name));
       if (this.innerEnvelope.type !== "resend")
         throw new $taskerrors.MalformedOrReplayPayloadError(
                     this.innerEnvelope.type);
     },
     check_named_user_is_our_user: function() {
-      return this.arg.config.authApi.serverGetUserAccountByTellKey(
-               this.arg.msg.name);
+      return this.config.authApi.serverGetUserAccountByTellKey(
+               this.envelope.name);
     },
     resend: function(userRootKey) {
       if (!userRootKey)
         throw new $taskerrors.UnauthorizedUserError(userRootKey);
-      return this.arg.config.senderApi.sendPersonEnvelopeToServer(userRootKey,
+      return this.config.senderApi.sendPersonEnvelopeToServer(userRootKey,
         {
-          senderKey: this.arg.msg.name,
+          senderKey: this.envelope.name,
           nonce: this.innerEnvelope.nonce,
           innerEnvelope: this.innerEnvelope.payload
         },
@@ -340,12 +386,13 @@ var ConversationJoinedTask = taskMaster.defineTask({
 
 var CreateConversationTask = taskMaster.defineTask({
   name: 'createConversation',
+  args: ['config', 'outerEnvelope', 'innerEnvelope', 'otherServerKey'],
   steps: {
     check_from_our_user_from_our_server: function(arg) {
-      if (arg.otherServerKey !== arg.config.keyring.boxingPublicKey)
+      if (this.otherServerKey !== this.config.keyring.boxingPublicKey)
         throw new Error($taskerrors.UnauthorizedUserError("not our server"));
-      return arg.config.authApi.serverGetUserAccountByTellKey(
-               arg.outerEnvelope.senderKey);
+      return this.config.authApi.serverGetUserAccountByTellKey(
+               this.outerEnvelope.senderKey);
     },
     verify_our_user: function(userRootKey) {
       if (!userRootKey)
@@ -357,7 +404,7 @@ var CreateConversationTask = taskMaster.defineTask({
      *  add and that they be adding at least one other person.
      */
     verify_add_constraints: function() {
-      var addPayloads = this.arg.innerEnvelope.payload.addPayloads;
+      var addPayloads = this.innerEnvelope.payload.addPayloads;
       if (addPayloads.length < 2)
         throw new $taskerrors.MalformedPayloadError('Not enough adds');
       if (addPayloads[0].tellKey !== this.arg.outerEnvelope.senderKey)
@@ -368,10 +415,10 @@ var CreateConversationTask = taskMaster.defineTask({
      *  be sent in a single backlog message to all initial participants.
      */
     formulate_initial_fanout_messages: function() {
-      var convPayload = this.arg.innerEnvelope.payload;
+      var convPayload = this.innerEnvelope.payload;
       var fanouts = this.initialFanouts = [];
       var now = this.now = Date.now(),
-          senderKey = this.arg.outerEnvelope.senderKey;
+          senderKey = this.outerEnvelope.senderKey;
       // - joins
       for (var iAdd = 0; iAdd < convPayload.addPayloads.length; iAdd++) {
         var addPayload = convPayload.addPayloads[iAdd];
@@ -389,7 +436,8 @@ var CreateConversationTask = taskMaster.defineTask({
         type: 'message',
         sentBy: senderKey,
         receivedAt: now,
-        nonce: this.arg.outerEnvelope.nonce,
+        nonce: convPayload.msgNonce,
+        payload: convPayload.msgPayload,
       });
     },
     /**
@@ -406,24 +454,24 @@ var CreateConversationTask = taskMaster.defineTask({
      * XXX also, bad/broken actor entropy
      */
     create_conversation_race: function() {
-      return arg.config.fanoutApi.createConversation(
-               arg.innerEnvelope.convId, this.userRootKey, this.initialFanouts);
+      return this.config.fanoutApi.createConversation(
+               this.innerEnvelope.convId, this.userRootKey, this.initialFanouts);
     },
 
     authorize_all_participants_including_creator: function() {
-      return arg.config.authApi.convInitialAuthorizeMultipleUsers(
-        this.arg.innerEnvelope.convId,
-        this.arg.innerEnvelope.payload.addPayloads);
+      return this.config.authApi.convInitialAuthorizeMultipleUsers(
+        this.innerEnvelope.convId,
+        this.innerEnvelope.payload.addPayloads);
     },
 
     send_welcome_to_initial_recipients: function() {
-      var convPayload = this.arg.innerEnvelope.payload,
-          convId = this.arg.innerEnvelope.convId,
-          senderKey = this.arg.outerEnvelope.senderKey,
-          senderNonce = this.arg.outerEnvelope.nonce,
+      var convPayload = this.innerEnvelope.payload,
+          convId = this.innerEnvelope.convId,
+          senderKey = this.outerEnvelope.senderKey,
+          senderNonce = this.outerEnvelope.nonce,
           nowish = this.now,
           promises = [],
-          config = this.arg.config, senderApi = config.senderApi;
+          config = this.config, senderApi = config.senderApi;
       // nonce for our pairwise unique welcome messages, so nonce reuse is fine
       var ourNonce = $keyops.makeBoxNonce();
       for (var iAdd = 0; iAdd < convPayload.addPayloads.length; iAdd++) {
@@ -442,9 +490,12 @@ var CreateConversationTask = taskMaster.defineTask({
         var boxedWelcomeMsg = config.keyring.box(
           JSON.stringify(welcomeMsg), ourNonce, addPayload.envelopeKey);
         promises.push(senderApi.sendServerEnvelopeToServer({
-            type: 'fannedmsg',
+            type: 'initialfan',
             name: addPayload.tellKey,
+            senderKey: senderKey,
             convId: convId,
+            proof: addPayload.inviteProof,
+            proofNonce: senderNonce,
             nonce: ourNonce,
             payload: boxedWelcomeMsg
           }));
@@ -491,31 +542,32 @@ function conversationSendToAllRecipients(config, convId, messageStr,
  */
 var ConversationMessageTask = taskMaster.defineTask({
   name: "conversationMessage",
+  args: ['config', 'outerEnvelope', 'innerEnvelope', 'otherServerKey'],
   steps: {
-    assert_author_in_on_conversation: function(arg) {
-      return arg.config.authApi.convAssertServerConversation(
-        arg.innerEnvelope.convId, arg.otherServerKey,
-        arg.outerEnvelope.senderKey);
+    assert_author_in_on_conversation: function() {
+      return this.config.authApi.convAssertServerConversation(
+        this.innerEnvelope.convId, this.otherServerKey,
+        this.outerEnvelope.senderKey);
     },
     formulate_fanout_message_and_persist: function() {
       this.fanoutMessage = {
         type: 'message',
-        sentBy: this.arg.outerEnvelope.senderKey,
+        sentBy: this.outerEnvelope.senderKey,
         receivedAt: Date.now(),
         // the message/envelope are encrypted with the same nonce as what we
         //  received.
-        nonce: arg.outerEnvelope.nonce,
-        payload: this.arg.innerEnvelope.payload,
+        nonce: this.outerEnvelope.nonce,
+        payload: this.innerEnvelope.payload,
       };
-      return this.arg.config.fanoutApi.addMessageToConversation(
+      return this.config.fanoutApi.addMessageToConversation(
                this.fanoutMessage);
     },
     get_recipients: function() {
-      return this.arg.config.authApi.convGetParticipants(
-               this.arg.innerEnvelope.convId);
+      return this.config.authApi.convGetParticipants(
+               this.innerEnvelope.convId);
     },
     send_to_all_recipients: function(usersAndServers) {
-      return conversationSendToAllRecipients(this.arg.config,
+      return conversationSendToAllRecipients(this.config,
                                              this.innerEnvelope.convId,
                                              this.fanoutMessage,
                                              usersAndServers);

@@ -115,7 +115,7 @@ UserBehalfDataStore.prototype = {
   },
   clientQueuePush: function(clientPublicKey, payload) {
     var listy = [payload];
-    return this._db.queueAppend(TBQ_CLIENT_REPLICAS, listy);
+    return this._db.queueAppend(TBQ_CLIENT_REPLICAS, clientPublicKey, listy);
   },
 
   //////////////////////////////////////////////////////////////////////////////

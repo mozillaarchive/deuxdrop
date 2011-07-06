@@ -450,10 +450,11 @@ AuthApi.prototype = {
    *   ]]]
    * ]
    */
-  convInitialAuthorizeMultipleUsers: function(convId, serverUserInfos) {
+  convInitialAuthorizeMultipleUsers: function(convId,
+                                              recipServerUserInfos) {
     var cells = {};
-    for (var i = 0; i < serverUserInfos.length; i++) {
-      var info = serverUserInfos[i];
+    for (var i = 0; i < recipServerUserInfos.length; i++) {
+      var info = recipServerUserInfos[i];
       cells["u:" + info.serverKey + ":" + info.tellKey] = info.envelopeKey;
     }
     return this._db.putCells(TBL_CONV_AUTH, convId, cells);

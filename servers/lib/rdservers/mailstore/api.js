@@ -84,19 +84,19 @@ MailstoreChooserApi.prototype = {
    *  key
    *
    * @args[
-   *   @param[type @oneof["fanout" "user"]]
-   *   @param[userTellPubKey]
-   *   @param[boxedMessage]
-   *   @param[nonce]
-   *   @param[senderKey]{
-   *     If the sender is a user, their tell key; if the sender is a (fanout)
-   *     server, the server's public box key.
-   *   }
+   *   @param[stransitEnv SSTransitEnvelope]
+   *   @param[otherServerKey]
    * ]
    */
   convMessageForUser: function(stransitEnv, otherServerKey) {
     return this.procRegistry.convMessageForUser(stransitEnv, otherServerKey);
   },
+
+  messageForUser: function() {
+    // XXX SEE EXCEPTION BELOW ME
+    throw new Error("XXX NOT BLOODY IMPLEMENTED");
+    // YOU WENT TOO FAR
+  }
 };
 
 }); // end define

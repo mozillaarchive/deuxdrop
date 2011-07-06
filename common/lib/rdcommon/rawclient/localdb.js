@@ -45,11 +45,19 @@
 
 define(
   [
-    'rdcommon/crypto/keyops',
+    'rdcommon/log',
+    'rdcommon/taskidiom', 'rdcommon/taskerrors',
+    'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
+    'rdcommon/identities/pubident',
+    'module',
     'exports'
   ],
   function(
-    $keyops,
+    $log,
+    $task, $taskerrors,
+    $keyops, $pubring,
+    $pubident,
+    $module,
     exports
   ) {
 
@@ -76,6 +84,13 @@ const IDX_PEEP_ANY_INVOLVEMENT = "idxPeepAny";
 
 /**
  * Conversation data.
+ *
+ * - d:meta - The conversation meta-info for this conversation.
+ * - d:s### - Self-ident for the given authorized participant by their tell
+ *             key.  The payload may want to be normalized out and the name
+ *             may want to become their root key.
+ * - d:m - High message number
+ * - d:m# - Message number #.  Fully decrypted rep.
  */
 const TBL_CONV_DATA = "convData";
 /**
@@ -208,7 +223,9 @@ const NS_PEEPS = 'peeps';
  *
  * Our implementation is problem domain aware.
  */
-function LocalStore(dbConn, keyring) {
+function LocalStore(dbConn, keyring, _logger) {
+  this._log = LOGFAB.localStore(this, _logger, null);
+
   this._db = dbConn;
   this._keyring = keyring;
   this._notif = new NotificationKing(this);
@@ -216,16 +233,20 @@ function LocalStore(dbConn, keyring) {
   this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
   this._db.defineReorderableIndex(TBL_PEEP_DATA,
                                   IDX_PEEP_WRITE_INVOLVEMENT);
+  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+                                  IDX_PEEP_RECIP_INVOLVEMENT);
+  this._db.defineReorderableIndex(TBL_PEEP_DATA,
+                                  IDX_PEEP_ANY_INVOLVEMENT);
 
-  // conversation data proper: meta, overview, data
-  this._db.defineHbaseTable(TBL_CONV_DATA, ["m", "o", "d"]);
+  // conversation data proper: just data for now, (Was: meta, overview, data)
+  this._db.defineHbaseTable(TBL_CONV_DATA, ["d"]);
 
   this._db.defineReorderableIndex(TBL_CONV_DATA, IDX_ALL_CONVS);
 
   this._db.defineReorderableIndex(TBL_CONV_DATA,
-                                  IDX_PEEP_CONV_WRITE_INVOLVEMENT);
+                                  IDX_CONV_PEEP_WRITE_INVOLVEMENT);
   this._db.defineReorderableIndex(TBL_CONV_DATA,
-                                  IDX_PEEP_CONV_ANY_INVOLVEMENT);
+                                  IDX_CONV_PEEP_ANY_INVOLVEMENT);
 }
 exports.LocalStore = LocalStore;
 LocalStore.prototype = {
@@ -361,20 +382,55 @@ LocalStore.prototype = {
   // Conversation Processing
 
   _proc_fanmsg: function(fanmsg) {
-    // - invite?
+    // -- invite?
     // (This gets to be the root of the conversation on the mailstore; it comes
     //  from the welcome message, which, for consistency reasons, the mailstore
     //  breaks apart and pretends does not exist to us.)
     if (fanmsg.hasOwnProperty("sentBy")) {
       return this._proc_convInvite(fanmsg);
     }
-    // - fanout message
+    // -- fanout message
     else {
+      // - decrypt fanout envelope (transit server to our envelope key)
+      var fanoutEnv = JSON.parse(
+        this._keyring.openBoxUtf8With(fanmsg.fanmsg, fanmsg.nonce,
+                                      fanmsg.transit,
+                                      'messaging', 'envelopeBox'));
+
+      // just grab all the cells; XXX timecopout caching/unification
+      return when(this._db.getRow(TBL_CONV_DATA, fanmsg.convId, "d"),
+                  function(cells) {
+        if (!cells.hasOwnProperty("d:meta"))
+          throw new $taskerrors.MissingPrereqFatalError();
+        var convMeta = cells["d:meta"];
+
+        switch(fanoutEnv.type) {
+          case 'join':
+            return this._proc_convJoin(convMeta, fanoutEnv, cells);
+          case 'message':
+            return this._proc_convMessage(convMeta, fanoutEnv, cells);
+          case 'meta':
+            return this._proc_convMetaMsg(convMeta, fanoutEnv, cells);
+          default:
+            throw new $taskerrors.MalformedPayloadError(
+                        'bad type: ' + fanoutEnv.type);
+        }
+
+      });
     }
   },
 
+  _cmd_convCreate: function() {
+
+  },
+
+  /**
+   * Process a conversation invitation by validating its attestation and
+   *  creating the appropriate database row.  The conversation will not become
+   *  visible to the user until at least one message has been processed.
+   */
   _proc_convInvite: function(fanmsg) {
-    // - unbox the invite envelopeb
+    // - unbox the invite envelope
     var inviteEnv = JSON.parse(
                       this._keyring.openBoxUtf8With(
                         fanmsg.fanmsg, fanmsg.nonce, fanmsg.senderKey,
@@ -386,31 +442,91 @@ LocalStore.prototype = {
                          inviteEnv, fanmsg.nonce, fanmgs.senderKey,
                          'messaging', 'bodyBox'));
 
+    // - validate the attestation (and enclosed creator self-ident)
+    var attestPayload = $msg_gen.assertGetConversationAttestation(
+                          inviteBody.signedAttestation, inviteEnv.convId);
+    var creatorPubring =
+      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+        attestPayload.creatorSelfIdent);
 
+    // - reconstruct the overview convMeta
+    var convMeta = {
+      id: inviteEnv.convId,
+      transitServerKey: inviteEnv.transitServerKey,
+      envelopeSharedSecretKey: inviteEnv.envelopeSharedSecretKey,
+      bodySharedSecretKey: inviteBody.bodySharedSecretKey,
+      signedAttestation: inviteBody.signedAttestation,
+    };
+
+    // - persist, mark the creator as the first authorized participant
+    // (they will still be "joined" which will replace the entry)
+    var cells = {
+      "d:meta": convMeta
+    };
+    cells["d:s" + creatorPubring.getPublicKeyFor('messaging', 'tellBox')] =
+      attestPayload.creatorSelfIdent;
+    return this._db.putCells(TBL_CONV_DATA, convMeta.id, cells);
   },
 
   /**
-   * A new conversation (from our perspective) as defined by its metadata; the
-   *  join notifications/etc. come separately .  Store the meta-information so
-   *  that we can do things with the conversation in the future.
+   * Process a join message.
    */
-  _cmd_addConversation: function(convMeta) {
-    // - generate the conversation table entry
-  },
+  _proc_convJoin: function(convMeta, fanoutEnv, cells) {
+    // - get the pubring for the inviter, exploding if they are not authorized
+    var inviterCellName = "d:s" + fanoutEnv.sentBy;
+    if (!cells.hasOwnProperty(inviterCellName))
+      throw new $taskerror.UnauthorizedUserDataLeakError(  // a stretch...
+                  "uncool inviter: " + fanoutEnv.sentBy);
+    var inviterPubring =
+      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+        cells[inviterCellName]);
 
-  /**
-   * Our own meta-data about a conversation (pinned, etc.)
-   */
-  _cmd_setConversationMeta: function() {
-    // -- update any subscribed queries on pinned
-    // -- update any blurbs for this conversation
+    // - unsbox the attestation
+    var signedAttestation = $keyops.secretBoxOpen(fanoutEnv.payload,
+                                                  fanoutEnv.nonce,
+                                                  convMeta.bodySharedSecretKey);
+    // - validate the attestation
+    var oident = $msg_gen.assertCheckConversationInviteAttestation(
+                   signedAttestation, inviterPubring, fanoutEnv.receivedAt);
+
+    this._nameTrack(oident, inviterPubring);
+
+    // XXX we really want to be using the root key, I suspect
+    var inviteePeepId = fanoutEnv.invitee;
+
+    var writeCells = {};
+    // - add the invitee as an authorized participant
+    writeCells["d:s" + fanoutEnv.invitee] = oident.personSelfIdent;
+    // - add the join entry in the message sequence
+    var msgNum = writeCells["d:m"] = cells["d:m"] + 1;
+    writeCells["d:m" + msgNum] = {type: 'join', id: inviteePeepId};
+
+    // XXX update in-memory reps
+    var timestamp = fanoutEnv.receivedAt;
+
+    return $Q.wait(
+      this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
+      // - create peep conversation involvement index entry
+      this._db.updateIndexValue(
+        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteePeepId,
+        convMeta.id, timestamp),
+      // - touch peep activity entry
+      this._db.maximizeIndexValue(
+        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteePeepId, timestamp)
+    );
   },
 
   /**
    * Meta-data about a conversation from other participants.
    */
-  _cmd_setConversationPeepMeta: function() {
+  _proc_convMetaMsg: function(convMeta, fanoutEnv, cells) {
     // -- update anyone subscribed to the full conversation
+
+
+    // --- metadata message
+    // -- write
+    // -- posit latched notification for active subscribers
+    // -- nuke pending new message notification if our user saw something...
   },
 
   /**
@@ -418,23 +534,70 @@ LocalStore.prototype = {
    *
    * If this is a join notification, we will name-check the added person.
    */
-  _cmd_addConversationMessage: function() {
-    // --- human message
-    // -- write
-    // -- update the all-conversations index
-    // -- update the author's write involvement view
-    // -- for all subscribed peeps, update the any involvement view
+  _proc_convMessage: function(convMeta, fanoutEnv, cells) {
+    var authorPeepId = fanoutEnv.sentBy;
+    var authorCellName = "d:s" + authorPeepId;
+    if (!cells.hasOwnProperty(authorCellName))
+      throw new $taskerror.UnauthorizedUserDataLeakError();
+    var authorPubring =
+      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+        cells[authorCellName]);
 
-    // -- posit potential notification (might be taken back by metadata update)
+    // - decrypt conversation envelope
+    var convEnv = $msg_gen.assertGetConversationHumanMessageEnvelope(
+                    fanoutEnv.payload, fanoutEnv.nonce, convMeta);
 
-    // --- metadata message
-    // -- write
-    // -- posit latched notification for active subscribers
-    // -- nuke pending new message notification if our user saw something...
+    // - decrypt conversation body
+    var convBody = $msg_gen.assertGetConversationHumanMessageBody(
+                     convEnv.body, fanoutEnv.nonce, convMeta,
+                     fanoutEnv.receivedAt, authorPubring);
 
-    // --- join message
-    // -- add entry in the joined author's any involvement view
+
+
+    // - add the join entry in the message sequence
+    var msgNum = writeCells["d:m"] = cells["d:m"] + 1;
+    writeCells["d:m" + msgNum] = {
+      type: 'message',
+      authorId: authorPeepId,
+      composedAt: convBody.composedAt,
+      text: convBody.body
+    };
+
+    var timestamp = fanoutEnv.receivedAt;
+
+    // XXX notifications
+
+    return $Q.wait(
+      this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
+      // - all conversation index
+      this._db.updateIndexValue(
+        TBL_CONV_DATA, IDX_ALL_CONVS, '', convMeta.id, timestamp),
+      // - per-peep conversation indices
+      this._db.updateIndexValue(
+        TBL_CONV_DATA, IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorPeepId,
+        convMeta.id, timestamp),
+      // (XXX recip involvement if our own user wrote this)
+      this._db.updateIndexValue(
+        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, authorPeepId,
+        convMeta.id, timestamp),
+      // - touch peep (activity) indices
+      this._db.maximizeIndexValue(
+        TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '', inviteePeepId,
+        timestamp),
+      this._db.maximizeIndexValue(
+        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteePeepId, timestamp)
+    );
   },
+
+  /**
+   * Our own meta-data about a conversation (pinned, etc.)
+   */
+  /*
+  _cmd_setConversationMeta: function() {
+    // -- update any subscribed queries on pinned
+    // -- update any blurbs for this conversation
+  },
+  */
 
   /**
    * Our user has composed a message to a conversation; track it for UI display
@@ -459,7 +622,7 @@ LocalStore.prototype = {
 
   },
 
-  loadAndWatchPeepBlurb: function(id) {
+  loadAndWatchPeepBlurb: function(rootKey) {
   },
 
   unwatchPeepBlurb: function() {
@@ -489,9 +652,9 @@ LocalStore.prototype = {
       'd:oident': data.oident,
     });
     // -- bump indices
-    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_CONV_ANY_INVOLVEMENT,
+    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT,
                               peepRootKey, now);
-    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_CONV_WRITE_INVOLVEMENT,
+    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT,
                               peepRootKey, now);
 
     // -- notify peep queries
@@ -532,8 +695,10 @@ LocalStore.prototype = {
    * A person was added in a conversation; if the person is not a contact
    *  but rather a peep, boost the reference count and make note of their
    *  relationship.
+   *
+   * XXX this is speculative work that needs to be filled out
    */
-  _nameTrack: function(tellKey, otherPersonSelfIdent) {
+  _nameTrack: function(oidentPayload, inviterPubring) {
   },
 
   /**
@@ -547,4 +712,15 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
 };
 
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  localStore: {
+    //implClass: AuthClientConn,
+    type: $log.DAEMON,
+    subtype: $log.DAEMON,
+    events: {
+      newConversation: {convId: true},
+      conversationMessage: {convId: true, nonce: true},
+    },
+  },
+});
 }); // end define
