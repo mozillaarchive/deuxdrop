@@ -511,7 +511,7 @@ exports.createConversationInvitation = function(authorKeyring,
                          JSON.stringify(inviteEnv), inviteNonce,
                          recipPubring.getPublicKeyFor('messaging',
                                                       'envelopeBox'),
-                         'messaging', 'tellbox');
+                         'messaging', 'tellBox');
 
   return {
     nonce: inviteNonce,
@@ -674,7 +674,7 @@ exports.createConversationHumanMessage = function(bodyString, authorKeyring,
     //  really authenticate the envelope.
     body: bodyEncrypted,
   };
-  var envelopeJsonStr = JSON.strigify(envelopeObj);
+  var envelopeJsonStr = JSON.stringify(envelopeObj);
   var envelopeEncrypted = $keyops.secretBoxUtf8(
                             envelopeJsonStr, nonce,
                             convMeta.envelopeSharedSecretKey);

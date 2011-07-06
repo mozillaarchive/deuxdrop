@@ -144,11 +144,14 @@ MailsenderLocalApi.prototype = {
    *  no actual plans for how the long-term box keys get changed.
    */
   getServerUrl: function(serverPubBoxKey) {
+    var self = this;
     return when(this._db.getRowCell(TBL_SERVER_URL, serverPubBoxKey, "u:url"),
       function(url) {
+        self._log.gotUrl(url);
         // this becomes a rejection
         if (!url)
           throw new Error("Database does not know about the server!");
+        return url;
       }
       // pass-through rejection is fine.
     );
@@ -161,7 +164,10 @@ MailsenderLocalApi.prototype = {
    */
   sendPersonEnvelopeToServer: function(userRootKey, outerEnvelope,
                                        serverPublicBoxKey) {
+    if (!serverPublicBoxKey)
+      throw new Error("we need an actual key");
     if (serverPublicBoxKey === this._config.keyring.boxingPublicKey) {
+      this._log.selfSendPersonEnvelope();
       return $maildrop_server.fauxPersonEnqueueProcessNow(
                this._config, outerEnvelope,
                this._config.keyring.boxingPublicKey, this._log);
@@ -169,9 +175,10 @@ MailsenderLocalApi.prototype = {
 
     var self = this;
     return when(this.getServerUrl(serverPublicBoxKey), function(url) {
+       self._log.sendPersonEnvelope(serverPublicBoxKey);
        var deliveryConn = new $mailsender_server.SendDeliveryConnection(
                                 'deliverTransit',
-                                outerEnvelope, this._config.keyring,
+                                outerEnvelope, self._config.keyring,
                                 serverPublicBoxKey, url, self._log);
        return when(deliveryConn.promise,
          null, // pass-through fulfillment is fine
@@ -195,19 +202,21 @@ MailsenderLocalApi.prototype = {
    * ]
    */
   sendServerEnvelopeToServer: function(envelope, serverPublicBoxKey) {
+    if (!serverPublicBoxKey)
+      throw new Error("we need an actual key");
     if (serverPublicBoxKey === this._config.keyring.boxingPublicKey) {
-      // XXX we should ideally not be directly accessing the task
-      return new $maildrop_server.FanoutToUserMessageTask({
-          envelope: envelope,
-          otherServerKey: serverPublicBoxKey,
-        }, this._log);
+      this._log.selfSendServerEnvelope();
+      return $maildrop_server.fauxServerEnqueueProcessNow(
+               this._config, envelope,
+               this._config.keyring.boxingPublicKey, this._log);
     }
 
     var self = this;
     return when(this.getServerUrl(serverPublicBoxKey), function(url) {
+       self._log.sendServerEnvelope(serverPublicBoxKey);
        var deliveryConn = new $mailsender_server.SendDeliveryConnection(
                                 'deliverServer',
-                                envelope, this._config.keyring,
+                                envelope, self._config.keyring,
                                 serverPublicBoxKey, url, self._log);
        return when(deliveryConn.promise,
          null, // pass-through fulfillment is fine
@@ -226,6 +235,14 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     //implClass: AuthClientConn,
     type: $log.DAEMON,
     subtype: $log.DAEMON,
+    events: {
+      gotUrl: {url: false},
+      selfSendPersonEnvelope: {},
+      selfSendServerEnvelope: {},
+
+      sendPersonEnvelope: {serverKey: false},
+      sendServerEnvelope: {serverKey: false},
+    },
     errors: {
       selfIdentMismatch: {dbCopy: false, userCopy: false},
       deliveryFailure: {userRootKey: 'key'},

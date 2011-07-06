@@ -53,12 +53,6 @@ define(
     exports
   ) {
 
-var LOGFAB = exports.LOGFAB = $log.register($module, {
-});
-
-var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
-
-
 function MailstoreChooserApi(serverConfig, dbConn, _logger) {
   this._parentLogger = _logger;
 

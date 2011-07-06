@@ -238,7 +238,7 @@ exports.createPersonPubringFromSelfIdentDO_NOT_VERIFY = function(selfIdentBlob) 
 exports.createPersonPubringFromOthIdentDO_NOT_VERIFY = function(othIdentBlob) {
   var othIdentPayload = JSON.parse($keyops.generalPeekInsideSignatureUtf8(
                                      othIdentBlob));
-  var selfIdentBlob = othIdentBlob.personSelfIdent;
+  var selfIdentBlob = othIdentPayload.personSelfIdent;
   var selfIdentPayload = JSON.parse($keyops.generalPeekInsideSignatureUtf8(
                                       selfIdentBlob));
   return commonCreatePersonPubring(selfIdentPayload, selfIdentBlob);

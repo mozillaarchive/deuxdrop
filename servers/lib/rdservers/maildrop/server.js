@@ -58,6 +58,7 @@ define(
     $module,
     exports
   ) {
+var when = $Q.when;
 
 var AuthAPI = $auth_api;
 
@@ -89,7 +90,7 @@ var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
                                                    outerEnvelope.nonce,
                                                    outerEnvelope.senderKey));
   var arg = {
-    config: this.config,
+    config: config,
     outerEnvelope: outerEnvelope,
     innerEnvelope: innerEnvelope,
     otherServerKey: otherServerKey,
@@ -97,23 +98,23 @@ var fauxPersonEnqueueProcessNow = exports.fauxPersonEnqueueProcessNow =
   switch (innerEnvelope.type) {
     // - other user to user
     case "user":
-      return new UserToUserMessageTask(arg, _logger);
+      return new UserToUserMessageTask(arg, _logger).run();
 
     // - other user to user's maildrop
     case "joinconv":
-      return new ConversationJoinTask(arg, _logger);
+      return new ConversationJoinTask(arg, _logger).run();
 
     // - (other) user to user's fanout role
     case "convadd":
-      return new ConversationAddTask(arg, _logger);
+      return new ConversationAddTask(arg, _logger).run();
     case "convmsg":
-      return new ConversationMessageTask(arg, _logger);
+      return new ConversationMessageTask(arg, _logger).run();
     case "convmeta":
-      return new ConversationMetaTask(arg, _logger);
+      return new ConversationMetaTask(arg, _logger).run();
 
     // - user to their own maildrop
     case "createconv":
-      return new CreateConversationTask(arg, _logger);
+      return new CreateConversationTask(arg, _logger).run();
 
     default:
       throw new $taskerrors.MalformedPayloadError(
@@ -135,12 +136,12 @@ var fauxServerEnqueueProcessNow = exports.fauxServerEnqueueProcessNow =
   };
   switch (envelope.type) {
     case "joined":
-      return new ConversationJoinedTask(arg, _logger);
+      return new ConversationJoinedTask(arg, _logger).run();
 
     case "initialfan":
-      return new InitialFanoutToUserMessageTask(arg, _logger);
+      return new InitialFanoutToUserMessageTask(arg, _logger).run();
     case "fannedmsg":
-      return new FanoutToUserMessageTask(arg, _logger);
+      return new FanoutToUserMessageTask(arg, _logger).run();
     default:
       throw new $taskerrors.MalformedPayloadError(
                   "Bad envelope type '" + envelope.type + "'");
@@ -388,7 +389,7 @@ var CreateConversationTask = taskMaster.defineTask({
   name: 'createConversation',
   args: ['config', 'outerEnvelope', 'innerEnvelope', 'otherServerKey'],
   steps: {
-    check_from_our_user_from_our_server: function(arg) {
+    check_from_our_user_from_our_server: function() {
       if (this.otherServerKey !== this.config.keyring.boxingPublicKey)
         throw new Error($taskerrors.UnauthorizedUserError("not our server"));
       return this.config.authApi.serverGetUserAccountByTellKey(
@@ -498,7 +499,8 @@ var CreateConversationTask = taskMaster.defineTask({
             proofNonce: senderNonce,
             nonce: ourNonce,
             payload: boxedWelcomeMsg
-          }));
+          },
+          addPayload.serverKey));
       }
       return $Q.all(promises);
     },
@@ -735,6 +737,7 @@ exports.makeServerDef = function(serverConfig) {
     endpoints: {
       'drop/deliver': {
         implClass: ReceiveDeliveryConnection,
+        serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {
           // we are just checking that they are allowed to talk to us at all
           return serverConfig.authApi.serverCheckServerAuth(clientKey);

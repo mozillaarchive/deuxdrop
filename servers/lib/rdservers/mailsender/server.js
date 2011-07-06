@@ -66,15 +66,16 @@ function SendDeliveryConnection(type, transitMsg,
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
-                serverUrl, 'signup/signup', _logger);
+                serverUrl, 'drop/deliver', _logger);
   this._deferred = $Q.defer();
   this.promise = this._deferred.promise;
 }
+exports.SendDeliveryConnection = SendDeliveryConnection;
 SendDeliveryConnection.prototype = {
   INITIAL_STATE: 'deliver',
 
   __connected: function() {
-    this.conn.send({
+    this.conn.writeMessage({
       type: this._type,
       msg: this._msg,
     });

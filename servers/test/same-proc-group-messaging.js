@@ -64,9 +64,11 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
       client_b = T.actor('testClient', 'B'),
       client_c = T.actor('testClient', 'C');
   // servers have no helpers because they never originate actions.
-  var server_x = T.actor('testServer', 'X'),
-      server_y = T.actor('testServer', 'Y'),
-      server_z = T.actor('testServer', 'Z');
+  var serverOpts = {roles: ['auth', 'signup', 'drop', 'sender', 'store',
+                            'fanout']};
+  var server_x = T.actor('testServer', 'X', serverOpts),
+      server_y = T.actor('testServer', 'Y', serverOpts),
+      server_z = T.actor('testServer', 'Z', serverOpts);
   // (all of the above entities have their own initialization steps)
   // the messages in play...
 
@@ -81,6 +83,10 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   client_a.setup_useServer(server_x);
   client_b.setup_useServer(server_y);
   client_c.setup_useServer(server_z);
+
+  client_a.setup_connect();
+  client_b.setup_connect();
+  client_c.setup_connect();
 
   // make everybody already be friends with everybody else
   // XXX this would ideally be one of our permutations or just an additional

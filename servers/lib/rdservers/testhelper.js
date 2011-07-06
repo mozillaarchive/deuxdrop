@@ -49,12 +49,15 @@ var $log = require('rdcommon/log'),
     $client_localdb = require('rdcommon/rawclient/localdb'),
     $authconn = require('rdcommon/transport/authconn'),
     $keyring = require('rdcommon/crypto/keyring'),
+    $pubring = require('rdcommon/crypto/pubring'),
     $pubident = require('rdcommon/identities/pubident');
 
 var $gendb = require('rdservers/gendb/redis'),
     $configurer = require('rdservers/configurer');
 
-var $signup_server = require('rdservers/signup/server');
+var $signup_server = require('rdservers/signup/server'),
+    $maildrop_server = require('rdservers/maildrop/server'),
+    $mailsender_local_api = require('rdservers/mailsender/localapi');
 
 var TestClientActorMixins = {
   /**
@@ -79,6 +82,7 @@ var TestClientActorMixins = {
     // -- define the raw client and its setup step
     self._eRawClient = self.T.actor('rawClient', self.__name, null, self);
     self._eLocalStore = self.T.actor('localStore', self.__name, null, self);
+    self._peepsByName = {};
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
         function() {
       // - create our self-corresponding logger the manual way
@@ -210,8 +214,9 @@ var TestClientActorMixins = {
     this.RT.reportActiveActorThisStep(this._eRawClient);
     this._eRawClient.expect_allActionsProcessed();
 
-    this._rawClient.connectToPeepUsingSelfIdent(
-      other._rawClient._selfIdentBlob);
+    this._peepsByName[other.__name] =
+      this._rawClient.connectToPeepUsingSelfIdent(
+        other._rawClient._selfIdentBlob);
   },
 
   setup_addContact: function(other) {
@@ -287,14 +292,21 @@ var TestClientActorMixins = {
   startConversation: function(tConv, tMsgThing, recipients) {
     var iRecip;
 
+    var peepOIdents = [], peepPubrings = [];
     for (iRecip = 0; iRecip < recipients.length; iRecip++) {
       var recipTestClient = recipients[iRecip];
+      var othIdent = this._peepsByName[recipTestClient.__name];
+      var othPubring = $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(
+                         othIdent);
+      peepOIdents.push(othIdent);
+      peepPubrings.push(othPubring);
     }
 
     // - create the conversation
     // (we have to do this before the expectations because we don't know what
     //  to expect until we invoke this)
-    var convInfo = this._rawClient.createConversation();
+    var convInfo = this._rawClient.createConversation(
+                     peepOIdents, peepPubrings, "I AM A TEST MESSAGE BODY");
 
     tConv.digitalName = convInfo.convId;
     tMsgThing.digitalName = convInfo.msgNonce;
@@ -304,6 +316,7 @@ var TestClientActorMixins = {
     for (iRecip = 0; iRecip < recipients.length; iRecip++) {
       var recipTestClient = recipients[iRecip];
 
+      this.RT.reportActiveActorThisStep(recipTestClient._eLocalStore);
       recipTestClient._eLocalStore.expect_newConversation(convInfo.convId);
       recipTestClient._eLocalStore.expect_conversationMessage(
         convInfo.convId, convInfo.msgNonce);
@@ -438,8 +451,13 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
 exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB,
-    $authconn.LOGFAB, $rawclient_api.LOGFAB, $client_localdb.LOGFAB,
-    $signup_server.LOGFAB, $gendb.LOGFAB,
+    $authconn.LOGFAB, $gendb.LOGFAB,
+    $rawclient_api.LOGFAB, $client_localdb.LOGFAB,
+
+    $signup_server.LOGFAB,
+    $maildrop_server.LOGFAB,
+    $mailsender_local_api.LOGFAB,
+
   ],
 
   actorMixins: {

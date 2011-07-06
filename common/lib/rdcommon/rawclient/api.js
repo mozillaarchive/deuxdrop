@@ -75,7 +75,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/transport/authconn',
-    'rdcommon/crypto/keyring',
+    'rdcommon/crypto/keyops', 'rdcommon/crypto/keyring',
     'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
     '../messages/generator',
     './localdb',
@@ -86,7 +86,7 @@ define(
     $Q,
     $log,
     $authconn,
-    $keyring,
+    $keyops, $keyring,
     $pubident, $pubring,
     $msg_gen,
     $localdb,
@@ -563,6 +563,9 @@ RawClientAPI.prototype = {
       serverSelfIdent: identPayload.transitServerIdent,
       replicaBlock: replicaBlock
     });
+
+    // XXX we should surface a peep rep or nothing at all, not this (testhack)
+    return otherPersonIdentBlob;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -590,16 +593,12 @@ RawClientAPI.prototype = {
    *   }
    * ]]
    */
-  createConversation: function(peepOIdents, peepPubrings, messageText, location) {
+  createConversation: function(peepOIdents, peepPubrings, messageText) {
     var iPeep;
-    // - validate that all the peeps are actually contacts
-    for (iPeep = 0; iPeep < peeps.length; iPeep++) {
-      if (!peeps[iPeep].isContact)
-        throw new Error("You can't invite a non-contact to a conversation.");
-    }
 
     // - create the conversation
     var convBits = $msg_gen.createNewConversation(this._keyring,
+                                                  this._selfIdentBlob,
                                                   this._transitServer);
     var convKeypair = convBits.keypair,
         convMeta = convBits.meta;
@@ -644,7 +643,7 @@ RawClientAPI.prototype = {
     var ccpsNonce = $keyops.makeBoxNonce();
     var ccpsInnerEnvelope = {
       type: 'createconv',
-      convId: metaConv.id,
+      convId: convMeta.id,
       payload: convCreatePayload,
     };
     var ccpsOuterEnvelope = {
@@ -653,7 +652,7 @@ RawClientAPI.prototype = {
       innerEnvelope: this._keyring.boxUtf8With(
                        JSON.stringify(ccpsInnerEnvelope),
                        ccpsNonce,
-                       convMeta.transitKey,
+                       convMeta.transitServerKey,
                        'messaging', 'tellBox'),
     };
 

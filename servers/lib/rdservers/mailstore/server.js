@@ -313,7 +313,7 @@ ClientServicingConnection.prototype = {
     return $Q.join(
       this.config.senderApi.sendPersonEnvelopeToServer(
         this.userEffigy.rootPublicKey,
-        msg.payload,
+        msg.toTransit,
         // is there a better way to know this?
         this.userEffigy.pubring.transitServerPublicKey),
       // create a new conversation with the metadata
