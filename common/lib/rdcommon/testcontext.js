@@ -570,6 +570,7 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
     },
     errors: {
       timeout: {},
+      actorNeverGotLogger: {type: false, name: false},
       uncaughtException: {ex: $log.EXCEPTION},
     },
   },

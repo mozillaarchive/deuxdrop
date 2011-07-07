@@ -85,6 +85,9 @@ var TestClientActorMixins = {
     self._peepsByName = {};
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
         function() {
+      // tell it about all the actors that will be instantiated this turn...
+      self.RT.reportActiveActorThisStep(self._eLocalStore);
+
       // - create our self-corresponding logger the manual way
       // (we deferred until this point so we could nest in the hierarchy
       //  in a traditional fashion.)
@@ -140,8 +143,12 @@ var TestClientActorMixins = {
   _signupWith: function(testServerActor) {
     // create actors corresponding to the connections so we can make sure they
     //  die.
-    var eClientConn = this.T.actor('clientConn', this.__name, null, this),
-        eServerConn = this.T.actor('serverConn', this.__name, null, this);
+    var eClientConn = this.T.actor('clientConn', this.__name + ' signup',
+                                   null, this),
+        eServerConn = this.T.actor('serverConn',
+                                   testServerActor.__name + ' signup ' +
+                                     this.__name,
+                                   null, testServerActor);
     this.RT.reportActiveActorThisStep(eClientConn);
     eClientConn.expectOnly__die();
     this.RT.reportActiveActorThisStep(eServerConn);
@@ -302,7 +309,6 @@ var TestClientActorMixins = {
 
   startConversation: function(tConv, tMsgThing, recipients) {
     var iRecip;
-
     var peepOIdents = [], peepPubrings = [];
     for (iRecip = 0; iRecip < recipients.length; iRecip++) {
       var recipTestClient = recipients[iRecip];
@@ -324,6 +330,9 @@ var TestClientActorMixins = {
 
     // - expectations
     // we'll call it done when it hits the clients
+    if (!recipients.length) {
+      throw new Error("No recipients supplied!");
+    }
     for (iRecip = 0; iRecip < recipients.length; iRecip++) {
       var recipTestClient = recipients[iRecip];
 

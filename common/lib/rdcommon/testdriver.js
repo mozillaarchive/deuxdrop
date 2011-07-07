@@ -141,10 +141,12 @@ TestRuntimeContext.prototype = {
    *  sub-actors as active this step, allowing them to be used for expectations.
    */
   reportActiveActorThisStep: function(actor) {
+    if (this._liveActors === null)
+      throw new Error("We are not in a step!");
     if (actor._activeForTestStep)
       return;
     this._liveActors.push(actor);
-     actor.__prepForTestStep(this);
+    actor.__prepForTestStep(this);
   },
 
   peekLogger: function() {
@@ -159,11 +161,12 @@ var STEP_TIMEOUT_MS = 1000;
 /**
  * Consolidates the logic to run tests.
  */
-function TestDefinerRunner(testDefiner) {
+function TestDefinerRunner(testDefiner, superDebug) {
   if (!testDefiner)
     throw new Error("No test definer provided!");
   this._testDefiner = testDefiner;
   this._runtimeContext = new TestRuntimeContext();
+  this._superDebug = Boolean(superDebug);
 
   this._logBadThingsToLogger = null;
 }
@@ -176,6 +179,9 @@ TestDefinerRunner.prototype = {
    * }
    */
   runTestStep: function(step) {
+    const superDebug = this._superDebug;
+    if (superDebug)
+      console.log("\n====== Running Step: " + step.log._ident);
     var iActor, actor;
 
     this._logBadThingsToLogger = step.log;
@@ -195,18 +201,27 @@ TestDefinerRunner.prototype = {
     var rval = step.log.stepFunc(null, step.testFunc);
     // any kind of exception in the function is a failure.
     if (rval instanceof Error) {
+      if (superDebug)
+        console.log(" encountered an error in the step func:", rval);
       step.log.run_end();
       step.log.result('fail');
       return false;
     }
 
     // -- wait on actors' expectations (if any) promise-style
+    if (superDebug)
+      console.log(" there are", liveActors.length, "live actors this step",
+                  "up from", step.actors.length, "step-defined actors");
     var promises = [], allGood = true;
     for (iActor = 0; iActor < liveActors.length; iActor++) {
       actor = liveActors[iActor];
       var waitVal = actor.__waitForExpectations();
-      if ($Q.isPromise(waitVal))
+      if ($Q.isPromise(waitVal)) {
         promises.push(waitVal);
+        if (superDebug)
+          console.log(" actor", actor.__defName, actor.__name,
+                      "generated a promise");
+      }
       // if it's not a promise, it must be a boolean
       else if (!waitVal) {
         allGood = false;
@@ -216,18 +231,32 @@ TestDefinerRunner.prototype = {
     if (!promises.length) {
       step.log.run_end();
       step.log.result(allGood ? 'pass' : 'fail');
+
+      // clear out all the actors, however!
+      for (iActor = 0; iActor < liveActors.length; iActor++) {
+        actor = liveActors[iActor];
+        actor.__resetExpectations();
+      }
+      this._runtimeContext._liveActors = null;
+
       return allGood;
     }
     else {
       // create a deferred so we can generate a timeout.
-      var deferred = $Q.defer();
+      var deferred = $Q.defer(), self = this;
       // -- timeout handler
       var countdownTimer = setTimeout(function() {
+        if (!deferred) return;
         // - tell the actors to fail any remaining expectations
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
           actor = liveActors[iActor];
-          actor.__failUnmetExpectations();
+          if (!actor._logger)
+            step.log.actorNeverGotLogger(actor.__defName, actor.__name);
+          else
+            actor.__failUnmetExpectations();
+          actor.__resetExpectations();
         }
+        self._runtimeContext._liveActors = null;
 
         step.log.timeout();
         step.log.result('fail');
@@ -235,7 +264,9 @@ TestDefinerRunner.prototype = {
         deferred = null;
       }, STEP_TIMEOUT_MS);
       // -- promise resolution/rejection handler
-      when($Q.wait.apply(null, promises), function passed() {
+      if (this._superDebug)
+        console.log("waiting on", promises.length, "promises");
+      when($Q.all(promises), function passed() {
         if (!deferred) return;
         clearTimeout(countdownTimer);
 
@@ -244,24 +275,28 @@ TestDefinerRunner.prototype = {
           actor = liveActors[iActor];
           actor.__resetExpectations();
         }
+        self._runtimeContext._liveActors = null;
 
         step.log.run_end();
         step.log.result('pass');
         deferred.resolve(allGood);
+        deferred = null;
       }, function failed(expPair) {
         if (!deferred) return;
         // XXX we should do something with the failed expectation pair...
         clearTimeout(countdownTimer);
 
         // - tell the actors we are done with this round
-        for (var iActor = 0; iActor < step.actors.length; iActor++) {
-          actor = step.actors[iActor];
+        for (var iActor = 0; iActor < liveActors.length; iActor++) {
+          actor = liveActors[iActor];
           actor.__resetExpectations();
         }
+        self._runtimeContext._liveActors = null;
 
         step.log.run_end();
         step.log.result('fail');
         deferred.resolve(false);
+        deferred = null;
       });
       return deferred.promise;
     }
@@ -495,7 +530,8 @@ function reportTestModuleRequireFailures(testModuleName, exceptions) {
  * @return[success Boolean]
  */
 exports.runTestsFromModule = function runTestsFromModule(testModuleName,
-                                                         ErrorTrapper) {
+                                                         ErrorTrapper,
+                                                         superDebug) {
   var deferred = $Q.defer();
   var runner;
   function itAllGood() {
@@ -524,7 +560,7 @@ console.error("IN TEST MODULE INVOC");
     }
 
     // now that it is loaded, run it
-    runner = new TestDefinerRunner(tmod.TD);
+    runner = new TestDefinerRunner(tmod.TD, superDebug);
     when(runner.runAll(), itAllGood, itAllGood);
   });
   return deferred.promise;

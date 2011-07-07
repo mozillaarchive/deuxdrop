@@ -239,7 +239,8 @@ parser.command('test')
       deathClock(20 * 1000, true);
       require(['rdcommon/testdriver'],
                function($driver) {
-        when($driver.runTestsFromModule(options.specificTest, ErrorTrapper),
+        when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
+                                        SUPER_DEBUG),
           function() {
 console.error("  !! performing exit");
             // pass or fail, we want to exit normally; only the death clock

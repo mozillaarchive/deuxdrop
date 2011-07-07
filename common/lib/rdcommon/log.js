@@ -452,7 +452,7 @@ var TestActorProtoBase = {
   __waitForExpectations: function() {
     if ((this._iExpectation >= this._expectations.length) &&
         (this._expectDeath ? (this._logger && this._logger._died) : true))
-      return this._expectationsMet;
+      return this._expectationsMetSoFar;
 
     if (!this._deferred)
       this._deferred = $Q.defer();
@@ -460,7 +460,7 @@ var TestActorProtoBase = {
   },
 
   __resetExpectations: function() {
-    this._expectationsMet = true;
+    this._expectationsMetSoFar = true;
     // kill all processed entries.
     this._iExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
@@ -512,8 +512,8 @@ var TestActorProtoBase = {
         continue;
       }
       // (only bad cases fall out without hitting a continue)
-      if (this._expectationsMet && this._deferred) {
-        this._expectationsMet = false;
+      if (this._expectationsMetSoFar && this._deferred) {
+        this._expectationsMetSoFar = false;
         this._deferred.reject([this.__defName, expy, entry]);
       }
       return;
@@ -1060,7 +1060,7 @@ LoggestClassMaker.prototype = {
       //  the logger instance when paired.
       this._logger = undefined;
       this._expectations = [];
-      this._expectationsMet = true;
+      this._expectationsMetSoFar = true;
       this._expectDeath = false;
       this._activeForTestStep = false;
       this._iEntry = this._iExpectation = 0;
