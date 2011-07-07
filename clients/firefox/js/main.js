@@ -490,6 +490,7 @@ define(function (require) {
       // Clear out all the cards and go back to start
       // TODO handle better.
       alert('got signed out');
+      location.reload();
     },
 
     'message': function (message) {
