@@ -214,7 +214,7 @@ define(function (require, exports) {
   // the global.
   io = window.io;
 
-  socket = io.connect(null, {port: 8888, rememberTransport: false,
+  socket = io.connect(null, {rememberTransport: false,
                 transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
                 });
 

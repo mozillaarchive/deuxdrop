@@ -41,15 +41,18 @@
             <a class="item browserSignIn" data-nonav="nonav" href="#browserSignIn"><img src="https://browserid.org/i/sign_in_blue.png" align="absmiddle">Sign In With BrowserID</a>
           </div>
         </div>
-        <div data-cardid="start" title="Deuxdrop" class="card">
+        <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
           <div class="scroller">
-            <a class="item" href="#peeps">Peeps</a>
-            <a class="item" href="#compose">Compose</a>
-            <a class="item" data-nonav="nonav" href="#signOut">Sign Out</a>
-            <div class="newConversationNotifications" data-childclass="newConversation"></div>
+            <a class="item block vbox" href="#peeps"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">People</span></a>
+            <a class="item block" href="#compose"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">Compose</span></a>
+            <a class="item block" data-nonav="nonav" href="#signOut"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">Sign Out</span></a>
+            <div class="newConversationNotifications" data-childclass="newConversation">
+              <div class="newConversationScroller">
+              </div>
+            </div>
           </div>
         </div>
-        <div data-cardid="peeps" title="Peeps" class="card">
+        <div data-cardid="peeps" title="People" class="card">
           <div class="scroller" data-childclass="personLink">
           </div>
         </div>
@@ -86,22 +89,24 @@
     <!-- Start standard UI elements -->
     <div id="common" class="hidden">
 
-      <form data-classimpl="compose" class="compose hbox">
+      <form data-classimpl="compose" class="compose">
         <input type="hidden" name="from" value="">
         <input type="hidden" name="to" value="">
         <input type="hidden" name="convId" value="">
-        <textarea name="text" class="boxFlex"></textarea>
-        <button>Send</button>
+        <textarea name="text"></textarea>
       </form>
 
       <a href="#conversation?id=" data-classimpl="newConversation" class="newConversation">
-        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
+        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"></span>
         <span class="newConversationPeep" data-bind="from.name"></span>
-        <span class="newConversationText" data-bind="text"></span>
         <span class="newConversationTime"></span>
+        <span class="newConversationText" data-bind="text"></span>
       </a>
 
-      <a data-classimpl="personLink" class="item" href="#peep"></a>
+      <a data-classimpl="personLink" class="item" href="#peep">
+        <img class="peepInfoPic" src="i/face2.png" data-bind="pic" data-attr="src" align="absmiddle">
+        <span class="personName" data-bind="name"></span>
+      </a>
 
       <a data-classimpl="addPeepLink" data-nonav="nonav" class="item" href="#addPeep?&id="></a>
 

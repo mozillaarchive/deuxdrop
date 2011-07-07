@@ -61,12 +61,10 @@ button {
   border-top: 1px solid #e6e6e6;
   margin-top: -1px;
   cursor: pointer;
-  color: white;
   text-align: center;
   font-size: 20px;
-  background-color: #222;
-  background-image: -moz-linear-gradient(left, #222 0%, #1f1f1f 100%);
-  background-image: -webkit-gradient(linear, top left, top right, color-stop(0%, #222), color-stop(100%, #1f1f1f));
+  background: -moz-linear-gradient(top, #fefefe, #e6e6e6);
+  background: -webkit-gradient(linear, left top, left bottom, from(#fefefe), to(#e6e6e6));
 }
 
 .mblArrowButtonHead {
@@ -81,6 +79,11 @@ button {
 .mblArrowButtonNeck {
   position: absolute;
   left: 0;
+}
+
+.mblArrowButtonText {
+  color: #777777;
+  font-size: 16px;
 }
 
 #notify {
@@ -164,6 +167,22 @@ a.item.selected {
   background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #EDF2F5), color-stop(100%, #E6EDF0));
 }
 
+a.item.block {
+  float: left;
+  width: 65px;
+  height: 65px;
+  margin: 20px;
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 10px;
+}
+
+.tileImage {
+  width: 24px;
+  height: 24px;
+}
 
 .peepInfoPic {
   width: 48px;
@@ -176,6 +195,17 @@ a.item.selected {
   margin: 0 10px;
 }
 
+
+.newConversationNotifications {
+  display: block;
+  clear: both;
+}
+
+.newConversationScroller {
+  overflow-y: hidden;
+  overflow-x: auto;
+  height: 180px;
+}
 
 .compose {
   padding: 10px 10px 41px 10px;
@@ -312,7 +342,8 @@ a.item.selected {
   border-style: solid;
   border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
   display: inline-block;
-  width: 40%;
+  width: 180px;
+  height: 160px;
   border-radius: 5px;
   color: #111;
   background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
@@ -322,6 +353,8 @@ a.item.selected {
 .newConversation span.avatar {
   float: left;
   margin-right: 10px;
+  width: 28px;
+  height: 28px;
 }
 
 .newConversation .newConversationPeep {
@@ -329,6 +362,8 @@ a.item.selected {
 }
 
 .newConversation img.avatar {
+  width: 24px;
+  height: 24px;
 }
 
 .newConversationText {

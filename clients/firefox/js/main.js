@@ -55,9 +55,14 @@ define(function (require) {
       moda = require('moda'),
       friendly = require('friendly'),
       browserId = require('browserId'),
+      IScroll = require('iscroll'),
 
       commonNodes = {},
-      peeps, update, messageCloneNode, notifyDom, nodelessActions;
+      peeps, update, messageCloneNode, notifyDom, nodelessActions,
+      newMessageIScroll, newConversationNodeWidth;
+
+  //iScroll just defines a global, bind to it here
+  IScroll = window.iScroll;
 
   // Browser ID is not actually a module, get a handle on it now.
   browserId = navigator.id;
@@ -103,6 +108,11 @@ define(function (require) {
     metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
   }
 
+  function adjustNewScrollerWidth(convScrollerDom) {
+    convScrollerDom = convScrollerDom || $('.newConversationScroller');
+    convScrollerDom.css('width', (convScrollerDom.children().length * newConversationNodeWidth) + 'px');
+  }
+
   function makeMessageBubble(node, message) {
     var nodeDom = $(node),
         senderNode, senderDom,
@@ -144,6 +154,7 @@ define(function (require) {
 
   function insertUnseenMessage(message) {
     var convNotificationDom = $('.newConversationNotifications'),
+        convScrollerDom = convNotificationDom.find('.newConversationScroller'),
         convNode, convCloneNode, node, nodeDom;
 
     // Add a conversation box to the start card, but only if there is not
@@ -166,14 +177,43 @@ define(function (require) {
       // Add the conversation ID to the node
       node.setAttribute('data-convid', message.convId);
 
-      convNode.appendChild(node);
+      convScrollerDom.prepend(node);
+
+      if (!newConversationNodeWidth) {
+        // Lame. adding extra 20px. TODO fix this.
+        newConversationNodeWidth = $(node).outerWidth() + 20;
+      }
+
+      // Figure out how big to make the horizontal scrolling area.
+      adjustNewScrollerWidth(convScrollerDom);
+
       cards.adjustCardSizes();
+
+      if (newMessageIScroll) {
+        newMessageIScroll.refresh();
+      }
 
       // Activate new notification, but only if not already on start page.
       if (cards.currentCard().attr('data-cardid') !== 'start') {
         notifyDom.show();
       }
     }
+  }
+
+  function adjustCardScroll(card) {
+    // Scroll to the bottom of the conversation
+    setTimeout(function () {
+      // If the message contents are longer than the containing element,
+      // scroll down.
+      if (card.innerHeight() < card.find('.scroller').innerHeight()) {
+        var scroller = cards.getIScroller(card);
+        if (scroller) {
+          scroller.scrollToElement(card.find('.compose')[0], 200);
+        } else {
+          card[0].scrollTop = card[0].scrollHeight;
+        }
+      }
+    }, 300);
   }
 
   // Set up card update actions.
@@ -205,6 +245,12 @@ define(function (require) {
     'start': function (data, dom) {
       // Use user ID as the title
       dom[0].title = moda.me().id;
+
+      // Bind the iscroll to allow horizontal scrolling of new messages.
+      newMessageIScroll = new IScroll(dom.find('.newConversationNotifications')[0], {
+        hScrollbar: true,
+        vScrollbar: false
+      });
     },
 
     'notify': function (data, dom) {
@@ -248,8 +294,11 @@ define(function (require) {
         // Generate nodes for each person.
         peeps.items.forEach(function (peep) {
           var node = clonable.cloneNode(true);
+
+          updateDom($(node), peep);
+
           node.href += '?id=' + encodeURIComponent(peep.id);
-          node.appendChild(document.createTextNode(peep.name));
+
           frag.appendChild(node);
         });
 
@@ -414,16 +463,7 @@ define(function (require) {
         // Let the server know the messages have been seen
         conversation.setSeen();
 
-        // TODO: best to do this ontransition end instead of guessing when it
-        // ends.
-        setTimeout(function () {
-          scroller = cards.getIScroller(dom);
-          if (scroller) {
-            scroller.scrollToElement(dom.find('.compose')[0], 200);
-          } else {
-            dom[0].scrollTop = dom[0].scrollHeight;
-          }
-        }, 300);
+        adjustCardScroll(dom);
       });
 
       // Set up compose area
@@ -461,24 +501,15 @@ define(function (require) {
         card.find('.conversationMessages').append(makeMessageBubble(messageCloneNode.cloneNode(true), message));
         cards.adjustCardSizes();
 
-        // Scroll to the bottom of the conversation
-        setTimeout(function () {
-          var scroller = cards.getIScroller(card);
-          if (scroller) {
-            scroller.scrollToElement(card.find('.compose')[0], 200);
-          } else {
-            card[0].scrollTop = card[0].scrollHeight;
-          }
+        adjustCardScroll(card);
 
-          // Let the server know the messages have been seen
-          moda.conversation({
-            by: 'id',
-            filter: message.convId
-          }).withMessages(function (conv) {
-            conv.setSeen();
-          });
+        // Let the server know the messages have been seen
+        moda.conversation({
+          by: 'id',
+          filter: message.convId
+        }).withMessages(function (conv) {
+          conv.setSeen();
         });
-
       } else if (message.from.id === moda.me().id) {
         // If message is from me, it means I wanted to start a new conversation.
         cards.nav('conversation?id=' + message.convId);
@@ -589,6 +620,14 @@ define(function (require) {
         // after transition has happened.
         setTimeout(function () {
           node.parentNode.removeChild(node);
+          adjustNewScrollerWidth();
+
+          // Adjust the new conversation list scroll to be back at zero,
+          // otherwise it can look weird when going "back" to the start card.
+          if (newMessageIScroll) {
+            newMessageIScroll.scrollTo(0, 0);
+          }
+
           cards.adjustCardSizes();
         }, 1000);
 
