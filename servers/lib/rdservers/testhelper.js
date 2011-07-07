@@ -138,7 +138,22 @@ var TestClientActorMixins = {
    *  `setup_useServer` function instead since it runs at step definition time.
    */
   _signupWith: function(testServerActor) {
+    // create actors corresponding to the connections so we can make sure they
+    //  die.
+    var eClientConn = this.T.actor('clientConn', this.__name, null, this),
+        eServerConn = this.T.actor('serverConn', this.__name, null, this);
+    this.RT.reportActiveActorThisStep(eClientConn);
+    eClientConn.expectOnly__die();
+    this.RT.reportActiveActorThisStep(eServerConn);
+    eServerConn.expectOnly__die();
+
+    // expect
     this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eRawClient
+      .expect_signup_begin()
+      .expect_signedUp()
+      .expect_signup_end();
+
     this._rawClient.signupUsingServerSelfIdent(
       this._usingServer.__signedSelfIdentBlob);
   },
@@ -149,10 +164,6 @@ var TestClientActorMixins = {
     return this.T.convenienceSetup(self._eRawClient, 'creates account with',
                                    server._eServer,
                                    function() {
-      self._eRawClient
-        .expect_signup_begin()
-        .expect_signedUp()
-        .expect_signup_end();
 
       self._signupWith(server);
     });

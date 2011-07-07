@@ -389,7 +389,18 @@ var TestLogProtoBase = {
     var entry = ['!failedexp', exp, $microtime.now(), gSeq++];
     this._entries.push(entry);
   },
+
+  __die: function() {
+    this._died = $microtime.now();
+    var testActor = this._actor;
+    if (testActor && testActor._expectDeath) {
+      testActor._expectDeath = false;
+      testActor.__loggerFired();
+    }
+  },
 };
+
+const DIED_EVENTNAME = '(died)', DIED_EXP = [DIED_EVENTNAME];
 
 var TestActorProtoBase = {
   toJSON: function() {
@@ -400,6 +411,17 @@ var TestActorProtoBase = {
       parentUniqueName: this._parentUniqueName,
       loggerUniqueName: this._logger ? this._logger._uniqueName : null,
     };
+  },
+
+  /**
+   * Indicate that the only expectation we have on this actor is that its
+   *  logger will die during this step.
+   */
+  expectOnly__die: function() {
+    if (!this._activeForTestStep)
+      throw new Error("Attempt to set expectations on an actor that is not " +
+                      "participating in this test step!");
+    this._expectDeath = true;
   },
 
   /**
@@ -428,7 +450,8 @@ var TestActorProtoBase = {
    *  null.
    */
   __waitForExpectations: function() {
-    if (this._iExpectation >= this._expectations.length)
+    if ((this._iExpectation >= this._expectations.length) &&
+        (this._expectDeath ? (this._logger && this._logger._died) : true))
       return this._expectationsMet;
 
     if (!this._deferred)
@@ -441,6 +464,7 @@ var TestActorProtoBase = {
     // kill all processed entries.
     this._iExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
+    this._expectDeath = false;
     this._deferred = null;
     this._activeForTestStep = false;
   },
@@ -451,6 +475,8 @@ var TestActorProtoBase = {
         this._logger.__failedExpectation(this._expectations[i]);
       }
     }
+    if (this._expectDeath && !this._logger._died)
+      this._logger.__failedExpectation(DIED_EXP);
   },
 
   /**
@@ -494,7 +520,8 @@ var TestActorProtoBase = {
     }
     // XXX explode on logs without expectations?
 
-    if ((this._iExpectation >= this._expectations.length) && this._deferred) {
+    if ((this._iExpectation >= this._expectations.length) && this._deferred &&
+        (this._expectDeath ? (this._logger && this._logger._died) : true)) {
       this._deferred.resolve();
     }
   },
@@ -1034,6 +1061,7 @@ LoggestClassMaker.prototype = {
       this._logger = undefined;
       this._expectations = [];
       this._expectationsMet = true;
+      this._expectDeath = false;
       this._activeForTestStep = false;
       this._iEntry = this._iExpectation = 0;
     };

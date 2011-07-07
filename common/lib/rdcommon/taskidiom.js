@@ -144,9 +144,11 @@ var SoftFailureTaskProto = exports.SoftFailureTaskProto = {
     // call the cleanup function safely-like
     if (this.__cleanup)
       this.log.cleaup(this, this.__cleanup);
+    this.log.__die();
     this.__deferred.resolve(false);
   },
   __succeed: function(val) {
+    this.log.__die();
     this.__deferred.resolve(val);
   },
 };

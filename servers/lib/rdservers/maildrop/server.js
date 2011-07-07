@@ -210,6 +210,7 @@ ReceiveDeliveryConnection.prototype = {
    *  regarding a conversation our user should be subscribed to.
    */
   _msg_root_deliverServer: function(msg) {
+    var self = this;
     return when(fauxServerEnqueueProcessNow(this.conn.serverConfig,
                                             msg.msg,
                                             this.conn.clientPublicKey,
@@ -496,7 +497,7 @@ var CreateConversationTask = taskMaster.defineTask({
             senderKey: senderKey,
             convId: convId,
             proof: addPayload.inviteProof,
-            proofNonce: senderNonce,
+            proofNonce: addPayload.proofNonce,
             nonce: ourNonce,
             payload: boxedWelcomeMsg
           },

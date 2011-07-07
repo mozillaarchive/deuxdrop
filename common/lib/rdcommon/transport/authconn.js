@@ -240,6 +240,8 @@ var AuthClientCommon = {
     this.log.websocketError(error);
   },
   _onClose: function() {
+    if (this._conn === null)
+      return;
     this._conn = null;
     this.log.closed();
 
@@ -428,7 +430,9 @@ function AuthClientConn(appConn, clientKeyring, serverPublicKey,
   this._initCommon('connect',
                    INITIAL_CLIENT_NONCE, INITIAL_SERVER_NONCE);
 
-  var wsc = this._wsClient = new $ws.WebSocketClient();
+  // XXX forcing a super-short timeout because we don't care about close frames
+  //  and we are experiencing odd issues when simultaneously closing...
+  var wsc = this._wsClient = new $ws.WebSocketClient({closeTimeout: 0});
   wsc.on('error', this._onConnectError.bind(this));
   wsc.on('connectFailed', this._onConnectFailed.bind(this));
   wsc.on('connect', this._onConnected.bind(this));
@@ -647,6 +651,8 @@ console.log("instantiating server");
 
   var server = this._wsServer = new $ws.WebSocketServer({
     httpServer: httpServer,
+    // XXX see the client for our logic on using a zero close timeout.
+    closeTimeout: 0,
   });
   server.on('request', this._onRequest.bind(this));
 
