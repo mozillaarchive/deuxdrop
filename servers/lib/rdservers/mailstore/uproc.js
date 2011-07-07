@@ -77,6 +77,15 @@ function UserMessageProcessor(effigy, dbConn, _logger) {
   this._logger = _logger;
 }
 UserMessageProcessor.prototype = {
+  toString: function() {
+    return '[UserMessageProcessor]';
+  },
+  toJSON: function() {
+    return {
+      type: 'UserMessageProcessor',
+    };
+  },
+
   /**
    * Process a message for the user.
    *
@@ -100,13 +109,13 @@ UserMessageProcessor.prototype = {
     };
     switch (fanoutMsg.type) {
       case 'welcome':
-        return (new UserConvWelcomeTask(arg, _logger)).run();
+        return (new UserConvWelcomeTask(arg, this._logger)).run();
       case 'join':
-        return (new UserConvJoinTask(arg, _logger)).run();
+        return (new UserConvJoinTask(arg, this._logger)).run();
       case 'message':
-        return (new UserConvMessageTask(arg, _logger)).run();
+        return (new UserConvMessageTask(arg, this._logger)).run();
       case 'meta':
-        return (new UserConvMetaTask(arg, _logger)).run();
+        return (new UserConvMetaTask(arg, this._logger)).run();
 
       default:
         throw new $taskerrors.MalformedPayloadError(
@@ -138,11 +147,21 @@ UserMessageProcessor.prototype = {
 function UserProcessorRegistry(serverConfig, dbConn, _logger) {
   this._config = serverConfig;
   this._db = dbConn;
+  this._logger = _logger;
 
   this._procByTell = {};
 }
 exports.UserProcessorRegistry = UserProcessorRegistry;
 UserProcessorRegistry.prototype = {
+  toString: function() {
+    return '[UserProcessorRegistry]';
+  },
+  toJSON: function() {
+    return {
+      type: 'UserProcessorRegistry',
+    };
+  },
+
   _getUserMessageProcessorUsingTellKey: function(userTellKey) {
     if (this._procByTell.hasOwnProperty(userTellKey))
       return this._procByTell(userTellKey);

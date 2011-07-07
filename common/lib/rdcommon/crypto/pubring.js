@@ -72,6 +72,15 @@ function PersonPubring(persistedBlob) {
   this.data = persistedBlob;
 }
 PersonPubring.prototype = {
+  toString: function() {
+    return '[PersonPubring]';
+  },
+  toJSON: function() {
+    return {
+      type: 'PersonPubring',
+    };
+  },
+
   get rootPublicKey() {
     return this.data.rootPublicKey;
   },

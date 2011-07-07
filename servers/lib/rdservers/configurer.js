@@ -99,6 +99,9 @@ function ServerConfig(keyring, selfIdentBlob, dbConn) {
   this._serverModules = [];
 }
 ServerConfig.prototype = {
+  toString: function() {
+    return '[ServerConfig]';
+  },
   toJSON: function() {
     return {
       type: 'ServerConfig',

@@ -178,7 +178,7 @@ AuthApi.prototype = {
     var promises = [];
     var accountCells = {
       "d:selfIdent": selfIdentBlob,
-      "d:store:keyring": storeKeyring,
+      "d:store:keyring": JSON.stringify(storeKeyring),
     };
     for (var clientKey in clientAuthsMap) {
       accountCells["d:c:" + clientKey] = clientAuthsMap[clientKey];
@@ -238,7 +238,8 @@ AuthApi.prototype = {
         if (serverRole === "store" &&
             cells.hasOwnProperty("d:store:keyring")) {
           effigy.storeEnvelopeKeyring =
-            $keyring.loadSimpleBoxingKeyring(cells["d:store:keyring"]);
+            $keyring.loadSimpleBoxingKeyring(
+              JSON.parse(cells["d:store:keyring"]));
         }
 
         return effigy;

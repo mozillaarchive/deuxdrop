@@ -57,6 +57,7 @@ var $gendb = require('rdservers/gendb/redis'),
 
 var $signup_server = require('rdservers/signup/server'),
     $maildrop_server = require('rdservers/maildrop/server'),
+    $mailstore_uproc = require('rdservers/mailstore/uproc'),
     $mailsender_local_api = require('rdservers/mailsender/localapi');
 
 var TestClientActorMixins = {
@@ -478,6 +479,7 @@ exports.TESTHELPER = {
     $maildrop_server.LOGFAB,
     $mailsender_local_api.LOGFAB,
 
+    $mailstore_uproc.LOGFAB,
   ],
 
   actorMixins: {

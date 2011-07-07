@@ -65,6 +65,8 @@
  *   - And they knew about something they shouldn't know about:
  *     `UnauthorizedUserDataLeakError`.
  *   - Otherwise: `UnauthorizedUserError`.
+ * - Legitimate-seeming user naming a name we have never heard of:
+ *     `BadNameError`.
  * - Apparent invariant violation, likely a local cluster thing:
  *   - Someone else is trying to do this at the same time as us and may still
  *     be trying to do it (aka not obviously dead):
@@ -262,6 +264,21 @@ var UnauthorizedUserDataLeakError = exports.UnauthorizedUserDataLeakError =
 UnauthorizedUserDataLeakError.prototype = {
   __proto__: UnauthorizedUserError.prototype,
   name: 'UnauthorizedUserDataLeakError',
+};
+
+
+/**
+ * They named something that does not exist as far as we know.  Note that this
+ *  should not convey additional information to clients without thought, as we
+ *  don't want them to be able to survey information out of us.
+ */
+var BadNameError = exports.BadNameError =
+  function() {
+  Error.captureStackTrace(this, BadNameError);
+};
+BadNameError.prototype = {
+  __proto__: Error.prototype,
+  name: 'BadNameError',
 };
 
 }); // end define

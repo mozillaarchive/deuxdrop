@@ -183,12 +183,12 @@ ReceiveDeliveryConnection.prototype = {
                                               this.conn.clientPublicKey,
                                               this.conn.log),
         function yeaback() {
-          self.sendMessage({type: "ack"});
+          self.conn.writeMessage({type: "ack"});
           return 'root';
         },
         function errback() {
           // XXX bad actor analysis feeding
-          self.sendMessage({type: "bad"});
+          self.conn.writeMessage({type: "bad"});
           // the bad message is notable but non-fatal
           return 'root';
         });
@@ -198,7 +198,7 @@ ReceiveDeliveryConnection.prototype = {
       // XXX note bad actor evidence
       // Tell the other server it fed us something gibberishy so it can
       //  detect a broken or bad actor in its midst.
-      this.sendMessage({
+      this.conn.writeMessage({
         type: "bad",
       });
       return 'root';
@@ -216,11 +216,11 @@ ReceiveDeliveryConnection.prototype = {
                                             this.conn.clientPublicKey,
                                             this.conn.log),
       function yeaback() {
-        self.sendMessage({type: "ack"});
+        self.conn.writeMessage({type: "ack"});
         return 'root';
       },
       function errback() {
-        self.sendMessage({type: "bad"});
+        self.conn.writeMessage({type: "bad"});
         return 'root';
       });
   },
@@ -246,7 +246,14 @@ var InitialFanoutToUserMessageTask = exports.InitialFanoutToUserMessageTask =
      *  user.
      */
     check_authorized_to_talk_to_user: function(ourUserRootKey) {
+      if (!ourUserRootKey)
+        throw new $taskerrors.BadNameError();
       this.ourUserRootKey = ourUserRootKey;
+      // loopback messages sent from us to ourselves for our own user are of
+      //  course authorized...
+      if (this.otherServerKey === this.config.keyring.boxingPublicKey &&
+          this.envelope.name === this.envelope.senderKey)
+        return true;
       return this.config.authApi.userAssertServerUser(
         ourUserRootKey, this.otherServerKey, this.envelope.senderKey);
     },

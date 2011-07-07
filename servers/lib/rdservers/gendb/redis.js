@@ -83,6 +83,15 @@ function RedisDbConn(connInfo, nsprefix, _logger) {
   this._prefix = nsprefix;
 }
 RedisDbConn.prototype = {
+  toString: function() {
+    return '[RedisDbConn]';
+  },
+  toJSON: function() {
+    return {
+      type: 'RedisDbConn',
+    };
+  },
+
   _onReady: function() {
     this._log.connected();
   },
@@ -141,7 +150,7 @@ RedisDbConn.prototype = {
     return when(this.getRowCell(tableName, rowId, columnName),
       function(val) {
         if (!val)
-          throw new exClass();
+          throw new (exClass || Error)(columnName + " was falsy");
         return Boolean(val);
       }
       // rejection pass-through is fine
