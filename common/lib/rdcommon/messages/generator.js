@@ -355,10 +355,14 @@
 define(
   [
     'rdcommon/crypto/keyops',
+    'rdcommon/taskerrors',
+    'rdcommon/identities/pubident',
     'exports'
   ],
   function(
     $keyops,
+    $taskerrors,
+    $pubident,
     exports
   ) {
 
@@ -505,7 +509,7 @@ exports.createConversationInvitation = function(authorKeyring,
   var inviteEnv = {
     convId: convMeta.id,
     transitServerKey: convMeta.transitServerKey,
-    enevelopeSharedSecretKey: convMeta.envelopeSharedSecretKey,
+    envelopeSharedSecretKey: convMeta.envelopeSharedSecretKey,
     payload: boxedInviteBody,
   };
   var boxedInviteEnv = authorKeyring.boxUtf8With(
@@ -517,7 +521,8 @@ exports.createConversationInvitation = function(authorKeyring,
   return {
     nonce: inviteNonce,
     boxedInvite: boxedInviteEnv,
-    signedAttestation: signedAttestation,
+    attestSNonce: attestSNonce,
+    signedAttestation: sboxedAttestation,
   };
 };
 
@@ -621,7 +626,7 @@ exports.assertCheckConversationInviteAttestation =
                         'signingKey', 'issuedAt',
                         'messaging', 'announceSign');
   if (attestPayload.convId !== convId)
-    throw new $keyops.MalformedOrReplayPayloadError();
+    throw new $taskerrors.MalformedOrReplayPayloadError();
   var oidentPayload = $pubident.assertGetOtherPersonIdent(attestPayload.oident,
                                       checkAuthorPubring, timestamp);
   var selfIdentPayload = $pubident.assertGetPersonSelfIdent(

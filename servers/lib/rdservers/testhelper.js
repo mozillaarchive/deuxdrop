@@ -334,13 +334,25 @@ var TestClientActorMixins = {
     if (!recipients.length) {
       throw new Error("No recipients supplied!");
     }
-    for (iRecip = 0; iRecip < recipients.length; iRecip++) {
-      var recipTestClient = recipients[iRecip];
 
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eRawClient.expect_allActionsProcessed();
+
+    var youAndMeBoth = [this].concat(recipients);
+    for (iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
+      var recipTestClient = youAndMeBoth[iRecip];
+
+      this.RT.reportActiveActorThisStep(recipTestClient._eRawClient);
       this.RT.reportActiveActorThisStep(recipTestClient._eLocalStore);
-      recipTestClient._eLocalStore.expect_newConversation(convInfo.convId);
-      recipTestClient._eLocalStore.expect_conversationMessage(
-        convInfo.convId, convInfo.msgNonce);
+
+      var els = recipTestClient._eLocalStore;
+
+      els.expect_newConversation(convInfo.convId);
+      els.expect_proc_conv('join');
+      els.expect_proc_conv('join');
+      els.expect_proc_conv('message');
+      els.expect_conversationMessage(convInfo.convId, convInfo.msgNonce);
+      recipTestClient._eRawClient.expect_replicaCaughtUp();
     }
   },
 

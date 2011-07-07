@@ -87,14 +87,14 @@ SendDeliveryConnection.prototype = {
 
   _msg_deliver_ack: function(msg) {
     this._deferred.resolve();
-    this.conn.close();
+    return this.conn.close();
   },
 
   _msg_deliver_bad: function(msg) {
     // if we were not a one-shot connection, we would note the bad message
     //  for bad actor handling, but otherwise continue on with our job.
     this._deferred.reject("other side says our message is bad");
-    this.conn.close();
+    return this.conn.close();
   },
 };
 

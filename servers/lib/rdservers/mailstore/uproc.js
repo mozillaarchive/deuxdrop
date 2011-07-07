@@ -131,14 +131,14 @@ UserMessageProcessor.prototype = {
    *  of course.
    */
   relayMessageToAllClients: function(block) {
-    var clientKeys = this.userEffigy.otherClientKeys;
+    var clientKeys = this.effigy.otherClientKeys;
     var promises = [];
     for (var i = 0; i < clientKeys.length; i++) {
       promises.push(this.store.clientQueuePush(clientKeys[i], block));
     }
 
     $mailstore_server.gConnTracker.notifyAllOfReplicaBlock(
-      this.effigy.rootPublicKey, replicaBlock);
+      this.effigy.rootPublicKey, block);
 
     return $Q.all(promises);
   },
@@ -234,7 +234,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
       this.replicaBlock = {
         fanmsg: this.fanoutMsg.payload.boxedInvite,
         sentBy: this.fanoutMsg.sentBy,
-        nonce: this.fanoutNonce,
+        nonce: this.fanoutMsg.payload.inviteNonce,
       };
       return this.store.newConversationRace(this.convId,
                                             this.replicaBlock);
@@ -271,7 +271,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
         // reverse-box the message into a raw form for storage purposes
         arg.fanoutMsgRaw = self.effigy.storeEnvelopeKeyring.boxUtf8(
                              JSON.stringify(subFanoutMsg), subFanoutMsg.nonce,
-                             transitServerKey);
+                             self.transitServerKey);
 
         switch(subFanoutMsg.type) {
           case 'join':

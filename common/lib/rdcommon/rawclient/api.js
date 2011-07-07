@@ -280,6 +280,7 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
   var selfIdentPayload = $pubident.assertGetPersonSelfIdent(
                            this._selfIdentBlob,
                            this._keyring.rootPublicKey);
+  this._selfOthIdentBlob = persistedBlob.selfOthIdent;
   this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
                     this._selfIdentBlob);
 
@@ -479,6 +480,10 @@ RawClientAPI.prototype = {
     this._selfIdentBlob = $pubident.generatePersonSelfIdent(
                             this._longtermKeyring, this._keyring,
                             this._poco, serverSelfIdentBlob);
+    // and our dubious self other-ident...
+    this._selfOthIdentBlob = $pubident.generateOtherPersonIdent(
+                               this._longtermKeyring, this._selfIdentBlob,
+                               {});
     this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
                       this._selfIdentBlob);
 
@@ -605,7 +610,7 @@ RawClientAPI.prototype = {
 
     var addPayloads = [];
 
-    var useOIdents = [null].concat(peepOIdents),
+    var useOIdents = [this._selfOthIdentBlob].concat(peepOIdents),
         useRecipPubrings = [this._pubring].concat(peepPubrings);
 
 
@@ -624,6 +629,7 @@ RawClientAPI.prototype = {
         envelopeKey: recipPubring.getPublicKeyFor('messaging', 'envelopeBox'),
         serverKey: recipPubring.transitServerPublicKey,
         inviteePayload: inviteInfo.boxedInvite,
+        attestationNonce: inviteInfo.attestSNonce,
         attestationPayload: inviteInfo.signedAttestation,
         inviteProof: inviteProofInfo.boxedInviteProof,
         proofNonce: inviteProofInfo.nonce,
@@ -744,6 +750,7 @@ RawClientAPI.prototype = {
   __persist: function() {
     return {
       selfIdent: this._selfIdentBlob, // (immutable)
+      selfOthIdent: this._selfOthIdentBlob, // (immutable)
       keyrings: { // (mutable)
         root: this._rootKeyring.data, // (atomic)
         longterm: this._longtermKeyring.data, // (atomic)
@@ -794,11 +801,15 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
   var personSelfIdentBlob = $pubident.generatePersonSelfIdent(
                               longtermKeyring, keyring,
                               poco, null);
+  var personSelfOthIdentBlob = $pubident.generateOtherPersonIdent(
+                                 longtermKeyring, personSelfIdentBlob,
+                                 {});
 
   var clientAuthBlob = keyring.getPublicAuthFor('client');
 
   var persistedBlob = {
     selfIdent: personSelfIdentBlob,
+    selfOthIdent: personSelfOthIdentBlob,
     keyrings: {
       root: rootKeyring.data,
       longterm: longtermKeyring.data,

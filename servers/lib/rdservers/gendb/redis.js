@@ -326,7 +326,7 @@ RedisDbConn.prototype = {
     var multi = this._conn.multi();
     for (var i = 0; i < values.length; i++) {
       multi.rpush(this._prefix + ':' + tableName + ':' + queueName,
-                  values[i]);
+                  JSON.stringify(values[i]));
     }
     var deferred = $Q.defer();
     multi.exec(function(err, replies) {
@@ -345,7 +345,7 @@ RedisDbConn.prototype = {
       if (err)
         deferred.reject(err);
       else
-        deferred.resolve(multibulk);
+        deferred.resolve(multibulk.map(JSON.parse));
     });
     return deferred.promise;
   },

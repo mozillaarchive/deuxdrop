@@ -436,8 +436,8 @@ var CreateConversationTask = taskMaster.defineTask({
           sentBy: senderKey,
           invitee: addPayload.tellKey,
           receivedAt: now,
-          nonce: addPayload.nonce,
-          addPayload: addPayload.attestationPayload,
+          nonce: addPayload.attestationNonce,
+          payload: addPayload.attestationPayload,
         });
       }
       // - message

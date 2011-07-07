@@ -41,11 +41,14 @@
 
 define(
   [
+    'q',
     'exports'
   ],
   function(
+    $Q,
     exports
   ) {
+var when = $Q.when;
 
 const TBL_CONTACTS = 'store:userContacts';
 
@@ -155,6 +158,7 @@ UserBehalfDataStore.prototype = {
   newConversationRace: function(conversationId, invitationEnvContext) {
     return this._db.raceCreateRow(TBL_CONVERSATIONS,
                                   this._userRowBit + conversationId,
+                                  "m:race",
                                   {"m:i": invitationEnvContext});
   },
 
@@ -184,9 +188,9 @@ UserBehalfDataStore.prototype = {
    * Update the per-peep conversation view indices; in other words, update the
    *  ordered lists of conversations the peep is involved in.
    */
-  touchConvPeepsRecencies: function(conversationId, timestamp,
-                                    writerPeepId,
-                                    recipientPeepIds) {
+  touchConvPeepRecencies: function(conversationId, timestamp,
+                                   writerPeepId,
+                                   recipientPeepIds) {
     var promises = [];
     // - writer
     promises.push(this._db.maximizeIndexValue(

@@ -45,21 +45,26 @@
 
 define(
   [
+    'q',
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
     'rdcommon/identities/pubident',
+    'rdcommon/messages/generator',
     'module',
     'exports'
   ],
   function(
+    $Q,
     $log,
     $task, $taskerrors,
     $keyops, $pubring,
     $pubident,
+    $msg_gen,
     $module,
     exports
   ) {
+var when = $Q.when;
 
 /**
  * Data on peeps, be they a contact or a transitive-acquaintance we heard of
@@ -397,25 +402,33 @@ LocalStore.prototype = {
                                       fanmsg.transit,
                                       'messaging', 'envelopeBox'));
 
+      var self = this;
       // just grab all the cells; XXX timecopout caching/unification
       return when(this._db.getRow(TBL_CONV_DATA, fanmsg.convId, "d"),
                   function(cells) {
         if (!cells.hasOwnProperty("d:meta"))
           throw new $taskerrors.MissingPrereqFatalError();
-        var convMeta = cells["d:meta"];
+        var convMeta = JSON.parse(cells["d:meta"]);
 
+        var procfunc;
         switch(fanoutEnv.type) {
           case 'join':
-            return this._proc_convJoin(convMeta, fanoutEnv, cells);
+            procfunc = self._proc_convJoin;
+            break;
           case 'message':
-            return this._proc_convMessage(convMeta, fanoutEnv, cells);
+            procfunc = self._proc_convMessage;
+            break;
           case 'meta':
-            return this._proc_convMetaMsg(convMeta, fanoutEnv, cells);
+            procfunc = self._proc_convMetaMsg;
+            break;
           default:
             throw new $taskerrors.MalformedPayloadError(
                         'bad type: ' + fanoutEnv.type);
         }
 
+        return self._log.proc_conv(fanoutEnv.type,
+                                   self, procfunc,
+                                   convMeta, fanoutEnv, cells);
       });
     }
   },
@@ -433,13 +446,13 @@ LocalStore.prototype = {
     // - unbox the invite envelope
     var inviteEnv = JSON.parse(
                       this._keyring.openBoxUtf8With(
-                        fanmsg.fanmsg, fanmsg.nonce, fanmsg.senderKey,
+                        fanmsg.fanmsg, fanmsg.nonce, fanmsg.sentBy,
                         'messaging', 'envelopeBox'));
 
     // - unbox the invite payload
     var inviteBody = JSON.parse(
                        this._keyring.openBoxUtf8With(
-                         inviteEnv, fanmsg.nonce, fanmgs.senderKey,
+                         inviteEnv.payload, fanmsg.nonce, fanmsg.sentBy,
                          'messaging', 'bodyBox'));
 
     // - validate the attestation (and enclosed creator self-ident)
@@ -461,11 +474,16 @@ LocalStore.prototype = {
     // - persist, mark the creator as the first authorized participant
     // (they will still be "joined" which will replace the entry)
     var cells = {
-      "d:meta": convMeta
+      "d:meta": JSON.stringify(convMeta),
+      "d:m": 0,
     };
     cells["d:s" + creatorPubring.getPublicKeyFor('messaging', 'tellBox')] =
       attestPayload.creatorSelfIdent;
-    return this._db.putCells(TBL_CONV_DATA, convMeta.id, cells);
+    var self = this;
+    return when(this._db.putCells(TBL_CONV_DATA, convMeta.id, cells),
+                function() {
+                  self._log.newConversation(convMeta.id);
+                });
   },
 
   /**
@@ -479,7 +497,7 @@ LocalStore.prototype = {
                   "uncool inviter: " + fanoutEnv.sentBy);
     var inviterPubring =
       $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-        cells[inviterCellName]);
+        cells[inviterCellName]); // (this is a blob-string, not json encoded)
 
     // - unsbox the attestation
     var signedAttestation = $keyops.secretBoxOpen(fanoutEnv.payload,
@@ -487,7 +505,8 @@ LocalStore.prototype = {
                                                   convMeta.bodySharedSecretKey);
     // - validate the attestation
     var oident = $msg_gen.assertCheckConversationInviteAttestation(
-                   signedAttestation, inviterPubring, fanoutEnv.receivedAt);
+                   signedAttestation, inviterPubring, convMeta.id,
+                   fanoutEnv.receivedAt);
 
     this._nameTrack(oident, inviterPubring);
 
@@ -498,7 +517,7 @@ LocalStore.prototype = {
     // - add the invitee as an authorized participant
     writeCells["d:s" + fanoutEnv.invitee] = oident.personSelfIdent;
     // - add the join entry in the message sequence
-    var msgNum = writeCells["d:m"] = cells["d:m"] + 1;
+    var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
     writeCells["d:m" + msgNum] = {type: 'join', id: inviteePeepId};
 
     // XXX update in-memory reps
@@ -555,7 +574,8 @@ LocalStore.prototype = {
 
 
     // - add the join entry in the message sequence
-    var msgNum = writeCells["d:m"] = cells["d:m"] + 1;
+    var writeCells = {};
+    var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
     writeCells["d:m" + msgNum] = {
       type: 'message',
       authorId: authorPeepId,
@@ -566,8 +586,8 @@ LocalStore.prototype = {
     var timestamp = fanoutEnv.receivedAt;
 
     // XXX notifications
-
-    return $Q.wait(
+    var self = this;
+    return $Q.join(
       this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
       // - all conversation index
       this._db.updateIndexValue(
@@ -582,10 +602,13 @@ LocalStore.prototype = {
         convMeta.id, timestamp),
       // - touch peep (activity) indices
       this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '', inviteePeepId,
+        TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '', authorPeepId,
         timestamp),
       this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteePeepId, timestamp)
+        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', authorPeepId, timestamp),
+      function() {
+        self._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
+      }
     );
   },
 
@@ -720,6 +743,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     events: {
       newConversation: {convId: true},
       conversationMessage: {convId: true, nonce: true},
+    },
+    calls: {
+      proc_conv: {type: true},
+    },
+    TEST_ONLY_calls: {
+      proc_conv: {convMeta: false, fanoutEnv: false, cells: false},
     },
   },
 });
