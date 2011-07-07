@@ -492,11 +492,12 @@ var CreateConversationTask = taskMaster.defineTask({
           receivedAt: nowish,
           nonce: senderNonce, // (we are not boxing using this nonce)
           payload: {
+            inviteNonce: addPayload.nonce,
             boxedInvite: addPayload.inviteePayload,
             backlog: this.initialFanouts,
           },
         };
-        var boxedWelcomeMsg = config.keyring.box(
+        var boxedWelcomeMsg = config.keyring.boxUtf8(
           JSON.stringify(welcomeMsg), ourNonce, addPayload.envelopeKey);
         promises.push(senderApi.sendServerEnvelopeToServer({
             type: 'initialfan',
@@ -518,7 +519,7 @@ var CreateConversationTask = taskMaster.defineTask({
 /**
  * Send a message to all
  */
-function conversationSendToAllRecipients(config, convId, messageStr,
+function conversationSendToAllRecipients(config, convId, messageObj,
                                          usersAndServers) {
   var keyring = config.keyring,
       senderApi = config.senderApi,
@@ -530,7 +531,7 @@ function conversationSendToAllRecipients(config, convId, messageStr,
     var userAndServer = usersAndServers[i];
 
     // - box the fanout message for the user
-    var boxed = keyring.box(messageStr, nonce,
+    var boxed = keyring.boxUtf8(JSON.stringify(messageObj), nonce,
                             userAndServer.userEnvelopeKey);
     // - create the server-to-server envelope
     var serverEnvelope = {
@@ -623,7 +624,7 @@ var ConversationAddTask = taskMaster.defineTask({
       };
       var nonce = $keyops.makeBoxNonce();
       // boxed to the user's envelope key so their mailstore can read it
-      var boxedBackfillMessage = this.config.keyring.box(
+      var boxedBackfillMessage = this.config.keyring.boxUtf8(
         JSON.stringify(backfillMessage), nonce,
         this.innerEnvelope.payload.envelopeKey);
       return this.config.senderApi.sendServerEnvelopeToServer({
@@ -653,10 +654,9 @@ var ConversationAddTask = taskMaster.defineTask({
                this.innerEnvelope.convId);
     },
     send_to_all_recipients: function(usersAndServers) {
-      var fanoutMessageStr = JSON.stringify(this.fanoutMessage);
       return conversationSendToAllRecipients(this.config,
                                              this.innerEnvelope.convId,
-                                             fanoutMessageStr,
+                                             this.fanoutMessage,
                                              usersAndServers);
     },
   },

@@ -429,7 +429,8 @@ exports.createNewConversation = function(authorKeyring, authorSelfIdentBlob,
 exports.assertGetConversationAttestation = function(signedAttestation,
                                                     checkConversationId) {
   // verify its self-validity
-  var peeked = $keyops.generalPeekInsideSignatureUtf8(signedAttestation);
+  var peeked = JSON.parse(
+                 $keyops.generalPeekInsideSignatureUtf8(signedAttestation));
   $keyops.generalVerifySignatureUtf8(signedAttestation, peeked.id);
   // verify it matches the expected conversation id
   if (checkConversationId !== peeked.id)
@@ -661,8 +662,8 @@ exports.createConversationHumanMessage = function(bodyString, authorKeyring,
     body: bodyString,
   };
   var bodyJsonStr = JSON.stringify(bodyObj);
-  var bodySigned = authorKeyring.signWith(bodyJsonStr,
-                                          'messaging', 'announceSign');
+  var bodySigned = authorKeyring.signUtf8With(bodyJsonStr,
+                                              'messaging', 'announceSign');
 
   var nonce = $keyops.makeSecretBoxNonce();
   var bodyEncrypted = $keyops.secretBox(bodySigned, nonce,
@@ -707,8 +708,8 @@ exports.assertGetConversationHumanMessageBody = function(bodyEncrypted,
                                                          convMeta,
                                                          receivedTS,
                                                          authorPubring) {
-  var bodySigned = $keyops.secretBoxOpenUtf8(bodyEncrypted, nonce,
-                                             convMeta.bodySharedSecretKey);
+  var bodySigned = $keyops.secretBoxOpen(bodyEncrypted, nonce,
+                                         convMeta.bodySharedSecretKey);
   var peekedBodyObj = JSON.parse(
                         $keyops.generalPeekInsideSignatureUtf8(bodySigned));
   // make sure the signature is consistent with its payload
@@ -722,36 +723,9 @@ exports.assertGetConversationHumanMessageBody = function(bodyEncrypted,
 exports.encryptHumanToHuman = function(obj, nonce,
                                        authorKeyring, recipPubring) {
   var jsonStr = JSON.stringify(obj);
-  authorKeyring.boxWith(jsonStr, nonce,
-                        recipPubring.getPublicKeyFor('messaging', 'bodyBox'),
-                        'messaging', 'tellBox');
-};
-
-/**
- *
- */
-exports.encryptTransitMessage = function(senderFullIdent,
-                                         envelope, payload,
-                                         recipPubIdent) {
-
-  var nonce = $nacl.box_random_nonce;
-  var strPayload = JSON.stringify(payload);
-  var encPayload = $nacl.box(strPayload, nonce,
-                             recipPubIdent.payloadPubKey,
-                             senderFullIdent.secret.authorshipBoxSecKey);
-
-  var dupEnvelope = {};
-  for (var key in envelope) {
-    dupEnvelope[key] = envelope[key];
-  }
-  dupEnvelope.payload = encPayload;
-
-  var strEnvelope = JSON.stringify(dupEnvelope);
-  var encEnvelope = $nacl.box(strEnvelope, nonce,
-                              recipPubIdent.envelopePubKey,
-                              senderFullIdent.secret.authorshipBoxSecKey);
-
-
+  authorKeyring.boxUtf8With(jsonStr, nonce,
+                            recipPubring.getPublicKeyFor('messaging', 'bodyBox'),
+                            'messaging', 'tellBox');
 };
 
 }); // end define

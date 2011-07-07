@@ -214,7 +214,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
       var inviteEnv = JSON.parse(
                         this.effigy.storeEnvelopeKeyring.openBoxUtf8(
                           this.fanoutMsg.payload.boxedInvite,
-                          this.fanoutNonce,
+                          this.fanoutMsg.payload.inviteNonce,
                           this.fanoutMsg.sentBy));
 
       if (inviteEnv.convId !== this.convId)
@@ -270,7 +270,7 @@ var UserConvWelcomeTask = taskMaster.defineTask({
         arg.fanoutNonce = subFanoutMsg.nonce;
         // reverse-box the message into a raw form for storage purposes
         arg.fanoutMsgRaw = self.effigy.storeEnvelopeKeyring.boxUtf8(
-                             subFanoutMsg, subFanoutMsg.nonce,
+                             JSON.stringify(subFanoutMsg), subFanoutMsg.nonce,
                              transitServerKey);
 
         switch(subFanoutMsg.type) {
