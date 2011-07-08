@@ -54,6 +54,21 @@ define(function (require, exports) {
     socket.emit('serverMessage', JSON.stringify(obj));
   }
 
+  function triggerSignOut() {
+    delete localStorage.assertion;
+    delete localStorage.me;
+    moda.trigger('signedOut');
+  }
+
+  function userConnect() {
+    if (localStorage.assertion) {
+      transport.signIn(localStorage.assertion, function (user) {
+        if (!user) {
+          triggerSignOut();
+        }
+      });
+    }
+  }
   /**
    * Factory machinery to creating an API that just calls back to the
    * server. Uses a deferred to only do the call once, so subsequent
@@ -232,15 +247,7 @@ define(function (require, exports) {
 
   socket.on('connect', function () {
     moda.trigger('networkConnected');
-    if (localStorage.assertion) {
-      transport.signIn(localStorage.assertion, function (user) {
-        if (!user) {
-          delete localStorage.assertion;
-          delete localStorage.me;
-          moda.trigger('signedOut');
-        }
-      });
-    }
+    userConnect();
   });
 
   socket.on('disconnect', function () {
@@ -249,6 +256,7 @@ define(function (require, exports) {
 
   socket.on('reconnect', function () {
     moda.trigger('networkReconnect');
+    userConnect();
   });
 
   socket.on('reconnecting', function (nextRetry) {

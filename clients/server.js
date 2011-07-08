@@ -104,8 +104,8 @@ actions = {
     // First check if we have saved data for the assertion.
     redis.get('browserid-assertion-' + assertion, function (err, value) {
       if (value && (value = value.toString())) {
-        redis.hmget(value, function (err, userData) {
-          if (userData && (userData = JSON.parse(userData))) {
+        redis.hgetall(value, function (err, userData) {
+          if (userData) {
             sendSignInComplete(data, client, userData);
           }
           // better not hit the else for this if.
