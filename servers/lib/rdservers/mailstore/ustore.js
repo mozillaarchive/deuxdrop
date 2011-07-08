@@ -156,10 +156,13 @@ UserBehalfDataStore.prototype = {
    * Store the
    */
   newConversationRace: function(conversationId, invitationEnvContext) {
+    // we start the message number from 1 for consistency with the increment
+    //  primitive; could change.
     return this._db.raceCreateRow(TBL_CONVERSATIONS,
                                   this._userRowBit + conversationId,
                                   "m:race",
-                                  {"m:i": invitationEnvContext});
+                                  {"m:i": invitationEnvContext,
+                                   "m:m": 1});
   },
 
   /**
@@ -174,10 +177,15 @@ UserBehalfDataStore.prototype = {
    * Add a message to the conversation, optionally boosting peep index values.
    */
   addConversationMessage: function(conversationId, highMsgNum,
-                                   rawMsgWithContext) {
+                                   rawMsgWithContext, extraCells) {
     var cells = {
       "m:m": highMsgNum + 1,
     };
+    if (extraCells) {
+      for (var key in extraCells) {
+        cells[key] = extraCells[key];
+      }
+    }
     cells["d:m" + highMsgNum] = rawMsgWithContext;
     return this._db.putCells(TBL_CONVERSATIONS,
                              this._userRowBit + conversationId,

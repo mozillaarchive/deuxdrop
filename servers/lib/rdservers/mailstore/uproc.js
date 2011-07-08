@@ -356,10 +356,13 @@ var UserConvJoinTask = taskMaster.defineTask({
       };
       var extraCells = {};
       extraCells["u:" + this.fanoutMsg.invitee] = 1;
-      return this.store.addConversationMessage(this.convId, {
-            // we don't need the transit server's key, it's implicit
-            nonce: this.fanoutNonce,
-            msg: this.fanoutMsg
+      return this.store.addConversationMessage(
+        this.convId,
+        this.highMessageNumber,
+        {
+          // we don't need the transit server's key, it's implicit
+          nonce: this.fanoutNonce,
+          msg: this.fanoutMsg
         }, extraCells);
     },
     relay_to_subscribed_clients: function() {
