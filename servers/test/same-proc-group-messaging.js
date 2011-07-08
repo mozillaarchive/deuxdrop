@@ -93,13 +93,12 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   //  explicit step (to invite someone who is not a friend of everyone else)
   client_a.setup_superFriends([client_b, client_c]);
 
-  T.group("conversation");
+  T.group("start 1:1 conversation");
 
-  // -- actual testing stuff
-  T.action(client_a, 'initiates one-on-one conversation with', client_b,
-           'by sending message', msg_a1, function() {
-    client_a.startConversation(conv, msg_a1, [client_b]);
-  });
+  client_a.do_startConversation(conv, msg_a1, [client_b]);
+
+  T.group("B responds to the message");
+
 /*
   T.action(client_b, 'responds to the messsage', msg_a1, 'of', client_a, 'with',
            msg_b1, function() {
@@ -107,6 +106,8 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
     msg_b1.expect_receivedBy([client_a]);
   });
 */
+
+  T.group("A invites C");
   /*
   T.permutation([
     T.action('The conversation hoster,', client_a, 'invites superfriend',

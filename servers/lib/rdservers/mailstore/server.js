@@ -110,7 +110,7 @@ UserConnectionsTracker.prototype = {
     for (var i = 0; i < conns.length; i++) {
       var othConn = conns[i];
       if (othConn !== conn)
-        othConn.otherClientGeneratedReplicaBlock(replicaBlock);
+        othConn.heyAReplicaBlock(replicaBlock);
     }
   },
 
@@ -119,8 +119,7 @@ UserConnectionsTracker.prototype = {
       return;
     var conns = this.liveByRootKey[rootKey];
     for (var i = 0; i < conns.length; i++) {
-      // XXX otherClientGeneratedReplicaBlock is a misnomer in this case
-      conns[i].otherClientGeneratedReplicaBlock(replicaBlock);
+      conns[i].heyAReplicaBlock(replicaBlock);
     }
   },
 };
@@ -182,6 +181,7 @@ function ClientServicingConnection(conn, userEffigy) {
   this._bound_ackAction = this._needsbind_ackAction.bind(this);
   this._bound_peekHandler = this._needsbind_peekHandler.bind(this);
 }
+exports.ClientServicingConnection = ClientServicingConnection;
 ClientServicingConnection.prototype = {
   INITIAL_STATE: 'init',
 
@@ -245,7 +245,11 @@ ClientServicingConnection.prototype = {
                 );
   },
 
-  otherClientGeneratedReplicaBlock: function(block) {
+  /**
+   * Notification from the `UserConnectionsTracker` that the provided
+   *  replica block has been enqueued for our consumption.
+   */
+  heyAReplicaBlock: function(block) {
     if (this._replicaBacklog)
       return;
     if (this._replicaInFlight) {

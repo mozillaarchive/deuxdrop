@@ -1081,6 +1081,7 @@ console.error("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
         if (typeof(parentLogger) === "string")
           throw new Error("A string can't be a logger => not a valid parent");
         logger = new testerCon(ident);
+        logger.__instance = implInstance;
         parentLogger = tester.reportNewLogger(logger, parentLogger);
       }
       // - Logging

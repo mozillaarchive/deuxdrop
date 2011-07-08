@@ -60,6 +60,13 @@ var $signup_server = require('rdservers/signup/server'),
     $mailstore_uproc = require('rdservers/mailstore/uproc'),
     $mailsender_local_api = require('rdservers/mailsender/localapi');
 
+var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
+    $testwrap_mailstore = require('rdservers/mailstore/testwrappers');
+
+var gClobberNamespace = {
+  senderApi: $testwrap_sender,
+};
+
 var TestClientActorMixins = {
   /**
    * Automatically create an identity; a client is not much use without one.
@@ -83,6 +90,11 @@ var TestClientActorMixins = {
     // -- define the raw client and its setup step
     self._eRawClient = self.T.actor('rawClient', self.__name, null, self);
     self._eLocalStore = self.T.actor('localStore', self.__name, null, self);
+    // We don't create the actors for both sides of our connection until we
+    //  connect. These may need to be refreshed, too.
+    self._eClientConn = null;
+    self._eServerConn = null;
+
     self._peepsByName = {};
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
         function() {
@@ -196,6 +208,17 @@ var TestClientActorMixins = {
    *  deviceCheckin to complete including all replica data to be received.
    */
   connect: function() {
+    // create the actors for our mailstore connections and report them pending
+    this._eClientConn = this.T.actor('clientConn', this.__name + ' mailstore',
+                                     null, this);
+    this._eServerConn = this.T.actor('serverConn',
+                                     this._usingServer.__name + ' mailstore ' +
+                                       this.__name,
+                                     null, this._usingServer);
+    // (pending, but not active; they don't want/need expectations)
+    this.RT.reportPendingActor(this._eClientConn);
+    this.RT.reportPendingActor(this._eServerConn);
+
     this.RT.reportActiveActorThisStep(this._eRawClient);
     this.RT.reportActiveActorThisStep(this._usingServer._eServer);
 
@@ -308,51 +331,107 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Messaging
 
-  startConversation: function(tConv, tMsgThing, recipients) {
-    var iRecip;
-    var peepOIdents = [], peepPubrings = [];
-    for (iRecip = 0; iRecip < recipients.length; iRecip++) {
-      var recipTestClient = recipients[iRecip];
-      var othIdent = this._peepsByName[recipTestClient.__name];
-      var othPubring = $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(
-                         othIdent);
-      peepOIdents.push(othIdent);
-      peepPubrings.push(othPubring);
-    }
-
-    // - create the conversation
-    // (we have to do this before the expectations because we don't know what
-    //  to expect until we invoke this)
-    var convInfo = this._rawClient.createConversation(
-                     peepOIdents, peepPubrings, "I AM A TEST MESSAGE BODY");
-
-    tConv.digitalName = convInfo.convId;
-    tMsgThing.digitalName = convInfo.msgNonce;
-
-    // - expectations
-    // we'll call it done when it hits the clients
+  /**
+   * Start a conversation amongst some set of recipients.
+   *
+   * Because this results in a boatload of stuff happening, we break this out
+   *  into multiple steps by using (test-only) gating of the messages from
+   *  the maildrop's fanout server to the users to spread those into separate
+   *  steps.
+   */
+  do_startConversation: function(tConv, tMsgThing, recipients) {
     if (!recipients.length) {
       throw new Error("No recipients supplied!");
     }
 
-    this.RT.reportActiveActorThisStep(this._eRawClient);
-    this._eRawClient.expect_allActionsProcessed();
+    var peepOIdents = [], peepPubrings = [],
+        youAndMeBoth = [this].concat(recipients),
+        convInfo;
 
-    var youAndMeBoth = [this].concat(recipients);
-    for (iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
+    var self = this, eServer = this._usingServer;
+
+    // - create the conversation
+    this.T.action(this._eRawClient,
+        'creates conversation, sends it to their mailstore on', eServer,
+        function() {
+      for (var iRecip = 0; iRecip < recipients.length; iRecip++) {
+        var recipTestClient = recipients[iRecip];
+        var othIdent = self._peepsByName[recipTestClient.__name];
+        var othPubring = $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(
+                           othIdent);
+        peepOIdents.push(othIdent);
+        peepPubrings.push(othPubring);
+      }
+
+      self._eRawClient.expect_allActionsProcessed();
+      eServer.holdAllMailSenderMessages();
+      eServer.expectPSMessageToUsFrom(self);
+
+      // (we have to do this before the expectations because we don't know what
+      //  to expect until we invoke this)
+      convInfo = self._rawClient.createConversation(
+                   peepOIdents, peepPubrings, "I AM A TEST MESSAGE BODY");
+
+      tConv.digitalName = convInfo.convId;
+      tMsgThing.digitalName = convInfo.msgNonce;
+    });
+    // - the maildrop processes it
+    this.T.action(this._usingServer,
+        'maildrop processes the new conversation, generating welcome messages',
+        function() {
+      // expect one welcome message per participant (which we will hold)
+      for (var iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
+        var recipTestClient = youAndMeBoth[iRecip];
+
+        eServer.expectSSMessageToServerUser(
+          'initialfan', recipTestClient._usingServer, recipTestClient);
+      }
+      // release the conversation creation message to the maildrop
+      eServer.releasePSMessageToUsFrom(self);
+    });
+
+    // - per-client receipt steps
+    function latchReceiptSteps(recipTestClient) {
+      self.T.action(recipTestClient._usingServer,
+          'receives welcome message for', recipTestClient,
+          'and the mailstore processes it.', function() {
+        // we want to wait for the total completion of the task.
+        // XXX when we start using queueing, this should change to
+        //  userConvWelcome, or whatever wraps it instead of us.
+        var eWelcomeTask = self.T.actor('initialFanoutToUserMessage',
+                                        [recipTestClient.__name],
+                                        null, recipTestClient);
+        self.RT.reportActiveActorThisStep(eWelcomeTask);
+        eWelcomeTask.expectOnly__die();
+
+        recipTestClient._usingServer.holdAllReplicaBlocksFor(recipTestClient);
+        // welcome, join, join, message.
+        recipTestClient._usingServer.expectReplicaBlocksFor(recipTestClient, 4);
+
+        eServer.releaseSSMessageToServerUser(
+          'initialfan', recipTestClient._usingServer, recipTestClient);
+      });
+      self.T.action(recipTestClient._usingServer,
+          'delivers conversation welcome message to', recipTestClient,
+          function() {
+        self.RT.reportActiveActorThisStep(recipTestClient._eRawClient);
+        self.RT.reportActiveActorThisStep(recipTestClient._eLocalStore);
+        var els = recipTestClient._eLocalStore;
+
+        els.expect_newConversation(convInfo.convId); // (unreported 'welcome')
+        els.expect_proc_conv('join');
+        els.expect_proc_conv('join');
+        els.expect_proc_conv('message');
+        els.expect_conversationMessage(convInfo.convId, convInfo.msgNonce);
+        recipTestClient._eRawClient.expect_replicaCaughtUp();
+
+        recipTestClient._usingServer.releaseAllReplicaBlocksFor(recipTestClient);
+      });
+      // XXX need to also handle any cloned/same-identity clients, too.
+    }
+    for (var iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
       var recipTestClient = youAndMeBoth[iRecip];
-
-      this.RT.reportActiveActorThisStep(recipTestClient._eRawClient);
-      this.RT.reportActiveActorThisStep(recipTestClient._eLocalStore);
-
-      var els = recipTestClient._eLocalStore;
-
-      els.expect_newConversation(convInfo.convId);
-      els.expect_proc_conv('join');
-      els.expect_proc_conv('join');
-      els.expect_proc_conv('message');
-      els.expect_conversationMessage(convInfo.convId, convInfo.msgNonce);
-      recipTestClient._eRawClient.expect_replicaCaughtUp();
+      latchReceiptSteps(recipTestClient);
     }
   },
 
@@ -412,7 +491,9 @@ var TestServerActorMixins = {
       // -- create api's, bind server definitions
       var serverConfig = self._config =
           $configurer.__populateTestConfig(keyring, signedSelfIdent,
-                                           self._db, opts.roles, self._logger);
+                                           self._db, opts.roles,
+                                           gClobberNamespace,
+                                           self._logger);
       serverConfig.__registerServers(self._server);
     });
     self.T.convenienceDeferredCleanup(self, 'cleans up, killing', self._eServer,
@@ -450,6 +531,126 @@ var TestServerActorMixins = {
         self._logger.clientAuthorizationCheck(clientKey, val);
       });
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Holding: mailsender
+  //
+  // We hold mailsender blocks by wrapping the sender API and deferring the
+  //  calls to the underlying implementation until released.
+
+  /**
+   * Tell our mailsender to hold all send messages pending explicit release
+   *  calls.  This is *only* to be used to be able to break steps up into
+   *  human-comprehensible sized pieces.  If you are doing this to make a test
+   *  pass, then you are burning karma at a dangerous pace, good sir.
+   *
+   * Be sure to match this with a call to
+   *  `stopHoldingAndAssertNoHeldSendMessages` when you are done with whatever
+   *  controlled series of steps you are getting up to.  (We do not want this
+   *  active all the time, as it is possible for there to be flows that we don't
+   *  want to break apart into separate steps.)
+   */
+  holdAllMailSenderMessages: function() {
+    this._config.senderApi.__hold_all(true);
+  },
+
+  /**
+   * Tell the mailsender to stop holding all messages.  Generate a failure if
+   *  there are any held messages at this point, as it suggests some message
+   *  unintentionally ran afoul of our hold-up and either the tests or the
+   *  test framework need to be adapted to handle reality.
+   */
+  stopHoldingAndAssertNoHeldSendMessages: function() {
+    this._config.senderApi.__hold_all(false);
+  },
+
+  /**
+   * Expect a loopback Person-to-Server message from a specific user of ours.
+   */
+  expectPSMessageToUsFrom: function(testClient) {
+    this.RT.reportActiveActorThisStep(this);
+    this.expect_sender_sendPersonEnvelopeToServer(
+      testClient._rawClient.rootPublicKey);
+  },
+
+  /**
+   * Release a held Person-to-Server message from a specific user of ours.
+   */
+  releasePSMessageToUsFrom: function(testClient) {
+    this._config.senderApi.__release_sendPersonEnvelopeToServer(
+      testClient._rawClient.rootPublicKey);
+  },
+
+  /**
+   * Expect a Server-to-Server message from ourselves to another server
+   *  of a given type and intended for a given user.  (We peek inside the
+   *  envelope.)
+   */
+  expectSSMessageToServerUser: function(type, testServer, testClient) {
+    this.RT.reportActiveActorThisStep(this);
+    this.expect_sender_sendServerEnvelopeToServer(
+      type, testClient._rawClient.tellBoxKey,
+      testServer._config.keyring.boxingPublicKey);
+  },
+
+  /**
+   * Release a Server-to-Server message from ourselves to another server
+   *  of a given type and intended for a given user.  (We peek inside the
+   *  envelope.)
+   */
+  releaseSSMessageToServerUser: function(type, testServer, testClient) {
+    this._config.senderApi.__release_sendServerEnvelopeToServer(
+      type, testClient._rawClient.tellBoxKey,
+      testServer._config.keyring.boxingPublicKey);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Holding: Replica Blocks
+  //
+  // We hold replica blocks on a per-client basis by wrapping their replica
+  //  notification function and deferring calls to it.  For the time being we
+  //  do not differentiate between types of replica blocks because they are not
+  //  great at being easily differentiated right now.
+
+  /**
+   * Tell our mailstore to hold all replica blocks (or other unsolicited
+   *  notifications) pending explicit release calls.  Used for step-sanity,
+   *  don't abuse.  Call `stopHoldingAndAssertNoHeldReplicaBlocks` when done.
+   */
+  holdAllReplicaBlocksFor: function(testClient) {
+    var csc = testClient._eServerConn._logger.__instance.appConn;
+    // wrap it for hold support if not already wrapped
+    if (!("__hold_all" in csc))
+      $testwrap_mailstore.storeConnWrap(csc, testClient._logger);
+
+    csc.__hold_all(true);
+  },
+
+  /**
+   * Expect some number of replica blocks to be queued for the client.
+   */
+  expectReplicaBlocksFor: function(testClient, expectedCount) {
+    while (expectedCount--) {
+      testClient.expect_replicaBlockNotifiedOnServer();
+    }
+  },
+
+  releaseAllReplicaBlocksFor: function(testClient) {
+    var csc = testClient._eServerConn._logger.__instance.appConn;
+    while(csc.__release_heyAReplicaBlock()) {
+      // just keep calling that guy until it returns 0.
+    }
+  },
+
+  /**
+   * Counterpart to `holdAllReplicaBlocks`.
+   */
+  stopHoldingAndAssertNoHeldReplicaBlocks: function() {
+    var csc = testClient._eServerConn._logger.__instance.appConn;
+    csc.__hold_all(false);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 var MessageThingMixins = {
@@ -464,8 +665,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.CLIENT,
 
     events: {
+      // - db checks
       localStoreContactCheck: {userRootKey: 'key', otherUserRootKey: 'key',
                                present: true},
+
+      // - hold-related
+      replicaBlockNotifiedOnServer: {},
     },
   },
   testServer: {
@@ -474,10 +679,16 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.SERVER,
 
     events: {
+      // - db checks
       clientAuthorizationCheck: {clientRootKey: 'key', isAuthorized: true},
       userAuthorizationCheck: {userRootKey: 'key', isAuthorized: true},
       clientContactCheck: {userRootKey: 'key', otherUserRootKey: 'key',
                            isAuthorized: true},
+
+      // - hold-related
+      sender_sendPersonEnvelopeToServer: {userRootKey: 'key'},
+      sender_sendServerEnvelopeToServer: {type: true, userTellKey: 'key',
+                                          otherServerKey: 'key'},
     },
   }
 });

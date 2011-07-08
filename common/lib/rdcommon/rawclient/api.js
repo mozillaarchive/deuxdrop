@@ -415,6 +415,10 @@ RawClientAPI.prototype = {
     return this._keyring.getPublicKeyFor('client', 'connBox');
   },
 
+  get transitServerPublicKey() {
+    return this._pubring.transitServerPublicKey;
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Mailstore connection management.
 

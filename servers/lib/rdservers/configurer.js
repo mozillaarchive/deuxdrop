@@ -185,15 +185,22 @@ exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, hostname,
  */
 var populateTestConfig = exports.__populateTestConfig =
     function populateTestConfig(keyring, selfIdentBlob, dbConn, roles,
-                                _logger) {
+                                clobberNamespace, _logger) {
   var serverConfig = new ServerConfig(keyring, selfIdentBlob, dbConn);
 
   for (var iRole = 0; iRole < roles.length; iRole++) {
     var roleName = roles[iRole];
     var serverRoleInfo = SERVER_ROLE_MODULES[roleName];
     if (serverRoleInfo.apiModule) {
-      serverConfig[roleName + 'Api'] =
-        new serverRoleInfo.apiModule.Api(serverConfig, dbConn, _logger);
+      if (clobberNamespace.hasOwnProperty(roleName + 'Api')) {
+        serverConfig[roleName + 'Api'] =
+          new clobberNamespace[roleName + 'Api'].ApiWrapFactory(_logger,
+                [serverConfig, dbConn, _logger]);
+      }
+      else {
+        serverConfig[roleName + 'Api'] =
+          new serverRoleInfo.apiModule.Api(serverConfig, dbConn, _logger);
+      }
     }
     if (serverRoleInfo.serverModule)
       serverConfig._serverModules.push(serverRoleInfo.serverModule);
