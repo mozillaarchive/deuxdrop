@@ -273,6 +273,10 @@ function ($,        url,         array,         headerTemplate) {
     if (cardPosition < 0) {
       cardPosition = 0;
     }
+
+    //Restore showing text inputs on old current card (see forward)
+    nlCards.find('.card').eq(cardPosition).find('.inputHidden').removeClass('inputHidden');
+
     cards.scroll();
   };
 
@@ -281,10 +285,17 @@ function ($,        url,         array,         headerTemplate) {
     if (cardPosition < 0) {
       cardPosition = 0;
     }
+
+    //Restore showing text inputs on old current card (see forward)
+    nlCards.find('.card').eq(cardPosition).find('.inputHidden').removeClass('inputHidden');
+
     cards.scroll();
   };
 
   cards.forward = function (title) {
+    //Hide text inputs on old current card, so that mobile firefox
+    //does not put the up/down arrow UI on the screen to jump to them.
+    nlCards.find('.card').eq(cardPosition).find('input, textarea').addClass('inputHidden');
     cardPosition += 1;
     cards.scroll(title);
   };

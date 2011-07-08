@@ -46,6 +46,14 @@ button {
   display: none;
 }
 
+/* Used by card.js to hide inputs on other cards
+  so that mobile firefox does not do the up/down arrow
+  controls over the screen.
+*/
+.inputHidden {
+  visibility: hidden;
+}
+
 #header {
   display: block;
   position: fixed;
