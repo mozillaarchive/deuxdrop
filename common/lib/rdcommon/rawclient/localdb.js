@@ -518,7 +518,8 @@ LocalStore.prototype = {
     writeCells["d:s" + fanoutEnv.invitee] = oident.personSelfIdent;
     // - add the join entry in the message sequence
     var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-    writeCells["d:m" + msgNum] = {type: 'join', id: inviteePeepId};
+    writeCells["d:m" + msgNum] =
+      JSON.stringify({type: 'join', id: inviteePeepId});
 
     // XXX update in-memory reps
     var timestamp = fanoutEnv.receivedAt;
@@ -576,12 +577,12 @@ LocalStore.prototype = {
     // - add the join entry in the message sequence
     var writeCells = {};
     var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-    writeCells["d:m" + msgNum] = {
+    writeCells["d:m" + msgNum] = JSON.stringify({
       type: 'message',
       authorId: authorPeepId,
       composedAt: convBody.composedAt,
       text: convBody.body
-    };
+    });
 
     var timestamp = fanoutEnv.receivedAt;
 

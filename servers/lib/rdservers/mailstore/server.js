@@ -124,6 +124,7 @@ UserConnectionsTracker.prototype = {
   },
 };
 
+// XXX XXX this needs to migrate to the server config!
 var gConnTracker = exports.gConnTracker = new UserConnectionsTracker();
 
 /**
@@ -320,6 +321,21 @@ ClientServicingConnection.prototype = {
         msg.toTransit,
         // is there a better way to know this?
         this.userEffigy.pubring.transitServerPublicKey),
+      // create a new conversation with the metadata
+      this._bound_ackAction
+    );
+  },
+
+  /**
+   * Add a message to a conversation; XXX we currently punt and do not generate
+   *  a ghost for the outgoing message.
+   */
+  _msg_root_convMessage: function(msg) {
+    return $Q.join(
+      this.config.senderApi.sendPersonEnvelopeToServer(
+        this.userEffigy.rootPublicKey,
+        msg.toTransit,
+        msg.toServer),
       // create a new conversation with the metadata
       this._bound_ackAction
     );

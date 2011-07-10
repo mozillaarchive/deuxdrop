@@ -164,7 +164,7 @@ UserProcessorRegistry.prototype = {
 
   _getUserMessageProcessorUsingTellKey: function(userTellKey) {
     if (this._procByTell.hasOwnProperty(userTellKey))
-      return this._procByTell(userTellKey);
+      return this._procByTell[userTellKey];
     var self = this;
     var promise = when(
       this._config.authApi.serverFetchUserEffigyUsingTellKey(userTellKey,

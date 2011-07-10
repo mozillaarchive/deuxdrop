@@ -76,7 +76,6 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
       msg_a1 = T.thing('message', 'a1'),
       msg_b1 = T.thing('message', 'b1'),
       msg_b2 = T.thing('message', 'b2'),
-      join_msg = T.thing('message', 'join'),
       msg_c1 = T.thing('message', 'c1');
 
 
@@ -88,26 +87,25 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   client_b.setup_connect();
   client_c.setup_connect();
 
+  T.group("setup: make friend clique: A, B, C");
+
   // make everybody already be friends with everybody else
   // XXX this would ideally be one of our permutations or just an additional
   //  explicit step (to invite someone who is not a friend of everyone else)
-  client_a.setup_superFriends([client_b, client_c]);
+  client_a.setup_friendClique([client_b, client_c]);
 
   T.group("start 1:1 conversation");
 
   client_a.do_startConversation(conv, msg_a1, [client_b]);
 
-  T.group("B responds to the message");
+  T.group("B responds to the conversation");
 
-/*
-  T.action(client_b, 'responds to the messsage', msg_a1, 'of', client_a, 'with',
-           msg_b1, function() {
-    client_b.replyToMessageWith(msg_a1, msg_b1);
-    msg_b1.expect_receivedBy([client_a]);
-  });
-*/
+  client_b.do_replyToConversationWith(conv, msg_b1);
 
-  T.group("A invites C");
+  T.group("A invites (superfriend) C");
+
+  //client_b.do_inviteToConversation(client_c, conv);
+
   /*
   T.permutation([
     T.action('The conversation hoster,', client_a, 'invites superfriend',

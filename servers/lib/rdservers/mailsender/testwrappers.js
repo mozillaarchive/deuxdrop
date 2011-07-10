@@ -56,8 +56,9 @@ exports.ApiWrapFactory = $testwrapmaker.wrapClassGimmeFactory({
   holders: {
     sendPersonEnvelopeToServer: function(userRootKey, outerEnvelope,
                                          serverPublicBoxKey) {
-      this.__wraplog.sender_sendPersonEnvelopeToServer(userRootKey);
-      return userRootKey;
+      this.__wraplog.sender_sendPersonEnvelopeToServer(serverPublicBoxKey,
+                                                       userRootKey);
+      return serverPublicBoxKey + "-" + userRootKey;
     },
     sendServerEnvelopeToServer: function(envelope, otherServerPublicBoxKey) {
       this.__wraplog.sender_sendServerEnvelopeToServer(envelope.type,
@@ -68,8 +69,8 @@ exports.ApiWrapFactory = $testwrapmaker.wrapClassGimmeFactory({
     },
   },
   releasers: {
-    sendPersonEnvelopeToServer: function(userRootKey) {
-      return userRootKey;
+    sendPersonEnvelopeToServer: function(serverPublicBoxKey, userRootKey) {
+      return serverPublicBoxKey + "-" + userRootKey;
     },
     sendServerEnvelopeToServer: function(type, userTellKey,
                                          otherServerPublicBoxKey) {

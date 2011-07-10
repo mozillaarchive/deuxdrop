@@ -186,7 +186,7 @@ UserBehalfDataStore.prototype = {
         cells[key] = extraCells[key];
       }
     }
-    cells["d:m" + highMsgNum] = rawMsgWithContext;
+    cells["d:m" + highMsgNum] = JSON.stringify(rawMsgWithContext);
     return this._db.putCells(TBL_CONVERSATIONS,
                              this._userRowBit + conversationId,
                              cells);

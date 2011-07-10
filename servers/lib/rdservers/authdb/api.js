@@ -313,6 +313,10 @@ AuthApi.prototype = {
   //
   // Maildrop server implied.
 
+  /**
+   * Assert that the user (identified by their tell key) on the given server
+   *  is authorized to talk to our user (identified by their root key).
+   */
   userAssertServerUser: function(ourUserRootKey, otherServerBoxPubKey,
                                  otherUserTellBoxPubKey) {
     return this._db.assertBoolcheckRowCell(TBL_SERVER_USER_AUTH,
@@ -321,8 +325,8 @@ AuthApi.prototype = {
   },
 
   /**
-   * From the perspective of one of our users, is this an authorized
-   *  conversation?
+   * From the perspective of one of our users (identified by their root key), is
+   *  this an authorized conversation?
    */
   userAssertServerConversation: function(ourUserRootKey, otherServerBoxPubKey,
                                          conversationIdent) {
@@ -332,7 +336,8 @@ AuthApi.prototype = {
   },
 
   /**
-   * Authorize a given user on a given server to send our user messages.
+   * Authorize a given user (identified by their tell key) on a given server to
+   *  send our user messages.
    */
   userAuthorizeServerUser: function(ourUserRootKey, serverKey, userTellKey) {
     var cells = {};
@@ -374,18 +379,16 @@ AuthApi.prototype = {
              "u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey);
   },
 
-  convAssertServerUser: function(convId, otherServerBoxPubKey,
-                                 otherUserTellBoxPubKey) {
-    return this._db.assertBoolcheckRowCell(TBL_CONV_AUTH,
-             convId,
-             "u:" + otherServerBoxPubKey + ":" + otherUserTellBoxPubKey);
+  _sortParticipants: function(a, b) {
+    return a.i - b.i;
   },
-
   /**
    * Get the list of all participants, namely their tell box key and server,
-   *  for a given conversation.
+   *  for a given conversation.  Participants are ordered by the order in which
+   *  they were joined to the conversation.
    */
   convGetParticipants: function(convId) {
+    var self = this;
     return when(this._db.getRow(TBL_CONV_AUTH, convId), function(cells) {
         // key is u:SERVERKEY:TELLKEY, both are boxing keys of known fixed
         //  length.
@@ -395,10 +398,14 @@ AuthApi.prototype = {
           var userTellKey = key.substring(
             2 + BOX_PUB_KEYSIZE + 1,
             2 + BOX_PUB_KEYSIZE + 1 + BOX_PUB_KEYSIZE);
-          usersAndServers.push({userTellKey: userTellKey,
-                                userEnvelopeKey: cells[key],
+          var userInfo = JSON.parse(cells[key]);
+          usersAndServers.push({i: userInfo.i,
+                                userTellKey: userTellKey,
+                                userEnvelopeKey: userInfo.envelopeKey,
                                 serverKey: serverKey});
         }
+        // sort them by their order of addition
+        usersAndServers.sort(self._sortParticipants);
         return usersAndServers;
       }
       // rejection pass-through is fine
@@ -424,7 +431,15 @@ AuthApi.prototype = {
           throw new Error("user already authorized"); // XXX better class wanted
         // authorize since not
         var cells = {};
-        cells[columnName] = otherUserEnvelopeBoxPubKey;
+        cells[columnName] = JSON.stringify({
+          // XXX this is not a super-great way to accomplish this.  it would
+          //  be nice if we could use the cell's timestamp or something with
+          //  with higher resolution, etc.
+          // (where this = establish an ordering of addition without maintaining
+          //  a separate counter; we should probably just use a counter.)
+          i: Date.now(),
+          envelopeKey: otherUserEnvelopeBoxPubKey
+        });
         return $Q.all([
           self._serverAuthorizeServer(otherServerBoxPubKey),
           self._db.putCells(TBL_CONV_AUTH, convId, cells)
@@ -456,7 +471,10 @@ AuthApi.prototype = {
     var cells = {};
     for (var i = 0; i < recipServerUserInfos.length; i++) {
       var info = recipServerUserInfos[i];
-      cells["u:" + info.serverKey + ":" + info.tellKey] = info.envelopeKey;
+      cells["u:" + info.serverKey + ":" + info.tellKey] = JSON.stringify({
+        i: i,
+        envelopeKey: info.envelopeKey,
+      });
     }
     return this._db.putCells(TBL_CONV_AUTH, convId, cells);
   },

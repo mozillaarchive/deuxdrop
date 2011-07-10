@@ -379,7 +379,7 @@ RedisDbConn.prototype = {
       if (err)
         deferred.reject(err);
       else
-        deferred.resolve(replies[1]);
+        deferred.resolve(replies[1].map(JSON.parse));
     });
     return deferred.promise;
   },

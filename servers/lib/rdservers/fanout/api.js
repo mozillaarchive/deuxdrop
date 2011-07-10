@@ -41,11 +41,14 @@
 
 define(
   [
+    'q',
     'exports'
   ],
   function(
+    $Q,
     exports
   ) {
+var when = $Q.when;
 
 const TBL_CONV_DATA = "fanout:convData";
 

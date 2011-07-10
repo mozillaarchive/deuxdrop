@@ -675,18 +675,40 @@ RawClientAPI.prototype = {
     return {
       convId: convMeta.id,
       msgNonce: msgInfo.nonce,
+      convMeta: convMeta,
     };
   },
-  replyToConversation: function(conversation, messageText, location) {
-    // - create a signed message payload
-    // this is what the recipients will read/display
-
-    // - encrypt the signed message with the conversation's secret key
+  replyToConversation: function(convMeta, messageText) {
+    // - create the signed message wrapped in conversation crypto (body+env)
+    var msgInfo = $msg_gen.createConversationHumanMessage(
+                    messageText, this._keyring, convMeta);
 
     // - box it for transit to the fanout server
     // this is what makes the fanout server agree to re-publish it
     // (it can't see the payload)
+    var psInnerEnvelope = {
+      type: 'convmsg',
+      convId: convMeta.id,
+      payload: msgInfo.payload,
+    };
+    var psOuterEnvelope = {
+      senderKey: this._keyring.getPublicKeyFor('messaging', 'tellBox'),
+      nonce: msgInfo.nonce,
+      innerEnvelope: this._keyring.boxUtf8With(
+                       JSON.stringify(psInnerEnvelope),
+                       msgInfo.nonce, // we can reuse the nonce
+                       convMeta.transitServerKey,
+                       'messaging', 'tellBox'),
+    };
+    this._enqueueAction({
+      type: 'convMessage',
+      toTransit: psOuterEnvelope,
+      toServer: convMeta.transitServerKey,
+    });
 
+    return {
+      msgNonce: msgInfo.nonce,
+    };
   },
   inviteToConversation: function(conversation, peep) {
   },

@@ -285,9 +285,18 @@ var FanoutToUserMessageTask = exports.FanoutToUserMessageTask =
   name: "fanoutToUserMessage",
   args: ['config', 'envelope', 'otherServerKey'],
   steps: {
-    check_authorized_conversation: function(arg) {
+    /**
+     * The other fanout server isn't supposed to see our user's root key in
+     *  the clear, so the best it can do is tell key.  (note that I'm not sure
+     *  that's going to be a long-lived invariant.)
+     */
+    verify_map_our_user_tell_key_to_root: function() {
+      return this.config.authApi.serverGetUserAccountByTellKey(
+               this.envelope.name);
+    },
+    check_authorized_conversation: function(ourUserRootKey) {
       return this.config.authApi.userAssertServerConversation(
-        this.envelope.name, this.otherServerKey, this.envelope.convId);
+        ourUserRootKey, this.otherServerKey, this.envelope.convId);
     },
     back_end_hand_off: function() {
       return this.config.storeApi.convMessageForUser(this.envelope,
@@ -556,7 +565,7 @@ var ConversationMessageTask = taskMaster.defineTask({
   args: ['config', 'outerEnvelope', 'innerEnvelope', 'otherServerKey'],
   steps: {
     assert_author_in_on_conversation: function() {
-      return this.config.authApi.convAssertServerConversation(
+      return this.config.authApi.convAssertServerUser(
         this.innerEnvelope.convId, this.otherServerKey,
         this.outerEnvelope.senderKey);
     },

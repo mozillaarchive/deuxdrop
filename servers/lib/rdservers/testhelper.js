@@ -36,13 +36,29 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
+ * Provides test helper abstractions for client and server behaviours, providing
+ *  helper methods that both trigger actions and verify the resulting state.
+ *  The goal is to minimize the amount of boilerplate in the unit tests;
+ *  experience from Thunderbird has shown people will tend to just copy and
+ *  paste test logic without spending a lot of time trying to understand it so
+ *  it's better for all involved if we minimize that code and build-in all the
+ *  relevant checks so they don't accidentally get left out.
  *
+ * In concrete terms, this means that when you create a conversation (named
+ *  as a "thing"), we do things like store all the participants in the
+ *  conversation on the object so that then when a message is sent to the
+ *  conversation we can automatically generate expectations for its arrival
+ *  at all of the relevant servers.  Likewise, we track whether a client is
+ *  connected so we can know whether we should expect the message to make it
+ *  to the client, or if it instead should be backlogged.
  **/
 
 define(function(require,exports,$module) {
 
 var $Q = require('q'),
     when = $Q.when;
+
+var $testdata = require('rdcommon/testdatafab');
 
 var $log = require('rdcommon/log'),
     $rawclient_api = require('rdcommon/rawclient/api'),
@@ -66,6 +82,8 @@ var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
 var gClobberNamespace = {
   senderApi: $testwrap_sender,
 };
+
+var fakeDataMaker = new $testdata.DataFabricator();
 
 var TestClientActorMixins = {
   /**
@@ -298,7 +316,7 @@ var TestClientActorMixins = {
    * Create mutual friendship relationships between 'this' client and the
    *  provided clients.
    */
-  setup_superFriends: function(friends) {
+  setup_friendClique: function(friends) {
     var tofriend = friends.concat([this]);
       // (the destructive mutation is fine)
     while (tofriend.length >= 2) {
@@ -311,7 +329,7 @@ var TestClientActorMixins = {
     }
   },
 
-  check_superFriends: function(friends) {
+  check_friendClique: function(friends) {
     var tocheck = friends.concat([this]);
     return this.T.check(
         'assert mutual friend relationships among:', tocheck,
@@ -329,7 +347,7 @@ var TestClientActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Messaging
+  // Conversation Actions (High-Level)
 
   /**
    * Start a conversation amongst some set of recipients.
@@ -339,23 +357,33 @@ var TestClientActorMixins = {
    *  the maildrop's fanout server to the users to spread those into separate
    *  steps.
    */
-  do_startConversation: function(tConv, tMsgThing, recipients) {
+  do_startConversation: function(tConv, tMsg, recipients) {
     if (!recipients.length) {
       throw new Error("No recipients supplied!");
     }
 
     var peepOIdents = [], peepPubrings = [],
-        youAndMeBoth = [this].concat(recipients),
-        convInfo;
+        youAndMeBoth = [this].concat(recipients);
 
     var self = this, eServer = this._usingServer;
+    // Setup conversation data; used during the setupFunc to relate known state
+    //  about the conversation to other step-generating functions.  Differs from
+    //  the live in-step data which represents that state of the conversation
+    //  as far as actual execution has progressed.
+    tConv.sdata = {
+      participants: youAndMeBoth.concat(),
+      fanoutServer: eServer,
+    };
+    // the live in-step data, null until our step is actually created!
+    tConv.data = null;
 
     // - create the conversation
     this.T.action(this._eRawClient,
         'creates conversation, sends it to their mailstore on', eServer,
         function() {
-      for (var iRecip = 0; iRecip < recipients.length; iRecip++) {
-        var recipTestClient = recipients[iRecip];
+      var backlog = [], recipTestClient, iRecip;
+      for (iRecip = 0; iRecip < recipients.length; iRecip++) {
+        recipTestClient = recipients[iRecip];
         var othIdent = self._peepsByName[recipTestClient.__name];
         var othPubring = $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(
                            othIdent);
@@ -363,25 +391,53 @@ var TestClientActorMixins = {
         peepPubrings.push(othPubring);
       }
 
+      for (iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
+        recipTestClient = youAndMeBoth[iRecip];
+
+        var tJoin = self.T.thing('message', 'join ' + recipTestClient.__name);
+        tJoin.data = {
+          type: 'join',
+          who: recipTestClient
+        };
+        backlog.push(tJoin);
+      }
+
       self._eRawClient.expect_allActionsProcessed();
       eServer.holdAllMailSenderMessages();
       eServer.expectPSMessageToUsFrom(self);
 
+      var messageText = fakeDataMaker.makeSubject();
+
       // (we have to do this before the expectations because we don't know what
       //  to expect until we invoke this)
-      convInfo = self._rawClient.createConversation(
-                   peepOIdents, peepPubrings, "I AM A TEST MESSAGE BODY");
+      var convCreationInfo = self._rawClient.createConversation(
+                   peepOIdents, peepPubrings, messageText);
+      tMsg.data = {
+        type: 'message',
+        nonce: convCreationInfo.msgNonce,
+        text: messageText
+      };
+      backlog.push(tMsg);
 
-      tConv.digitalName = convInfo.convId;
-      tMsgThing.digitalName = convInfo.msgNonce;
+      tConv.data = {
+        id: convCreationInfo.convId,
+        backlog: backlog,
+        // XXX this is identical across all participants, but this is pretty
+        //  sketchy for us to be extracting and storing.
+        convMeta: convCreationInfo.convMeta,
+        participants: youAndMeBoth.concat(),
+      };
+
+      tConv.digitalName = convCreationInfo.convId;
+      tMsg.digitalName = convCreationInfo.msgNonce;
     });
     // - the maildrop processes it
     this.T.action(this._usingServer,
         'maildrop processes the new conversation, generating welcome messages',
         function() {
       // expect one welcome message per participant (which we will hold)
-      for (var iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
-        var recipTestClient = youAndMeBoth[iRecip];
+      for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
+        var recipTestClient = tConv.data.participants[iRecip];
 
         eServer.expectSSMessageToServerUser(
           'initialfan', recipTestClient._usingServer, recipTestClient);
@@ -390,59 +446,168 @@ var TestClientActorMixins = {
       eServer.releasePSMessageToUsFrom(self);
     });
 
-    // - per-client receipt steps
-    function latchReceiptSteps(recipTestClient) {
-      self.T.action(recipTestClient._usingServer,
-          'receives welcome message for', recipTestClient,
-          'and the mailstore processes it.', function() {
-        // we want to wait for the total completion of the task.
-        // XXX when we start using queueing, this should change to
-        //  userConvWelcome, or whatever wraps it instead of us.
-        var eWelcomeTask = self.T.actor('initialFanoutToUserMessage',
-                                        [recipTestClient.__name],
-                                        null, recipTestClient);
-        self.RT.reportActiveActorThisStep(eWelcomeTask);
-        eWelcomeTask.expectOnly__die();
-
-        recipTestClient._usingServer.holdAllReplicaBlocksFor(recipTestClient);
-        // welcome, join, join, message.
-        recipTestClient._usingServer.expectReplicaBlocksFor(recipTestClient, 4);
-
-        eServer.releaseSSMessageToServerUser(
-          'initialfan', recipTestClient._usingServer, recipTestClient);
-      });
-      self.T.action(recipTestClient._usingServer,
-          'delivers conversation welcome message to', recipTestClient,
-          function() {
-        self.RT.reportActiveActorThisStep(recipTestClient._eRawClient);
-        self.RT.reportActiveActorThisStep(recipTestClient._eLocalStore);
-        var els = recipTestClient._eLocalStore;
-
-        els.expect_newConversation(convInfo.convId); // (unreported 'welcome')
-        els.expect_proc_conv('join');
-        els.expect_proc_conv('join');
-        els.expect_proc_conv('message');
-        els.expect_conversationMessage(convInfo.convId, convInfo.msgNonce);
-        recipTestClient._eRawClient.expect_replicaCaughtUp();
-
-        recipTestClient._usingServer.releaseAllReplicaBlocksFor(recipTestClient);
-      });
-      // XXX need to also handle any cloned/same-identity clients, too.
-    }
-    for (var iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
-      var recipTestClient = youAndMeBoth[iRecip];
-      latchReceiptSteps(recipTestClient);
+    // -- per-client receipt steps
+    for (var iRecip = 0; iRecip < tConv.sdata.participants.length; iRecip++) {
+      var recipTestClient = tConv.sdata.participants[iRecip];
+      recipTestClient.do_expectConvWelcome(tConv, eServer);
     }
   },
 
-  replyToMessageWith: function(msgReplyingTo, outMsgThing) {
+  do_replyToConversationWith: function(tConv, tNewMsg) {
+    // -- client composes message, mailstore receives, gated at sender
+    var self = this;
+    this.T.action(this._eRawClient, 'writes', tNewMsg, 'to', tConv,
+                  'sends it to their mailstore on', this._usingServer,
+                  function() {
+      self._eRawClient.expect_allActionsProcessed();
+      self._usingServer.holdAllMailSenderMessages();
+      self._usingServer.expectPSMessageToServerFrom(tConv.sdata.fanoutServer,
+                                                    self);
+
+      var messageText = fakeDataMaker.makeSubject();
+      var msgInfo = self._rawClient.replyToConversation(tConv.data.convMeta,
+                                                        messageText);
+      tNewMsg.data = {
+        type: 'message',
+        nonce: msgInfo.msgNonce,
+        text: messageText
+      };
+      tConv.data.backlog.push(tNewMsg);
+    });
+
+    // -- sender releases to fanout maildrop, gated for all recipients
+    this.T.action('conversation hosting server', tConv.sdata.fanoutServer,
+                  'receives the message and processes it', function() {
+      // expect one welcome message per participant (which we will hold)
+      for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
+        var recipTestClient = tConv.data.participants[iRecip];
+
+        tConv.sdata.fanoutServer.expectSSMessageToServerUser(
+          'fannedmsg', recipTestClient._usingServer, recipTestClient);
+      }
+
+      // release the message to the fanout maildrop
+      self._usingServer.releasePSMessageToServerFrom(tConv.sdata.fanoutServer,
+                                                     self);
+    });
+    // -- per-client receipt steps
+    for (var iRecip = 0; iRecip < tConv.sdata.participants.length; iRecip++) {
+      var recipTestClient = tConv.sdata.participants[iRecip];
+      recipTestClient.do_expectConvMessage(tConv, tNewMsg);
+    }
   },
 
-  expect_receiveMessages: function() {
+  do_inviteToConversation: function(recipient, outConvThing) {
+    // -- author composes invite, mailstore receives, gated at author sender
+    // -- author sender releases to invitee, fan-in processes, gated for resend
+    // -- invitee resend released to author fan-in, convadd gated for fan-out
+    // -- convadd released to fan-out, processes, welcome and joins gated.
+    // -- release the welcome, let it be processed through
+    // -- release the joins one-by-one to the recipients
   },
 
-  inviteToConv: function(recipient, outConvThing) {
-    throw new Error("XXX NOT IMPLEMENTED");
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Expectations
+
+  /**
+   * Expect a welcome-message for the given conversation.  Sub-expectations are
+   *  based on the state of the conversation at the time the step is executed,
+   *  so don't use this for race situations naively.
+   *
+   * This is broken into two steps:
+   * - Mailstore receipt/processing, with replica blocks gated.
+   * - Replica block delivery to the client.
+   *
+   * XXX handle disconnected clients, cloned clients
+   */
+  do_expectConvWelcome: function(tConv) {
+    var self = this;
+    self.T.action(self._usingServer,
+        'receives welcome message for', self,
+        'and the mailstore processes it.', function() {
+      // we want to wait for the total completion of the task.
+      // XXX when we start using queueing, this should change to
+      //  userConvWelcome, or whatever wraps it instead of us.
+      var eWelcomeTask = self.T.actor('initialFanoutToUserMessage',
+                                      [self.__name],
+                                      null, self);
+      self.RT.reportActiveActorThisStep(eWelcomeTask);
+      eWelcomeTask.expectOnly__die();
+
+      self._usingServer.holdAllReplicaBlocksFor(self);
+      // welcome + backlog
+      self._usingServer.expectReplicaBlocksFor(self,
+                                               1 + tConv.data.backlog.length);
+
+      tConv.sdata.fanoutServer.releaseSSMessageToServerUser(
+        'initialfan', self._usingServer, self);
+    });
+    self.T.action(self._usingServer,
+        'delivers conversation welcome message to', self,
+        function() {
+      self.RT.reportActiveActorThisStep(self._eRawClient);
+      self.RT.reportActiveActorThisStep(self._eLocalStore);
+      var els = self._eLocalStore;
+
+      els.expect_newConversation(tConv.data.id); // (unreported 'welcome')
+
+      for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
+        var tMsg = tConv.data.backlog[iMsg];
+        els.expect_proc_conv(tMsg.data.type);
+        switch (tMsg.data.type) {
+          case 'message':
+            els.expect_conversationMessage(tConv.data.id, tMsg.data.nonce);
+            break;
+        }
+      }
+      self._eRawClient.expect_replicaCaughtUp();
+
+      self._usingServer.releaseAllReplicaBlocksFor(self);
+    });
+  },
+
+  /**
+   * Expect a human-message for the given conversation.
+   *
+   * This is broken intwo two steps:
+   * - Mailstore receipt/processing, with replica blocks gated.
+   * - Replica block delivery to the client.
+   *
+   * XXX handle disconnected clients, cloned clients
+   */
+  do_expectConvMessage: function(tConv, tMsg) {
+    var self = this;
+    self.T.action(self._usingServer,
+        'receives message for', self,
+        'and the mailstore processes it.', function() {
+      // we want to wait for the total completion of the task.
+      var eMessageTask = self.T.actor('fanoutToUserMessage',
+                                      [self.__name],
+                                      null, self);
+      self.RT.reportActiveActorThisStep(eMessageTask);
+      eMessageTask.expectOnly__die();
+
+      self._usingServer.holdAllReplicaBlocksFor(self);
+      // just the one message
+      self._usingServer.expectReplicaBlocksFor(self, 1);
+
+      tConv.sdata.fanoutServer.releaseSSMessageToServerUser(
+        'fannedmsg', self._usingServer, self);
+    });
+    self.T.action(self._usingServer,
+        'delivers', tMsg, 'to', self,
+        function() {
+      self.RT.reportActiveActorThisStep(self._eRawClient);
+      self.RT.reportActiveActorThisStep(self._eLocalStore);
+      var els = self._eLocalStore;
+
+      els.expect_proc_conv(tMsg.data.type);
+      els.expect_conversationMessage(tConv.data.id, tMsg.data.nonce);
+
+      self._eRawClient.expect_replicaCaughtUp();
+
+      self._usingServer.releaseAllReplicaBlocksFor(self);
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -570,6 +735,7 @@ var TestServerActorMixins = {
   expectPSMessageToUsFrom: function(testClient) {
     this.RT.reportActiveActorThisStep(this);
     this.expect_sender_sendPersonEnvelopeToServer(
+      this._config.keyring.boxingPublicKey,
       testClient._rawClient.rootPublicKey);
   },
 
@@ -578,6 +744,27 @@ var TestServerActorMixins = {
    */
   releasePSMessageToUsFrom: function(testClient) {
     this._config.senderApi.__release_sendPersonEnvelopeToServer(
+      this._config.keyring.boxingPublicKey,
+      testClient._rawClient.rootPublicKey);
+  },
+
+  /**
+   * Expect a Person-to-Server message targeted at a given server from a
+   *  specific user of ours.
+   */
+  expectPSMessageToServerFrom: function(testServer, testClient) {
+    this.RT.reportActiveActorThisStep(this);
+    this.expect_sender_sendPersonEnvelopeToServer(
+      testServer._config.keyring.boxingPublicKey,
+      testClient._rawClient.rootPublicKey);
+  },
+  /**
+   * Release a Person-to-Server message targeted at a given server from a
+   *  specific user of ours.
+   */
+  releasePSMessageToServerFrom: function(testServer, testClient) {
+    this._config.senderApi.__release_sendPersonEnvelopeToServer(
+      testServer._config.keyring.boxingPublicKey,
       testClient._rawClient.rootPublicKey);
   },
 
@@ -686,7 +873,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                            isAuthorized: true},
 
       // - hold-related
-      sender_sendPersonEnvelopeToServer: {userRootKey: 'key'},
+      sender_sendPersonEnvelopeToServer: {serverKey: 'key',
+                                          userRootKey: 'key'},
       sender_sendServerEnvelopeToServer: {type: true, userTellKey: 'key',
                                           otherServerKey: 'key'},
     },
