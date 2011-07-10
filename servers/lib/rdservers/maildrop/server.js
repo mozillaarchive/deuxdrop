@@ -350,7 +350,7 @@ var ConversationJoinTask = taskMaster.defineTask({
     add_auth: function() {
       return this.config.authApi.userAuthorizeServerForConversation(
         this.innerEnvelope.name, this.innerEnvelope.serverName,
-        this.innerEnvelope.serverName, this.outerEnvelope.senderKey);
+        this.innerEnvelope.convId, this.outerEnvelope.senderKey);
     },
     /**
      * Resend the message back to the maildrop of the person inviting us so
@@ -360,7 +360,7 @@ var ConversationJoinTask = taskMaster.defineTask({
       return this.config.senderApi.sendServerEnvelopeToServer({
         type: "joined",
         name: this.outerEnvelope.senderKey,
-        nonce: this.outerEnvelope.nonce,
+        nonce: this.innerEnvelope.nonce,
         payload: this.innerEnvelope.payload,
       }, this.otherServerKey);
     },
@@ -499,7 +499,7 @@ var CreateConversationTask = taskMaster.defineTask({
           type: 'welcome',
           sentBy: senderKey,
           receivedAt: nowish,
-          nonce: senderNonce, // (we are not boxing using this nonce)
+          //nonce: senderNonce, // (we are not boxing using this nonce)
           payload: {
             inviteNonce: addPayload.nonce,
             boxedInvite: addPayload.inviteePayload,
@@ -580,7 +580,7 @@ var ConversationMessageTask = taskMaster.defineTask({
         payload: this.innerEnvelope.payload,
       };
       return this.config.fanoutApi.addMessageToConversation(
-               this.fanoutMessage);
+               this.innerEnvelope.convId, this.fanoutMessage);
     },
     get_recipients: function() {
       return this.config.authApi.convGetParticipants(
@@ -606,7 +606,7 @@ var ConversationAddTask = taskMaster.defineTask({
   args: ['config', 'innerEnvelope', 'outerEnvelope', 'otherServerKey'],
   steps: {
     assert_inviter_in_on_conversation: function() {
-      return this.config.authApi.convAssertServerConversation(
+      return this.config.authApi.convAssertServerUser(
         this.innerEnvelope.convId, this.otherServerKey,
         this.outerEnvelope.senderKey);
     },
@@ -625,9 +625,10 @@ var ConversationAddTask = taskMaster.defineTask({
         type: 'welcome',
         sentBy: this.outerEnvelope.senderKey,
         receivedAt: Date.now(),
-        nonce: this.outerEnvelope.nonce,
+        //nonce: this.outerEnvelope.nonce,
         payload: {
-          boxedMeta: this.innerEnvelope.payload.inviteePayload,
+          inviteNonce: this.outerEnvelope.nonce,
+          boxedInvite: this.innerEnvelope.payload.inviteePayload,
           backlog: allConvData,
         },
       };
@@ -650,13 +651,11 @@ var ConversationAddTask = taskMaster.defineTask({
         sentBy: this.outerEnvelope.senderKey,
         invitee: this.innerEnvelope.name,
         receivedAt: Date.now(),
-        // the message/envelope are encrypted with the same nonce as what we
-        //  received.
-        nonce: this.outerEnvelope.nonce,
+        nonce: this.innerEnvelope.payload.attestationNonce,
         payload: this.innerEnvelope.payload.attestationPayload,
       };
       return this.config.fanoutApi.addMessageToConversation(
-               this.fanoutMessage);
+               this.innerEnvelope.convId, this.fanoutMessage);
     },
     get_recipients: function() {
       return this.config.authApi.convGetParticipants(

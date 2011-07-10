@@ -253,6 +253,9 @@ var gUniqueActorName = 1;
 var gUniqueThingName = -1;
 
 var ThingProto = exports.ThingProto = {
+  get digitalName() {
+    return this.__diginame;
+  },
   set digitalName(val) {
     this.__diginame = val;
   },

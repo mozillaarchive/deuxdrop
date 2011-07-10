@@ -94,7 +94,7 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   //  explicit step (to invite someone who is not a friend of everyone else)
   client_a.setup_friendClique([client_b, client_c]);
 
-  T.group("start 1:1 conversation");
+  T.group("start 1:1 conversation between A, B");
 
   client_a.do_startConversation(conv, msg_a1, [client_b]);
 
@@ -102,9 +102,16 @@ TD.commonCase('group messaging upgrade from one-on-one', function(T) {
 
   client_b.do_replyToConversationWith(conv, msg_b1);
 
-  T.group("A invites (superfriend) C");
+  T.group("A invites C");
 
-  //client_b.do_inviteToConversation(client_c, conv);
+  client_b.do_inviteToConversation(client_c, conv);
+
+  T.group("B sends a message, all hear");
+
+  client_b.do_replyToConversationWith(conv, msg_b2);
+
+// the commented out stuff was part of the original plan, the main deviation
+//  from the plan right now is that we do not do any form of permutation.
 
   /*
   T.permutation([

@@ -524,7 +524,8 @@ LocalStore.prototype = {
     // XXX update in-memory reps
     var timestamp = fanoutEnv.receivedAt;
 
-    return $Q.wait(
+    var self = this;
+    return $Q.join(
       this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
       // - create peep conversation involvement index entry
       this._db.updateIndexValue(
@@ -532,7 +533,10 @@ LocalStore.prototype = {
         convMeta.id, timestamp),
       // - touch peep activity entry
       this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteePeepId, timestamp)
+        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteePeepId, timestamp),
+      function() {
+        self._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
+      }
     );
   },
 

@@ -391,17 +391,6 @@ var TestClientActorMixins = {
         peepPubrings.push(othPubring);
       }
 
-      for (iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
-        recipTestClient = youAndMeBoth[iRecip];
-
-        var tJoin = self.T.thing('message', 'join ' + recipTestClient.__name);
-        tJoin.data = {
-          type: 'join',
-          who: recipTestClient
-        };
-        backlog.push(tJoin);
-      }
-
       self._eRawClient.expect_allActionsProcessed();
       eServer.holdAllMailSenderMessages();
       eServer.expectPSMessageToUsFrom(self);
@@ -412,6 +401,19 @@ var TestClientActorMixins = {
       //  to expect until we invoke this)
       var convCreationInfo = self._rawClient.createConversation(
                    peepOIdents, peepPubrings, messageText);
+
+      for (iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
+        recipTestClient = youAndMeBoth[iRecip];
+
+        var tJoin = self.T.thing('message', 'join ' + recipTestClient.__name);
+        tJoin.data = {
+          type: 'join',
+          who: recipTestClient
+        };
+        tJoin.digitalName = convCreationInfo.joinNonces[iRecip];
+        backlog.push(tJoin);
+      }
+
       tMsg.data = {
         type: 'message',
         nonce: convCreationInfo.msgNonce,
@@ -435,6 +437,8 @@ var TestClientActorMixins = {
     this.T.action(this._usingServer,
         'maildrop processes the new conversation, generating welcome messages',
         function() {
+      tConv.sdata.fanoutServer.expectServerTaskToRun('createConversation');
+
       // expect one welcome message per participant (which we will hold)
       for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
         var recipTestClient = tConv.data.participants[iRecip];
@@ -449,7 +453,7 @@ var TestClientActorMixins = {
     // -- per-client receipt steps
     for (var iRecip = 0; iRecip < tConv.sdata.participants.length; iRecip++) {
       var recipTestClient = tConv.sdata.participants[iRecip];
-      recipTestClient.do_expectConvWelcome(tConv, eServer);
+      recipTestClient.do_expectConvWelcome(tConv, true);
     }
   },
 
@@ -457,7 +461,7 @@ var TestClientActorMixins = {
     // -- client composes message, mailstore receives, gated at sender
     var self = this;
     this.T.action(this._eRawClient, 'writes', tNewMsg, 'to', tConv,
-                  'sends it to their mailstore on', this._usingServer,
+                  ', sends it to their mailstore on', this._usingServer,
                   function() {
       self._eRawClient.expect_allActionsProcessed();
       self._usingServer.holdAllMailSenderMessages();
@@ -469,15 +473,17 @@ var TestClientActorMixins = {
                                                         messageText);
       tNewMsg.data = {
         type: 'message',
-        nonce: msgInfo.msgNonce,
         text: messageText
       };
+      tNewMsg.digitalName = msgInfo.msgNonce;
       tConv.data.backlog.push(tNewMsg);
     });
 
     // -- sender releases to fanout maildrop, gated for all recipients
     this.T.action('conversation hosting server', tConv.sdata.fanoutServer,
                   'receives the message and processes it', function() {
+      tConv.sdata.fanoutServer.expectServerTaskToRun('conversationMessage');
+
       // expect one welcome message per participant (which we will hold)
       for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
         var recipTestClient = tConv.data.participants[iRecip];
@@ -497,17 +503,109 @@ var TestClientActorMixins = {
     }
   },
 
-  do_inviteToConversation: function(recipient, outConvThing) {
+  do_inviteToConversation: function(invitedTestClient, tConv) {
+    var self = this;
+    // -- update setup-pass conversation state
+    tConv.sdata.participants.push(invitedTestClient);
+    var tJoin = self.T.thing('message', 'join ' + invitedTestClient.__name);
+
     // -- author composes invite, mailstore receives, gated at author sender
+    this.T.action(this._eRawClient, 'invites', invitedTestClient, 'to', tConv,
+                  function() {
+      self._eRawClient.expect_allActionsProcessed();
+      self._usingServer.holdAllMailSenderMessages();
+      self._usingServer.expectPSMessageToServerFrom(
+        invitedTestClient._usingServer, self);
+
+      var peepOIdent = self._peepsByName[invitedTestClient.__name];
+      var peepPubring = $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(
+                          peepOIdent);
+      var msgInfo = self._rawClient.inviteToConversation(tConv.data.convMeta,
+                                           peepOIdent, peepPubring);
+
+      tJoin.data = {
+        type: 'join',
+        who: invitedTestClient
+      };
+      tJoin.digitalName = msgInfo.msgNonce;
+      // note: we do not add this to the backlog until after the welcome message
+      //  is generated because that's how the server does it.
+    });
+
     // -- author sender releases to invitee, fan-in processes, gated for resend
+    this.T.action(this._usingServer, 'delivers join request to',
+                  invitedTestClient._usingServer, function() {
+      invitedTestClient.expectServerTaskToRun('conversationJoin');
+
+      invitedTestClient._usingServer.holdAllMailSenderMessages();
+      // they will send the joined message back to us
+      invitedTestClient._usingServer.expectSSMessageToServerUser(
+        'joined', self._usingServer, self);
+
+      self._usingServer.releasePSMessageToServerFrom(
+        invitedTestClient._usingServer, self);
+    });
+
     // -- invitee resend released to author fan-in, convadd gated for fan-out
+    this.T.action(invitedTestClient._usingServer,
+                  'processes join and delivers joined notification to',
+                  this._usingServer,
+                  function() {
+      self.expectServerTaskToRun('conversationJoined');
+      self._usingServer.expectPSMessageToServerFrom(
+        tConv.sdata.fanoutServer, self);
+
+      invitedTestClient._usingServer.releaseSSMessageToServerUser(
+        'joined', self._usingServer, self);
+    });
+
     // -- convadd released to fan-out, processes, welcome and joins gated.
+    this.T.action(self._usingServer, 'delivers convadd request to',
+                  tConv.sdata.fanoutServer,
+                  'resulting in a welcome and several join messages',
+                  function() {
+      tConv.sdata.fanoutServer.expectServerTaskToRun('conversationAdd');
+
+      // the welcome
+      tConv.sdata.fanoutServer.expectSSMessageToServerUser(
+        'fannedmsg', invitedTestClient._usingServer, invitedTestClient);
+      // the join messages
+      for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
+        var recipTestClient = tConv.data.participants[iRecip];
+
+        tConv.sdata.fanoutServer.expectSSMessageToServerUser(
+          'fannedmsg', recipTestClient._usingServer, recipTestClient);
+      }
+
+      self._usingServer.releasePSMessageToServerFrom(
+        tConv.sdata.fanoutServer, self);
+    });
+
     // -- release the welcome, let it be processed through
-    // -- release the joins one-by-one to the recipients
+    invitedTestClient.do_expectConvWelcome(tConv, false);
+
+    this.T.convenienceSetup('testframework metadata fixup', function() {
+      // now it is safe to add the join to the backlog since the welcome has
+      //  been generated.
+      tConv.data.backlog.push(tJoin);
+    });
+
+    // -- release the joins
+    for (var iRecip = 0; iRecip < tConv.sdata.participants.length; iRecip++) {
+      var recipTestClient = tConv.sdata.participants[iRecip];
+      recipTestClient.do_expectConvMessage(tConv, tJoin);
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Expectations
+
+  // XXX this needs more thought about who to attribute it to
+  expectServerTaskToRun: function(taskName) {
+    var eTask = this.T.actor(taskName, [this.__name], null, this);
+    this.RT.reportActiveActorThisStep(eTask);
+    eTask.expectOnly__die();
+  },
 
   /**
    * Expect a welcome-message for the given conversation.  Sub-expectations are
@@ -520,7 +618,7 @@ var TestClientActorMixins = {
    *
    * XXX handle disconnected clients, cloned clients
    */
-  do_expectConvWelcome: function(tConv) {
+  do_expectConvWelcome: function(tConv, isInitial) {
     var self = this;
     self.T.action(self._usingServer,
         'receives welcome message for', self,
@@ -528,11 +626,8 @@ var TestClientActorMixins = {
       // we want to wait for the total completion of the task.
       // XXX when we start using queueing, this should change to
       //  userConvWelcome, or whatever wraps it instead of us.
-      var eWelcomeTask = self.T.actor('initialFanoutToUserMessage',
-                                      [self.__name],
-                                      null, self);
-      self.RT.reportActiveActorThisStep(eWelcomeTask);
-      eWelcomeTask.expectOnly__die();
+      self.expectServerTaskToRun(
+        isInitial ? 'initialFanoutToUserMessage' : 'fanoutToUserMessage');
 
       self._usingServer.holdAllReplicaBlocksFor(self);
       // welcome + backlog
@@ -540,7 +635,7 @@ var TestClientActorMixins = {
                                                1 + tConv.data.backlog.length);
 
       tConv.sdata.fanoutServer.releaseSSMessageToServerUser(
-        'initialfan', self._usingServer, self);
+        isInitial ? 'initialfan' : 'fannedmsg', self._usingServer, self);
     });
     self.T.action(self._usingServer,
         'delivers conversation welcome message to', self,
@@ -554,11 +649,7 @@ var TestClientActorMixins = {
       for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
         var tMsg = tConv.data.backlog[iMsg];
         els.expect_proc_conv(tMsg.data.type);
-        switch (tMsg.data.type) {
-          case 'message':
-            els.expect_conversationMessage(tConv.data.id, tMsg.data.nonce);
-            break;
-        }
+        els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
       }
       self._eRawClient.expect_replicaCaughtUp();
 
@@ -567,7 +658,7 @@ var TestClientActorMixins = {
   },
 
   /**
-   * Expect a human-message for the given conversation.
+   * Expect a message for the given conversation.
    *
    * This is broken intwo two steps:
    * - Mailstore receipt/processing, with replica blocks gated.
@@ -580,12 +671,7 @@ var TestClientActorMixins = {
     self.T.action(self._usingServer,
         'receives message for', self,
         'and the mailstore processes it.', function() {
-      // we want to wait for the total completion of the task.
-      var eMessageTask = self.T.actor('fanoutToUserMessage',
-                                      [self.__name],
-                                      null, self);
-      self.RT.reportActiveActorThisStep(eMessageTask);
-      eMessageTask.expectOnly__die();
+      self.expectServerTaskToRun('fanoutToUserMessage');
 
       self._usingServer.holdAllReplicaBlocksFor(self);
       // just the one message
@@ -602,7 +688,7 @@ var TestClientActorMixins = {
       var els = self._eLocalStore;
 
       els.expect_proc_conv(tMsg.data.type);
-      els.expect_conversationMessage(tConv.data.id, tMsg.data.nonce);
+      els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
 
       self._eRawClient.expect_replicaCaughtUp();
 
@@ -835,6 +921,16 @@ var TestServerActorMixins = {
   stopHoldingAndAssertNoHeldReplicaBlocks: function() {
     var csc = testClient._eServerConn._logger.__instance.appConn;
     csc.__hold_all(false);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // General Expectations
+
+  // XXX this needs more thought about who to attribute it to
+  expectServerTaskToRun: function(taskName) {
+    var eTask = this.T.actor(taskName, [this.__name], null, this);
+    this.RT.reportActiveActorThisStep(eTask);
+    eTask.expectOnly__die();
   },
 
   //////////////////////////////////////////////////////////////////////////////

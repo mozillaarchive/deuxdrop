@@ -85,7 +85,7 @@ FanoutApi.prototype = {
     };
     for (var i = 0; i < initialMessages.length; i++) {
       // our message index is 1-based
-      cells["m:m" + (i + 1)] = initialMessages[i];
+      cells["m:m" + (i + 1)] = JSON.stringify(initialMessages[i]);
     }
     return this._db.raceCreateRow(TBL_CONV_DATA, convId, "o:race", cells);
   },
@@ -114,7 +114,7 @@ FanoutApi.prototype = {
     return when(this._db.incrementCell(TBL_CONV_DATA, convId, "m:m", 1),
       function(valAfterIncr) {
         var cells = {};
-        cells["m:m" + valAfterIncr] = fanoutMessage;
+        cells["m:m" + valAfterIncr] = JSON.stringify(fanoutMessage);
         return self._db.putCells(TBL_CONV_DATA, convId, cells);
       }
       // rejection pass-through is fine
@@ -126,7 +126,7 @@ FanoutApi.prototype = {
    */
   updateConvPerUserMetadata: function(convId, userKey, userMeta) {
     var cells = {};
-    cells["m:u" + userMeta] = userMeta;
+    cells["m:u" + userMeta] = JSON.stringify(userMeta);
     return this._db.putCells(TBL_CONV_DATA, convId, cells);
   },
 
@@ -144,13 +144,13 @@ FanoutApi.prototype = {
         var last = parseInt(cells["m:m"]);
         // accumulate the non-meta messages
         for (var i = 1; i <= last; i++) {
-          var msg = cells["m:m" + i];
+          var msg = JSON.parse(cells["m:m" + i]);
           msgs.push(msg);
         }
         // now add all the meta messages
         for (var key in cells) {
           if (key[2] === "u") {
-            msgs.push(cells[key]);
+            msgs.push(JSON.parse(cells[key]));
           }
         }
 

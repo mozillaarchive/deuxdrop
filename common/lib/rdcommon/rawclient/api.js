@@ -612,7 +612,7 @@ RawClientAPI.prototype = {
     var convKeypair = convBits.keypair,
         convMeta = convBits.meta;
 
-    var addPayloads = [];
+    var addPayloads = [], joinNonces = [];
 
     var useOIdents = [this._selfOthIdentBlob].concat(peepOIdents),
         useRecipPubrings = [this._pubring].concat(peepPubrings);
@@ -626,6 +626,8 @@ RawClientAPI.prototype = {
         this._keyring, otherPersonIdent, convMeta, recipPubring);
       var inviteProofInfo = $msg_gen.createInviteProof(
         this._keyring, convMeta, recipPubring);
+
+      joinNonces.push(inviteInfo.attestSNonce);
 
       addPayloads.push({
         nonce: inviteInfo.nonce,
@@ -676,6 +678,7 @@ RawClientAPI.prototype = {
       convId: convMeta.id,
       msgNonce: msgInfo.nonce,
       convMeta: convMeta,
+      joinNonces: joinNonces,
     };
   },
   replyToConversation: function(convMeta, messageText) {
@@ -710,7 +713,27 @@ RawClientAPI.prototype = {
       msgNonce: msgInfo.nonce,
     };
   },
-  inviteToConversation: function(conversation, peep) {
+  inviteToConversation: function(convMeta, peepOIdent, peepPubring) {
+    // - create the invitation
+    var inviteInfo = $msg_gen.createConversationInvitation(
+      this._keyring, peepOIdent, convMeta, peepPubring);
+
+    // - create the add/join message
+    var joinConvOuterEnv = $msg_gen.createConversationAddJoin(
+      this._keyring, this.transitServerPublicKey,
+      convMeta, peepPubring, inviteInfo);
+
+    // - send it to the invitee's maildrop/fan-in role
+    this._enqueueAction({
+      type: 'convMessage',
+      toTransit: joinConvOuterEnv,
+      toServer: peepPubring.transitServerPublicKey,
+    });
+
+    return {
+      // the nonce of record is that used for the attestation... dubious.
+      msgNonce: inviteInfo.attestSNonce,
+    };
   },
 
   pinConversation: function(conversation, pinned) {

@@ -468,10 +468,7 @@ exports.createConversationInvitation = function(authorKeyring,
                                                 recipPubring) {
   var now = Date.now();
   var attestSNonce = $keyops.makeSecretBoxNonce(),
-      inviteNonce = $keyops.makeBoxNonce(),
-      // required since in the case our own transit server is the fanout server
-      //  we would end up reusing a nonce which is forbidden.
-      resendNonce = $keyops.makeBoxNonce();
+      inviteNonce = $keyops.makeBoxNonce();
 
   // -- for the conversation participants (not the fanout server)
   // - generate signed attestation to be sent to the list
@@ -555,7 +552,23 @@ exports.createConversationAddJoin = function(authorKeyring,
                                              ourServerKey,
                                              convMeta,
                                              recipPubring,
-                                             invitePair) {
+                                             inviteInfo) {
+  // Nonce book-keeping:
+  // (Note that all servers may be identical and even though we may be nesting
+  //  payloads in a potentially safe way, we're not going to risk it.  Better
+  //  safe than too clever.)
+  //
+  // - inviteNonce:
+  //   - boxedInviteBody: (author tell, invitee body)
+  //   - boxedInviteEnv:  (author tell, invitee env)
+  //   - boxedConvAdd:    (author tell, conversation server)
+  // - resendNonce:
+  //   - boxedResend:     (author tell, author server)
+  // - joinNonce:
+  //   - boxedJoinConv:   (author tell, recipient server)
+
+
+
   // -- for the fanout server itself (includes both of the above)
   // - convadd request
   var convAddInnerEnv = {
@@ -565,23 +578,25 @@ exports.createConversationAddJoin = function(authorKeyring,
     convId: convMeta.id,
     payload: {
       envelopeKey: recipPubring.getPublicKeyFor('messaging', 'envelopeBox'),
-      inviteePayload: invitePair.boxedInvite,
-      attestationPayload: sboxedAttestation,
+      inviteePayload: inviteInfo.boxedInvite,
+      attestationPayload: inviteInfo.signedAttestation,
+      attestationNonce: inviteInfo.attestSNonce,
     }
   };
 
   // - which gets boxed to the transit server
   var boxedConvAdd = authorKeyring.boxUtf8With(
                        JSON.stringify(convAddInnerEnv),
-                       invitePair.nonce,
+                       inviteInfo.nonce,
                        convMeta.transitServerKey,
                        'messaging', 'tellBox');
 
   // -- for our fanin server to resend to the transit server (nests the above)
+  var resendNonce = $keyops.makeBoxNonce();
   var resend = {
     type: 'resend',
     serverName: convMeta.transitServerKey,
-    nonce: inviteNonce,
+    nonce: inviteInfo.nonce,
     payload: boxedConvAdd,
   };
   var boxedResend = authorKeyring.boxUtf8With(
@@ -589,22 +604,31 @@ exports.createConversationAddJoin = function(authorKeyring,
                       ourServerKey,
                       'messaging', 'tellBox');
 
+  var joinNonce = $keyops.makeBoxNonce();
+
   // -- for their fanin server (nests the above)
   // - "joinconv" message to their maildrop
-  var joinConv = {
+  var joinConvInnerEnv = {
     type: 'joinconv',
     name: recipPubring.rootPublicKey,
     serverName: convMeta.transitServerKey,
     convId: convMeta.id,
+    nonce: resendNonce,
     payload: boxedResend,
   };
 
   var boxedJoinConv = authorKeyring.boxUtf8With(
-                        JSON.stringify(joinConv), inviteNonce,
+                        JSON.stringify(joinConvInnerEnv), joinNonce,
                         recipPubring.transitServerPublicKey,
                         'messaging', 'tellBox');
 
-  return boxedJoinConv;
+  var joinConvOuterEnv = {
+    senderKey: authorKeyring.getPublicKeyFor('messaging', 'tellBox'),
+    nonce: joinNonce,
+    innerEnvelope: boxedJoinConv
+  };
+
+  return joinConvOuterEnv;
 };
 
 /**
