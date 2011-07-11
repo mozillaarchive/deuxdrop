@@ -7,7 +7,7 @@ with a server (node.js w/hbase).
 
 ## Checking It Out
 
-    git clone --recursive git://github.com/asutherland/deuxdrop.git
+    git clone --recursive git://github.com/mozilla/deuxdrop.git
 
 ## Directories
 
@@ -19,7 +19,7 @@ Implementation:
 
 UI/UX:
 
-- design: Mockups
+- design: (Old) Mockups
 
 Server Deployment:
 
@@ -31,3 +31,7 @@ Server Deployment:
    "git submodule init".
 * Make sure deps are up to date via "git submodule update"
 * cd servers; npm install
+
+## System Deps
+
+You really want to have redis installed and listening on localhost.
