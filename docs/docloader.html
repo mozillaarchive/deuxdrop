@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop Dynamic Docs</title>
+    <script type="text/javascript">
+      var console;
+      if (!console)
+        console = {
+          log: function() {},
+          error: function() {},
+          info: function() {},
+          warn: function() {},
+      };
+      function dump(aMsgWithNewline) {
+        console.log(aMsgWithNewline.replace("\n", "", "g"));
+      }
+    </script>
+  <script type="text/javascript" src="../clients/deps/require.js"></script>
+  <script>
+    require(
+      {
+        baseUrl: "../",
+        paths: {
+          text: "clients/deps/text",
+        },
+        // jstut stuff
+        packages: [
+          // deuxdrop
+          { name: "rdservers", location: "servers/lib/rdservers" },
+          { name: "rdcommon", location: "common/lib/rdcommon" },
+          // jstut
+          { name: "jstut", location: "clients/deps/jstut/lib/jstut" },
+          { name: "jstut-plat",
+            location: "clients/deps/jstut/lib-requirejs/jstut-plat" },
+          // wmsy
+          { name: "wmsy", location: "clients/deps/wmsy/lib/wmsy" },
+          // ace
+          { name: "ace", location: "clients/deps/jstut/deps/ace/lib/ace" },
+          { name: "cockpit",
+            location: "clients/deps/jstut/deps/ace/support/cockpit/lib/cockpit",
+            main: "index"
+          },
+          { name: "pilot",
+            location: "clients/deps/jstut/deps/ace/support/pilot/lib/pilot",
+            main: "index" },
+        ],
+      },
+      ["text", "jstut-plat/web-loader"],
+      function($ignoredText, mainModule) {
+        // it wants the rel-path so that jstut works
+        mainModule.main("../clients/deps/",
+                        "./jstut.json");
+      }
+    );
+  </script>
+  </head>
+<body id="body">
+</body>
+</html>

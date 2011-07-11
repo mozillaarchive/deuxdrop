@@ -53,7 +53,7 @@
  *     get the nonce attached in a new envelope.
  *   }
  *   @key[innerEnvelope @naclBoxed[PSTransitInnerEnvelope]]
- * ]{
+ * ]]{
  *   Person to Server transit outer envelope; this is what the mailsender can
  *   see and hands to the other server's maildrop.
  * }
@@ -117,7 +117,7 @@
  *       payloads is probably safe because the decrypted nested payload is only
  *       exposed to us, but better safe than sorry.)
  *     }
- *   }
+ *   ]]
  *   @key[name]
  *   @key[serverName]
  *   @key[convId]

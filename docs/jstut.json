@@ -1,0 +1,20 @@
+{
+  "?WHA?": "This file defines metadata about deuxdrop for the jstut doc tool",
+  "?BUT?": "package.json has other semantics, even its presence means stuff",
+  "us": {
+    "root": "../",
+    "packages": {
+      "rdservers": "servers/lib/rdservers",
+      "rdcommon": "common/lib/rdcommon",
+    },
+  },
+  "deps": {
+    "nacl": false,
+    "q": false,
+    "nomnom": false,
+    "microtime": false,
+    "redis": false,
+    "socket.io": false,
+    "paperboy": false
+  }
+}

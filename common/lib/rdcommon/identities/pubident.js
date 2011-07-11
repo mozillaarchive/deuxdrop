@@ -146,7 +146,7 @@
  *   messages and receive messages from them.
  * }
  *
- * @tyepdef[PersonClientAuthPayload GeneralAttestation]
+ * @typedef[PersonClientAuthPayload GeneralAttestation]
  *
  * @typedef[OtherPersonIdentPayload @dict[
  *   @key[issuedAt DateMS]
