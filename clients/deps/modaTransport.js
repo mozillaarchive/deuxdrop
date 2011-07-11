@@ -35,13 +35,15 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*jslint indent: 2, strict: false, nomen: false, plusplus: false */
-/*global define: false, localStorage: false, window: false, console: false */
+/*global define: false, localStorage: false, window: false, location: false,
+  console: false */
+
 define(function (require, exports) {
   var moda = require('moda'),
       q = require('q'),
       io = require('socket.io'),
       transport = exports,
-      meDeferred = q.defer(),
+      meCallbacks = [],
       deferreds = {},
       localMeCheck = false,
       deferIdCounter = 0,
@@ -52,6 +54,21 @@ define(function (require, exports) {
     socket.emit('serverMessage', JSON.stringify(obj));
   }
 
+  function triggerSignOut() {
+    delete localStorage.assertion;
+    delete localStorage.me;
+    moda.trigger('signedOut');
+  }
+
+  function userConnect() {
+    if (localStorage.assertion) {
+      transport.signIn(localStorage.assertion, function (user) {
+        if (!user) {
+          triggerSignOut();
+        }
+      });
+    }
+  }
   /**
    * Factory machinery to creating an API that just calls back to the
    * server. Uses a deferred to only do the call once, so subsequent
@@ -190,13 +207,15 @@ define(function (require, exports) {
 
   actions = {
     'signInComplete': function (data) {
-      if (!me) {
-        me = data.user;
 
-        localStorage.me = JSON.stringify(me);
+      me = data.user;
+      localStorage.me = JSON.stringify(me);
 
-        meDeferred.resolve(me);
-      }
+      var cbs = meCallbacks;
+      meCallbacks = [];
+      cbs.forEach(function (callback) {
+        callback(me);
+      });
 
       moda.trigger('me', me);
     },
@@ -210,7 +229,7 @@ define(function (require, exports) {
   // the global.
   io = window.io;
 
-  socket = io.connect(null, {port: 8888, rememberTransport: false,
+  socket = io.connect(null, {rememberTransport: false,
                 transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
                 });
 
@@ -228,9 +247,7 @@ define(function (require, exports) {
 
   socket.on('connect', function () {
     moda.trigger('networkConnected');
-    if (me) {
-      transport.signIn(me.id, me.name);
-    }
+    userConnect();
   });
 
   socket.on('disconnect', function () {
@@ -239,6 +256,7 @@ define(function (require, exports) {
 
   socket.on('reconnect', function () {
     moda.trigger('networkReconnect');
+    userConnect();
   });
 
   socket.on('reconnecting', function (nextRetry) {
@@ -259,9 +277,11 @@ define(function (require, exports) {
   transport.me = function () {
     if (!me && !localMeCheck) {
       // Load user from storage
-      me = localStorage.me;
-      if (me) {
-        me = JSON.parse(me);
+      if (localStorage.assertion) {
+        me = localStorage.me;
+        if (me) {
+          me = JSON.parse(me);
+        }
       }
       localMeCheck = true;
     }
@@ -271,16 +291,18 @@ define(function (require, exports) {
   /**
    * Sign in the user.
    */
-  transport.signIn = function (id, name, callback) {
+  transport.signIn = function (assertion, callback) {
+
+    localStorage.assertion = assertion;
 
     send({
       action: 'signIn',
-      userId: id.toLowerCase(),
-      userName: name
+      assertion: assertion,
+      audience: location.host
     });
 
     if (callback) {
-      q.when(meDeferred.promise, callback);
+      meCallbacks.push(callback);
     }
   };
 

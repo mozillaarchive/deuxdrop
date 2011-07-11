@@ -5,6 +5,7 @@
 /*global require: false, process: false, __dirname: false, console: false */
 
 var http = require('http'),
+    https = require('https'),
     url = require('url'),
     fs = require('fs'),
     path = require('path'),
@@ -76,31 +77,84 @@ redis.on('error', function (err) {
   console.log('Redis error: ' + err);
 });
 
+function sendSignInComplete(data, client, user) {
+  var id = user && user.id,
+      clientList;
+
+  if (id) {
+    clientList = clients[id] || (clients[id] = []);
+    client._deuxUserId = id;
+
+    clientList.push(client);
+  }
+
+  clientSend(client, data, {
+    action: 'signInComplete',
+    user: user
+  });
+}
+
 actions = {
 
   'signIn': function (data, client) {
-    var id = data.userId,
-        name = data.userName,
-        clientList = clients[id] || (clients[id] = []),
-        pic = 'http://www.gravatar.com/avatar/' +
-              md5.hex_md5(id.trim().toLowerCase());
+    var assertion = data.assertion,
+        audience = data.audience,
+        options, pic, req;
 
-    client._deuxUserId = id;
+    // First check if we have saved data for the assertion.
+    redis.get('browserid-assertion-' + assertion, function (err, value) {
+      if (value && (value = value.toString())) {
+        redis.hgetall(value, function (err, userData) {
+          if (userData) {
+            sendSignInComplete(data, client, userData);
+          }
+          // better not hit the else for this if.
+        });
+      } else {
+        options = {
+          host: 'browserid.org',
+          port: '443',
+          path: '/verify?assertion=' + encodeURIComponent(assertion) +
+                '&audience=' + encodeURIComponent(audience)
+        };
 
-    //Add the user ID to the list of users.
-    redis.sadd('users', id);
+        req = https.get(options, function (response) {
+          var responseData = '',
+              id;
 
-    //Add the user to the store
-    redis.hmset(id, 'id', id, 'name', name, 'pic', pic);
+          response.on('data', function (chunk) {
+            responseData += chunk;
+          });
 
-    clientList.push(client);
+          response.on('end', function () {
+            if (responseData) {
+              responseData = JSON.parse(responseData);
 
-    clientSend(client, data, {
-      action: 'signInComplete',
-      user: {
-        id: id,
-        name: name,
-        pic: pic
+              if (responseData.status === 'failure') {
+                sendSignInComplete(data, client, null);
+              } else {
+                id = responseData.email;
+                pic = 'http://www.gravatar.com/avatar/' +
+                      md5.hex_md5(id.trim().toLowerCase());
+
+                // Store the user data for next request.
+                redis.set('browserid-assertion-' + assertion, id);
+
+                //Add the user ID to the list of users.
+                redis.sadd('users', id);
+
+                //Add the user to the store
+                redis.hmset(id, 'id', id, 'name', id, 'pic', pic);
+
+                sendSignInComplete(data, client, {
+                  id: id,
+                  name: id,
+                  pic: pic
+                });
+              }
+            }
+          });
+        });
       }
     });
   },

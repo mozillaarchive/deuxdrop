@@ -36,7 +36,8 @@
 
 /*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false, document: false, setTimeout: false, history: false,
-  setInterval: false, location: true, window: true */
+  setInterval: false, location: true, window: true, navigator: false,
+  alert: false */
 
 /**
  * Main JS file, bootstraps the logic.
@@ -53,9 +54,18 @@ define(function (require) {
       cards = require('cards'),
       moda = require('moda'),
       friendly = require('friendly'),
+      browserId = require('browserId'),
+      IScroll = require('iscroll'),
 
       commonNodes = {},
-      peeps, update, messageCloneNode, notifyDom, nodelessActions;
+      peeps, update, messageCloneNode, notifyDom, nodelessActions,
+      newMessageIScroll, newConversationNodeWidth;
+
+  //iScroll just defines a global, bind to it here
+  IScroll = window.iScroll;
+
+  // Browser ID is not actually a module, get a handle on it now.
+  browserId = navigator.id;
 
   function getChildCloneNode(node) {
     // Try on the actual node, and if not there, check the scroller node
@@ -96,6 +106,11 @@ define(function (require) {
     var metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
     metaNode.setAttribute('data-time', message.time);
     metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
+  }
+
+  function adjustNewScrollerWidth(convScrollerDom) {
+    convScrollerDom = convScrollerDom || $('.newConversationScroller');
+    convScrollerDom.css('width', (convScrollerDom.children().length * newConversationNodeWidth) + 'px');
   }
 
   function makeMessageBubble(node, message) {
@@ -139,6 +154,7 @@ define(function (require) {
 
   function insertUnseenMessage(message) {
     var convNotificationDom = $('.newConversationNotifications'),
+        convScrollerDom = convNotificationDom.find('.newConversationScroller'),
         convNode, convCloneNode, node, nodeDom;
 
     // Add a conversation box to the start card, but only if there is not
@@ -161,8 +177,21 @@ define(function (require) {
       // Add the conversation ID to the node
       node.setAttribute('data-convid', message.convId);
 
-      convNode.appendChild(node);
+      convScrollerDom.prepend(node);
+
+      if (!newConversationNodeWidth) {
+        // Lame. adding extra 20px. TODO fix this.
+        newConversationNodeWidth = $(node).outerWidth() + 20;
+      }
+
+      // Figure out how big to make the horizontal scrolling area.
+      adjustNewScrollerWidth(convScrollerDom);
+
       cards.adjustCardSizes();
+
+      if (newMessageIScroll) {
+        newMessageIScroll.refresh();
+      }
 
       // Activate new notification, but only if not already on start page.
       if (cards.currentCard().attr('data-cardid') !== 'start') {
@@ -171,11 +200,57 @@ define(function (require) {
     }
   }
 
+  function adjustCardScroll(card) {
+    // Scroll to the bottom of the conversation
+    setTimeout(function () {
+      // If the message contents are longer than the containing element,
+      // scroll down.
+      if (card.innerHeight() < card.find('.scroller').innerHeight()) {
+        var scroller = cards.getIScroller(card);
+        if (scroller) {
+          scroller.scrollToElement(card.find('.compose')[0], 200);
+        } else {
+          card[0].scrollTop = card[0].scrollHeight;
+        }
+      }
+    }, 300);
+  }
+
   // Set up card update actions.
   update = {
+    'signIn': function (data, dom) {
+
+      // Create an explicit click handler to help some iphone devices,
+      // event bubbling does not allow the window to open.
+      dom.find('.browserSignIn')
+        .click(function (evt) {
+          browserId.getVerifiedEmail(function (assertion) {
+            if (assertion) {
+              moda.signIn(assertion, function (me) {
+                // Remove the sign in card
+                $('[data-cardid="signIn"]', '#cardContainer').remove();
+
+                // Show the start card
+                cards.onNav('start', {});
+              });
+            } else {
+              // Do not do anything. User stays on sign in screen.
+            }
+          });
+          evt.preventDefault();
+          evt.stopPropagation();
+        });
+    },
+
     'start': function (data, dom) {
       // Use user ID as the title
       dom[0].title = moda.me().id;
+
+      // Bind the iscroll to allow horizontal scrolling of new messages.
+      newMessageIScroll = new IScroll(dom.find('.newConversationNotifications')[0], {
+        hScrollbar: true,
+        vScrollbar: false
+      });
     },
 
     'notify': function (data, dom) {
@@ -198,7 +273,7 @@ define(function (require) {
       history.go(jumpLength);
     },
 
-    signOut: function () {
+    'signOut': function () {
       moda.signOut(function () {
         location.reload();
       });
@@ -219,8 +294,11 @@ define(function (require) {
         // Generate nodes for each person.
         peeps.items.forEach(function (peep) {
           var node = clonable.cloneNode(true);
+
+          updateDom($(node), peep);
+
           node.href += '?id=' + encodeURIComponent(peep.id);
-          node.appendChild(document.createTextNode(peep.name));
+
           frag.appendChild(node);
         });
 
@@ -385,16 +463,7 @@ define(function (require) {
         // Let the server know the messages have been seen
         conversation.setSeen();
 
-        // TODO: best to do this ontransition end instead of guessing when it
-        // ends.
-        setTimeout(function () {
-          scroller = cards.getIScroller(dom);
-          if (scroller) {
-            scroller.scrollToElement(dom.find('.compose')[0], 200);
-          } else {
-            dom[0].scrollTop = dom[0].scrollHeight;
-          }
-        }, 300);
+        adjustCardScroll(dom);
       });
 
       // Set up compose area
@@ -416,6 +485,14 @@ define(function (require) {
       moda.listUnseen();
     },
 
+    'signedOut': function () {
+      // User signed out/no longer valid.
+      // Clear out all the cards and go back to start
+      // TODO handle better.
+      alert('got signed out');
+      location.reload();
+    },
+
     'message': function (message) {
       var card = cards.currentCard();
 
@@ -425,24 +502,15 @@ define(function (require) {
         card.find('.conversationMessages').append(makeMessageBubble(messageCloneNode.cloneNode(true), message));
         cards.adjustCardSizes();
 
-        // Scroll to the bottom of the conversation
-        setTimeout(function () {
-          var scroller = cards.getIScroller(card);
-          if (scroller) {
-            scroller.scrollToElement(card.find('.compose')[0], 200);
-          } else {
-            card[0].scrollTop = card[0].scrollHeight;
-          }
+        adjustCardScroll(card);
 
-          // Let the server know the messages have been seen
-          moda.conversation({
-            by: 'id',
-            filter: message.convId
-          }).withMessages(function (conv) {
-            conv.setSeen();
-          });
+        // Let the server know the messages have been seen
+        moda.conversation({
+          by: 'id',
+          filter: message.convId
+        }).withMessages(function (conv) {
+          conv.setSeen();
         });
-
       } else if (message.from.id === moda.me().id) {
         // If message is from me, it means I wanted to start a new conversation.
         cards.nav('conversation?id=' + message.convId);
@@ -481,6 +549,7 @@ define(function (require) {
     nodelessActions = {
       'addPeep': true,
       'notify': true,
+      'browserIdSignIn': true,
       'signOut': true
     };
 
@@ -515,23 +584,6 @@ define(function (require) {
     };
 
     $('body')
-      // Handle sign in form
-      .delegate('.signInForm', 'submit', function (evt) {
-        evt.preventDefault();
-
-        var formDom = $(evt.target),
-            id = formDom.find('[name="id"]').val(),
-            name = formDom.find('[name="name"]').val();
-
-        moda.signIn(id, name, function (me) {
-          // Remove the sign in card
-          $('[data-cardid="signIn"]', '#cardContainer').remove();
-
-          // Show the start card
-          cards.onNav('start', {});
-        });
-      })
-
       // Handle compose from a peep screen.
       .delegate('[data-cardid="peep"] .compose', 'submit', function (evt) {
         evt.preventDefault();
@@ -569,6 +621,14 @@ define(function (require) {
         // after transition has happened.
         setTimeout(function () {
           node.parentNode.removeChild(node);
+          adjustNewScrollerWidth();
+
+          // Adjust the new conversation list scroll to be back at zero,
+          // otherwise it can look weird when going "back" to the start card.
+          if (newMessageIScroll) {
+            newMessageIScroll.scrollTo(0, 0);
+          }
+
           cards.adjustCardSizes();
         }, 1000);
 
