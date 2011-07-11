@@ -1,0 +1,183 @@
+#lang jstut/interactive
+
+@section{Realms}
+
+@realm[Internet]{
+  The public internet.  Things in this realm are directly reachable without
+  having to use VPNs, STUN through a firewall, etc.  They need to be highly
+  available.
+}
+@realm[Comfort]{
+  Does not have to be the public internet, but can be if you want; things may
+  live behind firewalls and need not be always available (though system
+  functionality may be compromised as a result).
+}
+
+
+@section{Trust}
+
+@trustLevel[Traffic]{
+  The entity in question is being exposed to some degree of information about
+  who you are communicating with, who is communicating with you, when
+  that communication is occurring, and a general idea of the amount of data
+  being conveyed.  The exact amount of information will vary based on the type
+  of communication and whether communication is occurring with servers not under
+  the control of the entity.  At the limit where the entity controls all servers
+  in use, the entity will have a very good idea of who you are communicating
+  with.
+
+  Additionally, the entity has the ability to pretend it didn't see messages,
+  attempt to lie about what it has seen, and attempt to repeat valid messages
+  it has previously received.  While maliciously and consistently dropped
+  messages will be hard to detect without an information channel external to the
+  entity, the other forms of malicious behaviour can be detected and should
+  largely prove fruitless.
+
+  An entity with only this level of trust will not have the ability to read
+  the contents of messages, nor any explicit envelope data.  Because the entity
+  cannot see the decrypted content of messages, it may be misled by
+  automatically created and discarded chaff messages into beliving additional
+  communication is occurring when it is not.  This can be used to obscure
+  when true communication is occurring if the patterns are similar enough.
+}
+
+@trustLevel[Envelope #:implies Traffic]{
+  You provide the entity with the cryptographic keys to be able to read the
+  envelope data of messages sent to you.
+
+  An entity with only this level of trust will not have the ability to read the
+  contents of messages nor the ability to forge messages to appear as if they
+  originate from you.
+
+  The entity will be able to forge envelopes to you; any information
+  which must not be vulnerable to forging will need to be also present in the
+  body of the message and possibly cryptographically signed.
+}
+
+@trustLevel[MessageContent #:implies Envelope]{
+  You provide the entity with the cryptographic keys to be able to read the
+  body data of messages sent to you.
+
+  An entity with only this level of trust will not be able to forge messages
+  to appear as if they originate from you.
+
+  The entity will be able to forge un-signed messages *to* you, but will
+  be uanble to forge signed messages.
+}
+
+@trustLevel[Authorship #:implies MessageContent]{
+  You provide the entity with the cryptographic keys to be able to create
+  messages as you.  The entity will be able to forge messages as if they
+  originate from you, because they effectively are you.
+
+  An entity with only this level of trust is unable to issue new keys or key
+  revocations, allowing its authority on your behalf to be terminated.
+}
+
+@trustLevel[IdentityTrust #:implies Authorship]{
+  The entity has access to your root cryptographic keys and so is
+  indistinguishable from you as far as the system is concerned.
+}
+
+
+@section{Roles}
+
+@role[PersonAgent]
+
+@role[Server]
+@role[PublicServer #:extends Server 
+  #:realm Internet
+]{
+  A highly-available server which exists on the addressable internet.
+}
+@role[ComfortServer #:extends Server
+  #:realm Comfort
+]{
+  A server that can live on the internet and even be the same implementation
+  as a `PublicServer`, but can also live in a closet on a flakey net connection
+  if it makes you feel better.
+}
+
+@role[Fanout #:extends PublicServer
+  #:trust Traffic
+  #:talksto Fanout Mailstore
+]{
+  The fanout server is the federated atomic unit.  It receives messages for
+  you from other servers, delivers messages to other servers for you, and
+  handles all conversation activities for conversations you have created.
+
+  When sending a message to another server for you, it only knows the name of
+  the server it is sending the message to; it does not know the name of the
+  user (or server component) on that server that will receive the message.  It
+  cannot look inside the messages unless so trusted.
+
+  When receiving a message from another server for you from a person, it knows
+  the cryptographic identifier of that person and uses it to authenticate the
+  message is indeed from that user.  When receiving a message from another
+  server for you from a conversation, it knows the conversation id of the
+  conversation so it can make sure you are subscribed to the conversation.  It
+  holds the received messages for you until the `Mailstore` retrieves them.  It
+  cannot look inside the messages unless so trusted.
+
+  The server knows the cryptographic identifiers for all of the people involved
+  in conversations you create, both those you add and those other participants
+  add.  It cannot look inside the messages unless so trusted.
+}
+
+@role[Mailstore #:extends ComfortServer
+  #:trust Envelope
+  #:talksto Fanout Client
+]{
+  The mailstore is the canonical repository of your data.  It stores your 
+  messages, meta-data about the messages, your contacts, and meta-data about
+  your contacts.  It can either be run as a separate server from your `Fanout`
+  server, or can be part of the `Fanout` cluster.
+
+  The mailstore does not directly provide any user-interface.  Instead, one
+  or more smart `Client` instances communicate with it to retrieve messages,
+  send new messages, etc. 
+
+  The mailstore can operate with only access to your envelope keys
+}
+
+@role[Client
+  #:trust IdentityTrust
+]{
+}
+
+@subsection{Analogies}
+
+In the traditional e-mail world, the mailstore is most similar to an IMAP
+server and the fanout server to a combination of POP (receipt), SMTP (delivery),
+and mailing-list (conversations) servers.  Specifically, the fanout server is
+like a POP server in that it does not keep your messages after you retrieve
+them.  It is like an SMTP server in that it sends messages and does not keep
+them after they have been successfully sent.  It is like a mailing-list server
+in that it retransmits all messages sent to a list and keeps a copy of them
+around for new participants to look at.  (The issue of expiration has not yet
+been addressed; the conversation server will currently keep them forever.)
+
+
+@section{Crypto Keys}
+
+@boxingKey[ServerKey]
+
+@boxingKey[EnvelopeKey]
+@boxingKey[BodyKey]
+@boxingKey[TellKey]
+@signingKey[AnnounceKey]
+
+@section{Messages}
+
+@boxedMessage[PSTransitInnerEnvelope
+  #:sender   PersonAgent   #:senderKey    TellKey
+  #:receiver PublicServer  #:recipientKey ServerKey
+]
+
+@message[PSTransitOuterEnvelope
+  #:sender   PersonAgent
+  #:receiver PublicServer
+  @key[senderKey TellKey]
+  @key[nonce BoxNonce]
+  @key[innerEnvelope BoxedPSTransitInnerEnvelope]
+]

@@ -1,0 +1,22 @@
+#lang jstut/interactive
+
+@title{Conversation Protocol}
+
+@section{Involved Parties}
+
+@section{Conversation Creation}
+
+@boxedMessage[CreateConv #:extends PSTransitInnerEnvelope
+]
+
+@section{Conversation Messages}
+
+@boxedMessage[ConvMsg #:extends PSTransitInnerEnvelope
+]
+
+@section{Conversation Invitations}
+
+@boxedMessage[ConvAdd #:extends PSTransitInnerEnvelope
+]
+
+

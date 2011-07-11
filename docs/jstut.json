@@ -5,8 +5,8 @@
     "root": "../",
     "packages": {
       "rdservers": "servers/lib/rdservers",
-      "rdcommon": "common/lib/rdcommon",
-    },
+      "rdcommon": "common/lib/rdcommon"
+    }
   },
   "deps": {
     "nacl": false,

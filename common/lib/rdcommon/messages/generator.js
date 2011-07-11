@@ -57,12 +57,10 @@
  *   Person to Server transit outer envelope; this is what the mailsender can
  *   see and hands to the other server's maildrop.
  * }
- * @typedef[PSTransitInnerEnvelope @dict[
- *   @key[type @oneof[
- *     @case["user"]{
- *       A user; this is a direct message.  `name` will hold the target user's
- *       root public key.  `payload` will hold the boxed message to the user.
- *     }
+ * @typedef[PSTransitInnerEnvelope @message[
+ *   #:sender PersonAgent
+ *   #:recipient Server
+ *   @key[type]
  *     @case["convadd"]{
  *       Our fanout server; this is a request to add a user to the conversation.
  *       `convId` will be the name of the conversation.  `payload` will be the
@@ -125,9 +123,37 @@
  * ]]{
  *   Person to server transit inner envelope; its contents are only for the
  *   receiving maildrop.  It gets boxed by the sending user.
- *
- *   Ideally we should split this into a polymorphic doc based on the type.
  * }
+ *
+ * @typedef[UserPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
+ *   @key[type "user"]
+ *   @key[name UserRootPublicKey]{
+ *     Target user's root key.
+ *   }
+ *   @key[payload BoxedUserToUserEnvelope]{
+ *     Boxed message to the user.
+ *   }
+ * ]]{
+ *   User-to-user direct message.
+ * }
+ *
+ * @typedef[ConvAddPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
+ *   @key[type "convadd"]
+ *   @key[convId]
+ * ]]{
+ *
+ * }
+ * @typedef[ConvMsgPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
+ *   @key[type "convmsg"]
+ *   @key[convId ConversationId]{
+ *     The name of the conversation the message is to.
+ *   }
+ *   @key[payload BoxedConversationEnvelope]
+ * ]]{
+ *   A human message to a conversation being relayed to the fan-out server.
+ * }
+ *
+ * @typedef[Conv
  *
  * @typedef[ConvAddPayload @dict[
  *   @key[envelopeKey]{
