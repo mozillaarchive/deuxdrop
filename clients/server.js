@@ -521,6 +521,7 @@ server = http.createServer(function (req, res) {
 });
 
 server.listen(process.env.PORT || 8888);
+console.log('Server is running on port '+(process.env.PORT||8888));
 
 listener = io.listen(server, {
   transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
