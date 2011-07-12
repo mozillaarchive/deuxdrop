@@ -8,9 +8,8 @@ Copy the md5 module into the modules directory
 
     cp md5.js to node_modules
 
-Get redis 2.2 running on your local box.
-
-> using [homebrew](http://mxcl.github.com/homebrew/) for Mac OS X
+Get redis 2.2 running on your local box on port ``6379``.
+using [homebrew](http://mxcl.github.com/homebrew/) for Mac OS X:
 
     brew install redis
     redis-server /usr/local/etc/redis.conf
