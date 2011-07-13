@@ -559,11 +559,7 @@ RawClientAPI.prototype = {
       this._longtermKeyring, personSelfIdentBlob, localPoco);
 
     var replicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
-      'addContact',
-      {
-        rootKey: identPayload.root.rootSignPubKey,
-        oident: otherPersonIdentBlob,
-      });
+      'addContact', identPayload.root.rootSignPubKey, otherPersonIdentBlob);
 
     this._enqueueAction({
       type: 'addContact',
@@ -580,10 +576,16 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Peep Mutation
 
-  pinPeep: function(peep) {
+  pinPeep: function(peepRootKey, peepMeta) {
     // (we already have the meta-data for the peep)
-    // - modify the blob
-    // - generate a new attestation
+
+    var replicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
+      'metaContact', peepRootKey, peepMeta);
+    this._enqueueAction({
+      type: 'metaContact',
+      userRootKey: peepRootKey,
+      replicaBlock: replicaBlock,
+    });
   },
 
 
@@ -736,13 +738,37 @@ RawClientAPI.prototype = {
     };
   },
 
-  pinConversation: function(conversation, pinned) {
+  /**
+   * Pin/unpin a conversation.
+   */
+  pinConversation: function(convId, pinned) {
+    var replicaBlock = this.store.generateAndPerformReplicaAuthBlock(
+      'setConvMeta', convId,
+      {
+        pinned: pinned,
+      });
+    this._enqueueAction({
+      type: 'convMeta',
+      replicaBlock: replicaBlock,
+    });
   },
+  /**
+   * Update our read watermark for the conversation, updating both our unread
+   *  counts and relaying to the rest of the participants in a conversation so
+   *  they can know we have read the message.
+   *
+   * This logic will always generate a message, even if the data provided is
+   *  equal to the already-broadcast data, so callers should be sure to not
+   *  invoke us redundantly.
+   */
   updateWatermarkForConversation: function(conversation, seenMarkValue) {
+
   },
 
+  /*
   deleteConversation: function(conversation) {
   },
+  */
 
   //////////////////////////////////////////////////////////////////////////////
   // Other Clients

@@ -194,6 +194,7 @@ RedisDbConn.prototype = {
    */
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
+    this._log.incrementCell(tableName, rowId, columnName, delta);
     this._conn.hincrby(this._prefix + ':' + tableName + ':' + rowId,
                        columnName, delta, function(err, result) {
       if (err)
@@ -213,6 +214,7 @@ RedisDbConn.prototype = {
    */
   raceCreateRow: function(tableName, rowId, probeCellName, cells) {
     var self = this;
+    this._log.raceCreateRow(tableName, rowId, probeCellName, cells);
     return when(this.incrementCell(tableName, rowId, probeCellName, 1),
       function(valAfterIncr) {
         // - win
@@ -265,6 +267,20 @@ RedisDbConn.prototype = {
   defineReorderableIndex: function(tableName, indexName) {
   },
   /**
+   * Very temporary scanning mechanism that will need to be revisted a few
+   *  times.  The competing factors are a desire to implement something that's
+   *  efficient in hbase while dealing with locality.  For the time being
+   *  our model is that there is no locality between the index and the actual
+   *  data storage so there is no harm in treating the actual row fetches as
+   *  separate operations using the usual primitives.  This has the actual
+   *  benefit of allowing the caching layer a chance to skip already known
+   *  rows.  (On the server, this would more likely manifest as an assisted
+   *  query where a 'cache hit' is talking about a row the client already
+   *  knows about/is subscribed to and so does not require a fetch, while a
+   *  'cache miss' is something we need to send down the wire and thus
+   *  most likely must fetch from the db layer since we are not likely to
+   *  otherwise have the data around.)
+   *
    * Scan index using the (ordered) values as our keypoints; although redis
    *  supports actual offsets, any hbase implementation would have serious
    *  difficulty with that model.  Because there could be multiple object
@@ -272,10 +288,25 @@ RedisDbConn.prototype = {
    *  provide precise boundaries.  Passing null for a value tells us to use
    *  the relevant infinity.  Passing null for an object name means to use the
    *  relevant first/last value.
+   *
+   * Scanning currently is hard-coded to assume high to low because we are
+   *  presuming timestamp use for everything.
+   *
    */
   scanIndex: function(tableName, indexName, indexParam,
                       lowValue, lowObjectName, lowInclusive,
                       highValue, highObjectName, highInclusive) {
+    var deferred = $Q.defer();
+    var minValStr = (lowValue == null) ? '-inf' : lowValue,
+        maxValStr = (highValue == null) ? '+inf' : highValue;
+
+    this._conn.zrangebyscore(key, maxValStr, minValStr, function(err, results) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(results);
+    });
+    return deferred.promise;
   },
 
   /**
@@ -285,6 +316,8 @@ RedisDbConn.prototype = {
   updateIndexValue: function(tableName, indexName, indexParam,
                              objectName, newValue, oldValueIfKnown) {
     var deferred = $Q.defer();
+    this._log.updateIndexValue(tableName, indexName, indexParam,
+                               objectName, newValue);
     this._conn.zadd(
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
       newValue, objectName, function(err, result) {
@@ -305,6 +338,8 @@ RedisDbConn.prototype = {
   maximizeIndexValue: function(tableName, indexName, indexParam,
                                objectName, newValue) {
     var deferred = $Q.defer();
+    this._log.maximizeIndexValue(tableName, indexName, indexParam,
+                                 objectName, newValue);
     this._conn.zadd(
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
       newValue, objectName, function(err, result) {
@@ -430,12 +465,25 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       connected: {},
       closed: {},
 
+      // - hbase abstractions
       getRowCell: {tableName: true, rowId: true, columnName: true},
       getRow: {tableName: true, rowId: true, columnFamilies: false},
       putCells: {tableName: true, rowId: true},
+      incrementCell: {tableName: true, rowId: true, columnName: true,
+                      delta: true},
+      raceCreateRow: {tableName: true, rowId: true},
+
+      // - reorderable collection abstraction
+      updateIndexValue: {tableName: true, indexName: true, indexParam: true,
+                         objectName: true, newValue: false},
+      maximizeIndexValue: {tableName: true, indexName: true, indexParam: true,
+                           objectName: true, newValue: false},
+
+      // - queue abstraction
     },
     TEST_ONLY_events: {
       putCells: {cells: $log.JSONABLE},
+      raceCreateRow: {probeCellName: false, cells: $log.JSONABLE},
     },
     errors: {
       dbErr: {err: $log.EXCEPTION},

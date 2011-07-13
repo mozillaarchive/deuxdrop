@@ -344,7 +344,7 @@ ClientServicingConnection.prototype = {
   /**
    * Set meta-data on a conversation/messages.
    */
-  _msg_root_setMeta: function(msg) {
+  _msg_root_convMeta: function(msg) {
   },
 
   /**
@@ -400,10 +400,11 @@ ClientServicingConnection.prototype = {
   /**
    * Modify the metadata associated with a contact.
    */
-  /*
-  _msg_root_modContact: function(msg) {
+  _msg_root_metaContact: function(msg) {
+    return $Q.join(
+      this.store.metaContact(msg.userRootKey, msg.replicaBlock),
+      this._bound_ackAction);
   },
-  */
 
   /**
    * Delete a contact.

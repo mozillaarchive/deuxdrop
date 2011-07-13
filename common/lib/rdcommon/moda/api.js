@@ -67,6 +67,12 @@ function PeepBlurb() {
 PeepBlurb.prototype = {
   get pinned() {
   },
+
+  get numInvolvedConversations() {
+  },
+
+  get numUnreadAuthoredMessages() {
+  },
 };
 
 /**

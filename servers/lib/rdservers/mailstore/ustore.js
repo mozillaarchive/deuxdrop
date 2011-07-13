@@ -123,11 +123,27 @@ UserBehalfDataStore.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Contacts
+  //
+  // All data is stored in encrypted replica blocks because we expect the smart
+  //  client to download all data and have it available locally.  As such, there
+  //  is no need for the server to be able to see which contacts are pinned or
+  //  have specific tags associated, etc.
+  //
+  // Cells:
+  // - d:addBlock - The replica block that constitutes the addition.
+  // - d:metaBlock - The replica block that defines the most-recent metadata for
+  //                 the contact.
 
   newContact: function(contactRootKey, replicaAddBlock) {
     return this._db.putCells(TBL_CONTACTS,
                              this._userRowBit + contactRootKey,
                              {'d:addBlock': replicaAddBlock});
+  },
+
+  metaContact: function(contactRootKey, replicaMetaBlock) {
+    return this._db.putCells(TBL_CONTACTS,
+                             this._userRowBit + contactRootKey,
+                             {'d:metaBlock': replicaMetaBlock});
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -151,6 +167,8 @@ UserBehalfDataStore.prototype = {
   // - d:m# - Message number '#'; this covers all non-conversation-level
   //    metadata.
   // - d:e### - Per-user metadata for tell key '###'.
+  // - d:umrep - Our user's replica block for the conversation, used to store
+  //             metadata (visible to us) like whether it is pinned or not.
 
   /**
    * Store the

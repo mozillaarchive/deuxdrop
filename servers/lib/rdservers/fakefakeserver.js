@@ -157,6 +157,9 @@ actions = {
       return;
     }
 
+    if (client._rawClient)
+      client._rawClient.disconnect();
+
     index = clientList.indexOf(client);
     if (index === -1) {
       console.log('HUH? Disconnect called, but cannot find client.');
@@ -493,13 +496,13 @@ function makeDbConn(prefix) {
 
 const TBL_USERS = 'fake:users';
 function stashSelfIdent(id, selfIdentBlob) {
-  dbServer.putCells(TBL_USERS, id, {'d:selfIdent': selfIdentBlob});
+  dbFake.putCells(TBL_USERS, id, {'d:selfIdent': selfIdentBlob});
 }
 function getSelfIdent(id) {
-  return dbServer.getRowCell(TBL_USERS, id, 'd:selfIdent');
+  return dbFake.getRowCell(TBL_USERS, id, 'd:selfIdent');
 }
 function getAllUserIds() {
- return dbServer.XXX_scanTableBatch_rowNames(TBL_USERS);
+ return dbFake.XXX_scanTableBatch_rowNames(TBL_USERS);
 }
 
 /**

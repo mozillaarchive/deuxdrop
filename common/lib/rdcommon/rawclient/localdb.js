@@ -66,9 +66,18 @@ define(
   ) {
 var when = $Q.when;
 
+const PINNED = 'pinned';
+
 /**
  * Data on peeps, be they a contact or a transitive-acquaintance we heard of
  *  through a conversation.
+ *
+ * row id: root key
+ *
+ * - d:oident - The other person ident.
+ * - d:meta - Full metadata dictionary object.
+ * - d:nunread - The number of unread messages from this user.
+ * - d:nconvs - The number of conversations involving the user.
  */
 const TBL_PEEP_DATA = "peepData";
 /**
@@ -90,12 +99,17 @@ const IDX_PEEP_ANY_INVOLVEMENT = "idxPeepAny";
 /**
  * Conversation data.
  *
+ * row id: conversation id
+ *
  * - d:meta - The conversation meta-info for this conversation.
  * - d:s### - Self-ident for the given authorized participant by their tell
  *             key.  The payload may want to be normalized out and the name
  *             may want to become their root key.
  * - d:m - High message number
  * - d:m# - Message number #.  Fully decrypted rep.
+ * - d:u### - Per-user metadata by tell key, primarily used for watermarks.
+ * - d:ourmeta - Our user's metadata about the conversation, primarily used
+ *                for pinned status.
  */
 const TBL_CONV_DATA = "convData";
 /**
@@ -108,6 +122,7 @@ const IDX_ALL_CONVS = "idxConv";
  *  peeps right now.)
  */
 const IDX_CONV_PEEP_WRITE_INVOLVEMENT = "idxPeepConvWrite";
+const IDX_CONV_PEEP_RECIP_INVOLVEMENT = "idxPeepConvRecip";
 const IDX_CONV_PEEP_ANY_INVOLVEMENT = "idxPeepConvAny";
 
 /**
@@ -119,6 +134,7 @@ exports._DB_NAMES = {
   TBL_CONV_DATA: TBL_CONV_DATA,
   IDX_ALL_CONVS: IDX_ALL_CONVS,
   IDX_CONV_PEEP_WRITE_INVOLVEMENT: IDX_CONV_PEEP_WRITE_INVOLVEMENT,
+  IDX_CONV_PEEP_RECIP_INVOLVEMENT: IDX_CONV_PEEP_RECIP_INVOLVEMENT,
   IDX_CONV_PEEP_ANY_INVOLVEMENT: IDX_CONV_PEEP_ANY_INVOLVEMENT,
 
   TBL_PEEP_DATA: TBL_PEEP_DATA,
@@ -138,6 +154,12 @@ function NotificationKing(store) {
 
 }
 NotificationKing.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Message Notifications
+  //
+  // Specialized message notification handling; required because the aggregation
+  //  of messages into conversations is unique within our system.
+
   /**
    * Track a message that appears to be new but we won't know for sure until we
    *  are done with our update phase.
@@ -168,6 +190,9 @@ NotificationKing.prototype = {
       newishForConv.splice(0, killUntil);
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // General
+
   /**
    * We are now up-to-speed and should generate any notifications we were
    *  holding off on because we were concerned a subsequent update would have
@@ -192,11 +217,25 @@ NotificationKing.prototype = {
     }
   },
 
+  /**
+   * A completely new-to-us peep/whatever has come into existence.  The new
+   *  thing needs to be checked for eligible sets and update any live queries.
+   */
   namespaceItemAdded: function(namespace, name, item) {
   },
 
-  namespaceItemModified: function(namespace, name, item) {
+  /**
+   * Something we already knew about has changed.  This may affect its
+   *  eligibility for live query sets and should notify all queries it already
+   *  is known to/being watched on.
+   */
+  namespaceItemModified: function(namespace, name, item,
+                                  changedAttr, newVal, oldVal) {
   },
+  /**
+   * Something known to us has been deleted from the system or otherwise should
+   *  now be treated as completely unknown to us.
+   */
   namespaceItemDeleted: function(namespace, name, item) {
   },
 
@@ -205,7 +244,7 @@ NotificationKing.prototype = {
   discardNamespaceQuery: function(namespace, name) {
   },
 
-
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 const NS_PEEPS = 'peeps';
@@ -235,6 +274,11 @@ function LocalStore(dbConn, keyring, _logger) {
   this._keyring = keyring;
   this._notif = new NotificationKing(this);
 
+  /**
+   * The set of root keys of pinned peeps.
+   */
+  this._pinnedPeepRootKeys = null;
+
   this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
   this._db.defineReorderableIndex(TBL_PEEP_DATA,
                                   IDX_PEEP_WRITE_INVOLVEMENT);
@@ -251,16 +295,28 @@ function LocalStore(dbConn, keyring, _logger) {
   this._db.defineReorderableIndex(TBL_CONV_DATA,
                                   IDX_CONV_PEEP_WRITE_INVOLVEMENT);
   this._db.defineReorderableIndex(TBL_CONV_DATA,
+                                  IDX_CONV_PEEP_RECIP_INVOLVEMENT);
+  this._db.defineReorderableIndex(TBL_CONV_DATA,
                                   IDX_CONV_PEEP_ANY_INVOLVEMENT);
+
+  this._bootstrap();
 }
 exports.LocalStore = LocalStore;
 LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
+  // Bootstrap
+  _bootstrap: function() {
+    // - load our list of pinned peeps by root key
+    // XXX actually load
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Replica API
 
-  _generateReplicaCryptoBlock: function(command, payload) {
+  _generateReplicaCryptoBlock: function(command, id, payload) {
     var block = {
       cmd: command,
+      id: id,
       when: Date.now(),
       data: payload
     };
@@ -274,9 +330,10 @@ LocalStore.prototype = {
     return JSON.stringify({nonce: nonce, sboxed: sboxed});
   },
 
-  _generateReplicaAuthBlock: function(command, payload) {
+  _generateReplicaAuthBlock: function(command, id, payload) {
     var block = {
       cmd: command,
+      id: id,
       when: Date.now(),
       data: payload
     };
@@ -327,18 +384,18 @@ LocalStore.prototype = {
     if (!(implCmdName in this)) {
       throw new Error("no command for '" + block.cmd + "'");
     }
-    return this[implCmdName](payload);
+    return this[implCmdName](id, payload);
   },
 
-  generateAndPerformReplicaCryptoBlock: function(command, payload) {
-    var serialized = this._generateReplicaCryptoBlock(command, payload);
-    this._performReplicaCommand(command, payload);
+  generateAndPerformReplicaCryptoBlock: function(command, id, payload) {
+    var serialized = this._generateReplicaCryptoBlock(command, id, payload);
+    this._performReplicaCommand(command, id, payload);
     return serialized;
   },
 
-  generateAndPerformReplicaAuthBlock: function(command, payload) {
-    var serialized = this._generateReplicaAuthBlock(command, payload);
-    this._performReplicaCommand(command, payload);
+  generateAndPerformReplicaAuthBlock: function(command, id, payload) {
+    var serialized = this._generateReplicaAuthBlock(command, id, payload);
+    this._performReplicaCommand(command, id, payload);
     return serialized;
   },
 
@@ -382,6 +439,70 @@ LocalStore.prototype = {
   subscribeToNewUnseenMessages: function() {
   },
 
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Index Updating
+  //
+  // We potentially maintain a lot of indices, and the code gets very dry,
+  //  so we centralize it.
+
+  /**
+   * Update conversation indices, both global and per-peep; this covers
+   *  write/recip/any and pinned permutations.  (Note that we don't
+   *  have per-peep pinned indices because the presumption is that filtering
+   *  will be cheap enough in that case.)
+   */
+  _updateConvIndices: function(convId, convPinned, authorRootKey, recipRootKeys,
+                               timestamp) {
+    var promises = [],
+        authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
+    // - global conversation list
+    promises.push(this._db.updateIndexValue(
+      TBL_CONV_DATA, IDX_ALL_CONVS, '', convId, timestamp));
+    // - global pinned conversation list
+    if (convPinned)
+      promises.push(this._db.updateIndexValue(
+        TBL_CONV_DATA, IDX_ALL_CONVS, PINNED, convId, timestamp));
+
+    // - per-peep write/any involvement for the author
+    promises.push(this._db.updateIndexValue(
+      TBL_CONV_DATA, IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
+      convId, timestamp));
+    promises.push(this._db.updateIndexValue(
+      TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
+      convId, timestamp));
+    // - per-peep (maybe recip)/any involvement for the recipients
+    for (var iRecip = 0; iRecip < recipRootKeys.length; iRecip++) {
+      var rootKey = recipRootKeys[iRecip];
+      // - boost any involvement
+      promises.push(this._db.updateIndexValue(
+        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT,
+        rootKey, convId, timestamp));
+      // - boost recip involvement
+      if (authorIsOurUser)
+        promises.push(this._db.updateIndexValue(
+          TBL_CONV_DATA, IDX_CONV_PEEP_RECIP_INVOLVEMENT,
+          rootKey, convId, timestamp));
+
+    }
+
+    return $Q.all(promises);
+  },
+
+  /**
+   * Update the peep indices; this covers write/recip/any and pinned
+   *  permutations.  The caller does not need to worry about knowing whether
+   *  people are pinned; we keep that information around and cached.
+   */
+  _updatePeepIndices: function(authorRootKey, recipRootKeys, timestamp) {
+    var promises = [];
+    // write/any involvement for the author
+    // (maybe) pinned variants
+    // (maybe recip)/any involvement for the recipients
+    // (maybe) pinned variants
+
+    return $Q.all(promises);
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Processing
@@ -510,16 +631,19 @@ LocalStore.prototype = {
 
     this._nameTrack(oident, inviterPubring);
 
-    // XXX we really want to be using the root key, I suspect
-    var inviteePeepId = fanoutEnv.invitee;
+    var inviteePubring =
+      $pubident.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+        oident.personSelfIdent);
+
+    var inviteeRootKey = inviteePubring.rootPublicKey;
 
     var writeCells = {};
-    // - add the invitee as an authorized participant
+    // - add the invitee as an authorized participant by their tell key
     writeCells["d:s" + fanoutEnv.invitee] = oident.personSelfIdent;
     // - add the join entry in the message sequence
     var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
     writeCells["d:m" + msgNum] =
-      JSON.stringify({type: 'join', id: inviteePeepId});
+      JSON.stringify({type: 'join', id: inviteeRootKey});
 
     // XXX update in-memory reps
     var timestamp = fanoutEnv.receivedAt;
@@ -529,11 +653,13 @@ LocalStore.prototype = {
       this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
       // - create peep conversation involvement index entry
       this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteePeepId,
+        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
         convMeta.id, timestamp),
       // - touch peep activity entry
       this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteePeepId, timestamp),
+        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteeRootKey, timestamp),
+      // - boost their involved conversation count
+      this._db.incrementCell(TBL_PEEP_DATA, inviteeRootKey, 'd:nconvs', 1),
       function() {
         self._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
       }
@@ -559,13 +685,16 @@ LocalStore.prototype = {
    * If this is a join notification, we will name-check the added person.
    */
   _proc_convMessage: function(convMeta, fanoutEnv, cells) {
-    var authorPeepId = fanoutEnv.sentBy;
-    var authorCellName = "d:s" + authorPeepId;
+    var authorTellKey = fanoutEnv.sentBy;
+    var authorCellName = "d:s" + authorTellKey;
     if (!cells.hasOwnProperty(authorCellName))
       throw new $taskerror.UnauthorizedUserDataLeakError();
     var authorPubring =
       $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
         cells[authorCellName]);
+    var authorRootKey = authorPubring.rootPublicKey;
+
+    var authorIsOurUser = (authorRootKEy === this._keyring.rootPublicKey);
 
     // - decrypt conversation envelope
     var convEnv = $msg_gen.assertGetConversationHumanMessageEnvelope(
@@ -577,40 +706,56 @@ LocalStore.prototype = {
                      fanoutEnv.receivedAt, authorPubring);
 
 
-
-    // - add the join entry in the message sequence
+    // - persist the message
     var writeCells = {};
     var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-    writeCells["d:m" + msgNum] = JSON.stringify({
+    var msgRec = {
       type: 'message',
-      authorId: authorPeepId,
+      authorId: authorRootKey,
       composedAt: convBody.composedAt,
       text: convBody.body
-    });
+    };
+    writeCells["d:m" + msgNum] = JSON.stringify(msgRec);
+
+    // - message notification
+    this._notif.trackNewishMessage(convMeta.id, msgNum, msgRec);
 
     var timestamp = fanoutEnv.receivedAt;
+
+    var promises = [
+      this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
+      // -- conversation indices
+      // - all conversation index
+      // - per-peep conversation indices
+    ];
+
+    // - all recipients stuff
+    var recipRootKeys = [];
+    for (var key in cells) {
+      if (!/^d:s/.test(key) || key === authorCellName)
+        continue;
+      // this must be the cell for one of the other recipients
+      var recipPubring =
+        $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(cells[key]);
+      recipRootKeys.push(recipPubring.rootPublicKey);
+    }
+
+    this._updateConvIndices(convMeta.id, authorRootKey, timestamp);
+
+    // - author is not us
+    if (!authorIsOurUser) {
+      // - peep indices
+      promises.push(this._db.maximizeIndexValue(
+        TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '',
+        authorRootKey, timestamp));
+      // - boost unread message count
+      promises.push(this._db.incrementCell(
+        TBL_PEEP_DATA, authorRootKey, 'd:nunread', authorIsOurUser ? 0 : 1));
+    }
 
     // XXX notifications
     var self = this;
     return $Q.join(
-      this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
-      // - all conversation index
-      this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_ALL_CONVS, '', convMeta.id, timestamp),
-      // - per-peep conversation indices
-      this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorPeepId,
-        convMeta.id, timestamp),
-      // (XXX recip involvement if our own user wrote this)
-      this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, authorPeepId,
-        convMeta.id, timestamp),
-      // - touch peep (activity) indices
-      this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '', authorPeepId,
-        timestamp),
-      this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', authorPeepId, timestamp),
       function() {
         self._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
       }
@@ -620,12 +765,10 @@ LocalStore.prototype = {
   /**
    * Our own meta-data about a conversation (pinned, etc.)
    */
-  /*
-  _cmd_setConversationMeta: function() {
+  _cmd_setConvMeta: function() {
     // -- update any subscribed queries on pinned
     // -- update any blurbs for this conversation
   },
-  */
 
   /**
    * Our user has composed a message to a conversation; track it for UI display
@@ -641,13 +784,35 @@ LocalStore.prototype = {
   // Peep Lookup
 
   /**
+   * Issue a live query on a (sub)set of peeps.  We care about changes to the
+   *  peeps in the set after we return it, plus changes to the membership of
+   *  the set.
+   *
    * @args[
    *   @param[by @oneof['recency' 'alphabet']]
    *   @param[filter @oneof[null 'pinned']]
    * ]
    */
   queryAndWatchPeepBlurbs: function(by, filter) {
-
+    var idx;
+    switch (by) {
+      case 'recency':
+        idx = IDX_PEEP_ANY_INVOLVEMENT;
+        break;
+      default:
+        throw new Error("Unsupported ordering: " + by);
+    }
+    return when(this._db.scanIndex(TBL_PEEP_DATA, idx, '',
+                                   null, null, null, null, null, null),
+      function(rootKeys) {
+        var promises = [];
+        for (var iKey = 0; iKey < rootKeys.length; iKey++) {
+          var rootKey = rootKeys[iKey];
+          promises.push();
+        }
+      }
+      // rejection pass-through is desired
+      );
   },
 
   loadAndWatchPeepBlurb: function(rootKey) {
@@ -671,13 +836,15 @@ LocalStore.prototype = {
    *   are connected.  Here's everything you know about him now..."'.
    * }
    */
-  _cmd_addContact: function(data) {
+  _cmd_addContact: function(peepRootKey, oident) {
     var now = Date.now();
-    var peepRootKey = data.rootKey;
 
     // -- persist
     this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
-      'd:oident': data.oident,
+      'd:oident': oident,
+      'd:meta': '{}',
+      'd:nunread': 0,
+      'd:nconvs': 0,
     });
     // -- bump indices
     this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT,
@@ -687,13 +854,16 @@ LocalStore.prototype = {
 
     // -- notify peep queries
     this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
-                                   {oident: data.oident});
+                                   {oident: oident});
   },
 
   /**
    * Set some meta-data about a contact in our address book (pinned, etc.)
    */
-  _cmd_setContactMeta: function() {
+  _cmd_metaContact: function(peepRootKey, meta) {
+    this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
+      'd:meta': JSON.stringify(meta),
+    });
     // -- persist
     // -- notify affected queries
     // -- notify subscribed blurbs

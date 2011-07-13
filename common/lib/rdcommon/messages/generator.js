@@ -153,8 +153,6 @@
  *   A human message to a conversation being relayed to the fan-out server.
  * }
  *
- * @typedef[Conv
- *
  * @typedef[ConvAddPayload @dict[
  *   @key[envelopeKey]{
  *     The user's envelope key for encrypting fanout messages to the user (so
