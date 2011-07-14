@@ -139,6 +139,7 @@ ModaBridge.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Queries
+
   queryPeeps: function(query) {
     var name = this._nextName++;
     var liveset = new LiveOrderedSet(name, query);
@@ -147,8 +148,31 @@ ModaBridge.prototype = {
     return liveset;
   },
 
+  queryPeepConversations: function(peep, query) {
+  },
+
+  queryConversations: function(query) {
+  },
+
+  killQuery: function(liveSet) {
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Actions
+
+  /**
+   * Connect to a new person using their self-ident blob.  This is being added
+   *  for testing reasons right now, but theoretically this might happen on
+   *  a desktop via drag-n-drop.
+   *
+   * Does not return anything because the connection process 
+   */
+  connectToPeepUsingSelfIdent: function(selfIdentBlob, localPoco) {
+
+  },
+
+  connectToPeepUsingEmail: function(email, optionalMessage) {
+  },
 
   /**
    * @args[
@@ -166,6 +190,17 @@ ModaBridge.prototype = {
     };
     this._send('createConversation', null, outArgs);
     // XXX ideally we would want to return a blurb...
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Global Notification Requests
+
+  /**
+   * @args[
+   *   @param[listenerMap @dictof["event name" Function]]
+   * ]
+   */
+  on: function(listenerMap) {
   },
 
   //////////////////////////////////////////////////////////////////////////////

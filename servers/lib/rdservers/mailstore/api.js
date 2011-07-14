@@ -86,6 +86,12 @@ MailstoreChooserApi.prototype = {
     return this.procRegistry.convMessageForUser(stransitEnv, otherServerKey);
   },
 
+  friendRequestForUser: function(innerEnv, senderKey, nonce, otherServerKey,
+                                 receivedAt) {
+    return this.procRegistry.friendRequestForUser(
+             innerEnv, senderKey, nonce, otherServerKey, receivedAt);
+  },
+
   messageForUser: function() {
     // XXX SEE EXCEPTION BELOW ME
     throw new Error("XXX NOT BLOODY IMPLEMENTED");

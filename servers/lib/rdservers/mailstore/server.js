@@ -357,6 +357,70 @@ ClientServicingConnection.prototype = {
   // Contact Mutation
 
   /**
+   * Request/approve the establishment of a contact relationship using
+   *  webfinger.  The primary issue in contact establishment is making sure we
+   *  know when both parties have agreed to be friends.  This is important
+   *  because our UX does not want to deal with the pre-friend limbo state and
+   *  so we have to know when success happens.  One pleasant side-effect of this
+   *  decision is that it does allow our protocol to require the client to be
+   *  involved in the process, allowing signatures to be fully verified.
+   *
+   * The general flow goes like this:
+   *
+   * - The client somehow gets the friendee's self-ident (possibly using
+   *    webfinger).
+   * - The client generates a friend request by composing a PS message to the
+   *    friendee's transit server that identifies itself as a friend request.
+   *    It contains a body-boxed message that contains a copy of the sender's
+   *    self-ident.
+   * - The client also generates a replica block to be released once the
+   *    friending process completes.
+   * - The client gives the mailstore the friend request message, the replica
+   *    block, and the root and tell keys of the friendee.
+   * - The mailstore verifies it does not already have a friend request on file
+   *    from the friendee.  If it does, it sends the message and jumps to the
+   *    success case.
+   * - The mailstore files the pending request.
+   * - Otherwise it asks the mailsender to send the request.
+   *
+   * - The mailsender contacts the recipient maildrop, tries to pass off the
+   *    request.  XXX This is the most vulnerable part of the system, and will
+   *    likely need to grow some form of proof-of-work/token bucket/whatever
+   *    system for the initial cases.
+   *
+   * - The mailstore receives the request.
+   * - The mailstore checks if it has its own pending request.  If it does, it
+   *    declares success and releases the replica block to the clients. (Note:
+   *    there is an assumption that our outgoing request has been or will
+   *    eventually be received, leading to convergence.  We may need to require
+   *    the protocol to show proof of round-tripped information, such as
+   *    propagation of a nonce value in roundtrip fashion.)
+   * - Since there is not a pending request, place the request in the
+   *    appropriate storage for delivery/perusal by the client.
+   * - Once the client receives the request, it is able to then issue a request
+   *    of its own, issue a ban request, or leave the request around as
+   *    something that can be acknowledged in the future.
+   *
+   * General attack goals and models:
+   * - Spamming by issuing friend requests with annoying requests.
+   *   - P: Continually create new identities on trusted servers.
+   *     - S: Provide feedback of bad actors so the server can rectify.
+   *     - S: Penalize the server for not vetting its users sufficiently.
+   *     - S: Require proof-of-work with upward-adjustable cost.
+   *     - S: Allow requirement of FOAF-type vouchers.
+   *     - S: Allow requirement of verification 
+   *   - P: Continually create new server keys with new identities, possibly
+   *      astroturfing them into looking good by having sock-puppets on a
+   *      trusted server friend made-up users on the new rogue server.
+   *     - S: Proof-of-work requirements.
+   *     - S: Penalize IP addresses/subnets.
+   * - Attempt to impede "good" friend requests by using spam behavior.
+   * - Denial of service attack.
+   */
+  _msg_root_reqContact: function(msg) {
+  },
+
+  /**
    * Add a new contact, someday with related-metadata for prioritization, etc.
    *
    * This affects the following roles idempotently like so:

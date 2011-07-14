@@ -113,6 +113,16 @@ var TestClientActorMixins = {
     self._eClientConn = null;
     self._eServerConn = null;
 
+    /** Dynamic list of known moda actors. */
+    self._modaActors = [];
+    /** Setup-time list of known moda actors. */
+    self._staticModaActors = [];
+
+    /**
+     * @field[@dictof[name OtherPersonIdentBlob]]{
+     *   Dynamic (only known/updated during steps) known peeps map.
+     * }
+     */
     self._peepsByName = {};
     self.T.convenienceSetup(self._eRawClient, 'creates identity',
         function() {
@@ -283,7 +293,6 @@ var TestClientActorMixins = {
     var self = this;
     return this.T.convenienceSetup(self, 'add contact of', other, function() {
       self.addContact(other);
-      //focal._usingServer.expect_clientAddedContact(focal, other);
     });
   },
 

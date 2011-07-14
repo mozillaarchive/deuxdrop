@@ -1,0 +1,16 @@
+#lang jstut/interactive
+
+Our unit tests resemble automation scripts with a curious lack of test
+assertions.  The reason for this is that we use helper logic to perform most of
+the actions in the tests to avoid proliferating testing boilerplate.  We put
+much of the checking logic in with the action logic since no code knows better
+what checks need to be performed than the code that performed the actions.
+
+Indeed, in many cases knowing when the operation completes is the same as
+knowing that the operation succeeded.  Having said that, we frequently will go a
+step beyond to perform additional state checking.  It is believed that the
+benefit of detecting subtle state corruption outweighs the additional test
+runtime and result storage cost.  One major benefit is that it makes it very
+simple for us to implement fuzzing-esque tests where we perform a series of
+pseudo-random operations over long durations to attempt to detect bugs that
+only arise in complex situations.

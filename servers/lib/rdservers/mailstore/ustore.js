@@ -65,6 +65,17 @@ const IDX_CONV_PEEP_WRITE_INVOLVEMENT = "store:idxPeepConvWrite";
 const IDX_CONV_PEEP_ANY_INVOLVEMENT = "store:idxPeepConvAny";
 
 
+const TBL_REQUESTS_IN = 'store:userInRequests';
+
+/**
+ * Lexicographically pad out a timestamp for use in a row.
+ */
+function lexipadTS(timestamp) {
+  // no padding required for stuff from now well into the future
+  var s = "" + timestamp;
+  return s;
+}
+
 exports.initializeUserTable = function(dbConn) {
   dbConn.defineHbaseTable(TBL_CONTACTS, ["d"]);
 
@@ -80,6 +91,8 @@ exports.initializeUserTable = function(dbConn) {
                                 IDX_CONV_PEEP_WRITE_INVOLVEMENT);
   dbConn.defineReorderableIndex(TBL_CONVERSATIONS,
                                 IDX_CONV_PEEP_ANY_INVOLVEMENT);
+
+  dbConn.defineHbaseTable(TBL_REQUESTS_IN, ["d"]);
 
   dbConn.defineQueueTable(TBQ_CLIENT_REPLICAS);
 };
@@ -144,6 +157,21 @@ UserBehalfDataStore.prototype = {
     return this._db.putCells(TBL_CONTACTS,
                              this._userRowBit + contactRootKey,
                              {'d:metaBlock': replicaMetaBlock});
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Contact Requests
+
+  putIncomingContactRequest: function(receivedAt, tellKey, reqData) {
+    var cells = {};
+    cells['d:' + tellKey] = reqData;
+    return this._db.putCells(TBL_REQUESTS_IN,
+                             this._userRowBit + lexipadTS(receivedAt),
+                             cells);
+  },
+
+  delIncomingContactRequest: function(receivedAt, tellKey) {
+    // XXX
   },
 
   //////////////////////////////////////////////////////////////////////////////

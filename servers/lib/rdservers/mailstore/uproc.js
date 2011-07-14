@@ -123,6 +123,11 @@ UserMessageProcessor.prototype = {
     }
   },
 
+  friendRequestForUser: function(innerEnv, senderKey, nonce, otherServerKey,
+                                 receivedAt) {
+
+  },
+
   /**
    * Enqueue the given replica block for all clients and notify connected
    *  clients so they can immediately process.
@@ -191,6 +196,19 @@ UserProcessorRegistry.prototype = {
     return when(this._getUserMessageProcessorUsingTellKey(stransitEnv.name),
                 function(uproc) {
       return uproc.convMessageForUser(stransitEnv, otherServerKey);
+    });
+  },
+
+
+  /**
+   * Receive a friend request, queueing it for transmission to the client.
+   */
+  friendRequestForUser: function(innerEnv, senderKey, nonce, otherServerKey,
+                                 receivedAt) {
+    return when(this._getUserMessageProcessorUsingTellKey(stransitEnv.name),
+                function(uproc) {
+      return uproc.friendRequestForUser(innerEnv, senderKey, nonce,
+                                        otherServerKey, receivedAt);
     });
   },
 };

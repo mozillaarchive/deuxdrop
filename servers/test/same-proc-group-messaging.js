@@ -59,19 +59,18 @@ var TD = exports.TD = $tc.defineTestsFor($module, null,
 TD.commonCase('group messaging upgrade from one-on-one', function(T) {
   T.group('setup');
 
-  // clients are test helper entities that have convenience functions.
   var client_a = T.actor('testClient', 'A'),
       client_b = T.actor('testClient', 'B'),
       client_c = T.actor('testClient', 'C');
-  // servers have no helpers because they never originate actions.
+
   var serverOpts = {roles: ['auth', 'signup', 'drop', 'sender', 'store',
                             'fanout']};
   var server_x = T.actor('testServer', 'X', serverOpts),
       server_y = T.actor('testServer', 'Y', serverOpts),
       server_z = T.actor('testServer', 'Z', serverOpts);
   // (all of the above entities have their own initialization steps)
-  // the messages in play...
 
+  // the messages in play...
   var conv = T.thing('conversation', 'conv'),
       msg_a1 = T.thing('message', 'a1'),
       msg_b1 = T.thing('message', 'b1'),

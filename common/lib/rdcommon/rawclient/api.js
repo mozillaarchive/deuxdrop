@@ -546,9 +546,19 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Peep Relationships
 
-  connectToPeepUsingEmail: function(email, optionalMessage) {
+  /**
+   * Initiate the connection process using webfinger.  Steps from our
+   *  perspective look like:
+   *
+   * - We perform a webfinger lookup on the given address, netting us the XRD.
+   *    We fail if the lookup fails, there is no XRD, or the XRD does not
+   *    name a deuxdrop self-ident.
+   * - We fetch the deuxdrop self-ident.
+   * - We use the self-ident connect mechanism.
+   */
+  connectToPeepUsingWebfinger: function(email, optionalMessage) {
   },
-  rejectPeepUsingEmail: function(email, reportAs) {
+  rejectPeepUsingWebfinger: function(email, reportAs) {
   },
 
   connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco) {

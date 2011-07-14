@@ -748,6 +748,63 @@ PickupConnection.prototype = {
 };
 */
 
+/**
+ * Connection request to establish friendship.  This is intended to cover the
+ *  the base case of two server who don't already trust each other, though
+ *  we want logic that provides benefit to servers that already trust each
+ *  other.  Ideally that could be handled by the delivery connection mechanism
+ *  once that starts being more batchy/persistent.
+ */
+function ReceiveEstablishConnection(conn) {
+  this.conn = conn;
+}
+ReceiveEstablishConnection.prototype = {
+  INITIAL_STATE: 'root',
+
+  /**
+   * Receive/process a transit message from a user directed to us for
+   *  delivery to our user or our conversation daemon.
+   */
+  _msg_root_establish: function(msg) {
+    // -- try and open the inner envelope.
+    // (catch exceptions from the decryption; bad messages can happen)
+    try {
+      var self = this, config = this.conn.config;
+      var receivedAt = Date.now();
+      var outerEnvelope = msg.msg;
+      var innerEnvelope = JSON.parse(
+        config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
+                                   outerEnvelope.nonce,
+                                   outerEnvelope.senderKey));
+      return when(config.storeApi.friendRequestForUser(
+                    innerEnvelope, outerEnvelope.senderKey,
+                    outerEnvelope.nonce, this.conn.clientPublicKey,
+                    receivedAt),
+        function yeaback() {
+          self.conn.writeMessage({type: "ack"});
+          return 'root';
+        },
+        function errback() {
+          // XXX bad actor analysis feeding
+          self.conn.writeMessage({type: "bad"});
+          // the bad message is notable but non-fatal
+          return 'root';
+        });
+    }
+    catch(ex) {
+      // XXX log that a bad message happened
+      // XXX note bad actor evidence
+      // Tell the other server it fed us something gibberishy so it can
+      //  detect a broken or bad actor in its midst.
+      this.conn.writeMessage({
+        type: "bad",
+      });
+      return 'root';
+    }
+  },
+};
+
+
 exports.makeServerDef = function(serverConfig) {
   return {
     endpoints: {
@@ -758,6 +815,15 @@ exports.makeServerDef = function(serverConfig) {
           // we are just checking that they are allowed to talk to us at all
           return serverConfig.authApi.serverCheckServerAuth(clientKey);
         }
+      },
+      'drop/establish': {
+        implClass: ReceiveEstablishConnection,
+        serverConfig: serverConfig,
+        authVerifier: function(endpoint, clientKey) {
+          // XXX we are willing to talk to anyone, although we should have
+          //  some anti-DoS logic in place.
+          return true;
+        },
       },
     },
   };
