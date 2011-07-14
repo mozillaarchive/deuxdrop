@@ -230,6 +230,10 @@ a.item.block {
   line-height: 20px;
 }
 
+.compose input[type="text"] {
+  width: 100%;
+}
+
 /* START chat bubble styles */
 
   .bubble {

@@ -446,8 +446,6 @@ define(function (require) {
 
       // Wait for messages before showing the messages.
       conversation.withMessages(function (conv) {
-        var scroller;
-
         // Clear out old messages
         messagesNode.innerHTML = '';
 
@@ -621,6 +619,9 @@ define(function (require) {
         // after transition has happened.
         setTimeout(function () {
           node.parentNode.removeChild(node);
+
+          cards.adjustCardSizes();
+
           adjustNewScrollerWidth();
 
           // Adjust the new conversation list scroll to be back at zero,
@@ -628,17 +629,8 @@ define(function (require) {
           if (newMessageIScroll) {
             newMessageIScroll.scrollTo(0, 0);
           }
-
-          cards.adjustCardSizes();
         }, 1000);
 
-      })
-
-      // Handle submitting the text in the text field on enter key
-      .delegate('form.compose textarea', 'keypress', function (evt) {
-        if (evt.keyCode === 13) {
-          $(evt.target).parent('form').trigger('submit');
-        }
       });
 
     // Periodically update the timestamps shown in the page, every minute.
