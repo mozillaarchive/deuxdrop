@@ -271,8 +271,6 @@ actions = {
     var userId = client._deuxUserId;
 
     redis.smembers('chatPerms:' + userId, function (err, list) {
-      var multi;
-
       if (list) {
         list = multiBulkToStringArray(list);
         list.sort(peepSort);
@@ -320,6 +318,27 @@ actions = {
         getPeep(peepId, data, client);
       }
     });
+
+    // Let the peep know they were added.
+    redis.hexists(peepId + '-unseen', 'addedYou-' + userId, function (err, exists) {
+      if (!exists) {
+        redis.hset(peepId + '-unseen', 'addedYou-' + userId, JSON.stringify({
+          id: userId,
+          unseenId: 'addedYou-' + userId
+        }));
+      }
+    });
+
+    // Send a live event to the peep if they are online.
+    pushToClients(peepId, JSON.stringify({
+      action: 'addedYou',
+      id: userId,
+      unseenId: 'addedYou-' + userId
+    }));
+
+    // Add user to the peep's addedYou list for future reference, even after
+    // the unseen notifications have been cleared.
+    redis.sadd('addedYou:' + peepId, userId);
   },
 
   'removePeep': function (data, client) {
@@ -523,6 +542,17 @@ actions = {
 
     // Update the 'seen' metadata for the conversation.
     redis.hset(convId + 'seen', userId, messageId);
+  },
+
+  'markBulkSeen': function (data, client) {
+    var ids = data.ids,
+        userId = client._deuxUserId;
+
+    if (ids && ids.length) {
+      ids.forEach(function (id) {
+        redis.hdel(userId + '-unseen', id);
+      });
+    }
   },
 
   'listUnseen': function (data, client) {

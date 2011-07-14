@@ -226,6 +226,10 @@ define(function (require, exports) {
 
     'chatPermsAdd': function (data) {
       moda.trigger('chatPermsAdd', data.id);
+    },
+
+    'addedYou': function (data) {
+      moda.trigger('addedYou', data);
     }
   };
 
@@ -335,4 +339,5 @@ define(function (require, exports) {
   makeRequestOnlyApi('sendMessage', ['message']);
 
   makeRequestOnlyApi('messageSeen', ['convId', 'messageId']);
+  makeRequestOnlyApi('markBulkSeen', ['ids']);
 });

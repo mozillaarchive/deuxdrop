@@ -45,7 +45,9 @@
         <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
           <div class="scroller">
             <a class="item block vbox" href="#peeps"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">People</span></a>
-            <a class="item block" href="#compose"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">Compose</span></a>
+            <!-- a class="item block" href="#compose"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">Compose</span></a -->
+            <a class="item block" href="#notifications"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div>
+              <span class="tileName notifications">Notifications</span><span class="notificationCount hidden"></span></a>
             <a class="item block" data-nonav="nonav" href="#signOut"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">Sign Out</span></a>
             <div class="newConversationNotifications" data-childclass="newConversation">
               <div class="newConversationScroller">
@@ -55,6 +57,10 @@
         </div>
         <div data-cardid="peeps" title="People" class="card">
           <div class="scroller" data-childclass="personLink">
+          </div>
+        </div>
+        <div data-cardid="notifications" title="Notifications" class="card">
+          <div class="scroller" data-childaddedyou="personLink">
           </div>
         </div>
         <div data-cardid="listUsersForAddPeep" title="Add Peep" class="card">

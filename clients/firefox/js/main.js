@@ -59,6 +59,7 @@ define(function (require) {
 
       commonNodes = {},
       chatPerms = {},
+      notifications = [],
       peeps, update, messageCloneNode, notifyDom, nodelessActions,
       newMessageIScroll, newConversationNodeWidth;
 
@@ -280,6 +281,45 @@ define(function (require) {
       });
     },
 
+    'notifications': function (data, dom) {
+      var dataChildNode = dom.find('.scroller')[0],
+          dataChildren = {},
+          serverIds = [],
+          frag = document.createDocumentFragment();
+
+      // Cycle through the notifications and show them.
+      notifications.forEach(function (notification) {
+        var type = notification.type,
+            data = notification.data,
+            nodeClassName = dataChildren[type] ||
+                  (dataChildren[type] = dataChildNode.getAttribute('data-child' +
+                                                                   type.toLowerCase())),
+            node = commonNodes[nodeClassName].cloneNode(true);
+
+        if (type === 'addedYou') {
+          updateDom($(node), data.peep);
+          node.href += '?id=' + encodeURIComponent(data.peep.id);
+          node.appendChild(document.createTextNode(' added you'));
+        }
+
+        frag.appendChild(node);
+
+        //
+        // Hold on to the IDs to give to the server to mark them seen.
+        serverIds.push(data.unseenId);
+      });
+
+      // Show all the notifications.
+      dataChildNode.appendChild(frag);
+
+      // Let the server know these notifications have been seen.
+      moda.markBulkSeen(serverIds);
+
+      // Clear the notification UI
+      notifyDom.hide();
+      $('.notificationCount').addClass('hidden').text('');
+    },
+
     'peeps': function (data, dom) {
       // Get the node to use for each peep.
       var clonable = getChildCloneNode(dom[0]);
@@ -494,7 +534,7 @@ define(function (require) {
       // now fetch unseen data.
       moda.listUnseen();
 
-      // Also get list of people we can chat with.
+      // Get list of people we can chat with.
       moda.chatPerms(function (ids) {
         if (ids && ids.length) {
           ids.forEach(function (id) {
@@ -512,6 +552,22 @@ define(function (require) {
       // User signed out/no longer valid.
       // Clear out all the cards and go back to start
       location.reload();
+    },
+
+    'addedYou': function (data) {
+      // New notifications go first.
+      notifications.unshift({
+        type: 'addedYou',
+        data: data
+      });
+
+      // Update display of notifications.
+      $('.notificationCount').removeClass('hidden').text(notifications.length);
+
+      // Activate new notification, but only if not already on start page.
+      if (cards.currentCard().attr('data-cardid') !== 'start') {
+        notifyDom.show();
+      }
     },
 
     'message': function (message) {

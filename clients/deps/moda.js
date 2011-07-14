@@ -426,6 +426,21 @@ moda.on({
       if (conv && conv.messages) {
         conv.messages.push(data);
       }
+    } else if (name === 'addedYou') {
+      peep = peepCache[data.id];
+      if (!peep) {
+        // Need to fetch the peep and bail out.
+        transport.peep(data.id, function (peepData) {
+          var peep = new Peep(peepData);
+
+          //Re-trigger the event.
+          moda.trigger(name, data);
+        });
+
+        // Bail on this trigger, wait for peep response to re-trigger.
+        return;
+      }
+      data.peep = peep;
     } else if (name === 'me') {
       me = new Peep(data);
     }
@@ -463,7 +478,11 @@ moda.on({
 
   moda.chatPerms = function (callback) {
     transport.chatPerms(callback);
-  }
+  };
+
+  moda.markBulkSeen = function (ids) {
+    transport.markBulkSeen(ids);
+  };
 
   moda.conversation = function (query) {
     // only support by ID filtering
@@ -497,12 +516,18 @@ moda.on({
       // but passing it through the trigger machinery since it
       // has logic to make sure the peep object is loaded for
       // the message senders.
-      var prop, message;
+      var prop, message, data;
 
       for (prop in unseen) {
         if (unseen.hasOwnProperty(prop)) {
-          message = unseen[prop];
-          moda.trigger('message', message);
+          data = unseen[prop];
+
+          if (prop.indexOf('addedYou-') !== -1) {
+            moda.trigger('addedYou', data);
+          } else {
+            // A message from a conversation.
+            moda.trigger('message', data);
+          }
         }
       }
     });

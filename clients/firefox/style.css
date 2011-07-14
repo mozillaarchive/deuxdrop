@@ -192,6 +192,23 @@ a.item.block {
   height: 24px;
 }
 
+.tileName.notifications {
+  font-size: smaller;
+}
+
+.notificationCount {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background-color: red;
+  color: white;
+  padding: 0 2px;
+
+  -webkit-border-radius: 5px;
+     -moz-border-radius: 5px;
+          border-radius: 5px;
+}
+
 .peepInfoPic {
   width: 48px;
   height: 48px;
