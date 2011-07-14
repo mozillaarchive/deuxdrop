@@ -222,6 +222,10 @@ define(function (require, exports) {
 
     'message': function (data) {
       moda.trigger('message', data.message);
+    },
+
+    'chatPermsAdd': function (data) {
+      moda.trigger('chatPermsAdd', data.id);
     }
   };
 
@@ -320,6 +324,8 @@ define(function (require, exports) {
   makePerCallPassThroughApi('users', ['query'], 'items');
   makePerCallPassThroughApi('peep', ['peepId'], 'peep');
   makePerCallPassThroughApi('addPeep', ['peepId'], 'peep');
+  makePerCallPassThroughApi('chatPerms', [], 'ids');
+
   makePerCallPassThroughApi('loadConversation', ['convId'], 'details');
   makePerCallPassThroughApi('getPeepConversations', ['peepId'], 'conversations');
 

@@ -461,6 +461,10 @@ moda.on({
     return new Users(query, on);
   };
 
+  moda.chatPerms = function (callback) {
+    transport.chatPerms(callback);
+  }
+
   moda.conversation = function (query) {
     // only support by ID filtering
     var conv;

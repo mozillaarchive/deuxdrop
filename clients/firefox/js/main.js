@@ -58,6 +58,7 @@ define(function (require) {
       IScroll = require('iscroll'),
 
       commonNodes = {},
+      chatPerms = {},
       peeps, update, messageCloneNode, notifyDom, nodelessActions,
       newMessageIScroll, newConversationNodeWidth;
 
@@ -403,6 +404,17 @@ define(function (require) {
         .find('[name="from"]')
           .val(moda.me().id);
 
+      // If the user is not in the chat permission list, do not show
+      // the compose form.
+      if (!chatPerms[peepId]) {
+        dom
+          .find('.compose')
+            .addClass('hidden')
+            .end()
+          .find('.addToChatMessage')
+            .removeClass('hidden');
+      }
+
       // Fill in list of conversations.
       peep.getConversations(function (conversations) {
         conversations.forEach(function (conv) {
@@ -481,13 +493,24 @@ define(function (require) {
       // Once we get the "me" message, it means user is signed in,
       // now fetch unseen data.
       moda.listUnseen();
+
+      // Also get list of people we can chat with.
+      moda.chatPerms(function (ids) {
+        if (ids && ids.length) {
+          ids.forEach(function (id) {
+            chatPerms[id] = true;
+          });
+        }
+      });
+    },
+
+    'chatPermsAdd': function (id) {
+      chatPerms[id] = true;
     },
 
     'signedOut': function () {
       // User signed out/no longer valid.
       // Clear out all the cards and go back to start
-      // TODO handle better.
-      alert('got signed out');
       location.reload();
     },
 

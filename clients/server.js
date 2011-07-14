@@ -17,6 +17,7 @@ var http = require('http'),
     clients = {},
     convCache = {},
     redis = redisLib.createClient(),
+    defaultAudience = process.env.BROWSERID_AUDIENCE,
     server, actions, listener;
 
 function send(id, message) {
@@ -94,11 +95,24 @@ function sendSignInComplete(data, client, user) {
   });
 }
 
+function getPeep(peepId, data, client) {
+  // Get the peep ID and return it.
+  redis.multi().hgetall(peepId).exec(function (err, items) {
+    clientSend(client, data, {
+      action: 'addPeepResponse',
+      peep: items[0]
+    });
+  });
+}
+
 actions = {
 
   'signIn': function (data, client) {
     var assertion = data.assertion,
-        audience = data.audience,
+        //The audience value should be hard-coded in the server config
+        //should not rely on data from the client. However, it makes it
+        //difficult to test in dev. Allow for optional config.
+        audience = defaultAudience || data.audience,
         options, pic, req;
 
     // First check if we have saved data for the assertion.
@@ -130,7 +144,8 @@ actions = {
             if (responseData) {
               responseData = JSON.parse(responseData);
 
-              if (responseData.status === 'failure') {
+              if (responseData.status === 'failure' ||
+                  responseData.audience !== audience) {
                 sendSignInComplete(data, client, null);
               } else {
                 id = responseData.email;
@@ -252,24 +267,59 @@ actions = {
               });
   },
 
+  'chatPerms': function (data, client) {
+    var userId = client._deuxUserId;
+
+    redis.smembers('chatPerms:' + userId, function (err, list) {
+      var multi;
+
+      if (list) {
+        list = multiBulkToStringArray(list);
+        list.sort(peepSort);
+
+        clientSend(client, data, {
+          action: 'chatPermsResponse',
+          ids: list
+        });
+      } else {
+        clientSend(client, data, {
+          action: 'chatPermsResponse',
+          ids: []
+        });
+      }
+    });
+  },
+
   'addPeep': function (data, client) {
     var peepId = data.peepId,
-        userId = client._deuxUserId,
-        multi;
+        userId = client._deuxUserId;
 
     // Add the list to the data store
     redis.sadd('peeps:' + userId, peepId);
 
-    // Get the peep ID and return it.
-    multi = redis
-              .multi()
-              .hgetall(peepId)
-              .exec(function (err, items) {
-                clientSend(client, data, {
-                  action: 'addPeepResponse',
-                  peep: items[0]
-                });
-              });
+    // If the peep has also added you, then set up a chat connection.
+    redis.sismember('peeps:' + peepId, userId, function (err, isMember) {
+      if (isMember) {
+        // TODO: if one of these sadd()s fails, thing will get wonky.
+        redis.sadd('chatPerms:' + userId, peepId);
+        redis.sadd('chatPerms:' + peepId, userId);
+
+        // Send data about the peep.
+        getPeep(peepId, data, client);
+
+        // Push the updated chatPerm to peep and user.
+        pushToClients(userId, JSON.stringify({
+          action: 'chatPermsAdd',
+          id: peepId
+        }));
+        pushToClients(peepId, JSON.stringify({
+          action: 'chatPermsAdd',
+          id: userId
+        }));
+      } else {
+        getPeep(peepId, data, client);
+      }
+    });
   },
 
   'removePeep': function (data, client) {
@@ -521,7 +571,7 @@ server = http.createServer(function (req, res) {
 });
 
 server.listen(process.env.PORT || 8888);
-console.log('Server is running on port '+(process.env.PORT||8888));
+console.log('Server is running on port ' + (process.env.PORT || 8888));
 
 listener = io.listen(server, {
   transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
