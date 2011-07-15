@@ -160,6 +160,9 @@ been addressed; the conversation server will currently keep them forever.)
 
 @section{Crypto Keys}
 
+@signingKey[RootKey]
+@signingKey[LongtermKey]
+
 @boxingKey[ServerKey]
 
 @boxingKey[EnvelopeKey]
@@ -167,11 +170,13 @@ been addressed; the conversation server will currently keep them forever.)
 @boxingKey[TellKey]
 @signingKey[AnnounceKey]
 
+
+
 @section{Messages}
 
 @boxedMessage[PSTransitInnerEnvelope
   #:sender   PersonAgent   #:senderKey    TellKey
-  #:receiver PublicServer  #:recipientKey ServerKey
+  #:receiver Fanout  #:recipientKey ServerKey
 ]
 
 @message[PSTransitOuterEnvelope
@@ -181,3 +186,14 @@ been addressed; the conversation server will currently keep them forever.)
   @key[nonce BoxNonce]
   @key[innerEnvelope BoxedPSTransitInnerEnvelope]
 ]
+
+@boxedMessage[GenMailstoreEnvelope
+  #:sender PersonAgent #:senderKey TellKey
+  #:receiver Mailstore #:recipientKey EnvelopeKey
+]
+
+@boxedMessage[GenClientBody
+  #:sender PersonAgent #:senderKey TellKey
+  #:receiver Client #:recipientKey BodyKey
+]
+

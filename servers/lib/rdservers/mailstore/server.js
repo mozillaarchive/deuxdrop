@@ -44,7 +44,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/identities/pubident',
-    './ustore', // note: cannot include uproc; it uses us for gConnTracker...
+    './ustore',
     'exports'
   ],
   function(
@@ -124,14 +124,21 @@ UserConnectionsTracker.prototype = {
   },
 };
 
-// XXX XXX this needs to migrate to the server config!
-var gConnTracker = exports.gConnTracker = new UserConnectionsTracker();
-
 /**
  * Receives requests from the client and services them in a synchronous fashion.
  *  The client is allowed to send subsequent requests before we acknowledge
  *  the completion of a given request (up to the limit allowed by authconn)
  *  in order to effect pipelining.
+ * We don't have a strong rationale for doing this versus
+ *  letting it send an unbounded series of commands that we work off in a queue.
+ *  I think the initial idea was that many of the commands might have return
+ *  values with some combination of desire to make it harder to be a bad actor
+ *  through an inherently flow-controlled model.  It is turning out that return
+ *  values may not actually happen in any way that matters (aka: affecting
+ *  whether the client would send subsequent messages), and that the uproc
+ *  model means processing is ending up queue-processing anyways.  (And bad
+ *  actor fighting can mean we just bound how many messages can be crammed in
+ *  the queue.)
  *
  * Our security model (for the connection) is that:
  * - We don't worry about a bad actor pretending to be the client, we just worry
@@ -168,12 +175,15 @@ function ClientServicingConnection(conn, userEffigy) {
   this.conn = conn;
   this.config = conn.serverConfig;
   this.userEffigy = userEffigy;
-  // note: this is not the same instance as a `UserMessageProcessor` holds.
-  this.store = new $ustore.UserBehalfDataStore(userEffigy.rootPublicKey,
-                                               conn.serverConfig.db);
+
+  this.uproc =
+    this.config.mailstoreApi.procRegistry.getUserMessageProcessorUsingEffigy(
+      userEffigy);
+  this.store = this.uproc.store;
+
   this.clientPublicKey = this.conn.clientPublicKey;
 
-  gConnTracker.born(this, userEffigy);
+  this.config.userConnTracker.born(this, userEffigy);
 
   // start out backlogged until we get a deviceCheckin at least.
   this._replicaBacklog = true;
@@ -187,7 +197,7 @@ ClientServicingConnection.prototype = {
   INITIAL_STATE: 'init',
 
   __closed: function() {
-    gConnTracker.died(this, this.userEffigy);
+    this.config.userConnTracker.died(this, this.userEffigy);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -275,7 +285,8 @@ ClientServicingConnection.prototype = {
     // - notify any lives ones about the enqueueing
     var self = this;
     return when($Q.all(promises), function() {
-                  gConnTracker.notifyOthersOfReplicaBlock(self, block);
+                  self.config.userConnTracker..notifyOthersOfReplicaBlock(
+                    self, block);
                 });
   },
 
@@ -401,14 +412,14 @@ ClientServicingConnection.prototype = {
    *    of its own, issue a ban request, or leave the request around as
    *    something that can be acknowledged in the future.
    *
-   * General attack goals and models:
+   * General attack models:
    * - Spamming by issuing friend requests with annoying requests.
    *   - P: Continually create new identities on trusted servers.
    *     - S: Provide feedback of bad actors so the server can rectify.
    *     - S: Penalize the server for not vetting its users sufficiently.
    *     - S: Require proof-of-work with upward-adjustable cost.
    *     - S: Allow requirement of FOAF-type vouchers.
-   *     - S: Allow requirement of verification 
+   *     - S: Allow requirement of verification
    *   - P: Continually create new server keys with new identities, possibly
    *      astroturfing them into looking good by having sock-puppets on a
    *      trusted server friend made-up users on the new rogue server.
@@ -416,49 +427,17 @@ ClientServicingConnection.prototype = {
    *     - S: Penalize IP addresses/subnets.
    * - Attempt to impede "good" friend requests by using spam behavior.
    * - Denial of service attack.
-   */
-  _msg_root_reqContact: function(msg) {
-  },
-
-  /**
-   * Add a new contact, someday with related-metadata for prioritization, etc.
    *
    * This affects the following roles idempotently like so:
    * - mailstore: Adds the contact to our address book.
    * - maildrop: Adds an authorization for the user to contact us.
    *
    * @args[
-   *   @param[msg @dict[
-   *     @key[userRootKey]{
-   *       The root key of the user we are adding.
-   *     }
-   *     @key[userTellKey]{
-   *       The tell key of the user we are adding.
-   *     }
-   *     @key[serverSelfIdent]{
-   *       The server self-ident of the server we are
-   *     }
-   *     @key[replicaBlock ReplicaCryptoBlock]
-   *   ]]
+   *   @param[msg ClientRequestContact]
    * ]
    */
-  _msg_root_addContact: function(msg) {
-    // -
-    var serverKey =
-      $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(msg.serverSelfIdent);
-
-    return $Q.join(
-      this.store.newContact(msg.userRootKey, msg.replicaBlock),
-      // persist the data to our random-access store
-      // enqueue for other (existing) clients
-      this.sendReplicaBlockToOtherClients(msg.replicaBlock),
-      // perform maildrop/fanout authorization
-      this.config.dropApi.authorizeServerUserForContact(
-        this.userEffigy.rootPublicKey, serverKey, msg.userTellKey),
-      // ensure the sending layer knows how to talk to that user too
-      this.config.senderApi.setServerUrlUsingSelfIdent(msg.serverSelfIdent),
-      this._bound_ackAction
-    );
+  _msg_root_reqContact: function(msg) {
+    return when(this.uproc.issueContactRequest(msg), this._bound_ackAction);
   },
 
   /**
@@ -485,8 +464,9 @@ exports.ClientServicingConnection = ClientServicingConnection;
 
 exports.makeServerDef = function(serverConfig) {
   // initialize our db
-
   $ustore.initializeUserTable(serverConfig.db);
+
+  serverConfig.userConnTracker = new UserConnectionsTracker();
 
   return {
     endpoints: {

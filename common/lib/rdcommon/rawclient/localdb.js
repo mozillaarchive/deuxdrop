@@ -350,6 +350,7 @@ LocalStore.prototype = {
    * - crypted block issued by a client (trustworthy)
    * - authenticated block issued by a client (trustworthy)
    * - conversation data from the mailstore (needs validation of nougat)
+   * - connect/contact requests
    */
   consumeReplicaBlock: function(serialized) {
     // XXX temporarily add slack in whether we marshal it on the way down
@@ -358,6 +359,9 @@ LocalStore.prototype = {
         authed, block;
     if (mform.hasOwnProperty("fanmsg")) {
       return this._proc_fanmsg(mform);
+    }
+    else if(mform.hasOwnProperty("reqmsg")) {
+      return this._proc_reqmsg(mform);
     }
     else {
       if (mform.hasOwnProperty("nonce")) {
@@ -502,6 +506,13 @@ LocalStore.prototype = {
     // (maybe) pinned variants
 
     return $Q.all(promises);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Contact Request Processing
+
+  _proc_reqmsg: function(reqmsg) {
+
   },
 
   //////////////////////////////////////////////////////////////////////////////

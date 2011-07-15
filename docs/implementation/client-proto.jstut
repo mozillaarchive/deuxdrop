@@ -1,0 +1,32 @@
+#lang jstut/interactive
+
+This document explains the messages specific to client communication with
+the mailstore server.  While many of the federated protocol definitions are
+intentionally reused here, a federated implementation that requires all keys
+to be known to the server need not have a protocl that looks anything like
+the federated protocol or the protocol we use here.
+
+@message[GenClientMessage
+  #:sender PersonAgent
+  #:receiver Mailstore
+]
+
+@section{Replica Blocks}
+
+@secretboxedMessage[ReplicaCryptoBlock]
+@authedMessage[ReplicaAuthBlock]
+
+@section{Friending}
+
+@message[ClientRequestContact #:extends GenClientMessage
+  @key[userRootKey RootKey]
+  @key[userTellKey TellKey]
+  @key[serverSelfIdent SignedServerSelfIdent]
+  @key[toRequestee BoxedContactRequestTransit]
+  @key[replicaBlock ReplicaCryptoBlock]
+]
+
+@section{Contacts}
+
+@section{Conversations}
+

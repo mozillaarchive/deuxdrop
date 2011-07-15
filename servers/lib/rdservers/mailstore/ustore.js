@@ -65,7 +65,9 @@ const IDX_CONV_PEEP_WRITE_INVOLVEMENT = "store:idxPeepConvWrite";
 const IDX_CONV_PEEP_ANY_INVOLVEMENT = "store:idxPeepConvAny";
 
 
-const TBL_REQUESTS_IN = 'store:userInRequests';
+const TBL_REQUESTS_IN = 'store:contactRequestsIn';
+const TBL_REQUESTS_SUPPRESS = 'store:contactRequestsSuppress';
+const TBL_REQUESTS_PENDING = 'store:contactRequestsPending';
 
 /**
  * Lexicographically pad out a timestamp for use in a row.
@@ -161,17 +163,105 @@ UserBehalfDataStore.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Contact Requests
+  //
+  // We use three tables:
+  // - Incoming requests, organized like a timeline.
+  // - Suppressed requests, organized as a lookup.  This is the mechanism by
+  //    which we avoid a root key sending us multiple requests.  This is also
+  //    the mechanism by which we can blacklist an entire server.
+  // - Pending outgoing requests, organized as a map that can be used as a
+  //    lookup and also processed to derive a timeline of requests.  (The
+  //    presumption is that our user will not have thousands of outstanding
+  //    requests, and if they do, we should probably be cutting them off before
+  //    that as presumption of bad actorness.)
+  //
+  // Incoming: [timestamp]
+  // - d:TELLKEY
+  //
+  // Suppress: [other user tell key/server longterm box key]
+  // - d:why - timestamp of still existing request, 'r'ejected, 'b'anned
+  //
+  // Pending: [other user/server key] (bloom-able row id)
+  // - d:d - It's a blob, ask the next layer up.
 
   putIncomingContactRequest: function(receivedAt, tellKey, reqData) {
     var cells = {};
-    cells['d:' + tellKey] = reqData;
-    return this._db.putCells(TBL_REQUESTS_IN,
-                             this._userRowBit + lexipadTS(receivedAt),
-                             cells);
+    cells['d:' + tellKey] = JSON.stringify(reqData);
+    var lexipadded = lexipadTS(receivedAt);
+    return $Q.wait(
+      this._db.putCells(TBL_REQUESTS_IN,
+                        this._userRowBit + lexipadded,
+                        cells),
+      this._db.putCells(TBL_REQUESTS_SUPPRESS,
+                        this._userRowBit + tellKey,
+                        {'d:why': lexipadded})
+    );
   },
 
-  delIncomingContactRequest: function(receivedAt, tellKey) {
-    // XXX
+  getIncomingContactRequest: function(tellKey) {
+    var self = this;
+    return when(this._db.getRowCell(TBL_REQUESTS_SUPPRESS,
+                                    this._userRowBit + tellKey,
+                                    'd:why'),
+      function(val) {
+        if (!val || val.length === 1)
+          return false;
+        return self._db.getRowCellJson(TBL_REQUESTS_IN,
+                                       self._userRowBit + val,
+                                       'd:' + tellKey);
+      });
+  },
+
+  /**
+   * Reject a contact request, deleting it from the incoming request table and
+   *  specifically marking the suppression table with a rejection notice.
+   */
+  rejectContactRequest: function(receivedAt, tellKey) {
+    return $Q.wait(
+      this._db.deleteRowCell(TBL_REQUESTS_IN,
+                             this._userRowBit + lexipadTS(receivedAt),
+                             'd:' + tellKey),
+      this._db.putCells(TBL_REQUESTS_SUPPRESS,
+                        this._userRowBit + tellKey,
+                        {'d:why': 'r'})
+    );
+  },
+
+  banServerForContacts: function(serverBoxKey) {
+    return this._db.putCells(TBL_REQUESTS_SUPPRESS,
+                             this._userRowBit + serverBoxKey,
+                             {'d:why': 'r'});
+  },
+
+  /**
+   * @return[suppressed @oneof[String null]]{
+   *   If not suppressed, null.  If suppressed, the most specific reason for
+   *   suppression.
+   * }
+   */
+  checkForSuppressedContactRequest: function(userTellKey, serverBoxKey) {
+    return $Q.join(
+      this._db.getRowCell(TBL_REQUESTS_SUPPRESS,
+                          this._userRowBit + serverBoxKey,
+                          'd:why'),
+      this._db.getRowCell(TBL_REQUESTS_SUPPRESS,
+                          this._userRotBit + userTellKey,
+                          'd:why'),
+      function(serverSuppress, userSuppress) {
+        return userSuppress || serverSuppress || null;
+      });
+  },
+
+  putOutgoingContactRequest: function(tellKey, blobObj) {
+    return this._db.putCells(TBL_REQUESTS_PENDING,
+                             this._userRowBit + tellKey,
+                             {'d:d': JSON.stringify(blob)});
+  },
+
+  getOutgoingContactRequest: function(tellKey) {
+    return this._db.getRowCellJson(TBL_REQUESTS_PENDING,
+                                   this._userRowBit + tellKey,
+                                   'd:d');
   },
 
   //////////////////////////////////////////////////////////////////////////////

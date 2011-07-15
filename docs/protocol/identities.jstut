@@ -1,0 +1,24 @@
+#lang jstut/interactive
+
+@section{Servers}
+
+@signed[ServerSelfIdent
+  #:signedWith RootKey
+  #:signingKeyNamedByAttr rootPublicKey
+]
+
+@section{People}
+
+@typedef[PoCo Object]{
+  Portable contacts dictionary object.
+}
+
+@signed[PersonSelfIdent
+  #:signedWith LongtermKey
+  #:signingKeyNamedByAttr root.longtermSignPubKey
+]
+
+@signed[OtherPersonIdent
+  #:signedWith LongtermKey
+  #:signingKeyNamedByAttr assertedBy
+]

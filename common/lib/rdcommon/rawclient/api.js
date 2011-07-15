@@ -558,29 +558,71 @@ RawClientAPI.prototype = {
    */
   connectToPeepUsingWebfinger: function(email, optionalMessage) {
   },
-  rejectPeepUsingWebfinger: function(email, reportAs) {
-  },
 
   connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco) {
     var identPayload = $pubident.assertGetPersonSelfIdent(personSelfIdentBlob);
+    var othPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+      personSelfIdentBlob);
 
     // generate and secretbox an OtherPersonIdentPayload for replica purposes
     var otherPersonIdentBlob = $pubident.generateOtherPersonIdent(
       this._longtermKeyring, personSelfIdentBlob, localPoco);
 
+    // this will get told to us once the connect process has completed
     var replicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
       'addContact', identPayload.root.rootSignPubKey, otherPersonIdentBlob);
 
+    var now = Date.now(), nonce = $keyops.makeBoxNonce();
+    // - request body (for client)
+    var requestBody = {
+      otherPersonIdent: otherPersonIdentBlob,
+    };
+    var boxedRequestBody = this._keyring.boxUtf8With(
+                             JSON.stringify(requestBody), nonce,
+                             othPubring.getPublicKeyFor('messaging', 'bodyBox'),
+                             'messaging', 'tellBox');
+    // - request env (for mailstore)
+    var requestEnv = {
+      type: 'contactRequest',
+      body: boxedRequestBody,
+    };
+    var boxedRequestEnv = this._keyring.boxUtf8With(
+      JSON.stringify(requestEnv), nonce,
+      othPubring.getPublicKeyFor('messaging', 'envelopeBox'),
+      'messaging', 'tellBox');
+
+    // - request transit (for maildrop)
+    var requestTransitInner = {
+      envelope: boxedRequestEnv,
+    };
+    var boxedRequestTransitInner = this._keyring.boxUtf8With(
+      JSON.stringify(requestTransitInner), nonce,
+      othPubring.transitServerPublicKey,
+      'messaging', 'tellBox');
+    var requestTransitOuter = {
+      name: identPayload.keys.tellBoxPubKey,
+      senderKey: this._keyring.getPublicKeyFor('messaging', 'tellBox'),
+      nonce: nonce,
+      innerEnvelope: boxedRequestTransitInner,
+    };
+
     this._enqueueAction({
-      type: 'addContact',
+      type: 'reqContact',
       userRootKey: identPayload.root.rootSignPubKey,
       userTellKey: identPayload.keys.tellBoxPubKey,
       serverSelfIdent: identPayload.transitServerIdent,
+      toRequestee: requestTransitOuter,
       replicaBlock: replicaBlock
     });
 
     // XXX we should surface a peep rep or nothing at all, not this (testhack)
     return otherPersonIdentBlob;
+  },
+
+  /**
+   * Reject a connection request.
+   */
+  rejectConnectRequest: function(rootKey, receivedAt, reportAs) {
   },
 
   //////////////////////////////////////////////////////////////////////////////

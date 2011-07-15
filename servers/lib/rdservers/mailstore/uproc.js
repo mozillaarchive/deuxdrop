@@ -65,96 +65,16 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
 var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
 
-/**
- * MRU-persistent processor of messages for users that keeps around state so
- *  that we can process batches of data or bursty data without setup costs for
- *  every message.
- */
-function UserMessageProcessor(effigy, dbConn, _logger) {
-  this.effigy = effigy;
-  this.store = new $ustore.UserBehalfDataStore(effigy.rootPublicKey,
-                                               dbConn);
-  this._logger = _logger;
-}
-UserMessageProcessor.prototype = {
-  toString: function() {
-    return '[UserMessageProcessor]';
-  },
-  toJSON: function() {
-    return {
-      type: 'UserMessageProcessor',
-    };
-  },
-
-  /**
-   * Process a message for the user.
-   *
-   * XXX someone in this path should be performing some kind of queueing
-   */
-  convMessageForUser: function(stransitEnv, otherServerKey) {
-    // -- unbox
-    var fanoutMsg = JSON.parse(
-                      this.effigy.storeEnvelopeKeyring.openBoxUtf8(
-                        stransitEnv.payload, stransitEnv.nonce,
-                        otherServerKey));
-    var arg = {
-      effigy: this.effigy,
-      store: this.store,
-      uproc: this,
-      convId: stransitEnv.convId,
-      fanoutMsg: fanoutMsg,
-      fanoutNonce: stransitEnv.nonce,
-      fanoutMsgRaw: stransitEnv.payload,
-      transitServerKey: otherServerKey,
-    };
-    switch (fanoutMsg.type) {
-      case 'welcome':
-        return (new UserConvWelcomeTask(arg, this._logger)).run();
-      case 'join':
-        return (new UserConvJoinTask(arg, this._logger)).run();
-      case 'message':
-        return (new UserConvMessageTask(arg, this._logger)).run();
-      case 'meta':
-        return (new UserConvMetaTask(arg, this._logger)).run();
-
-      default:
-        throw new $taskerrors.MalformedPayloadError(
-          'bad message type: ' + fanoutMsg.type);
-    }
-  },
-
-  friendRequestForUser: function(innerEnv, senderKey, nonce, otherServerKey,
-                                 receivedAt) {
-
-  },
-
-  /**
-   * Enqueue the given replica block for all clients and notify connected
-   *  clients so they can immediately process.
-   *
-   * XXX we want to narrow this to subscriptions and importance at some point,
-   *  of course.
-   */
-  relayMessageToAllClients: function(block) {
-    var clientKeys = this.effigy.otherClientKeys;
-    var promises = [];
-    for (var i = 0; i < clientKeys.length; i++) {
-      promises.push(this.store.clientQueuePush(clientKeys[i], block));
-    }
-
-    $mailstore_server.gConnTracker.notifyAllOfReplicaBlock(
-      this.effigy.rootPublicKey, block);
-
-    return $Q.all(promises);
-  },
-};
-
 function UserProcessorRegistry(serverConfig, dbConn, _logger) {
   this._config = serverConfig;
   this._db = dbConn;
   this._logger = _logger;
 
+  this._procByRoot = {};
   this._procByTell = {};
+
+  this._bound_getUserMessageProcessorUsingEffigy =
+    this.getUserMessageProcessorUsingEffigy.bind(this);
 }
 exports.UserProcessorRegistry = UserProcessorRegistry;
 UserProcessorRegistry.prototype = {
@@ -174,18 +94,26 @@ UserProcessorRegistry.prototype = {
     var promise = when(
       this._config.authApi.serverFetchUserEffigyUsingTellKey(userTellKey,
                                                              "store"),
-      function(userEffigy) {
-        var processor = new UserMessageProcessor(userEffigy, self._db,
-                                                 self._logger);
-        // save the processor in the table, overwriting the load promise
-        self._procByTell[userEffigy] = processor;
-        return processor;
-      }
+      this._bound_getUserMessageProcessorUsingEffigy
       // rejection pass-through
     );
     // put the promise in there for now to avoid multiple in-flights.
     this._procByTell[userTellKey] = promise;
     return promise;
+  },
+
+  getUserMessageProcessorUsingEffigy: function(userEffigy) {
+    if (this._procByRoot.hasOwnProperty(userEffigy.rootPublicKey))
+      return this._procByRoot[userEffigy.rootPublicKey];
+
+    var processor = new UserMessageProcessor(this._config, userEffigy, this._db,
+                                             this._config.userConnTracker,
+                                             this._logger);
+    // save the processor in the table, overwriting the load promise
+    var tellKey = userEffigy.pubring.getPublicKeyFor("messaging", "tellBox");
+    this._procByTell[tellKey] = processor;
+    this._procByRoot[userEffigy.rootPublicKey] = processor;
+    return processor;
   },
 
   /**
@@ -203,15 +131,215 @@ UserProcessorRegistry.prototype = {
   /**
    * Receive a friend request, queueing it for transmission to the client.
    */
-  friendRequestForUser: function(innerEnv, senderKey, nonce, otherServerKey,
-                                 receivedAt) {
-    return when(this._getUserMessageProcessorUsingTellKey(stransitEnv.name),
+  contactRequestForUser: function(receivedBundle) {
+    return when(this._getUserMessageProcessorUsingTellKey(receivedBundle.name),
                 function(uproc) {
-      return uproc.friendRequestForUser(innerEnv, senderKey, nonce,
-                                        otherServerKey, receivedAt);
+      return uproc.contactRequestForUser(receivedBundle);
     });
   },
 };
+
+
+/**
+ * MRU-persistent processor of messages for users that keeps around state so
+ *  that we can process batches of data or bursty data without setup costs for
+ *  every message.
+ */
+function UserMessageProcessor(serverConfig, effigy, dbConn, connTracker,
+                              _logger) {
+  this.serverConfig = serverConfig;
+  this.effigy = effigy;
+  this.store = new $ustore.UserBehalfDataStore(effigy.rootPublicKey,
+                                               dbConn);
+  this.connTracker = connTracker;
+  this._logger = _logger;
+}
+UserMessageProcessor.prototype = {
+  toString: function() {
+    return '[UserMessageProcessor]';
+  },
+  toJSON: function() {
+    return {
+      type: 'UserMessageProcessor',
+    };
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Messages from the internet
+
+  /**
+   * Process a message for the user.
+   *
+   * XXX someone in this path should be performing some kind of queueing
+   */
+  convMessageForUser: function(stransitEnv, otherServerKey) {
+    // -- unbox
+    var fanoutMsg = JSON.parse(
+                      this.effigy.storeEnvelopeKeyring.openBoxUtf8(
+                        stransitEnv.payload, stransitEnv.nonce,
+                        otherServerKey));
+    var arg = {
+      effigy: this.effigy, store: this.store, uproc: this,
+      convId: stransitEnv.convId,
+      fanoutMsg: fanoutMsg, fanoutMsgRaw: stransitEnv.payload,
+      fanoutNonce: stransitEnv.nonce,
+      transitServerKey: otherServerKey,
+    };
+    switch (fanoutMsg.type) {
+      case 'welcome':
+        return (new UserConvWelcomeTask(arg, this._logger)).run();
+      case 'join':
+        return (new UserConvJoinTask(arg, this._logger)).run();
+      case 'message':
+        return (new UserConvMessageTask(arg, this._logger)).run();
+      case 'meta':
+        return (new UserConvMetaTask(arg, this._logger)).run();
+
+      default:
+        throw new $taskerrors.MalformedPayloadError(
+          'bad message type: ' + fanoutMsg.type);
+    }
+  },
+
+  /**
+   * Process an incoming contact request (which we might end up rejecting).
+   */
+  contactRequestForUser: function(receivedBundle) {
+    var arg = {
+      effigy: this.effigy, store: this.store, uproc: this,
+      receivedBundle: receivedBundle
+    };
+    return (new UserIncomingContactRequestTask(arg, this._logger)).run();
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Client-requested actions
+
+  issueContactRequest: function(msg) {
+    var arg = {
+      config: this.serverConfig,
+      effigy: this.effigy, store: this.store, uproc: this,
+      msg: msg,
+    };
+    return (new UserOutgoingContactRequestTask(arg, this._logger)).run();
+  },
+
+  _completeContactAdd: function(incoming, outgoing) {
+    // - persist contact entry
+      // persist the data to our random-access store
+      this.store.newContact(outgoing.userRootKey, outgoing.replicaBlock),
+      // enqueue for other (existing) clients
+      this.sendReplicaBlockToOtherClients(outgoing.replicaBlock),
+    // - replica block notification
+
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Client communication
+
+  /**
+   * Enqueue the given replica block for all clients and notify connected
+   *  clients so they can immediately process.
+   *
+   * XXX we want to narrow this to subscriptions and importance at some point,
+   *  of course.
+   */
+  relayMessageToAllClients: function(block) {
+    var clientKeys = this.effigy.otherClientKeys;
+    var promises = [];
+    for (var i = 0; i < clientKeys.length; i++) {
+      promises.push(this.store.clientQueuePush(clientKeys[i], block));
+    }
+
+    this.connTracker.notifyAllOfReplicaBlock(this.effigy.rootPublicKey, block);
+
+    return $Q.all(promises);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+};
+
+
+var UserOutgoingContactRequestTask = taskMaster.defineTask({
+  name: 'userOutgoingContactRequest',
+  args: ['config', 'effigy', 'uproc', 'msg'],
+  steps: {
+    issue_authorizations: function() {
+      var serverKey =
+        $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(
+          this.msg.serverSelfIdent);
+      return $Q.wait(
+        // - issue maildrop/fanout authorization
+        this.config.dropApi.authorizeServerUserForContact(
+          this.effigy.rootPublicKey, serverKey, this.msg.userTellKey),
+        // - ensure the sending layer knows how to talk to that user too
+        this.config.senderApi.setServerUrlUsingSelfIdent(
+          this.msg.serverSelfIdent)
+      );
+    },
+    check_for_outstanding_incoming: function() {
+      return this.store.getIncomingContactRequest(this.msg.userTellKey);
+    },
+    maybe_success_if_outstanding: function(incoming) {
+      // note that the fact that the incoming request was persisted means
+      //  that it passed our validation.
+      if (!incoming)
+
+    },
+  },
+});
+
+var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
+  name: 'userIncomingContactRequest',
+  args: ['effigy', 'store', 'uproc', 'receivedBundle'],
+  steps: {
+    /**
+     * Verify the identity of the sender by unboxing the envelope.
+     */
+    validate_request: function() {
+      var requestEnv = JSON.parse(
+                         this.effigy.storeEnvelopeKeyring.openBoxUtf8(
+                           this.receivedBundle.innerEnvelope.envelope,
+                           this.receivedBundle.nonce,
+                           this.receivedBundle.senderKey));
+      // if what was boxed was not a contact request, fail.
+      if (requestEnv.type !== 'contactRequest')
+        return this.earlyReturn(false);
+    },
+    /**
+     * If the request is from someone we have an outstanding request to,
+     *  process it success-style.  This is done prior to the suppression
+     *  check to simplify things/avoid edge cases where we mutual blackhole.
+     */
+    check_for_pending: function() {
+      return this.store.getOutgoingContactRequest(
+        this.receivedBundle.senderKey);
+    },
+    success_if_pending: function(outgoing) {
+      return this.earlyReturn(this.uproc._completeContactAdd(
+                                this.receivedBundle, outgoing));
+    },
+    check_for_suppression: function() {
+      return this.store.checkForSuppressedContactRequest(
+        this.receivedBundle.senderKey, this.receivedBundle.otherServerKey);
+    },
+    throw_away_if_suppressed: function(suppressed) {
+      if (suppressed)
+        return this.earlyReturn(false);
+      return undefined;
+    },
+    persist: function() {
+      return $Q.wait(
+        this.store.putIncomingContactRequest(this.receivedAt,
+                                             this.senderKey,
+                                             this.receivedBundle)
+
+      );
+    },
+    relay_to_clients: function() {
+    }
+  },
+});
 
 /**
  * Process the welcome message, the first message any participant in a
@@ -377,11 +505,8 @@ var UserConvJoinTask = taskMaster.defineTask({
       return this.store.addConversationMessage(
         this.convId,
         this.highMessageNumber,
-        {
-          // we don't need the transit server's key, it's implicit
-          nonce: this.fanoutNonce,
-          msg: this.fanoutMsg
-        }, extraCells);
+        this.replicaBlock,
+        extraCells);
     },
     relay_to_subscribed_clients: function() {
       return this.uproc.relayMessageToAllClients(this.replicaBlock);

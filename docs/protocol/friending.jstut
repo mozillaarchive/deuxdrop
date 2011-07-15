@@ -1,0 +1,21 @@
+#lang jstut/interactive
+
+@boxedMessage[ContactRequestTransit #:extends PSTransitInnerEnvelope
+]{
+  Outermost envelope of the contact-establishing mechanism.  This exists so
+  the maildrop can perform some reliable (non-other-server-trusting)
+  pre-filtration, even though we are leaving most of the decision-making up to
+  the mailstore at this time.
+}
+
+
+@boxedMessage[ContactRequestEnvelope #:extends GenMailstoreEnvelope
+]{
+}
+
+@boxedMessage[ContactRequestBody #:extends GenClientBody
+  @key[otherPersonIdent SignedOtherPersonIdent]{
+    The requester's signed other-person-ident for the requestee.
+  }
+]{
+}

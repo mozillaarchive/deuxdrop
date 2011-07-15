@@ -61,6 +61,9 @@ function MailstoreChooserApi(serverConfig, dbConn, _logger) {
 }
 exports.Api = MailstoreChooserApi;
 MailstoreChooserApi.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Messages from the internet
+
   /**
    * If the user is using us as a fullpub, we pass the message directly to our
    *  mailstore layer; if not, we queue the message for pickup by the user
@@ -86,17 +89,17 @@ MailstoreChooserApi.prototype = {
     return this.procRegistry.convMessageForUser(stransitEnv, otherServerKey);
   },
 
-  friendRequestForUser: function(innerEnv, senderKey, nonce, otherServerKey,
-                                 receivedAt) {
-    return this.procRegistry.friendRequestForUser(
-             innerEnv, senderKey, nonce, otherServerKey, receivedAt);
+  contactRequestForUser: function(receivedBundle) {
+    return this.procRegistry.friendRequestForUser(receivedBundle);
   },
 
   messageForUser: function() {
     // XXX SEE EXCEPTION BELOW ME
     throw new Error("XXX NOT BLOODY IMPLEMENTED");
     // YOU WENT TOO FAR
-  }
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 }); // end define

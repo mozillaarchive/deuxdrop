@@ -754,6 +754,8 @@ PickupConnection.prototype = {
  *  we want logic that provides benefit to servers that already trust each
  *  other.  Ideally that could be handled by the delivery connection mechanism
  *  once that starts being more batchy/persistent.
+ *
+ *
  */
 function ReceiveEstablishConnection(conn) {
   this.conn = conn;
@@ -762,8 +764,7 @@ ReceiveEstablishConnection.prototype = {
   INITIAL_STATE: 'root',
 
   /**
-   * Receive/process a transit message from a user directed to us for
-   *  delivery to our user or our conversation daemon.
+   * Validate the identity of the sender by opening the transit inner env box.
    */
   _msg_root_establish: function(msg) {
     // -- try and open the inner envelope.
@@ -776,10 +777,15 @@ ReceiveEstablishConnection.prototype = {
         config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
                                    outerEnvelope.nonce,
                                    outerEnvelope.senderKey));
-      return when(config.storeApi.friendRequestForUser(
-                    innerEnvelope, outerEnvelope.senderKey,
-                    outerEnvelope.nonce, this.conn.clientPublicKey,
-                    receivedAt),
+      var receivedBundle = {
+        name: outerEnvelope.name,
+        senderKey: outerEnvelope.senderKey,
+        nonce: outerEnvelope.nonce,
+        innerEnvelope: innerEnvelope,
+        otherServerKey: this.conn.clientPublicKey,
+        receivedAt: receivedAt,
+      };
+      return when(config.storeApi.contactRequestForUser(receivedBundle),
         function yeaback() {
           self.conn.writeMessage({type: "ack"});
           return 'root';

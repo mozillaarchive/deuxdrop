@@ -136,6 +136,14 @@ RedisDbConn.prototype = {
     return deferred.promise;
   },
 
+  getRowCellJson: function(tableName, rowId, columnName) {
+    return when(this.getRowCell(tableName, rowId, columnName), function(val) {
+      if (val)
+        return JSON.parse(val);
+      return val;
+    });
+  },
+
   /**
    * Get the cell and return a truthy value based on the cell value.
    */
@@ -179,6 +187,32 @@ RedisDbConn.prototype = {
         deferred.reject(err);
       else
         deferred.resolve(null);
+    });
+    return deferred.promise;
+  },
+
+  deleteRow: function(tableName, rowId) {
+    var deferred = $Q.defer();
+    this._log.deleteRow(tableName, rowId);
+    this._conn.del(this._prefix + ':' + tableName + ':' + rowId,
+                     function(err, result) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(result);
+    });
+    return deferred.promise;
+  },
+
+  deleteRowCell: function(tableName, rowId, columnName) {
+    var deferred = $Q.defer();
+    this._log.deleteRowCell(tableName, rowId, columnName);
+    this._conn.hdel(this._prefix + ':' + tableName + ':' + rowId, columnName,
+                     function(err, result) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(result);
     });
     return deferred.promise;
   },
@@ -472,6 +506,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       incrementCell: {tableName: true, rowId: true, columnName: true,
                       delta: true},
       raceCreateRow: {tableName: true, rowId: true},
+
+      deleteRowCell: {tableName: true, rowId: true, columnName: true},
+      deleteRow: {tableName: true, rowId: true},
 
       // - reorderable collection abstraction
       updateIndexValue: {tableName: true, indexName: true, indexParam: true,
