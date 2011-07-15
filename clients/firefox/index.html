@@ -67,7 +67,7 @@
           <div class="scroller" data-childclass="addPeepLink">
           </div>
         </div>
-        <div data-cardid="peep" class="card">
+        <div data-cardid="user" class="card">
           <div class="scroller">
             <div class="peepInfo">
               <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
@@ -77,6 +77,10 @@
             </div>
             <form data-class="compose"></form>
             <span class="addToChatMessage hidden">This person needs to add you before you can chat with them.</span>
+            <form class="addPeepButtonForm hidden">
+              <input type="hidden" name="peepId" value="" data-bind="id" data-attr="value">
+              <button class="">Add</button>
+            </form>
           </div>
         </div>
         <div data-cardid="conversation" title="Conversation" class="card">
@@ -111,19 +115,19 @@
         <span class="newConversationText" data-bind="text"></span>
       </a>
 
-      <a data-classimpl="personLink" class="item" href="#peep">
+      <a data-classimpl="personLink" class="item" href="#user">
         <img class="peepInfoPic" src="i/face2.png" data-bind="pic" data-attr="src" align="absmiddle">
         <span class="personName" data-bind="name"></span>
       </a>
 
-      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item" href="#addPeep?&id="></a>
+      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item" href="#user?&id="></a>
 
       <a data-classimpl="addPersonLink" class="item" href="#listUsersForAddPeep">+ Add Peep</a>
 
       <a data-classimpl="convListItem" class="item" href="#conversation?id="><span class="meta"></span></a>
 
       <div data-classimpl="message"  class="bubble">
-        <a href='#peep?id=' class="sender">
+        <a href='#user?id=' class="sender">
           <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
           <span class="name" data-bind="from.name"></span>
         </a>

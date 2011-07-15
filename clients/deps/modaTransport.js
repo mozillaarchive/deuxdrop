@@ -216,8 +216,6 @@ define(function (require, exports) {
       cbs.forEach(function (callback) {
         callback(me);
       });
-
-      moda.trigger('me', me);
     },
 
     'message': function (data) {
@@ -326,7 +324,7 @@ define(function (require, exports) {
 
   makePerCallPassThroughApi('peeps', ['query'], 'items');
   makePerCallPassThroughApi('users', ['query'], 'items');
-  makePerCallPassThroughApi('peep', ['peepId'], 'peep');
+  makePerCallPassThroughApi('user', ['id'], 'user');
   makePerCallPassThroughApi('addPeep', ['peepId'], 'peep');
   makePerCallPassThroughApi('chatPerms', [], 'ids');
 

@@ -58,7 +58,7 @@ define(function (require) {
       IScroll = require('iscroll'),
 
       commonNodes = {},
-      chatPerms = {},
+      users = {},
       notifications = [],
       peeps, update, messageCloneNode, notifyDom, nodelessActions,
       newMessageIScroll, newConversationNodeWidth;
@@ -297,8 +297,8 @@ define(function (require) {
             node = commonNodes[nodeClassName].cloneNode(true);
 
         if (type === 'addedYou') {
-          updateDom($(node), data.peep);
-          node.href += '?id=' + encodeURIComponent(data.peep.id);
+          updateDom($(node), data.user);
+          node.href += '?id=' + encodeURIComponent(data.user.id);
           node.appendChild(document.createTextNode(' added you'));
         }
 
@@ -365,7 +365,7 @@ define(function (require) {
           frag = document.createDocumentFragment();
 
       moda.users({}, {
-        'usersComplete': function (users) {
+        'usersComplete': function (allUsers) {
           var me = moda.me(),
               known = {};
 
@@ -375,14 +375,21 @@ define(function (require) {
             known[peep.id] = true;
           });
 
-          users = users.filter(function (user) {
+          allUsers = allUsers.filter(function (user) {
+            // First, add the user to global list of users.
+            // Doing the work here to piggyback on the iteration.
+            if (!users[user.id]) {
+              users[user.id] = user;
+            }
+
+            // Now do the filtering.
             if (!known[user.id]) {
               return true;
             }
             return false;
           });
 
-          users.forEach(function (user) {
+          allUsers.forEach(function (user) {
             var node = clonable.cloneNode(true);
             node.href += encodeURIComponent(user.id);
             node.appendChild(document.createTextNode(user.name));
@@ -401,79 +408,92 @@ define(function (require) {
     'addPeep': function (data) {
       var peepId = data.id;
 
-      peeps.addPeep(peepId, function (peep) {
-        // Update the peeps card.
-        $('[data-cardid="peeps"]').each(function (i, node) {
-          // Replace the old peeps card with a new one.
-          var cardNode = cards.templates.peeps.cloneNode(true);
-          node.parentNode.replaceChild(cardNode, node);
-          update.peeps({}, $(cardNode));
-        });
+      function onPeepsComplete() {
+        peeps.addPeep(peepId, function (peep) {
+          // Update the peeps card.
+          $('[data-cardid="peeps"]').each(function (i, node) {
+            // Replace the old peeps card with a new one.
+            var cardNode = cards.templates.peeps.cloneNode(true);
+            node.parentNode.replaceChild(cardNode, node);
+            update.peeps({}, $(cardNode));
+          });
 
-        // Go back one in the navigation.
-        setTimeout(function () {
+          // Go back one in the navigation.
           history.back();
-        }, 30);
-      });
-    },
-
-    'peep': function (data, dom) {
-      var peepId = data.id,
-          conversationsNode = dom.find('.peepConversations')[0],
-          convCloneNode = getChildCloneNode(conversationsNode),
-          frag = document.createDocumentFragment(),
-          peep = peeps.items.filter(function (peep) {
-            if (peep.id === peepId) {
-              return peep;
-            } else {
-              return undefined;
-            }
-          })[0];
-
-      // Clear out old conversations
-      conversationsNode.innerHTML = '';
-
-      updateDom(dom, peep);
-
-      // Add the right peep IDs to the compose form.
-      dom
-        .attr('data-peepid', peepId)
-        .find('[name="to"]')
-          .val(peepId)
-          .end()
-        .find('[name="from"]')
-          .val(moda.me().id);
-
-      // If the user is not in the chat permission list, do not show
-      // the compose form.
-      if (!chatPerms[peepId]) {
-        dom
-          .find('.compose')
-            .addClass('hidden')
-            .end()
-          .find('.addToChatMessage')
-            .removeClass('hidden');
+        });
       }
 
-      // Fill in list of conversations.
-      peep.getConversations(function (conversations) {
-        conversations.forEach(function (conv) {
-          var node = convCloneNode.cloneNode(true),
-              nodeDom = $(node),
-              message = conv.message;
+      if (peeps) {
+        onPeepsComplete();
+      } else {
+        peeps = moda.peeps({}, {
+          'peepsComplete': onPeepsComplete
+        });
+      }
+    },
 
-          //Insert the message text and time.
-          insertTextAndMeta(nodeDom, message);
+    'user': function (data, dom) {
+      var userId = data.id,
+          conversationsNode = dom.find('.peepConversations')[0],
+          convCloneNode = getChildCloneNode(conversationsNode);
 
-          // Update the link to have the conversation ID.
-          node.href += encodeURIComponent(message.convId);
+      moda.user(userId, function (user) {
 
-          frag.appendChild(node);
+        // Clear out old conversations
+        conversationsNode.innerHTML = '';
+
+        updateDom(dom, user);
+
+        // Add the right peep IDs to the compose form.
+        dom
+          .attr('data-peepid', userId)
+          .find('[name="to"]')
+            .val(userId)
+            .end()
+          .find('[name="from"]')
+            .val(moda.me().id);
+
+        // If the user is not in the chat permission list, do not show
+        // the compose form.
+        if (!user.perms.peep) {
+          dom
+            .find('.compose')
+              .addClass('hidden')
+              .end()
+            .find('.addPeepButtonForm')
+              .removeClass('hidden');
+        } else if (!user.perms.chat) {
+          dom
+            .find('.compose')
+              .addClass('hidden')
+              .end()
+            .find('.addToChatMessage')
+              .removeClass('hidden');
+        }
+
+        // Fill in list of conversations.
+        user.getConversations(function (conversations) {
+
+          var frag = document.createDocumentFragment();
+
+          conversations.forEach(function (conv) {
+            var node = convCloneNode.cloneNode(true),
+                nodeDom = $(node),
+                message = conv.message;
+
+            //Insert the message text and time.
+            insertTextAndMeta(nodeDom, message);
+
+            // Update the link to have the conversation ID.
+            node.href += encodeURIComponent(message.convId);
+
+            frag.appendChild(node);
+
+            // refresh the card sizes
+            cards.adjustCardSizes();
+          });
 
           conversationsNode.appendChild(frag);
-
-          // refresh the card sizes
-          cards.adjustCardSizes();
         });
       });
     },
@@ -529,25 +549,6 @@ define(function (require) {
 
   // Listen to events from moda
   moda.on({
-    'me': function (me) {
-      // Once we get the "me" message, it means user is signed in,
-      // now fetch unseen data.
-      moda.listUnseen();
-
-      // Get list of people we can chat with.
-      moda.chatPerms(function (ids) {
-        if (ids && ids.length) {
-          ids.forEach(function (id) {
-            chatPerms[id] = true;
-          });
-        }
-      });
-    },
-
-    'chatPermsAdd': function (id) {
-      chatPerms[id] = true;
-    },
-
     'signedOut': function () {
       // User signed out/no longer valid.
       // Clear out all the cards and go back to start
@@ -662,7 +663,7 @@ define(function (require) {
 
     $('body')
       // Handle compose from a peep screen.
-      .delegate('[data-cardid="peep"] .compose', 'submit', function (evt) {
+      .delegate('[data-cardid="user"] .compose', 'submit', function (evt) {
         evt.preventDefault();
 
         moda.startConversation(formToObject(evt.target));
@@ -710,6 +711,18 @@ define(function (require) {
           }
         }, 1000);
 
+      })
+
+      // Handle "add peep" button form clicks.
+      .delegate('.addPeepButtonForm', 'submit', function (evt) {
+        evt.stopPropagation();
+        evt.preventDefault();
+
+        var id = evt.target.peepId.value;
+
+        update.addPeep({
+          id: id
+        });
       });
 
     // Periodically update the timestamps shown in the page, every minute.

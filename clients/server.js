@@ -250,18 +250,18 @@ actions = {
     });
   },
 
-  'peep': function (data, client) {
-    var peepId = data.peepId,
+  'user': function (data, client) {
+    var userId = data.id,
         multi;
 
     // Get the peep ID and return it.
     multi = redis
               .multi()
-              .hgetall(peepId)
+              .hgetall(userId)
               .exec(function (err, items) {
                 clientSend(client, data, {
-                  action: 'peepResponse',
-                  peep: items[0],
+                  action: 'userResponse',
+                  user: items[0],
                   _deferId: data._deferId
                 });
               });

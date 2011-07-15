@@ -70,7 +70,8 @@ define(function (require, exports) {
       listenerCounter = 0,
       moda = exports,
       convCache = {},
-      peepCache = {},
+      userCache = {},
+      chatPerms = {},
       me;
 
   /**
@@ -126,25 +127,30 @@ Peep
 * rejected
 */
 
-  function Peep(obj) {
+  function User(obj) {
+    // If user is already in the cache, return that
+    if (userCache[obj.id]) {
+      return userCache[obj.id];
+    }
+
     this.id = obj.id;
     this.name = obj.name;
     this.pic = obj.pic;
     this.pinned = false;
     this.frecency = 0;
 
-    //TODO: this should start as false
-    this.connected = true;
-
-    this.rejected = false;
+    this.perms = {
+      chat: chatPerms[obj.id]
+    };
 
     // Add the peep to the peepCache
-    if (!peepCache[this.id]) {
-      peepCache[this.id] = this;
+    if (!userCache[this.id]) {
+      userCache[this.id] = this;
     }
+    return this;
   }
 
-  Peep.prototype = {
+  User.prototype = {
     /**
      * Gets the conversations for this user.
      * @param {Function} callback a callback to call when the conversations
@@ -152,7 +158,14 @@ Peep
      * objects.
      */
     getConversations: function (callback) {
-      transport.getPeepConversations(this.id, callback);
+      // Only ask the server if there are chat permissions on the user.
+      if (this.perms.chat) {
+        transport.getPeepConversations(this.id, callback);
+      } else {
+        var d = q.defer();
+        q.when(d.promise, callback);
+        d.resolve([]);
+      }
     }
   };
 
@@ -167,7 +180,7 @@ Peep
 
       // Convert users into instance of peep objects
       users = users.map(function (user) {
-        return new Peep(user);
+        return new User(user);
       });
 
       this.items = users;
@@ -205,21 +218,22 @@ Peeps
     this.on = on;
 
     var d = q.defer();
-    q.when(d.promise, function (peeps) {
+    q.when(d.promise, function (users) {
       // Convert peeps into instance of peep objects
-      peeps = peeps.map(function (peep) {
-        return new Peep(peep);
+      users = users.map(function (user) {
+        var peep = new User(user);
+        peep.perms.peep = true;
       });
 
-      this.items = peeps;
-      trigger(this, 'peepsComplete', [peeps]);
+      this.items = users;
+      trigger(this, 'peepsComplete', [users]);
     }.bind(this));
 
     //Ignore the query for now, use
     //dummy data.
 
-    transport.peeps(query, function (peeps) {
-      d.resolve(peeps);
+    transport.peeps(query, function (users) {
+      d.resolve(users);
     });
   }
 
@@ -229,12 +243,15 @@ Peeps
      * @param {String} peepId
      */
     addPeep: function (peepId, callback) {
-      transport.addPeep(peepId, function (peep) {
-        this.items.push(new Peep(peep));
+      transport.addPeep(peepId, function (user) {
+        var peep = new User(user);
+        peep.perms.peep = true;
+
+        this.items.push(peep);
         this.items.sort(peepSort);
 
         if (callback) {
-          callback(peep);
+          callback(user);
         }
         trigger(this, 'addPeep', arguments);
       }.bind(this));
@@ -252,7 +269,7 @@ Peeps
   function Message(msg) {
     this.convId = msg.convId;
     this.id = msg.id;
-    this.from = peepCache[msg.from];
+    this.from = userCache[msg.from];
     this.text = msg.text;
     this.time = msg.time;
   }
@@ -299,7 +316,7 @@ Conversation
     transport.loadConversation(id, function (details) {
       this.peeps = [];
       details.peepIds.forEach(function (peepId) {
-        this.peeps.push(peepCache[peepId]);
+        this.peeps.push(userCache[peepId]);
       }.bind(this));
 
       this.messages = details.messages.map(function (message) {
@@ -401,18 +418,19 @@ moda.on({
    */
   moda.trigger = function (name, data) {
     var triggered = false,
-        prop, conv, peep;
+        prop, conv, user;
 
     // Some messages require updates to cached objects
     if (name === 'message') {
       conv = convCache[data.convId];
 
       // The from field should be a reference to the peepCache.
-      peep = peepCache[data.from];
-      if (!peep) {
+      user = userCache[data.from];
+      if (!user) {
         // Need to fetch the peep and bail out.
-        transport.peep(data.from, function (peepData) {
-          var peep = new Peep(peepData);
+        transport.user(data.from, function (userData) {
+          // temp is used to prevent jslint warning.
+          var temp = new User(userData);
 
           //Re-trigger the event.
           moda.trigger(name, data);
@@ -422,16 +440,17 @@ moda.on({
         return;
       }
 
-      data.from = peep;
+      data.from = user;
       if (conv && conv.messages) {
         conv.messages.push(data);
       }
     } else if (name === 'addedYou') {
-      peep = peepCache[data.id];
-      if (!peep) {
+      user = userCache[data.id];
+      if (!user) {
         // Need to fetch the peep and bail out.
-        transport.peep(data.id, function (peepData) {
-          var peep = new Peep(peepData);
+        transport.user(data.id, function (userData) {
+          // temp is used to prevent jslint warning.
+          var temp = new User(userData);
 
           //Re-trigger the event.
           moda.trigger(name, data);
@@ -440,9 +459,15 @@ moda.on({
         // Bail on this trigger, wait for peep response to re-trigger.
         return;
       }
-      data.peep = peep;
+      data.user = user;
     } else if (name === 'me') {
-      me = new Peep(data);
+      me = new User(data);
+    } else if (name === 'chatPermsAdd') {
+      chatPerms[data] = true;
+      user = userCache[data];
+      if (user) {
+        user.perms.chat = true;
+      }
     }
 
     // Cycle through listeners and notify them.
@@ -476,8 +501,19 @@ moda.on({
     return new Users(query, on);
   };
 
-  moda.chatPerms = function (callback) {
-    transport.chatPerms(callback);
+  moda.user = function (userId, callback) {
+    var user = userCache[userId],
+        d;
+    if (user) {
+      d = q.defer();
+      q.when(d.promise, callback);
+      d.resolve(user);
+    } else {
+      transport.user(userId, function (userData) {
+        user = new User(userData);
+        callback(user);
+      });
+    }
   };
 
   moda.markBulkSeen = function (ids) {
@@ -503,7 +539,31 @@ moda.on({
   };
 
   moda.signIn = function (assertion, callback) {
-    return transport.signIn(assertion, callback);
+    return transport.signIn(assertion, function (me) {
+      if (me && me.id) {
+
+        // Get list of people we can chat with. Needed before
+        // being able to do useful things with people.
+        transport.chatPerms(function (ids) {
+          if (ids && ids.length) {
+            ids.forEach(function (id) {
+              chatPerms[id] = true;
+            });
+          }
+
+          // Get all the peeps, since notifications need to
+          // know if a person that added you is a peep.
+          moda.peeps({}, {
+            peepsComplete: function () {
+              callback(me);
+
+              //Trigger the loading of unseen items.
+              moda.listUnseen();
+            }
+          });
+        });
+      }
+    });
   };
 
   moda.signOut = function (callback) {
@@ -516,7 +576,7 @@ moda.on({
       // but passing it through the trigger machinery since it
       // has logic to make sure the peep object is loaded for
       // the message senders.
-      var prop, message, data;
+      var prop, data;
 
       for (prop in unseen) {
         if (unseen.hasOwnProperty(prop)) {
