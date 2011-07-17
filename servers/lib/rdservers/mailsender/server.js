@@ -98,4 +98,47 @@ SendDeliveryConnection.prototype = {
   },
 };
 
+
+/**
+ * One-off contact contact establishment connection.
+ */
+function SendEstablishConnection(transitMsg,
+                                 clientKeyring, serverPublicKey,
+                                 serverUrl, _logger) {
+  this._msg = transitMsg;
+
+  this.conn = new $authconn.AuthClientConn(
+                this, clientKeyring, serverPublicKey,
+                serverUrl, 'drop/establish', _logger);
+  this._deferred = $Q.defer();
+  this.promise = this._deferred.promise;
+}
+exports.SendEstablishConnection = SendEstablishConnection;
+SendEstablishConnection.prototype = {
+  INITIAL_STATE: 'deliver',
+
+  __connected: function() {
+    this.conn.writeMessage({
+      type: 'establish',
+      msg: this._msg,
+    });
+  },
+
+  __closed: function() {
+    this._deferred.reject("connection closed without delivery ack");
+  },
+
+  _msg_deliver_ack: function(msg) {
+    this._deferred.resolve();
+    return this.conn.close();
+  },
+
+  _msg_deliver_bad: function(msg) {
+    // if we were not a one-shot connection, we would note the bad message
+    //  for bad actor handling, but otherwise continue on with our job.
+    this._deferred.reject("other side says our message is bad");
+    return this.conn.close();
+  },
+};
+
 }); // end define

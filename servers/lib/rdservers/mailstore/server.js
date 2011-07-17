@@ -177,7 +177,7 @@ function ClientServicingConnection(conn, userEffigy) {
   this.userEffigy = userEffigy;
 
   this.uproc =
-    this.config.mailstoreApi.procRegistry.getUserMessageProcessorUsingEffigy(
+    this.config.storeApi.procRegistry.getUserMessageProcessorUsingEffigy(
       userEffigy);
   this.store = this.uproc.store;
 
@@ -285,7 +285,7 @@ ClientServicingConnection.prototype = {
     // - notify any lives ones about the enqueueing
     var self = this;
     return when($Q.all(promises), function() {
-                  self.config.userConnTracker..notifyOthersOfReplicaBlock(
+                  self.config.userConnTracker.notifyOthersOfReplicaBlock(
                     self, block);
                 });
   },

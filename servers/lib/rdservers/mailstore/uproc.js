@@ -44,6 +44,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
+    'rdcommon/identities/pubident',
     './server',
     './ustore',
     'module',
@@ -53,6 +54,7 @@ define(
     $Q,
     $log,
     $task, $taskerrors,
+    $pubident,
     $mailstore_server,
     $ustore,
     $module,
@@ -224,14 +226,19 @@ UserMessageProcessor.prototype = {
     return (new UserOutgoingContactRequestTask(arg, this._logger)).run();
   },
 
+  /**
+   * Complete the contact request/addition cycle.  This gets invoked when we
+   *  have both received and incoming request and generated (and sent) an
+   *  outgoing request.
+   */
   _completeContactAdd: function(incoming, outgoing) {
-    // - persist contact entry
-      // persist the data to our random-access store
+    return $Q.wait(
+      // persist contact replica block to our random-access store
       this.store.newContact(outgoing.userRootKey, outgoing.replicaBlock),
-      // enqueue for other (existing) clients
+      // send replica block to all clients
       this.sendReplicaBlockToOtherClients(outgoing.replicaBlock),
-    // - replica block notification
-
+      // delete out our outgoing contact request
+      this.store.deleteOutgoingContactRequest(outgoing.userTellKey));
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -262,9 +269,9 @@ UserMessageProcessor.prototype = {
 
 var UserOutgoingContactRequestTask = taskMaster.defineTask({
   name: 'userOutgoingContactRequest',
-  args: ['config', 'effigy', 'uproc', 'msg'],
+  args: ['config', 'effigy', 'store', 'uproc', 'msg'],
   steps: {
-    issue_authorizations: function() {
+    authorize_incoming_messages_from_contact: function() {
       var serverKey =
         $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(
           this.msg.serverSelfIdent);
@@ -277,14 +284,26 @@ var UserOutgoingContactRequestTask = taskMaster.defineTask({
           this.msg.serverSelfIdent)
       );
     },
-    check_for_outstanding_incoming: function() {
+    send_outgoing: function() {
+      return this.config.senderApi.sendContactEstablishmentMessage(
+        this.msg.toRequestee,
+        $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(
+          this.msg.serverSelfIdent));
+    },
+    check_for_outstanding_incoming_contact_request: function() {
       return this.store.getIncomingContactRequest(this.msg.userTellKey);
     },
-    maybe_success_if_outstanding: function(incoming) {
+    maybe_success_if_outstanding_contact_request: function(incoming) {
       // note that the fact that the incoming request was persisted means
       //  that it passed our validation.
-      if (!incoming)
-
+      if (incoming)
+        return this.earlyReturn(this.uproc._completeContactAdd(incoming,
+                                                               this.msg));
+      return undefined;
+    },
+    persist_outgoing: function() {
+      return this.store.putOutgoingContactRequest(this.msg.userTellKey,
+                                                  this.msg);
     },
   },
 });
@@ -305,6 +324,7 @@ var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
       // if what was boxed was not a contact request, fail.
       if (requestEnv.type !== 'contactRequest')
         return this.earlyReturn(false);
+      return undefined;
     },
     /**
      * If the request is from someone we have an outstanding request to,
@@ -316,8 +336,10 @@ var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
         this.receivedBundle.senderKey);
     },
     success_if_pending: function(outgoing) {
-      return this.earlyReturn(this.uproc._completeContactAdd(
+      if (outgoing)
+        return this.earlyReturn(this.uproc._completeContactAdd(
                                 this.receivedBundle, outgoing));
+      return undefined;
     },
     check_for_suppression: function() {
       return this.store.checkForSuppressedContactRequest(
@@ -336,7 +358,8 @@ var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
 
       );
     },
-    relay_to_clients: function() {
+    relay_request_to_clients: function() {
+      return this.uproc.relayMessageToAllClients(this.receivedBundle);
     }
   },
 });

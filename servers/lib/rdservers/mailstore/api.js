@@ -90,7 +90,7 @@ MailstoreChooserApi.prototype = {
   },
 
   contactRequestForUser: function(receivedBundle) {
-    return this.procRegistry.friendRequestForUser(receivedBundle);
+    return this.procRegistry.contactRequestForUser(receivedBundle);
   },
 
   messageForUser: function() {

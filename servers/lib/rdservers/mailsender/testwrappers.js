@@ -67,6 +67,11 @@ exports.ApiWrapFactory = $testwrapmaker.wrapClassGimmeFactory({
       return envelope.type + '-' + envelope.name + '-' +
         otherServerPublicBoxKey;
     },
+    sendContactEstablishmentMessage: function(envelope, otherServerPublicBoxKey) {
+      this.__wraplog.sender_sendContactEstablishmentMessage(
+        envelope.name, otherServerPublicBoxKey);
+      return envelope.name + '-' + otherServerPublicBoxKey;
+    },
   },
   releasers: {
     sendPersonEnvelopeToServer: function(serverPublicBoxKey, userRootKey) {
@@ -75,6 +80,9 @@ exports.ApiWrapFactory = $testwrapmaker.wrapClassGimmeFactory({
     sendServerEnvelopeToServer: function(type, userTellKey,
                                          otherServerPublicBoxKey) {
       return type + '-' + userTellKey + '-' + otherServerPublicBoxKey;
+    },
+    sendContactEstablishmentMessage: function(name, otherServerPublicBoxKey) {
+      return name + '-' + otherServerPublicBoxKey;
     },
   },
 });

@@ -748,14 +748,31 @@ PickupConnection.prototype = {
 };
 */
 
+var fauxEstablishProcessNow = exports.fauxEstablishProcessNow =
+    function fauxEstablishProcessNow(config, outerEnvelope, otherServerKey) {
+  var innerEnvelope = JSON.parse(
+    config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
+                               outerEnvelope.nonce,
+                               outerEnvelope.senderKey));
+  var receivedAt = Date.now();
+  var receivedBundle = {
+    type: 'contactReq',
+    name: outerEnvelope.name,
+    senderKey: outerEnvelope.senderKey,
+    nonce: outerEnvelope.nonce,
+    innerEnvelope: innerEnvelope,
+    otherServerKey: otherServerKey,
+    receivedAt: receivedAt,
+  };
+  return config.storeApi.contactRequestForUser(receivedBundle);
+};
+
 /**
- * Connection request to establish friendship.  This is intended to cover the
- *  the base case of two server who don't already trust each other, though
- *  we want logic that provides benefit to servers that already trust each
- *  other.  Ideally that could be handled by the delivery connection mechanism
- *  once that starts being more batchy/persistent.
- *
- *
+ * Connection request to establish mutual contact relationship (aka friendship).
+ *  This is intended to cover the the base case of two server who don't already
+ *  trust each other, though we want logic that provides benefit to servers that
+ *  already trust each other.  Ideally that could be handled by the delivery
+ *  connection mechanism once that starts being more batchy/persistent.
  */
 function ReceiveEstablishConnection(conn) {
   this.conn = conn;
@@ -770,22 +787,9 @@ ReceiveEstablishConnection.prototype = {
     // -- try and open the inner envelope.
     // (catch exceptions from the decryption; bad messages can happen)
     try {
-      var self = this, config = this.conn.config;
-      var receivedAt = Date.now();
-      var outerEnvelope = msg.msg;
-      var innerEnvelope = JSON.parse(
-        config.keyring.openBoxUtf8(outerEnvelope.innerEnvelope,
-                                   outerEnvelope.nonce,
-                                   outerEnvelope.senderKey));
-      var receivedBundle = {
-        name: outerEnvelope.name,
-        senderKey: outerEnvelope.senderKey,
-        nonce: outerEnvelope.nonce,
-        innerEnvelope: innerEnvelope,
-        otherServerKey: this.conn.clientPublicKey,
-        receivedAt: receivedAt,
-      };
-      return when(config.storeApi.contactRequestForUser(receivedBundle),
+      var self = this;
+      return when(fauxEstablishProcessNow(this.conn.serverConfig, msg.msg,
+                                          this.conn.clientPublicKey),
         function yeaback() {
           self.conn.writeMessage({type: "ack"});
           return 'root';
@@ -798,7 +802,7 @@ ReceiveEstablishConnection.prototype = {
         });
     }
     catch(ex) {
-      // XXX log that a bad message happened
+      this.conn.log.handlerFailure(ex);
       // XXX note bad actor evidence
       // Tell the other server it fed us something gibberishy so it can
       //  detect a broken or bad actor in its midst.

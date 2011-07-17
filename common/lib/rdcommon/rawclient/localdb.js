@@ -350,7 +350,7 @@ LocalStore.prototype = {
    * - crypted block issued by a client (trustworthy)
    * - authenticated block issued by a client (trustworthy)
    * - conversation data from the mailstore (needs validation of nougat)
-   * - connect/contact requests
+   * - connect/contact request
    */
   consumeReplicaBlock: function(serialized) {
     // XXX temporarily add slack in whether we marshal it on the way down
@@ -360,7 +360,8 @@ LocalStore.prototype = {
     if (mform.hasOwnProperty("fanmsg")) {
       return this._proc_fanmsg(mform);
     }
-    else if(mform.hasOwnProperty("reqmsg")) {
+    // explicitly typed, currently implies contact request
+    else if(mform.hasOwnProperty("type")) {
       return this._proc_reqmsg(mform);
     }
     else {
@@ -383,7 +384,7 @@ LocalStore.prototype = {
    * Note that we do not differentiate between whether the command came to us
    *  via a secret-boxed or authenticated block.
    */
-  _performReplicaCommand: function(command, payload) {
+  _performReplicaCommand: function(command, id, payload) {
     var implCmdName = "_cmd_" + command;
     if (!(implCmdName in this)) {
       throw new Error("no command for '" + block.cmd + "'");
@@ -512,7 +513,8 @@ LocalStore.prototype = {
   // Contact Request Processing
 
   _proc_reqmsg: function(reqmsg) {
-
+    // XXX store, do display stuff, etc.
+    this._log.contactRequest(reqmsg.senderKey);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -866,6 +868,8 @@ LocalStore.prototype = {
     // -- notify peep queries
     this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
                                    {oident: oident});
+
+    this._log.contactAdded(peepRootKey);
   },
 
   /**
@@ -927,6 +931,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     type: $log.DAEMON,
     subtype: $log.DAEMON,
     events: {
+      contactRequest: {requester: 'key'},
+      contactAdded: {rootKey: 'key'},
+
       newConversation: {convId: true},
       conversationMessage: {convId: true, nonce: true},
     },

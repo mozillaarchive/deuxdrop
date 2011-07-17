@@ -227,7 +227,38 @@ MailsenderLocalApi.prototype = {
       }
       // pass-through rejection is fine.
     );
-  }
+  },
+
+  /**
+   * Send a contact request.
+   * XXX right now we always use a one-off connection
+   */
+  sendContactEstablishmentMessage: function(envelope, serverPublicBoxKey) {
+    if (!serverPublicBoxKey)
+      throw new Error("we need an actual key");
+    if (serverPublicBoxKey === this._config.keyring.boxingPublicKey) {
+      this._log.selfSendEstablish();
+      return $maildrop_server.fauxEstablishProcessNow(
+               this._config, envelope,
+               this._config.keyring.boxingPublicKey, this._log);
+    }
+
+    var self = this;
+    return when(this.getServerUrl(serverPublicBoxKey), function(url) {
+       self._log.sendEstablish(serverPublicBoxKey);
+       var deliveryConn = new $mailsender_server.SendEstablishConnection(
+                                envelope, self._config.keyring,
+                                serverPublicBoxKey, url, self._log);
+       return when(deliveryConn.promise,
+         null, // pass-through fulfillment is fine
+         function errback() {
+           self._log.establishDeliveryFailure(serverPublicBoxKey);
+         }
+       );
+      }
+      // pass-through rejection is fine.
+    );
+  },
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
@@ -239,14 +270,17 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       gotUrl: {url: false},
       selfSendPersonEnvelope: {},
       selfSendServerEnvelope: {},
+      selfSendEstablish: {},
 
       sendPersonEnvelope: {serverKey: false},
       sendServerEnvelope: {serverKey: false},
+      sendEstablish: {serverKey: false},
     },
     errors: {
       selfIdentMismatch: {dbCopy: false, userCopy: false},
       deliveryFailure: {userRootKey: 'key'},
       serverDeliveryFailure: {recipientServer: 'key'},
+      establishDeliveryFailure: {recipientServer: 'key'},
     },
     LAYER_MAPPING: {
       layer: "api",

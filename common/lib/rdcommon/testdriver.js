@@ -504,13 +504,15 @@ console.error("   resolving!");
  * In the event require()ing a test module fails, we want to report this
  *  so it's not just like the test disappears from the radar.
  */
-function reportTestModuleRequireFailures(testModuleName, exceptions) {
+function reportTestModuleRequireFailures(testModuleName, moduleName,
+                                         exceptions) {
   console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
   try {
     var dumpObj = {
       schema: $testcontext.LOGFAB._rawDefs,
       fileFailure: {
         fileName: testModuleName,
+        moduleName: moduleName,
         exceptions: exceptions.map($extransform.transformException),
       }
     };
@@ -540,12 +542,35 @@ console.error("  itAllGood()");
     deferred.resolve(true);
   };
 
-  ErrorTrapper.trapErrors();
+  // nutshell:
+  // * r.js previously would still invoke our require callback function in
+  //    the event of a failure because our error handler did not actually
+  //    throw, but just ate the error.  So we would generate errors at that
+  //    point.
+  // * now r.js no longer issues the callback because it performs a return when
+  //    invoking the callback, so we generate the error when the error happens.
+  //    This does mean that if there are multiple errors, we will only see one
+  //    of them before giving up, but many times the subsequent errors were
+  //    just fall-out from modules' evaluating to null.
+  var alreadyBailed = false;
+  ErrorTrapper.callbackOnError(function explodey(err, moduleName) {
+console.error("ERROR TRAPPAH");
+    if (alreadyBailed)
+      return;
+    reportTestModuleRequireFailures(testModuleName, moduleName, [err]);
+    deferred.resolve(true);
+    alreadyBailed = true;
+console.error("ERROR TRAPPAH2");
+  });
   require([testModuleName], function(tmod) {
 console.error("IN TEST MODULE INVOC");
+    // XXX per the above, this bit is moot now and should be removed unless
+    //  r.js changes behaviour (from our perspective) again.
     // If there was a problem, tmod will be null (and we will have trapped
     //  an error.)
     var trappedErrors = ErrorTrapper.gobbleAndStopTrappingErrors();
+    if (alreadyBailed)
+      return;
     if (trappedErrors.length) {
       reportTestModuleRequireFailures(testModuleName, trappedErrors);
       deferred.resolve(true);

@@ -422,7 +422,8 @@ var TestActorProtoBase = {
    */
   expectOnly__die: function() {
     if (!this._activeForTestStep)
-      throw new Error("Attempt to set expectations on an actor that is not " +
+      throw new Error("Attempt to set expectations on an actor (" +
+                      this.__defName + ": " + this.__name + ") that is not " +
                       "participating in this test step!");
     this._expectDeath = true;
   },
@@ -614,7 +615,8 @@ LoggestClassMaker.prototype = {
 
     this.testActorProto['expect_' + name] = function(val) {
       if (!this._activeForTestStep)
-        throw new Error("Attempt to set expectations on an actor that is not " +
+        throw new Error("Attempt to set expectations on an actor (" +
+                        this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
       this._expectations.push([name, val]);
       return this;
@@ -714,7 +716,8 @@ LoggestClassMaker.prototype = {
 
     this.testActorProto['expect_' + name] = function() {
       if (!this._activeForTestStep)
-        throw new Error("Attempt to set expectations on an actor that is not " +
+        throw new Error("Attempt to set expectations on an actor (" +
+                        this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
@@ -783,7 +786,8 @@ LoggestClassMaker.prototype = {
 
     this.testActorProto['expect_' + name_begin] = function() {
       if (!this._activeForTestStep)
-        throw new Error("Attempt to set expectations on an actor that is not " +
+        throw new Error("Attempt to set expectations on an actor (" +
+                        this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
       var exp = [name_begin];
       for (var iArg = 0; iArg < numArgs; iArg++) {
@@ -795,7 +799,8 @@ LoggestClassMaker.prototype = {
     };
     this.testActorProto['expect_' + name_end] = function() {
       if (!this._activeForTestStep)
-        throw new Error("Attempt to set expectations on an actor that is not " +
+        throw new Error("Attempt to set expectations on an actor (" +
+                        this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
       var exp = [name_end];
       for (var iArg = 0; iArg < numArgs; iArg++) {
@@ -939,7 +944,8 @@ LoggestClassMaker.prototype = {
     //  (we will just explode on any logged exception)
     this.testActorProto['expect_' + name] = function() {
       if (!this._activeForTestStep)
-        throw new Error("Attempt to set expectations on an actor that is not " +
+        throw new Error("Attempt to set expectations on an actor (" +
+                        this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
       var exp = [name];
       for (var iArg = 0; iArg < arguments.length; iArg++) {
@@ -996,7 +1002,8 @@ LoggestClassMaker.prototype = {
 
     this.testActorProto['expect_' + name] = function() {
       if (!this._activeForTestStep)
-        throw new Error("Attempt to set expectations on an actor that is not " +
+        throw new Error("Attempt to set expectations on an actor (" +
+                        this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {

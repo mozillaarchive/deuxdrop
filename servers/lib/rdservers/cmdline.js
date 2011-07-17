@@ -41,10 +41,15 @@ var SUPER_DEBUG = false;
 
 var ErrorTrapper = {
   _trappedErrors: null,
+  _handlerCallback: null,
   /**
    * Express interest in errors.
    */
   trapErrors: function() {
+    this._trappedErrors = [];
+  },
+  callbackOnError: function(handler) {
+    this._handlerCallback = handler;
     this._trappedErrors = [];
   },
   yoAnError: function(err, moduleName) {
@@ -52,13 +57,18 @@ var ErrorTrapper = {
       console.error("==== REQUIREJS ERR ====", moduleName);
       console.error(err.message);
       console.error(err.stack);
-      if (DEATH_PRONE)
+      if (DEATH_PRONE) {
+        console.error("PERFORMING PROCESS EXIT");
         process.exit(1);
-      return;
+      }
     }
-    this._trappedErrors.push(err);
+    if (this._handlerCallback)
+      this._handlerCallback(err, moduleName);
+    else if (this._trappedErrors)
+      this._trappedErrors.push(err);
   },
   gobbleAndStopTrappingErrors: function() {
+    this._handlerCallback = null;
     var errs = this._trappedErrors;
     this._trappedErrors = null;
     return errs;
@@ -69,9 +79,10 @@ require.onError = function(err) {
   //console.error("(Exception)");
   //console.error("RJS EX STACK", err.message, err.stack);
 
+  var useErr = err;
   if (err.originalError)
-    err = err.originalError;
-  ErrorTrapper.yoAnError(err, err.moduleName);
+    useErr = err.originalError;
+  ErrorTrapper.yoAnError(useErr, err.moduleName);
 };
 
 

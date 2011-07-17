@@ -255,13 +255,18 @@ UserBehalfDataStore.prototype = {
   putOutgoingContactRequest: function(tellKey, blobObj) {
     return this._db.putCells(TBL_REQUESTS_PENDING,
                              this._userRowBit + tellKey,
-                             {'d:d': JSON.stringify(blob)});
+                             {'d:d': JSON.stringify(blobObj)});
   },
 
   getOutgoingContactRequest: function(tellKey) {
     return this._db.getRowCellJson(TBL_REQUESTS_PENDING,
                                    this._userRowBit + tellKey,
                                    'd:d');
+  },
+
+  deleteOutgoingContactRequest: function(tellKey) {
+    return this._db.deleteRow(TBL_REQUESTS_PENDING,
+                              this._userRowBit + tellKey);
   },
 
   //////////////////////////////////////////////////////////////////////////////

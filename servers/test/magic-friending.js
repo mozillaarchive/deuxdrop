@@ -84,8 +84,7 @@ TD.commonCase('have two contacts be friends using magic rendezvous',
 
   // Establish the friendship relationship on the basis of cheaty action at
   //  a distance of the self-ident blobs.
-  client_a.setup_addContact(client_b).log.boring(false);
-  client_b.setup_addContact(client_a).log.boring(false);
+  client_a.setup_mutualContact(client_b, true);
 
   // Verify the clients and their servers
   T.group('verify');

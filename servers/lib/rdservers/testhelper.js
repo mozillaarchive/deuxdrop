@@ -272,28 +272,95 @@ var TestClientActorMixins = {
   // Contacts
 
   /**
-   * Add another client as a contact of ours *using magical self-ident knowing*
-   *  as the means of knowing the other contact's identity.
+   * Establish a contact relationship with another person (as identified by
+   *  their client) *using magical self-ident knowing*.
    *
-   * We place our expectation on our mailstore server acknowledging the
-   *  completion of our request.  If the mailstore is living on its own, we
-   *  would want to also place an expectation on the permission hitting the
-   *  maildrop.
+   * Because this is a stateful process that involves multiple actors, we
+   *  consolidate and perform both directions as a single conceptual operation.
    */
-  addContact: function(other) {
-    this.RT.reportActiveActorThisStep(this._eRawClient);
-    this._eRawClient.expect_allActionsProcessed();
-
-    this._peepsByName[other.__name] =
-      this._rawClient.connectToPeepUsingSelfIdent(
-        other._rawClient._selfIdentBlob);
-  },
-
-  setup_addContact: function(other) {
+  setup_mutualContact: function(other, interesting) {
     var self = this;
-    return this.T.convenienceSetup(self, 'add contact of', other, function() {
-      self.addContact(other);
-    });
+    // -- SELF req OTHER
+    // - issue request, client through send, hold at sender
+    this.T.convenienceSetup(self._eRawClient, 'request contact of', other,
+                                   function() {
+      self.expectServerTaskToRun('userOutgoingContactRequest');
+      self._eRawClient.expect_allActionsProcessed();
+      self._usingServer.holdAllMailSenderMessages();
+      self._usingServer.expectContactRequestToServerUser(other._usingServer,
+                                                         other);
+
+      self._peepsByName[other.__name] =
+        self._rawClient.connectToPeepUsingSelfIdent(
+          other._rawClient._selfIdentBlob);
+    }).log.boring(!interesting);
+    // - release to sender, their drop, mailstore. hold replica.
+    this.T.convenienceSetup(other._usingServer,
+        'receives contact request for', other, 'from', self, function() {
+      other.expectServerTaskToRun('userIncomingContactRequest');
+      other._usingServer.holdAllReplicaBlocksFor(other);
+      other._usingServer.expectReplicaBlocksFor(other, 1);
+
+      self._usingServer.releaseContactRequestToServerUser(other._usingServer,
+                                                          other);
+    }).log.boring(!interesting);
+    // - release replica of request
+    this.T.convenienceSetup(other._usingServer,
+        'delivers contact request to', other._eRawClient, function() {
+      self.RT.reportActiveActorThisStep(other._eLocalStore);
+      other._eLocalStore.expect_contactRequest(self._rawClient.tellBoxKey);
+      other._eRawClient.expect_replicaCaughtUp();
+
+      other._usingServer.releaseAllReplicaBlocksFor(other);
+    }).log.boring(!interesting);
+
+
+    // -- OTHER req SELF
+    this.T.convenienceSetup(other._eRawClient, 'request contact of', self,
+                                   function() {
+      other.expectServerTaskToRun('userOutgoingContactRequest');
+      other._eRawClient.expect_allActionsProcessed();
+      // the request message being sent to SELF
+      other._usingServer.holdAllMailSenderMessages();
+      other._usingServer.expectContactRequestToServerUser(self._usingServer,
+                                                          self);
+      // add-contact replica block is good to go!
+      other._usingServer.holdAllReplicaBlocksFor(other);
+      other._usingServer.expectReplicaBlocksFor(other, 1);
+
+      other._peepsByName[other.__name] =
+        other._rawClient.connectToPeepUsingSelfIdent(
+          self._rawClient._selfIdentBlob);
+    }).log.boring(!interesting);
+    // - release replica of addcontact
+    this.T.convenienceSetup(other._usingServer,
+        'delivers contact request to', other._eRawClient, function() {
+      self.RT.reportActiveActorThisStep(other._eLocalStore);
+      other._eLocalStore.expect_contactAdded(self._rawClient.rootPublicKey);
+      other._eRawClient.expect_replicaCaughtUp();
+
+      other._usingServer.releaseAllReplicaBlocksFor(other);
+    }).log.boring(!interesting);
+    // - release to sender, their drop, mailstore. hold replica.
+    this.T.convenienceSetup(self._usingServer,
+        'receives contact request for', self, 'from', other, function() {
+      self.expectServerTaskToRun('userIncomingContactRequest');
+      self._usingServer.holdAllReplicaBlocksFor(self);
+      self._usingServer.expectReplicaBlocksFor(self, 1);
+
+      other._usingServer.releaseContactRequestToServerUser(self._usingServer,
+                                                           self);
+    }).log.boring(!interesting);
+    // - release replica, boring.
+    this.T.convenienceSetup(self._usingServer,
+        'delivers contact request to', self._eRawClient, function() {
+      self.RT.reportActiveActorThisStep(self._eLocalStore);
+      self._eLocalStore.expect_contactAdded(other._rawClient.rootPublicKey);
+      self._eRawClient.expect_replicaCaughtUp();
+
+      self._usingServer.releaseAllReplicaBlocksFor(self);
+    }).log.boring(!interesting);
+
   },
 
   expectReplicaUpdate: function() {
@@ -332,8 +399,7 @@ var TestClientActorMixins = {
       var focal = tofriend.pop();
       for (var i = 0; i < tofriend.length; i++) {
         var other = tofriend[i];
-        focal.setup_addContact(other);
-        other.setup_addContact(focal);
+        focal.setup_mutualContact(other);
       }
     }
   },
@@ -886,6 +952,18 @@ var TestServerActorMixins = {
       testServer._config.keyring.boxingPublicKey);
   },
 
+  expectContactRequestToServerUser: function(testServer, testClient) {
+    this.RT.reportActiveActorThisStep(this);
+    this.expect_sender_sendContactEstablishmentMessage(
+      testClient._rawClient.tellBoxKey,
+      testServer._config.keyring.boxingPublicKey);
+  },
+  releaseContactRequestToServerUser: function(testServer, testClient) {
+    this._config.senderApi.__release_sendContactEstablishmentMessage(
+      testClient._rawClient.tellBoxKey,
+      testServer._config.keyring.boxingPublicKey);
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Holding: Replica Blocks
   //
@@ -912,6 +990,7 @@ var TestServerActorMixins = {
    * Expect some number of replica blocks to be queued for the client.
    */
   expectReplicaBlocksFor: function(testClient, expectedCount) {
+    testClient.RT.reportActiveActorThisStep(testClient);
     while (expectedCount--) {
       testClient.expect_replicaBlockNotifiedOnServer();
     }
@@ -982,6 +1061,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                                           userRootKey: 'key'},
       sender_sendServerEnvelopeToServer: {type: true, userTellKey: 'key',
                                           otherServerKey: 'key'},
+      sender_sendContactEstablishmentMessage: {name: 'key',
+                                               otherServerKey: 'key'},
     },
   }
 });
