@@ -313,7 +313,7 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Replica API
 
-  _generateReplicaCryptoBlock: function(command, id, payload) {
+  generateReplicaCryptoBlock: function(command, id, payload) {
     var block = {
       cmd: command,
       id: id,
@@ -330,7 +330,7 @@ LocalStore.prototype = {
     return JSON.stringify({nonce: nonce, sboxed: sboxed});
   },
 
-  _generateReplicaAuthBlock: function(command, id, payload) {
+  generateReplicaAuthBlock: function(command, id, payload) {
     var block = {
       cmd: command,
       id: id,
@@ -374,7 +374,7 @@ LocalStore.prototype = {
                                          'replicaAuth');
         block = JSON.parse(mform.block);
       }
-      return this._performReplicaCommand(block.cmd, block.data);
+      return this._performReplicaCommand(block.cmd, block.id, block.data);
     }
   },
 
@@ -389,17 +389,19 @@ LocalStore.prototype = {
     if (!(implCmdName in this)) {
       throw new Error("no command for '" + block.cmd + "'");
     }
-    return this[implCmdName](id, payload);
+    return this._log.replicaCmd(command, this,
+                                 this[implCmdName],
+                                 id, payload);
   },
 
   generateAndPerformReplicaCryptoBlock: function(command, id, payload) {
-    var serialized = this._generateReplicaCryptoBlock(command, id, payload);
+    var serialized = this.generateReplicaCryptoBlock(command, id, payload);
     this._performReplicaCommand(command, id, payload);
     return serialized;
   },
 
   generateAndPerformReplicaAuthBlock: function(command, id, payload) {
-    var serialized = this._generateReplicaAuthBlock(command, id, payload);
+    var serialized = this.generateReplicaAuthBlock(command, id, payload);
     this._performReplicaCommand(command, id, payload);
     return serialized;
   },
@@ -526,7 +528,7 @@ LocalStore.prototype = {
     //  from the welcome message, which, for consistency reasons, the mailstore
     //  breaks apart and pretends does not exist to us.)
     if (fanmsg.hasOwnProperty("sentBy")) {
-      return this._proc_convInvite(fanmsg);
+      return this._procConvInvite(fanmsg);
     }
     // -- fanout message
     else {
@@ -547,20 +549,20 @@ LocalStore.prototype = {
         var procfunc;
         switch(fanoutEnv.type) {
           case 'join':
-            procfunc = self._proc_convJoin;
+            procfunc = self._procConvJoin;
             break;
           case 'message':
-            procfunc = self._proc_convMessage;
+            procfunc = self._procConvMessage;
             break;
           case 'meta':
-            procfunc = self._proc_convMetaMsg;
+            procfunc = self._procConvMetaMsg;
             break;
           default:
             throw new $taskerrors.MalformedPayloadError(
                         'bad type: ' + fanoutEnv.type);
         }
 
-        return self._log.proc_conv(fanoutEnv.type,
+        return self._log.procConv(fanoutEnv.type,
                                    self, procfunc,
                                    convMeta, fanoutEnv, cells);
       });
@@ -576,7 +578,7 @@ LocalStore.prototype = {
    *  creating the appropriate database row.  The conversation will not become
    *  visible to the user until at least one message has been processed.
    */
-  _proc_convInvite: function(fanmsg) {
+  _procConvInvite: function(fanmsg) {
     // - unbox the invite envelope
     var inviteEnv = JSON.parse(
                       this._keyring.openBoxUtf8With(
@@ -623,7 +625,7 @@ LocalStore.prototype = {
   /**
    * Process a join message.
    */
-  _proc_convJoin: function(convMeta, fanoutEnv, cells) {
+  _procConvJoin: function(convMeta, fanoutEnv, cells) {
     // - get the pubring for the inviter, exploding if they are not authorized
     var inviterCellName = "d:s" + fanoutEnv.sentBy;
     if (!cells.hasOwnProperty(inviterCellName))
@@ -682,7 +684,7 @@ LocalStore.prototype = {
   /**
    * Meta-data about a conversation from other participants.
    */
-  _proc_convMetaMsg: function(convMeta, fanoutEnv, cells) {
+  _procConvMetaMsg: function(convMeta, fanoutEnv, cells) {
     // -- update anyone subscribed to the full conversation
 
 
@@ -697,7 +699,7 @@ LocalStore.prototype = {
    *
    * If this is a join notification, we will name-check the added person.
    */
-  _proc_convMessage: function(convMeta, fanoutEnv, cells) {
+  _procConvMessage: function(convMeta, fanoutEnv, cells) {
     var authorTellKey = fanoutEnv.sentBy;
     var authorCellName = "d:s" + authorTellKey;
     if (!cells.hasOwnProperty(authorCellName))
@@ -868,8 +870,6 @@ LocalStore.prototype = {
     // -- notify peep queries
     this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
                                    {oident: oident});
-
-    this._log.contactAdded(peepRootKey);
   },
 
   /**
@@ -932,16 +932,17 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.DAEMON,
     events: {
       contactRequest: {requester: 'key'},
-      contactAdded: {rootKey: 'key'},
 
       newConversation: {convId: true},
       conversationMessage: {convId: true, nonce: true},
     },
     calls: {
-      proc_conv: {type: true},
+      replicaCmd: {command: true},
+      procConv: {type: true},
     },
     TEST_ONLY_calls: {
-      proc_conv: {convMeta: false, fanoutEnv: false, cells: false},
+      replicaCmd: {id: true},
+      procConv: {convMeta: false, fanoutEnv: false, cells: false},
     },
   },
 });

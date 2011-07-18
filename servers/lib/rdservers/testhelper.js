@@ -284,12 +284,17 @@ var TestClientActorMixins = {
     // - issue request, client through send, hold at sender
     this.T.convenienceSetup(self._eRawClient, 'request contact of', other,
                                    function() {
+      // mark the local-store as active to make sure it generates no entries
+      self.RT.reportActiveActorThisStep(self._eLocalStore);
+      // the server should process this
       self.expectServerTaskToRun('userOutgoingContactRequest');
       self._eRawClient.expect_allActionsProcessed();
+      // and let's expect and gate its request to the other user
       self._usingServer.holdAllMailSenderMessages();
       self._usingServer.expectContactRequestToServerUser(other._usingServer,
                                                          other);
 
+      // initiate the connect process, save off the othident for test needs.
       self._peepsByName[other.__name] =
         self._rawClient.connectToPeepUsingSelfIdent(
           other._rawClient._selfIdentBlob);
@@ -336,7 +341,8 @@ var TestClientActorMixins = {
     this.T.convenienceSetup(other._usingServer,
         'delivers contact request to', other._eRawClient, function() {
       self.RT.reportActiveActorThisStep(other._eLocalStore);
-      other._eLocalStore.expect_contactAdded(self._rawClient.rootPublicKey);
+      other._eLocalStore.expect_replicaCmd('addContact',
+                                           self._rawClient.rootPublicKey);
       other._eRawClient.expect_replicaCaughtUp();
 
       other._usingServer.releaseAllReplicaBlocksFor(other);
@@ -355,7 +361,8 @@ var TestClientActorMixins = {
     this.T.convenienceSetup(self._usingServer,
         'delivers contact request to', self._eRawClient, function() {
       self.RT.reportActiveActorThisStep(self._eLocalStore);
-      self._eLocalStore.expect_contactAdded(other._rawClient.rootPublicKey);
+      self._eLocalStore.expect_replicaCmd('addContact',
+                                          other._rawClient.rootPublicKey);
       self._eRawClient.expect_replicaCaughtUp();
 
       self._usingServer.releaseAllReplicaBlocksFor(self);
@@ -723,7 +730,7 @@ var TestClientActorMixins = {
 
       for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
         var tMsg = tConv.data.backlog[iMsg];
-        els.expect_proc_conv(tMsg.data.type);
+        els.expect_procConv(tMsg.data.type);
         els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
       }
       self._eRawClient.expect_replicaCaughtUp();
@@ -762,7 +769,7 @@ var TestClientActorMixins = {
       self.RT.reportActiveActorThisStep(self._eLocalStore);
       var els = self._eLocalStore;
 
-      els.expect_proc_conv(tMsg.data.type);
+      els.expect_procConv(tMsg.data.type);
       els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
 
       self._eRawClient.expect_replicaCaughtUp();

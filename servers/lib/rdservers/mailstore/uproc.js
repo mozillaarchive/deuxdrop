@@ -236,7 +236,7 @@ UserMessageProcessor.prototype = {
       // persist contact replica block to our random-access store
       this.store.newContact(outgoing.userRootKey, outgoing.replicaBlock),
       // send replica block to all clients
-      this.sendReplicaBlockToOtherClients(outgoing.replicaBlock),
+      this.relayMessageToAllClients(outgoing.replicaBlock),
       // delete out our outgoing contact request
       this.store.deleteOutgoingContactRequest(outgoing.userTellKey));
   },
@@ -267,7 +267,7 @@ UserMessageProcessor.prototype = {
 };
 
 
-var UserOutgoingContactRequestTask = taskMaster.defineTask({
+var UserOutgoingContactRequestTask = taskMaster.defineEarlyReturnTask({
   name: 'userOutgoingContactRequest',
   args: ['config', 'effigy', 'store', 'uproc', 'msg'],
   steps: {
@@ -353,7 +353,7 @@ var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
     persist: function() {
       return $Q.wait(
         this.store.putIncomingContactRequest(this.receivedAt,
-                                             this.senderKey,
+                                             this.receivedBundle.senderKey,
                                              this.receivedBundle)
 
       );

@@ -569,7 +569,7 @@ RawClientAPI.prototype = {
       this._longtermKeyring, personSelfIdentBlob, localPoco);
 
     // this will get told to us once the connect process has completed
-    var replicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
+    var replicaBlock = this.store.generateReplicaCryptoBlock(
       'addContact', identPayload.root.rootSignPubKey, otherPersonIdentBlob);
 
     var now = Date.now(), nonce = $keyops.makeBoxNonce();
