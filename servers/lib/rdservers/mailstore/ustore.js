@@ -186,7 +186,7 @@ UserBehalfDataStore.prototype = {
 
   putIncomingContactRequest: function(receivedAt, tellKey, reqData) {
     var cells = {};
-    cells['d:' + tellKey] = JSON.stringify(reqData);
+    cells['d:' + tellKey] = reqData;
     var lexipadded = lexipadTS(receivedAt);
     return $Q.wait(
       this._db.putCells(TBL_REQUESTS_IN,
@@ -206,9 +206,9 @@ UserBehalfDataStore.prototype = {
       function(val) {
         if (!val || val.length === 1)
           return false;
-        return self._db.getRowCellJson(TBL_REQUESTS_IN,
-                                       self._userRowBit + val,
-                                       'd:' + tellKey);
+        return self._db.getRowCell(TBL_REQUESTS_IN,
+                                   self._userRowBit + val,
+                                   'd:' + tellKey);
       });
   },
 
@@ -255,13 +255,13 @@ UserBehalfDataStore.prototype = {
   putOutgoingContactRequest: function(tellKey, blobObj) {
     return this._db.putCells(TBL_REQUESTS_PENDING,
                              this._userRowBit + tellKey,
-                             {'d:d': JSON.stringify(blobObj)});
+                             {'d:d': blobObj});
   },
 
   getOutgoingContactRequest: function(tellKey) {
-    return this._db.getRowCellJson(TBL_REQUESTS_PENDING,
-                                   this._userRowBit + tellKey,
-                                   'd:d');
+    return this._db.getRowCell(TBL_REQUESTS_PENDING,
+                               this._userRowBit + tellKey,
+                               'd:d');
   },
 
   deleteOutgoingContactRequest: function(tellKey) {
@@ -327,7 +327,7 @@ UserBehalfDataStore.prototype = {
         cells[key] = extraCells[key];
       }
     }
-    cells["d:m" + highMsgNum] = JSON.stringify(rawMsgWithContext);
+    cells["d:m" + highMsgNum] = rawMsgWithContext;
     return this._db.putCells(TBL_CONVERSATIONS,
                              this._userRowBit + conversationId,
                              cells);

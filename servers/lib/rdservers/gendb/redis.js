@@ -69,6 +69,29 @@ define(
   ) {
 var when = $Q.when;
 
+function boxPersisted(val) {
+  switch (typeof(val)) {
+    case "object":
+      return JSON.stringify(val);
+    case "string":
+      return "S" + val;
+    default:
+      return val;
+  }
+}
+function unboxPersisted(val) {
+  if (val == null)
+    return null;
+  switch (val[0]) {
+    case '{':
+      return JSON.parse(val);
+    case 'S':
+      return val.substring(1);
+    default:
+      return parseInt(val);
+  }
+}
+
 function RedisDbConn(connInfo, nsprefix, _logger) {
   this._conn = $redis.createClient(connInfo.port, connInfo.host);
   if (connInfo.password)
@@ -109,6 +132,14 @@ RedisDbConn.prototype = {
   //  a region cluster together with lexicographically ordered rows.  The level
   //  of atomicity is a single row.
   //
+  // All cells get type-boxed to make debug logging easier/prettier.
+  //  Specifically, if you give us an object, we will stringify it on its way
+  //  to the database and parse it on its way out.  In order to avoid ambiguity
+  //  we prefix strings with "S" on their way in.  This leaves us able to
+  //  distinguish types based on the first character: '{' is a JSONed object,
+  //  'S' is a string, everything else must be a number that we parseInt.
+  //  See `boxPersisted`/`unboxPersisted`.
+  //
   // This should be used when:
   // - We believe we can generate long-term lexicographic clustering (things
   //    will be clustered on disk when fully merged) and/or temporal
@@ -131,17 +162,9 @@ RedisDbConn.prototype = {
       if (err)
         deferred.reject(err);
       else
-        deferred.resolve(result);
+        deferred.resolve(unboxPersisted(result));
     });
     return deferred.promise;
-  },
-
-  getRowCellJson: function(tableName, rowId, columnName) {
-    return when(this.getRowCell(tableName, rowId, columnName), function(val) {
-      if (val)
-        return JSON.parse(val);
-      return val;
-    });
   },
 
   /**
@@ -170,18 +193,28 @@ RedisDbConn.prototype = {
     this._log.getRow(tableName, rowId, columnFamilies);
     this._conn.hgetall(this._prefix + ':' + tableName + ':' + rowId,
                        function(err, result) {
-      if (err)
+      if (err) {
         deferred.reject(err);
-      else
-        deferred.resolve(result);
+      }
+      else {
+        var odict = {};
+        for (var key in result) {
+          odict[key] = unboxPersisted(result[key]);
+        }
+        deferred.resolve(odict);
+      }
     });
     return deferred.promise;
   },
 
   putCells: function(tableName, rowId, cells) {
     var deferred = $Q.defer();
+    var ocells = {};
+    for (var key in cells) {
+      ocells[key] = boxPersisted(cells[key]);
+    }
     this._log.putCells(tableName, rowId, cells);
-    this._conn.hmset(this._prefix + ':' + tableName + ':' + rowId, cells,
+    this._conn.hmset(this._prefix + ':' + tableName + ':' + rowId, ocells,
                      function(err, replies) {
       if (err)
         deferred.reject(err);

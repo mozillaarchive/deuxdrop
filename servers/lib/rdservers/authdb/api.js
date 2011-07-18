@@ -178,7 +178,7 @@ AuthApi.prototype = {
     var promises = [];
     var accountCells = {
       "d:selfIdent": selfIdentBlob,
-      "d:store:keyring": JSON.stringify(storeKeyring),
+      "d:store:keyring": storeKeyring,
     };
     for (var clientKey in clientAuthsMap) {
       accountCells["d:c:" + clientKey] = clientAuthsMap[clientKey];
@@ -238,8 +238,7 @@ AuthApi.prototype = {
         if (serverRole === "store" &&
             cells.hasOwnProperty("d:store:keyring")) {
           effigy.storeEnvelopeKeyring =
-            $keyring.loadSimpleBoxingKeyring(
-              JSON.parse(cells["d:store:keyring"]));
+            $keyring.loadSimpleBoxingKeyring(cells["d:store:keyring"]);
         }
 
         return effigy;
@@ -398,7 +397,7 @@ AuthApi.prototype = {
           var userTellKey = key.substring(
             2 + BOX_PUB_KEYSIZE + 1,
             2 + BOX_PUB_KEYSIZE + 1 + BOX_PUB_KEYSIZE);
-          var userInfo = JSON.parse(cells[key]);
+          var userInfo = cells[key];
           usersAndServers.push({i: userInfo.i,
                                 userTellKey: userTellKey,
                                 userEnvelopeKey: userInfo.envelopeKey,
@@ -431,7 +430,7 @@ AuthApi.prototype = {
           throw new Error("user already authorized"); // XXX better class wanted
         // authorize since not
         var cells = {};
-        cells[columnName] = JSON.stringify({
+        cells[columnName] = {
           // XXX this is not a super-great way to accomplish this.  it would
           //  be nice if we could use the cell's timestamp or something with
           //  with higher resolution, etc.
@@ -439,7 +438,7 @@ AuthApi.prototype = {
           //  a separate counter; we should probably just use a counter.)
           i: Date.now(),
           envelopeKey: otherUserEnvelopeBoxPubKey
-        });
+        };
         return $Q.all([
           self._serverAuthorizeServer(otherServerBoxPubKey),
           self._db.putCells(TBL_CONV_AUTH, convId, cells)
@@ -471,10 +470,10 @@ AuthApi.prototype = {
     var cells = {};
     for (var i = 0; i < recipServerUserInfos.length; i++) {
       var info = recipServerUserInfos[i];
-      cells["u:" + info.serverKey + ":" + info.tellKey] = JSON.stringify({
+      cells["u:" + info.serverKey + ":" + info.tellKey] = {
         i: i,
         envelopeKey: info.envelopeKey,
-      });
+      };
     }
     return this._db.putCells(TBL_CONV_AUTH, convId, cells);
   },
