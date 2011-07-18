@@ -252,7 +252,7 @@ UserMessageProcessor.prototype = {
    *  of course.
    */
   relayMessageToAllClients: function(block) {
-    var clientKeys = this.effigy.otherClientKeys;
+    var clientKeys = this.effigy.allClientKeys;
     var promises = [];
     for (var i = 0; i < clientKeys.length; i++) {
       promises.push(this.store.clientQueuePush(clientKeys[i], block));

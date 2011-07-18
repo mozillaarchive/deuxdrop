@@ -426,6 +426,7 @@ RedisDbConn.prototype = {
 
   queueAppend: function(tableName, queueName, values) {
     var multi = this._conn.multi();
+    this._log.queueAppend(tableName, queueName, values);
     for (var i = 0; i < values.length; i++) {
       multi.rpush(this._prefix + ':' + tableName + ':' + queueName,
                   JSON.stringify(values[i]));
@@ -442,6 +443,7 @@ RedisDbConn.prototype = {
 
   queuePeek: function(tableName, queueName, count) {
     var deferred = $Q.defer();
+    this._log.queuePeek(tableName, queueName, count);
     this._conn.lrange(this._prefix + ':' + tableName + ':' + queueName,
                       0, count - 1, function(err, multibulk) {
       if (err)
@@ -454,6 +456,7 @@ RedisDbConn.prototype = {
 
   queueConsume: function(tableName, queueName, count) {
     var deferred = $Q.defer();
+    this._log.queueConsume(tableName, queueName, count);
     this._conn.ltrim(this._prefix + ':' + tableName + ':' + queueName,
                      count, -1, function(err, status) {
       if (err)
@@ -473,6 +476,7 @@ RedisDbConn.prototype = {
   queueConsumeAndPeek: function(tableName, queueName, consumeCount, peekCount) {
     var deferred = $Q.defer();
     var multi = this._conn.multi();
+    this._log.queueConsumeAndPeek(tableName, queueName, consumeCount, peekCount);
     multi.ltrim(this._prefix + ':' + tableName + ':' + queueName,
                 consumeCount, -1);
     multi.lrange(this._prefix + ':' + tableName + ':' + queueName,
@@ -550,10 +554,17 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                            objectName: true, newValue: false},
 
       // - queue abstraction
+      queueAppend: {tableName: false, queueName: false},
+      queuePeek: {tableName: false, queueName: false, count: false},
+      queueConsume: {tableName: false, queueName: false, count: false},
+      queueConsumeAndPeek: {tableName: false, queueName: false,
+                            consumeCount: false, peekCount: false},
     },
     TEST_ONLY_events: {
       putCells: {cells: $log.JSONABLE},
       raceCreateRow: {probeCellName: false, cells: $log.JSONABLE},
+
+      queueAppend: {values: false},
     },
     errors: {
       dbErr: {err: $log.EXCEPTION},

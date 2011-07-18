@@ -272,14 +272,17 @@ ClientServicingConnection.prototype = {
   },
 
   sendReplicaBlockToOtherClients: function(block) {
-    if (!this.userEffigy.otherClientKeys.length)
+    if (this.userEffigy.allClientKeys.length === 1)
       return true;
 
     // - enqueue it for all other replicas
-    var otherClientKeys = this.userEffigy.otherClientKeys;
+    var allClientKeys = this.userEffigy.allClientKeys;
     var promises = [];
-    for (var i = 0; i < otherClientKeys.length; i++) {
-      promises.push(this.store.clientQueuePush(otherClientKeys[i], block));
+    for (var i = 0; i < allClientKeys.length; i++) {
+      var clientKey = allClientKeys[i];
+      if (clientKey === this.clientPublicKey)
+        continue;
+      promises.push(this.store.clientQueuePush(clientKey, block));
     }
 
     // - notify any lives ones about the enqueueing

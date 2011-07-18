@@ -1048,7 +1048,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                                present: true},
 
       // - hold-related
-      replicaBlockNotifiedOnServer: {},
+      replicaBlockNotifiedOnServer: {block: false},
     },
   },
   testServer: {

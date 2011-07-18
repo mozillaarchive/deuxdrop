@@ -75,14 +75,13 @@ var when = $Q.when;
  *  case of this effigy*.  Specifically, we do not want to load keyrings
  *  that are not required by our use-case.
  *
- * XXX we do not update the list of other client keys on-the-fly; this is okay
+ * XXX we do not update the list of client keys on-the-fly; this is okay
  *  because there is no way to dynamically authorize new clients, but we
  *  obviously need to make sure we take care of that.
  */
-function UserEffigy(pubring, clientPublicKey, otherClientKeys) {
+function UserEffigy(pubring, allClientKeys) {
   this.pubring = pubring;
-  this.clientPublicKey = clientPublicKey;
-  this.otherClientKeys = otherClientKeys;
+  this.allClientKeys = allClientKeys;
 }
 UserEffigy.prototype = {
   get rootPublicKey() {
@@ -222,17 +221,13 @@ AuthApi.prototype = {
           $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
             cells["d:selfIdent"]);
 
-        var otherClientKeys = [];
+        var allClientKeys = [];
         for (var key in cells) {
-          if (/^d:c:/.test(key)) {
-            var candClientKey = key.substring(4);
-            if (candClientKey !== clientPublicKey)
-              otherClientKeys.push(candClientKey);
-          }
+          if (/^d:c:/.test(key))
+            allClientKeys.push(key.substring(4));
         }
 
-        var effigy = new UserEffigy(pubring, clientPublicKey,
-                                    otherClientKeys);
+        var effigy = new UserEffigy(pubring, allClientKeys);
 
         // - envelope keyring (if we are mailstore)
         if (serverRole === "store" &&
