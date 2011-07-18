@@ -271,6 +271,13 @@ ClientServicingConnection.prototype = {
     this._replicaInFlight = true;
   },
 
+  /**
+   * Created as a means to send replica blocks to only other clients.  Currently
+   *  unused but presumably it or a variant will be required again once we start
+   *  pushing more metadata around.  (We will likely want it to live in uproc
+   *  since meta-data will want to bounce off the serialization world view and
+   *  be subject to subscriptions, batching, deferral, etc.)
+   */
   sendReplicaBlockToOtherClients: function(block) {
     if (this.userEffigy.allClientKeys.length === 1)
       return true;

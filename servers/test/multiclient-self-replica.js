@@ -90,11 +90,7 @@ TD.commonCase('clone client has state matching the mutator', function(T) {
 
   T.group("contact addition");
 
-  T.action('have', client, 'add', alice, 'as a contact,', clone,
-           'gets a replica update', function() {
-    clone.expectReplicaUpdate();
-    client.addContact(alice);
-  });
+  client_a.setup_mutualContact(client_b, true);
 
   T.group("verify");
 

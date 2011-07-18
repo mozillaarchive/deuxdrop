@@ -113,6 +113,14 @@ var TestClientActorMixins = {
     self._eClientConn = null;
     self._eServerConn = null;
 
+    if (opts && opts.clone) {
+      self._allClones = opts.clone._allClones;
+      self._allClones.push(self);
+    }
+    else {
+      self._allClones = [self];
+    }
+
     /** Dynamic list of known moda actors. */
     self._modaActors = [];
     /** Setup-time list of known moda actors. */
@@ -137,6 +145,7 @@ var TestClientActorMixins = {
 
       self._db = $gendb.makeTestDBConnection(self.__name, self._logger);
 
+      // -- CLONE!
       if (opts && opts.clone) {
         // - fork an identity with a new client keypair
         self._rawClient = $rawclient_api.getClientForExistingIdentity(
@@ -148,6 +157,7 @@ var TestClientActorMixins = {
         //  also fork off of the same guy as us, leaving only that one guy
         //  knowing about all us clones!)
       }
+      // -- FIRST / ONLY!
       else {
         // - create the client with a new identity
         var poco = {
@@ -170,6 +180,23 @@ var TestClientActorMixins = {
       self.T.ownedThing(self, 'key', self.__name + ' client',
                         self._rawClient.clientPublicKey);
     });
+  },
+
+  /**
+   * Define a step that should be invoked once per associated client.  This
+   *  should be used for handling notifications that originated elsewhere and so
+   *  all clients are equally interested.
+   */
+  _T_allClientsStep: function() {
+
+  },
+
+  /**
+   * Define a step that should be invoked once per associated client that is not
+   *  this client.  This should be used for handling things that other clients
+   *  hear about via replicated blocks played at them.
+   */
+  _T_otherClientsStep: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -333,7 +360,7 @@ var TestClientActorMixins = {
       other._usingServer.holdAllReplicaBlocksFor(other);
       other._usingServer.expectReplicaBlocksFor(other, 1);
 
-      other._peepsByName[other.__name] =
+      other._peepsByName[self.__name] =
         other._rawClient.connectToPeepUsingSelfIdent(
           self._rawClient._selfIdentBlob);
     }).log.boring(!interesting);
@@ -1048,6 +1075,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                                present: true},
 
       // - hold-related
+      replicaBlockNotifiedOnServer: {},
+    },
+    TEST_ONLY_events: {
       replicaBlockNotifiedOnServer: {block: false},
     },
   },

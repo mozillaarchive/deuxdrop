@@ -533,6 +533,57 @@ var TestActorProtoBase = {
 exports.TestActorProtoBase = TestActorProtoBase;
 
 /**
+ * Recursive traverse objects looking for (and eliding) very long strings.  We
+ *  do this because our logs are getting really large (6 megs!), and a likely
+ *  source of useless bloat are the encrypted message strings.  Although we
+ *  care how big the strings get, the reality is that until we switch to
+ *  avro/a binary encoding, they are going to bloat horribly under JSON,
+ *  especially when nested levels of encryption and JSON enter the picture.
+ *
+ * We will go a maximum of 3 layers deep.  Because this complicates having an
+ *  efficient fast-path where we detect that we don't need to clone-and-modify,
+ *  we currently always just clone-and-modify.
+ */
+function simplifyInsaneObjects(obj, curDepth) {
+  if (obj == null || typeof(obj) !== "object")
+    return obj;
+  if (!curDepth)
+    curDepth = 0;
+  const nextDepth = curDepth + 1;
+
+  var oot = {};
+  for (var key in obj) {
+    var val = obj[key];
+    switch (typeof(val)) {
+      case "string":
+        if (val.length > 64) {
+          oot[key] = "OMITTED STRING, originally " + val.length +
+                       " bytes long";
+        }
+        else {
+          oot[key] = val;
+        }
+        break;
+      case "object":
+        if (val == null ||
+            Array.isArray(val) ||
+            ("toJSON" in val) ||
+            curDepth >= 2) {
+          oot[key] = val;
+        }
+        else {
+          oot[key] = simplifyInsaneObjects(val, nextDepth);
+        }
+        break;
+      default:
+        oot[key] = val;
+        break;
+    }
+  }
+  return oot;
+}
+
+/**
  * Builds the logging and testing helper classes for the `register` driver.
  *
  * It operates in a similar fashion to wmsy's ProtoFab mechanism; state is
@@ -703,7 +754,7 @@ LoggestClassMaker.prototype = {
         // ++ new bit
         var toEat = numTestOnlyArgs;
         for (; toEat; toEat--, iArg++) {
-          entry.push(arguments[iArg]);
+          entry.push(simplifyInsaneObjects(arguments[iArg]));
         }
         // -- end new bit
         this._entries.push(entry);
@@ -907,7 +958,7 @@ LoggestClassMaker.prototype = {
           // ++ new bit
           var toEat = numTestOnlyArgs;
           for (iArg += 2; toEat; toEat--, iArg++) {
-            entry.push(arguments[iArg]);
+            entry.push(simplifyInsaneObjects(arguments[iArg]));
           }
           // -- end new bit
         }
@@ -924,7 +975,7 @@ LoggestClassMaker.prototype = {
           // ++ new bit
           var toEat = numTestOnlyArgs;
           for (iArg += 2; toEat; toEat--, iArg++) {
-            entry.push(arguments[iArg]);
+            entry.push(simplifyInsaneObjects(arguments[iArg]));
           }
           // -- end new bit
           // (call errors are events)

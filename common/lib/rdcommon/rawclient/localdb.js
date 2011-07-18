@@ -49,7 +49,6 @@ define(
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
-    'rdcommon/identities/pubident',
     'rdcommon/messages/generator',
     'module',
     'exports'
@@ -59,7 +58,6 @@ define(
     $log,
     $task, $taskerrors,
     $keyops, $pubring,
-    $pubident,
     $msg_gen,
     $module,
     exports
@@ -324,10 +322,7 @@ LocalStore.prototype = {
     var nonce = $keyops.makeSecretBoxNonce();
     var sboxed = this._keyring.secretBoxUtf8With(
                    blockStr, nonce, 'replicaSbox');
-    // while we could also concatenate, in theory we would eventually cram
-    //  some minor metadata in here, like an indicator of what key we are using
-    //  or the like.  some of that could be overloaded into the nonce.
-    return JSON.stringify({nonce: nonce, sboxed: sboxed});
+    return {nonce: nonce, sboxed: sboxed};
   },
 
   generateReplicaAuthBlock: function(command, id, payload) {
@@ -339,10 +334,7 @@ LocalStore.prototype = {
     };
     var blockStr = JSON.stringify(block);
     var authed = this._keyring.authUtf8With(blockStr, 'replicaAuth');
-    // while we could also concatenate, in theory we would eventually cram
-    //  some minor metadata in here, like an indicator of what key we are using
-    //  or the like.  some of that could be overloaded into the nonce.
-    return JSON.stringify({block: blockStr, auth: authed});
+    return {block: blockStr, auth: authed};
   },
 
   /**
@@ -353,9 +345,8 @@ LocalStore.prototype = {
    * - connect/contact request
    */
   consumeReplicaBlock: function(serialized) {
-    // XXX temporarily add slack in whether we marshal it on the way down
-    var mform = (typeof(serialized) === "string") ? JSON.parse(serialized)
-                                                  : serialized,
+    // (we used to JSON.stringify, now we don't)
+    var mform = serialized,
         authed, block;
     if (mform.hasOwnProperty("fanmsg")) {
       return this._proc_fanmsg(mform);
@@ -544,7 +535,7 @@ LocalStore.prototype = {
                   function(cells) {
         if (!cells.hasOwnProperty("d:meta"))
           throw new $taskerrors.MissingPrereqFatalError();
-        var convMeta = JSON.parse(cells["d:meta"]);
+        var convMeta = cells["d:meta"];
 
         var procfunc;
         switch(fanoutEnv.type) {
@@ -610,7 +601,7 @@ LocalStore.prototype = {
     // - persist, mark the creator as the first authorized participant
     // (they will still be "joined" which will replace the entry)
     var cells = {
-      "d:meta": JSON.stringify(convMeta),
+      "d:meta": convMeta,
       "d:m": 0,
     };
     cells["d:s" + creatorPubring.getPublicKeyFor('messaging', 'tellBox')] =
@@ -647,7 +638,7 @@ LocalStore.prototype = {
     this._nameTrack(oident, inviterPubring);
 
     var inviteePubring =
-      $pubident.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
         oident.personSelfIdent);
 
     var inviteeRootKey = inviteePubring.rootPublicKey;
@@ -657,8 +648,7 @@ LocalStore.prototype = {
     writeCells["d:s" + fanoutEnv.invitee] = oident.personSelfIdent;
     // - add the join entry in the message sequence
     var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-    writeCells["d:m" + msgNum] =
-      JSON.stringify({type: 'join', id: inviteeRootKey});
+    writeCells["d:m" + msgNum] = {type: 'join', id: inviteeRootKey};
 
     // XXX update in-memory reps
     var timestamp = fanoutEnv.receivedAt;
@@ -709,7 +699,7 @@ LocalStore.prototype = {
         cells[authorCellName]);
     var authorRootKey = authorPubring.rootPublicKey;
 
-    var authorIsOurUser = (authorRootKEy === this._keyring.rootPublicKey);
+    var authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
 
     // - decrypt conversation envelope
     var convEnv = $msg_gen.assertGetConversationHumanMessageEnvelope(
@@ -730,7 +720,7 @@ LocalStore.prototype = {
       composedAt: convBody.composedAt,
       text: convBody.body
     };
-    writeCells["d:m" + msgNum] = JSON.stringify(msgRec);
+    writeCells["d:m" + msgNum] = msgRec;
 
     // - message notification
     this._notif.trackNewishMessage(convMeta.id, msgNum, msgRec);
@@ -755,7 +745,8 @@ LocalStore.prototype = {
       recipRootKeys.push(recipPubring.rootPublicKey);
     }
 
-    this._updateConvIndices(convMeta.id, authorRootKey, timestamp);
+    this._updateConvIndices(convMeta.id, /* pinned */ false,
+                            authorRootKey, recipRootKeys, timestamp);
 
     // - author is not us
     if (!authorIsOurUser) {
@@ -857,7 +848,7 @@ LocalStore.prototype = {
     // -- persist
     this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
       'd:oident': oident,
-      'd:meta': '{}',
+      'd:meta': {},
       'd:nunread': 0,
       'd:nconvs': 0,
     });
@@ -877,7 +868,7 @@ LocalStore.prototype = {
    */
   _cmd_metaContact: function(peepRootKey, meta) {
     this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
-      'd:meta': JSON.stringify(meta),
+      'd:meta': meta,
     });
     // -- persist
     // -- notify affected queries
