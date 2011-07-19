@@ -812,6 +812,7 @@ var TestServerActorMixins = {
   __constructor: function(self, opts) {
     self._eServer = self.T.actor('server', self.__name, null, self);
     self._eDb = self.T.actor('gendbConn', self.__name, null, self);
+    var rootKeyring, keyring;
     self.T.convenienceSetup(self._eServer, 'created, listening to get port.',
                             self._eDb, 'established',
                             function() {
@@ -819,10 +820,20 @@ var TestServerActorMixins = {
       self._logger = LOGFAB.testServer(self, null, self.__name);
       self._logger._actor = self;
 
+      // - create our identity
+      rootKeyring = $keyring.createNewServerRootKeyring();
+      keyring = rootKeyring.issueLongtermBoxingKeyring();
+
+      self.T.ownedThing(self, 'key', self.__name + ' root',
+                        keyring.rootPublicKey);
+      self.T.ownedThing(self, 'key', self.__name + ' longterm',
+                        keyring.boxingPublicKey);
+
       // - create the server
       self._eServer.expect_listening();
 
-      self._server = new $authconn.AuthorizingServer(self._logger);
+      self._server = new $authconn.AuthorizingServer(self._logger,
+                                                     keyring.boxingPublicKey);
       self._server.listen();
 
       // - establish db connection
@@ -832,14 +843,6 @@ var TestServerActorMixins = {
     });
     self.T.convenienceSetup(
       self, 'creates its identity and registers implementations', function() {
-      // -- create our identity
-      var rootKeyring = $keyring.createNewServerRootKeyring(),
-          keyring = rootKeyring.issueLongtermBoxingKeyring();
-
-      self.T.ownedThing(self, 'key', self.__name + ' root',
-                        keyring.rootPublicKey);
-      self.T.ownedThing(self, 'key', self.__name + ' longterm',
-                        keyring.boxingPublicKey);
 
       var details = {
         tag: 'server:dummy',
@@ -1068,6 +1071,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.CLIENT,
+    topBilling: true,
 
     events: {
       // - db checks
@@ -1085,6 +1089,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.SERVER,
+    topBilling: true,
 
     events: {
       // - db checks

@@ -983,6 +983,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
+    topBilling: true,
     semanticIdent: {
       _l0: null,
       userIdent: 'key:root:user',

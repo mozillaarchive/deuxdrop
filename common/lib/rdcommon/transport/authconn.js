@@ -640,11 +640,12 @@ function serve404s(request, response) {
  *  listening on.  It is globally uniquely named by prefixing the host
  *  identifier (which is handled by the logging layer).
  */
-function AuthorizingServer(_logger) {
+function AuthorizingServer(_logger, extraNaming) {
 console.log("instantiating server");
   this._endpoints = {};
 
-  this.log = LOGFAB.server(this, _logger, []);
+  this._extraNaming = extraNaming || "server";
+  this.log = LOGFAB.server(this, _logger, [this._extraNaming]);
 
   // That which is not a websocket shall be severely disappointed currently.
   var httpServer = this._httpServer = $http.createServer(serve404s);
@@ -719,7 +720,7 @@ AuthorizingServer.prototype = {
     var self = this;
     function listening() {
       self.address = self._httpServer.address();
-      self.log.__updateIdent(["server on",
+      self.log.__updateIdent([self._extraNaming, "on",
                               self.address.address + ":" + self.address.port]);
       self.log.listening();
     }
@@ -848,6 +849,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
   server: {
     //implClass: AuthorizingServer,
     type: $log.SERVER,
+    topBilling: true,
     events: {
       endpointRegistered: {path: true},
       listening: {},
