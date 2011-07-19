@@ -457,6 +457,10 @@ AuthClientConn.prototype = {
   },
   _onConnected: function(conn) {
     this._connected(conn);
+    this.log.__updateIdent([this.clientKeyring.boxingPublicKey, 'to',
+                            this.serverPublicKey,
+                            'at endpoint', this.endpoint,
+                            'on port', this._conn.socket.address().port]);
     this.log.connState((this.connState = 'authServerKey'));
 
     // send [S, C', nonce, Box[64-bytes of zeroes](C'->S)]
@@ -617,7 +621,8 @@ AuthServerConn.prototype = {
       }
       self.log.__updateIdent([self.serverKeyring.boxingPublicKey,
                               'on endpoint', self.endpoint,
-                              'with client', self.clientPublicKey]);
+                              'with client', self.clientPublicKey,
+                              'on port', self._conn.socket.remotePort]);
       self._owningServer.__endpointConnected(self, self.endpoint);
 
       self.appConn = new self._implClass(self, authResult);
@@ -735,15 +740,16 @@ exports.AuthorizingServer = AuthorizingServer;
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   clientConn: {
-    //implClass: AuthClientConn,
     type: $log.CONNECTION,
     subtype: $log.CLIENT,
     semanticIdent: {
-      clientIdent: 'key',
+      clientIdent: 'client',
       _l1: null,
-      serverIdent: 'key',
+      serverIdent: 'server',
       _l2: null,
-      endpoint: 'endpoint',
+      endpoint: 'type',
+      _l3: null,
+      port: 'unique',
     },
     stateVars: {
       connState: true,
@@ -791,15 +797,16 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
   },
   serverConn: {
-    //implClass: AuthServerConn,
     type: $log.CONNECTION,
     subtype: $log.SERVER,
     semanticIdent: {
-      serverIdent: 'key',
+      serverIdent: 'server',
       _l1: null,
-      endpoint: 'endpoint',
+      endpoint: 'type',
       _l2: null,
-      clientIdent: 'key',
+      clientIdent: 'client',
+      _l3: null,
+      port: 'unique',
     },
     stateVars: {
       connState: true,
@@ -847,7 +854,6 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
   },
   server: {
-    //implClass: AuthorizingServer,
     type: $log.SERVER,
     topBilling: true,
     events: {

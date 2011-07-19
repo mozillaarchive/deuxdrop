@@ -354,7 +354,7 @@ var LogProtoBase = {
       var normIdent = [];
       for (var i = 0; i < ident.length; i++) {
         var identBit = ident[i];
-        if (typeof(identBit) === "string" || identBit == null)
+        if (typeof(identBit) !== "object" || identBit == null)
           normIdent.push(identBit);
         else
           normIdent.push(identBit._uniqueName);
@@ -1259,6 +1259,7 @@ exports.SERVER = 'server';
 exports.CLIENT = 'client';
 exports.TASK = 'task';
 exports.DAEMON = 'daemon';
+exports.DATABASE = 'database';
 
 exports.TEST_DRIVER = 'testdriver';
 exports.TEST_GROUP = 'testgroup';

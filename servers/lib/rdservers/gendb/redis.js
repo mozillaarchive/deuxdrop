@@ -529,8 +529,7 @@ exports.cleanupTestDBConnection = function(conn) {
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   gendbConn: {
-    //implClass: AuthClientConn,
-    type: $log.CONNECTION,
+    type: $log.DATABASE,
     subtype: $log.CLIENT,
     events: {
       connected: {},

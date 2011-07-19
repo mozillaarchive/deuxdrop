@@ -981,7 +981,7 @@ exports.getClientForExistingIdentityFromStorage = function(dbConn, _logger) {
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   rawClient: {
     // we are a client/server client, even if we are smart for one
-    type: $log.CONNECTION,
+    type: $log.DAEMON,
     subtype: $log.CLIENT,
     topBilling: true,
     semanticIdent: {
