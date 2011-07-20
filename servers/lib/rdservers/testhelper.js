@@ -330,6 +330,7 @@ var TestClientActorMixins = {
     this.T.convenienceSetup(other._usingServer,
         'receives contact request for', other, 'from', self, function() {
       other.expectServerTaskToRun('userIncomingContactRequest');
+      other.expectServerDeliveryToRunTo(self._usingServer, 'drop/establish');
       other._usingServer.holdAllReplicaBlocksFor(other);
       other._usingServer.expectReplicaBlocksFor(other, 1);
 
@@ -378,6 +379,7 @@ var TestClientActorMixins = {
     this.T.convenienceSetup(self._usingServer,
         'receives contact request for', self, 'from', other, function() {
       self.expectServerTaskToRun('userIncomingContactRequest');
+      self.expectServerDeliveryToRunTo(other._usingServer, 'drop/establish');
       self._usingServer.holdAllReplicaBlocksFor(self);
       self._usingServer.expectReplicaBlocksFor(self, 1);
 
@@ -714,6 +716,20 @@ var TestClientActorMixins = {
     var eTask = this.T.actor(taskName, [this.__name], null, this);
     this.RT.reportActiveActorThisStep(eTask);
     eTask.expectOnly__die();
+  },
+
+  expectServerDeliveryToRunTo: function(otherServer, endpoint) {
+    var server = this._usingServer;
+    var eClientConn = this.T.actor('clientConn',
+                                   server.__name + ' ' + endpoint, null,
+                                   server),
+        eServerConn = this.T.actor('serverConn',
+                                   otherServer.__name + ' ' + endpoint, null,
+                                   otherServer);
+    this.RT.reportActiveActorThisStep(eClientConn);
+    eClientConn.expectOnly__die();
+    this.RT.reportActiveActorThisStep(eServerConn);
+    eServerConn.expectOnly__die();
   },
 
   /**
