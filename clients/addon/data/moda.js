@@ -28,10 +28,28 @@ var origin = window.location.protocol + '//' + window.location.host;
 
 var moda = {
   transport: function (message) {
-    window.postMessage('modaRequest:' + message, origin);
+    var event = document.createEvent("MessageEvent");
+    event.initMessageEvent('addon-message', false, false, JSON.stringify(message), '*', null,
+                           null, null);
+    window.dispatchEvent(event);
+    //need bug fix for 666547 before switching to:
+    //window.postMessage('modaRequest:' + message, origin);
   }
 };
 
+window.addEventListener('content-message', function (evt) {
+  var data = JSON.parse(evt.data),
+      div = document.createElement('div');
+
+  div.innerHTML = data;
+  div.style.backgroundColor = 'red';
+  document.body.appendChild(div);
+
+  //console.log('moda.js on message: ' + evt + ', evt.data: ' + data);
+}, false);
+
+//need bug fix for 666547 before switching to:
+/*
 window.addEventListener('message', function (evt) {
   //alert('here: ' + evt.data);
   var div = document.createElement('div');
@@ -46,3 +64,4 @@ window.addEventListener('message', function (evt) {
     document.body.appendChild(div);
   }
 }, false);
+*/

@@ -40,9 +40,7 @@ function (exports,   self,   widgets,  tabs,   Moda) {
           contentScriptWhen: 'start',
           onMessage: function (data) {
             console.log('main.js: ' + data);
-            if (data.indexOf('moda') !== 0) {
-              worker.postMessage(data + '+' + (new Date()).getTime());
-            }
+            worker.postMessage(data + '+' + (new Date()).getTime());
           }
         }),
         moda = new Moda(worker);

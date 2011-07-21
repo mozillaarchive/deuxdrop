@@ -30,13 +30,34 @@
  */
 var targetOrigin = window.location.protocol + '//' + window.location.host;
 
+// Going with a custom event approach  as mentioned by Irakli instead of
+// postMessage because of this bug:
+// https://bugzilla.mozilla.org/show_bug.cgi?id=666547
+// Once that is fixed, go back to approach where
+// self.on('message') is used to get messages from addon and uses
+// window.postMessage to ferry them to content.
+// window.addEventListener() is used to get content messages, and it
+// uses self.postMessage to ferry to addon-space.
+
 // self is an injected variable done by the add-on SDK
+
+window.addEventListener('addon-message', function (event) {
+  self.postMessage(JSON.parse(event.data));
+}, false);
+
+self.on('message', function (data) {
+  var event = document.createEvent('MessageEvent');
+  event.initMessageEvent('content-message', false, false, JSON.stringify(data),
+                         '*', null, null, null);
+  window.dispatchEvent(event);
+});
+
+/*
 self.on('message', function (message) {
   console.log('modaContent onmessage: ' + message);
-  console.log('modaContent msg: ' + window.wrappedJSObject.postMessage);
-  console.log('modaContent targetOrigin: ' + targetOrigin);
+  console.log('modaContent msg: ' + unsafeWindow.postMessage);
 
-  window.wrappedJSObject.postMessage('modaResponse:' + message, targetOrigin);
+  unsafeWindow.postMessage('modaResponse:' + message, targetOrigin);
   console.log('finished forward');
 });
 
@@ -45,3 +66,4 @@ window.addEventListener('message', function (evt) {
     self.postMessage(evt.data.substring(12));
   }
 }, false);
+*/
