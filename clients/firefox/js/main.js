@@ -58,10 +58,11 @@ define(function (require) {
       IScroll = require('iscroll'),
 
       commonNodes = {},
+      states = {},
       users = {},
       notifications = [],
       peeps, update, messageCloneNode, notifyDom, nodelessActions,
-      newMessageIScroll, newConversationNodeWidth;
+      newMessageIScroll, newConversationNodeWidth, init;
 
   //iScroll just defines a global, bind to it here
   IScroll = window.iScroll;
@@ -549,6 +550,12 @@ define(function (require) {
 
   // Listen to events from moda
   moda.on({
+    'unknownUser': function () {
+      init('userDetermined');
+    },
+    'signedIn': function () {
+      init('userDetermined');
+    },
     'signedOut': function () {
       // User signed out/no longer valid.
       // Clear out all the cards and go back to start
@@ -599,6 +606,8 @@ define(function (require) {
     }
   });
 
+  moda.init();
+
   // Wait for DOM ready to do some DOM work.
   $(function () {
 
@@ -616,13 +625,21 @@ define(function (require) {
       origNode.parentNode.replaceChild(node, origNode);
     });
 
+    init('domReady');
+
+  });
+
+  init = function (state) {
+    states[state] = true;
+
+    if (!states.domReady || !states.userDetermined) {
+      return;
+    }
+
     // If user is not logged in, then set the start card to signin.
     if (!moda.me()) {
       cards.startCardId = 'signIn';
     }
-
-    // Initialize the cards
-    cards($('#cardContainer'));
 
     nodelessActions = {
       'addPeep': true,
@@ -725,6 +742,9 @@ define(function (require) {
         });
       });
 
+    // Initialize the cards
+    cards($('#cardContainer'));
+
     // Periodically update the timestamps shown in the page, every minute.
     setInterval(function () {
       $('[data-time]').each(function (i, node) {
@@ -735,5 +755,5 @@ define(function (require) {
         dom.text(text);
       });
     }, 60000);
-  });
+  };
 });

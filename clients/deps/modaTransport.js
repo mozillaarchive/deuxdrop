@@ -39,7 +39,7 @@
   console: false */
 
 define(function (require, exports) {
-  var moda = require('moda'),
+  var env = require('env'),
       q = require('q'),
       io = require('socket.io'),
       transport = exports,
@@ -48,7 +48,9 @@ define(function (require, exports) {
       localMeCheck = false,
       deferIdCounter = 0,
       waitingDeferreds = {},
-      actions, socket, me;
+      targetOrigin = window && window.location ? window.location.protocol +
+                     '//' + window.location.host : '',
+      actions, socket, me, respond;
 
   function send(obj) {
     socket.emit('serverMessage', JSON.stringify(obj));
@@ -57,7 +59,7 @@ define(function (require, exports) {
   function triggerSignOut() {
     delete localStorage.assertion;
     delete localStorage.me;
-    moda.trigger('signedOut');
+    respond(null, 'signedOut');
   }
 
   function userConnect() {
@@ -65,10 +67,15 @@ define(function (require, exports) {
       transport.signIn(localStorage.assertion, function (user) {
         if (!user) {
           triggerSignOut();
+        } else {
+          respond(null, 'signedIn', user);
         }
       });
+    } else {
+      respond(null, 'unknownUser');
     }
   }
+
   /**
    * Factory machinery to creating an API that just calls back to the
    * server. Uses a deferred to only do the call once, so subsequent
@@ -219,62 +226,68 @@ define(function (require, exports) {
     },
 
     'message': function (data) {
-      moda.trigger('message', data.message);
+      respond(null, 'message', data.message);
     },
 
     'chatPermsAdd': function (data) {
-      moda.trigger('chatPermsAdd', data.id);
+      respond(null, 'chatPermsAdd', data.id);
     },
 
     'addedYou': function (data) {
-      moda.trigger('addedYou', data);
+      respond(null, 'addedYou', data);
     }
   };
 
-  // Right now socket.io in the browser does not use define() so grab
-  // the global.
-  io = window.io;
+  /**
+   * Sets up the communication channel with the server. Must be called
+   * from application code.
+   */
+  transport.init = function () {
+    // Right now socket.io in the browser does not use define() so grab
+    // the global.
+    io = window.io;
 
-  socket = io.connect(null, {rememberTransport: false,
-                transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-                });
+    socket = io.connect(null, {rememberTransport: false,
+                  transports: ['websocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']
+                  });
 
-  socket.on('clientMessage', function (data) {
-    if (data) {
-      data = JSON.parse(data);
-    }
+    socket.on('clientMessage', function (data) {
+      if (data) {
+        data = JSON.parse(data);
+      }
 
-    if (actions[data.action]) {
-      actions[data.action](data);
-    } else {
-      console.log('Unhandled socket message: ' + JSON.stringify(data));
-    }
-  });
-
-  socket.on('connect', function () {
-    moda.trigger('networkConnected');
-    userConnect();
-  });
-
-  socket.on('disconnect', function () {
-    moda.trigger('networkDisconnect');
-  });
-
-  socket.on('reconnect', function () {
-    moda.trigger('networkReconnect');
-    userConnect();
-  });
-
-  socket.on('reconnecting', function (nextRetry) {
-    moda.trigger('networkReconnecting', {
-      nextRetry: nextRetry
+      if (actions[data.action]) {
+        actions[data.action](data);
+      } else {
+        console.log('Unhandled socket message: ' + JSON.stringify(data));
+      }
     });
-  });
 
-  socket.on('reconnect_failed', function () {
-    moda.trigger('networkDisconnect');
-  });
+    socket.on('connect', function () {
+      respond(null, 'networkConnected');
+      userConnect();
+    });
 
+    socket.on('disconnect', function () {
+      respond(null, 'networkDisconnect');
+    });
+
+    socket.on('reconnect', function () {
+      respond(null, 'networkReconnect');
+      userConnect();
+    });
+
+    socket.on('reconnecting', function (nextRetry) {
+      respond(null, 'networkReconnecting', {
+        nextRetry: nextRetry
+      });
+    });
+
+    socket.on('reconnect_failed', function () {
+      respond(null, 'networkDisconnect');
+    });
+
+  };
 
   /**
    * Define the transport object
@@ -314,6 +327,7 @@ define(function (require, exports) {
 
   transport.signOut = function (callback) {
     delete localStorage.me;
+    delete localStorage.assertion;
     me = undefined;
     localMeCheck = false;
 
@@ -321,6 +335,56 @@ define(function (require, exports) {
       callback();
     }
   };
+
+  /**
+   * Direct a client request to the correct transport call, and then
+   * send back the response with the proper request ID.
+   */
+  function route(requestId, method, args) {
+    //Push on a callback function
+    args.push(function (result) {
+      respond(requestId, method, result);
+    });
+
+    if (transport[method]) {
+      transport[method].apply(transport, args);
+    }
+  }
+
+  /**
+   * Sets up listening and broadcasting of messaging APIs.
+   * In the browser uses window.postMessage, in a jetpack,
+   * uses either custom events (due to a bug) or jetpack-specific
+   * postMessage APIs.
+   */
+  if (env.name === 'browser') {
+    respond = function (requestId, method, data) {
+      var response = {
+        kind: 'modaResponse',
+        requestId: requestId,
+        method: method,
+        response: data
+      };
+
+      window.postMessage(JSON.stringify(response), targetOrigin);
+    };
+
+    window.addEventListener('message', function (evt) {
+      var data;
+      // Pass data as JSON strings, so that it works in Firefox 5, later
+      // firefoxen can use structured clone objects, but staying away
+      // from that since it is still a bit new.
+      if (evt.origin === targetOrigin && typeof evt.data === 'string' &&
+          evt.data.indexOf('modaRequest') !== -1) {
+
+        data = JSON.parse(evt.data);
+
+        route(data.requestId, data.method, data.args);
+      }
+    }, false);
+  } else if (env.name === 'addon') {
+    //TODO
+  }
 
   makePerCallPassThroughApi('peeps', ['query'], 'items');
   makePerCallPassThroughApi('users', ['query'], 'items');
