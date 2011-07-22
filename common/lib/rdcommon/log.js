@@ -584,6 +584,58 @@ function simplifyInsaneObjects(obj, curDepth) {
 }
 
 /**
+ * Maximum comparison depth for argument equivalence in expectation checking.
+ *  We are explicitly choosing this depth to support our test simple state
+ *  representation expresseb by our `STATEREP` constant.
+ */
+const COMPARE_DEPTH = 3;
+function boundedCmpObjs(a, b, depthLeft) {
+  var aAttrCount = 0, bAttrCount = 0, key, nextDepth = depthLeft - 1;
+
+  for (key in a) {
+    aAttrCount++;
+    if (!(key in b))
+      return false;
+
+    if (depthLeft) {
+      if (!smartCompareEquiv(a[key], b[key], nextDepth))
+        return false;
+    }
+    else {
+      if (a[key] !== b[key])
+        return false;
+    }
+  }
+
+  for (key in b) {
+    bAttrCount++;
+  }
+  if (aAttrCount != bAttrCount)
+    return false;
+  return true;
+}
+
+function smartCompareEquiv(a, b, depthLeft) {
+  if (typeof(a) !== 'object' || (a == null))
+    return a === b;
+  // fast-path for identical objects
+  if (a === b)
+    return true;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b))
+      return false;
+    if (a.length !== b.length)
+      return false;
+    for (var iArr = 0; iArr < a.length; iArr++) {
+      if (!smartCompareEquiv(a[iArr], b[iArr]))
+        return false;
+    }
+    return true;
+  }
+  return boundedCmpObjs(a, b, depthLeft);
+}
+
+/**
  * Builds the logging and testing helper classes for the `register` driver.
  *
  * It operates in a similar fashion to wmsy's ProtoFab mechanism; state is
@@ -673,7 +725,7 @@ LoggestClassMaker.prototype = {
       return this;
     };
     this.testActorProto['_verify_' + name] = function(exp, entry) {
-      return exp[1] === entry[1];
+      return !smartCompareEquiv(exp[1], entry[1], COMPARE_DEPTH);
     };
   },
   /**
@@ -782,7 +834,7 @@ LoggestClassMaker.prototype = {
     this.testActorProto['_verify_' + name] = function(tupe, entry) {
       // only check arguments we had expectations for.
       for (var iArg = 1; iArg < tupe.length; iArg++) {
-        if (tupe[iArg] !== entry[iArg])
+        if (!smartCompareEquiv(tupe[iArg], entry[iArg], COMPARE_DEPTH))
           return false;
       }
       return true;
@@ -865,7 +917,7 @@ LoggestClassMaker.prototype = {
         this.testActorProto['_verify_' + name_end] = function(tupe, entry) {
       // only check arguments we had expectations for.
       for (var iArg = 1; iArg < tupe.length; iArg++) {
-        if (tupe[iArg] !== entry[iArg])
+        if (!smartCompareEquiv(tupe[iArg], entry[iArg], COMPARE_DEPTH))
           return false;
       }
       return true;
@@ -1013,7 +1065,7 @@ LoggestClassMaker.prototype = {
       }
       // only check arguments we had expectations for.
       for (var iArg = 1; iArg < tupe.length; iArg++) {
-        if (tupe[iArg] !== entry[iArg])
+        if (!smartCompareEquiv(tupe[iArg], entry[iArg], COMPARE_DEPTH))
           return false;
       }
       return true;
@@ -1067,7 +1119,7 @@ LoggestClassMaker.prototype = {
     this.testActorProto['_verify_' + name] = function(tupe, entry) {
       // only check arguments we had expectations for.
       for (var iArg = 1; iArg < tupe.length; iArg++) {
-        if (tupe[iArg] !== entry[iArg])
+        if (!smartCompareEquiv(tupe[iArg], entry[iArg], COMPARE_DEPTH))
           return false;
       }
       return true;
@@ -1294,5 +1346,33 @@ var JSONABLE = exports.JSONABLE = 'jsonable';
  *  unless they have a toJSON method, in which case it will invoke that.
  */
 var RAWOBJ_DATABIAS = exports.RAWOBJ_DATABIAS = 'jsonable'; //'rawobj:databias';
+
+////////////////////////////////////////////////////////////////////////////////
+// State/Delta Representation Support
+//
+// Specialized schema support to allow, by convention, the log viewer to
+//  visualize simple containment hierarchies and display annotations on those
+//  hierarchies.  Each entry in the hierarchy requires a unique name.
+//
+// The reconstruction mechanism works like so:
+// - For each logger, we latch any STATEREP we observe as the current state.
+// - Statereps are visualized as a simple hierarchy.
+// - Annotations (STATEANNO) affect display by colorizing/exposing a string on
+//    the object indexed by name.  For now, we use numbers to convey
+//    semantic colorization desires: -1 is deletion/red, 0 is notable/yellow,
+//    1 is addition/green.
+// - Deltas combine an annotation entry relevant to the prior state, the new
+//    state, and annotations relevant to the new state.  For example,
+//    expressing a deletion and an addition would have us annotate the
+//    deleted item in the pre-state and the added item in the post-state.
+
+/**
+ * Simple state representation.
+ */
+var STATEREP = exports.STATEREP = 'staterep';
+var STATEANNO = exports.STATEANNO = 'stateanno';
+var STATEDELTA = exports.STATEDELTA = 'statedelta';
+
+////////////////////////////////////////////////////////////////////////////////
 
 }); // end define

@@ -37,9 +37,9 @@
 
 /**
  * Implements the moda worker-thread logic that handles communicating with the
- *  mailstore server and local storage of data on the device.  It owns a
- *  rawclient instance and exposes it to the UI thread which uses the ModaBridge
- *  exposed API.
+ *  mailstore server and local storage of data on the device.  It has a
+ *  reference to the rawclient instance and exposes it to the UI thread which
+ *  uses the `ModaBridge` exposed API.
  *
  * Note that depending on the execution model, this logic may actually be
  *  time-sliced with the ui-thread logic.  Additionally, even if this logic does
@@ -50,12 +50,75 @@
 
 define(
   [
+    'rdcommon/log',
+    'module',
     'exports'
   ],
   function(
+    $log,
+    $module,
     exports
   ) {
 
+const NS_PEEPS = 'peeps';
 
+/**
+ * The other side of a ModaBridge instance/connection.  This is intended to be
+ *  a reasonably lightweight layer on top
+ */
+function ModaBackside(rawClient) {
+  this._rawClient = rawClient;
+  this._store = rawClient.store;
+  this._notif = this._store._notif;
+
+  this._bridgeName = null;
+  this._sendObjFunc = null;
+
+  this._prefix = null;
+}
+exports.ModaBackside = ModaBackside;
+ModaBackside.prototype = {
+  _received: function(binfo, boxedObj) {
+
+  },
+
+  /**
+   *
+   */
+  XXXcreateBridgeChannel: function(name, bridgeHandlerFunc) {
+    this._bridgeName = name;
+    this._sendObjFunc = bridgeHandlerFunc;
+
+    this._prefix = this._notif.registerNewQuerySource(name);
+
+    var self = this;
+    return function(msg) {
+      self._received(binfo, msg);
+    };
+  },
+
+  _cmd_queryPeeps: function(bridgeHandle, query) {
+    var handle = this._prefix + bridgeHandle;
+    this._notif.newTrackedQuery(handle, NS_PEEPS, query);
+    //this._store.queryAndWatchPeepBlurbs();
+  },
+
+  _cmd_queryPeepConversations: function(bridgeHandle, payload) {
+    var handle = this._prefix + bridgeHandle;
+    this._notif.newTrackedQuery(handle, NS_PEEPS, query);
+    this._store.queryAndWatchPeepConversationBlurbs(handle,
+  },
+};
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  modaWorker: {
+    calls: {
+      handle: {cmd: true},
+    },
+    TEST_ONLY_calls: {
+      handle: {name: true, payload: false},
+    },
+  },
+});
 
 }); // end define

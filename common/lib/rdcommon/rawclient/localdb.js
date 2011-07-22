@@ -50,6 +50,7 @@ define(
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
     'rdcommon/messages/generator',
+    './notifking',
     'module',
     'exports'
   ],
@@ -59,6 +60,7 @@ define(
     $task, $taskerrors,
     $keyops, $pubring,
     $msg_gen,
+    $notifking,
     $module,
     exports
   ) {
@@ -141,109 +143,6 @@ exports._DB_NAMES = {
   IDX_PEEP_ANY_INVOLVEMENT: IDX_PEEP_ANY_INVOLVEMENT,
 };
 
-/**
- * XXX We currently assume there is a listener that cares about everything
- *  because the UI does indeed care about everything right now.
- */
-function NotificationKing(store) {
-  this._newishMessagesByConvId = {};
-  this._store = store;
-
-
-}
-NotificationKing.prototype = {
-  //////////////////////////////////////////////////////////////////////////////
-  // Message Notifications
-  //
-  // Specialized message notification handling; required because the aggregation
-  //  of messages into conversations is unique within our system.
-
-  /**
-   * Track a message that appears to be new but we won't know for sure until we
-   *  are done with our update phase.
-   */
-  trackNewishMessage: function(convId, msgIndex, msgData) {
-    var newishForConv;
-    if (!this._newishMessagesByConvId.hasOwnProperty(convId))
-      newishForConv = this._newishMessagesByConvId[convId] = [];
-    else
-      newishForConv = this._newishMessagesByConvId[convId];
-    newishForConv.push({index: msgIndex, data: msgData});
-  },
-
-  /**
-   * Moot potential new message events in the given conversation
-   */
-  mootNewForMessages: function(convId, firstUnreadMessage) {
-    if (!this._newishMessagesByConvId.hasOwnProperty(convId))
-      return;
-    var newishForConv = this._newishMessagesByConvId[convId];
-    var killUntil = 0;
-    while (newishForConv[killUntil].index < firstUnreadMessage) {
-      killUntil++;
-    }
-    if (killUntil === newishForConv.length)
-      delete this._newishMessagesByConvId[convId];
-    else if (killUntil)
-      newishForConv.splice(0, killUntil);
-  },
-
-  //////////////////////////////////////////////////////////////////////////////
-  // General
-
-  /**
-   * We are now up-to-speed and should generate any notifications we were
-   *  holding off on because we were concerned a subsequent update would have
-   *  mooted the notification.
-   *
-   * Update phases are defined as:
-   * - When we first connect to the server until we work through our backlog.
-   */
-  updatePhaseDoneReleaseNotifications: function() {
-    var store = this._store;
-
-    // -- generate new message notifications
-    for (var convId in this._newishMessagesByConvId) {
-      var newishForConv = this._newishMessagesByConvId[convId];
-
-      var msgDataItems = [];
-      for (var i = 0; i < newishForConv.length; i++) {
-        msgDataItems.push(newishForConv[i].data);
-      }
-
-      store.__notifyNewMessagesInConversation(convId, msgDataItems);
-    }
-  },
-
-  /**
-   * A completely new-to-us peep/whatever has come into existence.  The new
-   *  thing needs to be checked for eligible sets and update any live queries.
-   */
-  namespaceItemAdded: function(namespace, name, item) {
-  },
-
-  /**
-   * Something we already knew about has changed.  This may affect its
-   *  eligibility for live query sets and should notify all queries it already
-   *  is known to/being watched on.
-   */
-  namespaceItemModified: function(namespace, name, item,
-                                  changedAttr, newVal, oldVal) {
-  },
-  /**
-   * Something known to us has been deleted from the system or otherwise should
-   *  now be treated as completely unknown to us.
-   */
-  namespaceItemDeleted: function(namespace, name, item) {
-  },
-
-  registerNamespaceQuery: function(namespace, name, query) {
-  },
-  discardNamespaceQuery: function(namespace, name) {
-  },
-
-  //////////////////////////////////////////////////////////////////////////////
-};
 
 const NS_PEEPS = 'peeps';
 
@@ -257,11 +156,9 @@ const NS_PEEPS = 'peeps';
  *  are also writing things without thinking out the SSD ramifications too much
  *  because we are under time pressure.
  *
- * Local storage implementation assuming a SQLite-based backend with a slight
- *  bias towards SSD storage.  More specifically, we are going to try and avoid
- *  triggering behaviours that result in a large number of random writes (since
- *  SSDs are good at random reads and linear writes).  This means trying to
- *  minimize the number of b-tree pages that are touched.
+ * Local storage implementation will be targeting a LevelDB implementation,
+ *  although we will likely be using SQLite initially owing to bindings already
+ *  existing.
  *
  * Our implementation is problem domain aware.
  */
@@ -270,7 +167,7 @@ function LocalStore(dbConn, keyring, _logger) {
 
   this._db = dbConn;
   this._keyring = keyring;
-  this._notif = new NotificationKing(this);
+  this._notif = new $notifking.NotificationKing(this);
 
   /**
    * The set of root keys of pinned peeps.
@@ -407,7 +304,24 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Lookup
 
-  loadAndWatchConversationBlurb: function(convId) {
+  _fetchAndReportConversationBlurbsById: function(qhandle, conversationIds) {
+    var deferred = $Q.defer();
+    var iConv = 0, self = this;
+    function getNextMaybeGot(row) {
+      while (iConv < conversationIds.length) {
+
+
+        return when(self
+      }
+      return msgBack;
+    }
+
+
+    return getNextMaybeGot(null);
+  },
+
+  _fetchConversationBlurb: function(qhandle, convId) {
+
   },
 
   unwatchConversationBlurb: function(convId) {
@@ -424,10 +338,32 @@ LocalStore.prototype = {
    *
    * @args[
    *   @param[peep]
-   *   @param[filter @oneof[null 'pinned']]
+   *   @parma[query @dict[
+   *     @key[involvement @oneof['any' 'recip' 'write']]
+   *   ]
    * ]
    */
-  queryAndWatchPeepConversationBlurbs: function(peep, filter) {
+  queryAndWatchPeepConversationBlurbs: function(handle, peepRootKey, query) {
+    // - pick the index to use
+    var index;
+    switch (query.involvement) {
+      case 'any':
+        index = IDX_CONV_PEEP_ANY_INVOLVEMENT;
+        break;
+      case 'recip':
+        index = IDX_CONV_PEEP_RECIP_INVOLVEMENT;
+        break;
+      case 'write':
+        index = IDX_CONV_PEEP_WRITE_INVOLVEMENT;
+        break;
+      default:
+        throw new Error("bad involvement type: '" + query.involvement + "'");
+    }
+
+    // - generate an index scan, netting us the conversation id's, hand-off
+    return when(this._db.scanIndex(TBL_CONV_DATA, index, peepRootKey,
+                                   null, null, null, null, null, null),
+      this._fetchAndReportConversationBlurbsById.bind(this, handle));
   },
 
   /**

@@ -36,7 +36,6 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * NOTIONAL BRAINSTORMING LOCATION.  NOT USED FOR IMPLEMENTATION YET IF EVER.
  **/
 
 define(
@@ -51,6 +50,8 @@ define(
  * Address-book type information about a person: their name, etc.
  */
 function PeepCard() {
+  this.ourPoco;
+  this.selfPoco;
 }
 PeepCard.prototype = {
 };
@@ -79,9 +80,15 @@ PeepBlurb.prototype = {
  * Message representation; this is only ever provided in a single
  *  representation.
  */
-function Message() {
+function Message(_fullConv) {
+  this._fullConv = _fullConv;
 }
 Message.prototype = {
+  markAsLastSeenMessage: function() {
+  },
+
+  markAsLastReadMessage: function() {
+  },
 };
 
 /**
@@ -102,33 +109,63 @@ function ConversationInFull(_bridge) {
 ConversationInFull.prototype = {
   writeMessage: function(text) {
   },
+
+  markAsSeenThrough: function() {
+  },
+
+  markAsReadThrough: function() {
+  },
 };
 
 /**
  * An ordered set (aka list).
  */
-function LiveOrderedSet(name, query) {
-  this._name = name;
+function LiveOrderedSet(handle, ns, query) {
+  this._handle = handle;
+  this._ns = ns;
   this.query = query;
 }
 LiveOrderedSet.prototype = {
 };
 
-function ModaBridge(channelId) {
-  this._chanId = channelId;
+////////////////////////////////////////////////////////////////////////////////
+// Notification Representations
 
-  this._nextName = 1;
-
-  this._nameMap = {};
+function ConversationNotification() {
 }
+ConversationNotification.prototype = {
+};
+
+function ContactAddedNotification() {
+}
+ContactAddedNotification.prototype = {
+};
+
+function ContactRequestNotification() {
+}
+ContactRequestNotification.prototype = {
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+function ModaBridge() {
+  this._sendObjFunc = null;
+
+  this._nextHandle = 0;
+
+  this._handleMap = {};
+}
+exports.ModaBridge = ModaBridge;
 ModaBridge.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Internals
 
   _send: function(cmd, thisSideName, payload) {
+    // pass it through a JSON transformation and back to make sure we don't
+    //  accidentally transit objects.  (nb: I believe the JS engine can do
+    //  faster things with the pure object rep, but it still amounts to JSON.)
     var str = JSON.stringify({cmd: cmd, name: thisSideName, payload: payload});
-    // XXX obviously not proper bridging...
-
+    this._sendObjFunc(JSON.parse(str));
   },
 
   /**
@@ -138,17 +175,22 @@ ModaBridge.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Queries
+  // Data Queries
 
   queryPeeps: function(query) {
-    var name = this._nextName++;
-    var liveset = new LiveOrderedSet(name, query);
-    this._nameMap[name] = liveset;
-    this._send('queryPeeps', name, query);
+    var handle = this._nextHandle++;
+    var liveset = new LiveOrderedSet(handle, query);
+    this._handleMap[handle] = liveset;
+    this._send('queryPeeps', handle, query);
     return liveset;
   },
 
   queryPeepConversations: function(peep, query) {
+    var handle = this._nextHandle++;
+    var liveset = new LiveOrderedSet(handle, query);
+    this._handleMap[handle] = liveset;
+    this._send('queryPeeps', handle, query);
+    return liveset;
   },
 
   queryConversations: function(query) {
@@ -165,7 +207,7 @@ ModaBridge.prototype = {
    *  for testing reasons right now, but theoretically this might happen on
    *  a desktop via drag-n-drop.
    *
-   * Does not return anything because the connection process 
+   * Does not return anything because the connection process
    */
   connectToPeepUsingSelfIdent: function(selfIdentBlob, localPoco) {
 
@@ -193,14 +235,19 @@ ModaBridge.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Global Notification Requests
+  // Notification Queries
+  //
+  // These are posed as queries rather than straight-up change notifications
+  //  because in the world of multiple clients we want to be able to take back
+  //  notifications.  Also, we update the aggregate notifications as more come
+  //  in.
 
   /**
    * @args[
    *   @param[listenerMap @dictof["event name" Function]]
    * ]
    */
-  on: function(listenerMap) {
+  queryNotifications: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////

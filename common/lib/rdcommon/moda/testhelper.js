@@ -79,6 +79,9 @@ var $testdata = require('rdcommon/testdatafab');
 
 var $log = require('rdcommon/log');
 
+var $moda_api = require('rdcommon/moda/api'),
+    $moda_worker = require('rdcommon/moda/worker');
+
 /**
  * There should be one moda-actor per moda-bridge.  So if we are simulating
  *  a desktop client UI that implements multiple tabs, each with their own
@@ -89,6 +92,20 @@ var TestModaActorMixins = {
     if (!opts.client)
       throw new Error("Moda actors must be associated with a client!");
     self._eRawClient = opts.client;
+
+    // - create the moda worker daemon
+    //self._eWorker = self.T.actor();
+    self._worker = new $moda_worker.ModaWorkerDaemon(
+                         self._eRawClient._rawClient);
+
+    // - create the moda bridge
+    self._bridge = new $moda_api.ModaBridge();
+
+    // - link worker and bridge (hackily)
+    self._bridge._sendObjFunc = self._worker.XXXcreateBridgeChannel(
+                                  self.__name,
+                                  self._bridge._send.bind(self._bridge));
+
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -148,16 +165,7 @@ var TestModaActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Global Notification Requests
-
-  /**
-   * Opt into global notifications and only then start checking for them.
-   *  Global notifications need to explicitly be opted into because they can
-   *  be quite prolific in a way that exceeds the amount of testing they
-   *  actually need/deserve.  So we don't leave them on all the time.
-   */
-  do_listenFor: function(eventNames) {
-  },
+  // Notification Queries
 
   //////////////////////////////////////////////////////////////////////////////
 };

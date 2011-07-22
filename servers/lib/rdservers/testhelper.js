@@ -85,6 +85,23 @@ var gClobberNamespace = {
 
 var fakeDataMaker = new $testdata.DataFabricator();
 
+function expectAuthconnFromTo(source, target, endpoint) {
+  // nothing to do in self case.
+  if (source === target)
+    return;
+  var eClientConn = source.T.actor('clientConn',
+                                 source.__name + ' ' + endpoint, null,
+                                 source),
+      eServerConn = target.T.actor('serverConn',
+                                 target.__name + ' ' + endpoint, null,
+                                 target);
+  source.RT.reportActiveActorThisStep(eClientConn);
+  eClientConn.expectOnly__die();
+  target.RT.reportActiveActorThisStep(eServerConn);
+  eServerConn.expectOnly__die();
+};
+
+
 var TestClientActorMixins = {
   /**
    * Automatically create an identity; a client is not much use without one.
@@ -209,18 +226,7 @@ var TestClientActorMixins = {
    *  `setup_useServer` function instead since it runs at step definition time.
    */
   _signupWith: function(testServerActor) {
-    // create actors corresponding to the connections so we can make sure they
-    //  die.
-    var eClientConn = this.T.actor('clientConn', this.__name + ' signup',
-                                   null, this),
-        eServerConn = this.T.actor('serverConn',
-                                   testServerActor.__name + ' signup ' +
-                                     this.__name,
-                                   null, testServerActor);
-    this.RT.reportActiveActorThisStep(eClientConn);
-    eClientConn.expectOnly__die();
-    this.RT.reportActiveActorThisStep(eServerConn);
-    eServerConn.expectOnly__die();
+    expectAuthconnFromTo(this, testServerActor, 'signup/signup');
 
     // expect
     this.RT.reportActiveActorThisStep(this._eRawClient);
@@ -330,7 +336,7 @@ var TestClientActorMixins = {
     this.T.convenienceSetup(other._usingServer,
         'receives contact request for', other, 'from', self, function() {
       other.expectServerTaskToRun('userIncomingContactRequest');
-      other.expectServerDeliveryToRunTo(self._usingServer, 'drop/establish');
+
       other._usingServer.holdAllReplicaBlocksFor(other);
       other._usingServer.expectReplicaBlocksFor(other, 1);
 
@@ -379,7 +385,7 @@ var TestClientActorMixins = {
     this.T.convenienceSetup(self._usingServer,
         'receives contact request for', self, 'from', other, function() {
       self.expectServerTaskToRun('userIncomingContactRequest');
-      self.expectServerDeliveryToRunTo(other._usingServer, 'drop/establish');
+
       self._usingServer.holdAllReplicaBlocksFor(self);
       self._usingServer.expectReplicaBlocksFor(self, 1);
 
@@ -718,20 +724,6 @@ var TestClientActorMixins = {
     eTask.expectOnly__die();
   },
 
-  expectServerDeliveryToRunTo: function(otherServer, endpoint) {
-    var server = this._usingServer;
-    var eClientConn = this.T.actor('clientConn',
-                                   server.__name + ' ' + endpoint, null,
-                                   server),
-        eServerConn = this.T.actor('serverConn',
-                                   otherServer.__name + ' ' + endpoint, null,
-                                   otherServer);
-    this.RT.reportActiveActorThisStep(eClientConn);
-    eClientConn.expectOnly__die();
-    this.RT.reportActiveActorThisStep(eServerConn);
-    eServerConn.expectOnly__die();
-  },
-
   /**
    * Expect a welcome-message for the given conversation.  Sub-expectations are
    *  based on the state of the conversation at the time the step is executed,
@@ -977,6 +969,8 @@ var TestServerActorMixins = {
    *  specific user of ours.
    */
   releasePSMessageToServerFrom: function(testServer, testClient) {
+    expectAuthconnFromTo(this, testServer, 'drop/deliver');
+
     this._config.senderApi.__release_sendPersonEnvelopeToServer(
       testServer._config.keyring.boxingPublicKey,
       testClient._rawClient.rootPublicKey);
@@ -1000,6 +994,8 @@ var TestServerActorMixins = {
    *  envelope.)
    */
   releaseSSMessageToServerUser: function(type, testServer, testClient) {
+    expectAuthconnFromTo(this, testServer, 'drop/deliver');
+
     this._config.senderApi.__release_sendServerEnvelopeToServer(
       type, testClient._rawClient.tellBoxKey,
       testServer._config.keyring.boxingPublicKey);
@@ -1012,6 +1008,8 @@ var TestServerActorMixins = {
       testServer._config.keyring.boxingPublicKey);
   },
   releaseContactRequestToServerUser: function(testServer, testClient) {
+    expectAuthconnFromTo(this, testServer, 'drop/establish');
+
     this._config.senderApi.__release_sendContactEstablishmentMessage(
       testClient._rawClient.tellBoxKey,
       testServer._config.keyring.boxingPublicKey);
