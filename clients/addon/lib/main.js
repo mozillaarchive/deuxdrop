@@ -24,38 +24,82 @@
 /*jslint indent: 2, strict: false  */
 /*global define: false */
 
-define([ 'exports', 'self', 'widget', 'tabs', 'Moda'],
-function (exports,   self,   widgets,  tabs,   Moda) {
-  var data = self.data,
-      url = data.url('index.html'),
-      modaContentUrl = data.url('content/modaContent.js');
+define([ 'exports', 'self', 'page-mod', 'Moda', 'chrome',
+         './jetpack-protocol/index'],
+function (exports,   self,   pageMod,    Moda,   chrome,
+          protocol) {
 
-  // Listen for new tab opens, and if it lands on our URL, expose
-  // moda to it.
-  tabs.on('open', function (tab) {
-    tab.on('ready', function (tab) {
-      if (tab.url === url) {
-        var worker = tab.attach({
-          contentScriptFile: modaContentUrl,
-          contentScriptWhen: 'start',
-          onMessage: function (data) {
-            console.log('main.js: ' + data);
-            worker.postMessage(data + '+' + (new Date()).getTime());
-          }
-        }),
-        moda = new Moda(worker);
-      }
-    });
+  var Cu = chrome.Cu,
+      jsm = {},
+      data = self.data,
+      url = data.url('index.html'),
+      aboutUrl = data.url('content/about.html'),
+      redirectorUrl = data.url('content/redirector.js'),
+      modaContentUrl = data.url('content/modaContent.js'),
+      handler, Services, XPCOMUtils;
+
+
+  // Load Services for dealing with bookmarking.
+  Cu['import']("resource://gre/modules/Services.jsm", jsm);
+  Cu['import']("resource://gre/modules/XPCOMUtils.jsm", jsm);
+  Services = jsm.Services;
+  XPCOMUtils = jsm.XPCOMUtils;
+
+  // Extend Services object
+  XPCOMUtils.defineLazyServiceGetter(
+    Services, "bookmarks",
+    "@mozilla.org/browser/nav-bookmarks-service;1",
+    "nsINavBookmarksService"
+  );
+
+
+  //Uses Irakli's jetpack-protocol to register about:deuxdrop, but
+  //concerned the url will not update correctly for state info with
+  //about: URLs
+  handler = protocol.about('deuxdrop', {
+    onRequest: function (request, response) {
+      console.log('>>>', JSON.stringify(request, '', '  '));
+      response.uri = aboutUrl;
+      console.log('<<<', JSON.stringify(response, '', '  '));
+    }
   });
+  handler.register();
 
   exports.main = function () {
-    // Create a widget to launch Deuxdrop
-    widgets.Widget({
-      id: 'deuxdrop-link',
-      label: 'Deuxdrop',
-      contentURL: 'http://www.mozilla.org/favicon.ico',
-      onClick: function () {
-        tabs.open(url);
+/*
+    // Set up a bookmark to deuxdrop. Another option is a custom
+    // protocol handler, but that does not seem to get the URL structures
+    // we want. But needs more exploration.
+    var nsiuri = Services.io.newURI(url, null, null);
+    if (!Services.bookmarks.isBookmarked(nsiuri)) {
+      Services.bookmarks.insertBookmark(
+        Services.bookmarks.unfiledBookmarksFolder,
+        nsiuri,
+        Services.bookmarks.DEFAULT_INDEX, 'Deuxdrop'
+      );
+    }
+*/
+
+    pageMod.PageMod({
+      include: ['about:deuxdrop'],
+      contentScriptWhen: 'start',
+      contentScriptFile: redirectorUrl,
+      onAttach: function onAttach(worker) {
+        worker.on('message', function (message) {
+          worker.postMessage(url);
+        });
+      }
+    });
+
+    pageMod.PageMod({
+      include: [url],
+      contentScriptWhen: 'start',
+      contentScriptFile: modaContentUrl,
+      onAttach: function onAttach(worker) {
+        worker.on('message', function (data) {
+          console.log('pagemod/main.js: ' + data);
+          worker.postMessage(data + '+' + (new Date()).getTime());
+        });
       }
     });
   };
