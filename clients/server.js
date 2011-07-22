@@ -113,7 +113,7 @@ actions = {
         //should not rely on data from the client. However, it makes it
         //difficult to test in dev. Allow for optional config.
         audience = defaultAudience || data.audience,
-        options, pic, req;
+        options, pic, req, postBody;
 
     // First check if we have saved data for the assertion.
     redis.get('browserid-assertion-' + assertion, function (err, value) {
@@ -125,14 +125,21 @@ actions = {
           // better not hit the else for this if.
         });
       } else {
+        postBody = 'assertion=' + encodeURIComponent(assertion) +
+                   '&audience=' + encodeURIComponent(audience);
+
         options = {
           host: 'browserid.org',
           port: '443',
-          path: '/verify?assertion=' + encodeURIComponent(assertion) +
-                '&audience=' + encodeURIComponent(audience)
+          path: '/verify',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': postBody.length
+          }
         };
 
-        req = https.get(options, function (response) {
+        req = https.request(options, function (response) {
           var responseData = '',
               id;
 
@@ -170,6 +177,9 @@ actions = {
             }
           });
         });
+
+        req.write(postBody);
+        req.end();
       }
     });
   },
