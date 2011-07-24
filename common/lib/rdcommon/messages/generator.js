@@ -752,7 +752,7 @@ exports.assertGetConversationHumanMessageEnvelope = function(envelopeEncrypted,
  *   @param[convMeta]
  *   @param[authorPubring]{
  *     The pubring of the supposed author of this message as conveyed to us by
- *     the transit envelope from the fanout server.
+ *     the transit envelope from the fanout server.  Needed for the signing key.
  *   }
  * ]
  */

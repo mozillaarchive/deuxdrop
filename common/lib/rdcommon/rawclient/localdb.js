@@ -50,7 +50,7 @@ define(
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
     'rdcommon/messages/generator',
-    './notifking',
+    './schema', './notifking', './lstasks',
     'module',
     'exports'
   ],
@@ -60,89 +60,13 @@ define(
     $task, $taskerrors,
     $keyops, $pubring,
     $msg_gen,
-    $notifking,
+    $lss, $notifking, $ls_tasks,
     $module,
     exports
   ) {
 var when = $Q.when;
 
 const PINNED = 'pinned';
-
-/**
- * Data on peeps, be they a contact or a transitive-acquaintance we heard of
- *  through a conversation.
- *
- * row id: root key
- *
- * - d:oident - The other person ident.
- * - d:meta - Full metadata dictionary object.
- * - d:nunread - The number of unread messages from this user.
- * - d:nconvs - The number of conversations involving the user.
- */
-const TBL_PEEP_DATA = "peepData";
-/**
- * Peeps by recency of messages they have written to conversations (the user is
- *  involved in).
- */
-const IDX_PEEP_WRITE_INVOLVEMENT = "idxPeepWrite";
-/**
- * Peeps by recency of messages the user have written to conversations they are
- *  in.
- */
-const IDX_PEEP_RECIP_INVOLVEMENT = "idxPeepRecip";
-/**
- * Peeps by recency of activity in any conversation they are involved in,
- *  even if it was just a third party in the coversation posting a message.
- */
-const IDX_PEEP_ANY_INVOLVEMENT = "idxPeepAny";
-
-/**
- * Conversation data.
- *
- * row id: conversation id
- *
- * - d:meta - The conversation meta-info for this conversation.
- * - d:s### - Self-ident for the given authorized participant by their tell
- *             key.  The payload may want to be normalized out and the name
- *             may want to become their root key.
- * - d:m - High message number
- * - d:m# - Message number #.  Fully decrypted rep.
- * - d:u### - Per-user metadata by tell key, primarily used for watermarks.
- * - d:ourmeta - Our user's metadata about the conversation, primarily used
- *                for pinned status.
- */
-const TBL_CONV_DATA = "convData";
-/**
- * The master conversation ordered view; all converations our user is in on.
- */
-const IDX_ALL_CONVS = "idxConv";
-
-/**
- * The per-peep conversation involvement view (for both contact and non-contact
- *  peeps right now.)
- */
-const IDX_CONV_PEEP_WRITE_INVOLVEMENT = "idxPeepConvWrite";
-const IDX_CONV_PEEP_RECIP_INVOLVEMENT = "idxPeepConvRecip";
-const IDX_CONV_PEEP_ANY_INVOLVEMENT = "idxPeepConvAny";
-
-/**
- * Database table names are exposed for use by `testhelper.js` instances so
- *  they can issue checks on database state that do not make sense to expose
- *  via explicit API's.
- */
-exports._DB_NAMES = {
-  TBL_CONV_DATA: TBL_CONV_DATA,
-  IDX_ALL_CONVS: IDX_ALL_CONVS,
-  IDX_CONV_PEEP_WRITE_INVOLVEMENT: IDX_CONV_PEEP_WRITE_INVOLVEMENT,
-  IDX_CONV_PEEP_RECIP_INVOLVEMENT: IDX_CONV_PEEP_RECIP_INVOLVEMENT,
-  IDX_CONV_PEEP_ANY_INVOLVEMENT: IDX_CONV_PEEP_ANY_INVOLVEMENT,
-
-  TBL_PEEP_DATA: TBL_PEEP_DATA,
-  IDX_PEEP_WRITE_INVOLVEMENT: IDX_PEEP_WRITE_INVOLVEMENT,
-  IDX_PEEP_RECIP_INVOLVEMENT: IDX_PEEP_RECIP_INVOLVEMENT,
-  IDX_PEEP_ANY_INVOLVEMENT: IDX_PEEP_ANY_INVOLVEMENT,
-};
-
 
 const NS_PEEPS = 'peeps';
 
@@ -174,25 +98,25 @@ function LocalStore(dbConn, keyring, _logger) {
    */
   this._pinnedPeepRootKeys = null;
 
-  this._db.defineHbaseTable(TBL_PEEP_DATA, ["d"]);
-  this._db.defineReorderableIndex(TBL_PEEP_DATA,
-                                  IDX_PEEP_WRITE_INVOLVEMENT);
-  this._db.defineReorderableIndex(TBL_PEEP_DATA,
-                                  IDX_PEEP_RECIP_INVOLVEMENT);
-  this._db.defineReorderableIndex(TBL_PEEP_DATA,
-                                  IDX_PEEP_ANY_INVOLVEMENT);
+  this._db.defineHbaseTable($lss.TBL_PEEP_DATA, ["d"]);
+  this._db.defineReorderableIndex($lss.TBL_PEEP_DATA,
+                                  $lss.IDX_PEEP_WRITE_INVOLVEMENT);
+  this._db.defineReorderableIndex($lss.TBL_PEEP_DATA,
+                                  $lss.IDX_PEEP_RECIP_INVOLVEMENT);
+  this._db.defineReorderableIndex($lss.TBL_PEEP_DATA,
+                                  $lss.IDX_PEEP_ANY_INVOLVEMENT);
 
   // conversation data proper: just data for now, (Was: meta, overview, data)
-  this._db.defineHbaseTable(TBL_CONV_DATA, ["d"]);
+  this._db.defineHbaseTable($lss.TBL_CONV_DATA, ["d"]);
 
-  this._db.defineReorderableIndex(TBL_CONV_DATA, IDX_ALL_CONVS);
+  this._db.defineReorderableIndex($lss.TBL_CONV_DATA, $lss.IDX_ALL_CONVS);
 
-  this._db.defineReorderableIndex(TBL_CONV_DATA,
-                                  IDX_CONV_PEEP_WRITE_INVOLVEMENT);
-  this._db.defineReorderableIndex(TBL_CONV_DATA,
-                                  IDX_CONV_PEEP_RECIP_INVOLVEMENT);
-  this._db.defineReorderableIndex(TBL_CONV_DATA,
-                                  IDX_CONV_PEEP_ANY_INVOLVEMENT);
+  this._db.defineReorderableIndex($lss.TBL_CONV_DATA,
+                                  $lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT);
+  this._db.defineReorderableIndex($lss.TBL_CONV_DATA,
+                                  $lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT);
+  this._db.defineReorderableIndex($lss.TBL_CONV_DATA,
+                                  $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT);
 
   this._bootstrap();
 }
@@ -311,7 +235,11 @@ LocalStore.prototype = {
       while (iConv < conversationIds.length) {
 
 
-        return when(self
+        return when(self._fetchConversationBlurb(qhandle,
+                                                 conversationIds[iConv]),
+                    function() {
+
+        });
       }
       return msgBack;
     }
@@ -322,15 +250,6 @@ LocalStore.prototype = {
 
   _fetchConversationBlurb: function(qhandle, convId) {
 
-  },
-
-  unwatchConversationBlurb: function(convId) {
-  },
-
-  loadAndWatchConversationInFull: function(convId) {
-  },
-
-  unwatchConversationInFull: function(convId) {
   },
 
   /**
@@ -348,20 +267,20 @@ LocalStore.prototype = {
     var index;
     switch (query.involvement) {
       case 'any':
-        index = IDX_CONV_PEEP_ANY_INVOLVEMENT;
+        index = $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT;
         break;
       case 'recip':
-        index = IDX_CONV_PEEP_RECIP_INVOLVEMENT;
+        index = $lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT;
         break;
       case 'write':
-        index = IDX_CONV_PEEP_WRITE_INVOLVEMENT;
+        index = $lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT;
         break;
       default:
         throw new Error("bad involvement type: '" + query.involvement + "'");
     }
 
     // - generate an index scan, netting us the conversation id's, hand-off
-    return when(this._db.scanIndex(TBL_CONV_DATA, index, peepRootKey,
+    return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey,
                                    null, null, null, null, null, null),
       this._fetchAndReportConversationBlurbsById.bind(this, handle));
   },
@@ -392,33 +311,35 @@ LocalStore.prototype = {
         authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
     // - global conversation list
     promises.push(this._db.updateIndexValue(
-      TBL_CONV_DATA, IDX_ALL_CONVS, '', convId, timestamp));
+      $lss.TBL_CONV_DATA, $lss.IDX_ALL_CONVS, '', convId, timestamp));
     // - global pinned conversation list
     if (convPinned)
       promises.push(this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_ALL_CONVS, PINNED, convId, timestamp));
+        $lss.TBL_CONV_DATA, $lss.IDX_ALL_CONVS, PINNED, convId, timestamp));
 
     // - per-peep write/any involvement for the author
     promises.push(this._db.updateIndexValue(
-      TBL_CONV_DATA, IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
+      $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
       convId, timestamp));
     promises.push(this._db.updateIndexValue(
-      TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
+      $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
       convId, timestamp));
     // - per-peep (maybe recip)/any involvement for the recipients
     for (var iRecip = 0; iRecip < recipRootKeys.length; iRecip++) {
       var rootKey = recipRootKeys[iRecip];
       // - boost any involvement
       promises.push(this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT,
+        $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT,
         rootKey, convId, timestamp));
       // - boost recip involvement
       if (authorIsOurUser)
         promises.push(this._db.updateIndexValue(
-          TBL_CONV_DATA, IDX_CONV_PEEP_RECIP_INVOLVEMENT,
+          $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
           rootKey, convId, timestamp));
 
     }
+
+
 
     return $Q.all(promises);
   },
@@ -449,13 +370,17 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Processing
 
+  /**
+   * Process a conversation fan-out message, delegating to the appropriate task.
+   */
   _proc_fanmsg: function(fanmsg) {
     // -- invite?
     // (This gets to be the root of the conversation on the mailstore; it comes
     //  from the welcome message, which, for consistency reasons, the mailstore
     //  breaks apart and pretends does not exist to us.)
     if (fanmsg.hasOwnProperty("sentBy")) {
-      return this._procConvInvite(fanmsg);
+      return (new $ls_tasks.ConvInviteTask({store: this, fanmsg: fanmsg},
+                                          this._log)).run();
     }
     // -- fanout message
     else {
@@ -467,241 +392,39 @@ LocalStore.prototype = {
 
       var self = this;
       // just grab all the cells; XXX timecopout caching/unification
-      return when(this._db.getRow(TBL_CONV_DATA, fanmsg.convId, "d"),
+      return when(this._db.getRow($lss.TBL_CONV_DATA, fanmsg.convId, "d"),
                   function(cells) {
         if (!cells.hasOwnProperty("d:meta"))
           throw new $taskerrors.MissingPrereqFatalError();
         var convMeta = cells["d:meta"];
 
-        var procfunc;
+        var arg = {
+          store: this,
+          convMeta: convMeta,
+          fanoutEnv: fanoutEnv,
+          cells: cells,
+        };
+        var taskClass;
         switch(fanoutEnv.type) {
           case 'join':
-            procfunc = self._procConvJoin;
+            return (new $ls_tasks.ConvJoinTask(arg, self._log)).run();
             break;
           case 'message':
-            procfunc = self._procConvMessage;
+            return (new $ls_tasks.ConvMessageTask(arg, self._log)).run();
             break;
           case 'meta':
-            procfunc = self._procConvMetaMsg;
+            return (new $ls_tasks.ConvMetaTask(arg, self._log)).run();
             break;
           default:
             throw new $taskerrors.MalformedPayloadError(
                         'bad type: ' + fanoutEnv.type);
         }
-
-        return self._log.procConv(fanoutEnv.type,
-                                   self, procfunc,
-                                   convMeta, fanoutEnv, cells);
       });
     }
   },
 
   _cmd_convCreate: function() {
 
-  },
-
-  /**
-   * Process a conversation invitation by validating its attestation and
-   *  creating the appropriate database row.  The conversation will not become
-   *  visible to the user until at least one message has been processed.
-   */
-  _procConvInvite: function(fanmsg) {
-    // - unbox the invite envelope
-    var inviteEnv = JSON.parse(
-                      this._keyring.openBoxUtf8With(
-                        fanmsg.fanmsg, fanmsg.nonce, fanmsg.sentBy,
-                        'messaging', 'envelopeBox'));
-
-    // - unbox the invite payload
-    var inviteBody = JSON.parse(
-                       this._keyring.openBoxUtf8With(
-                         inviteEnv.payload, fanmsg.nonce, fanmsg.sentBy,
-                         'messaging', 'bodyBox'));
-
-    // - validate the attestation (and enclosed creator self-ident)
-    var attestPayload = $msg_gen.assertGetConversationAttestation(
-                          inviteBody.signedAttestation, inviteEnv.convId);
-    var creatorPubring =
-      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-        attestPayload.creatorSelfIdent);
-
-    // - reconstruct the overview convMeta
-    var convMeta = {
-      id: inviteEnv.convId,
-      transitServerKey: inviteEnv.transitServerKey,
-      envelopeSharedSecretKey: inviteEnv.envelopeSharedSecretKey,
-      bodySharedSecretKey: inviteBody.bodySharedSecretKey,
-      signedAttestation: inviteBody.signedAttestation,
-    };
-
-    // - persist, mark the creator as the first authorized participant
-    // (they will still be "joined" which will replace the entry)
-    var cells = {
-      "d:meta": convMeta,
-      "d:m": 0,
-    };
-    cells["d:s" + creatorPubring.getPublicKeyFor('messaging', 'tellBox')] =
-      attestPayload.creatorSelfIdent;
-    var self = this;
-    return when(this._db.putCells(TBL_CONV_DATA, convMeta.id, cells),
-                function() {
-                  self._log.newConversation(convMeta.id);
-                });
-  },
-
-  /**
-   * Process a join message.
-   */
-  _procConvJoin: function(convMeta, fanoutEnv, cells) {
-    // - get the pubring for the inviter, exploding if they are not authorized
-    var inviterCellName = "d:s" + fanoutEnv.sentBy;
-    if (!cells.hasOwnProperty(inviterCellName))
-      throw new $taskerror.UnauthorizedUserDataLeakError(  // a stretch...
-                  "uncool inviter: " + fanoutEnv.sentBy);
-    var inviterPubring =
-      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-        cells[inviterCellName]); // (this is a blob-string, not json encoded)
-
-    // - unsbox the attestation
-    var signedAttestation = $keyops.secretBoxOpen(fanoutEnv.payload,
-                                                  fanoutEnv.nonce,
-                                                  convMeta.bodySharedSecretKey);
-    // - validate the attestation
-    var oident = $msg_gen.assertCheckConversationInviteAttestation(
-                   signedAttestation, inviterPubring, convMeta.id,
-                   fanoutEnv.receivedAt);
-
-    this._nameTrack(oident, inviterPubring);
-
-    var inviteePubring =
-      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-        oident.personSelfIdent);
-
-    var inviteeRootKey = inviteePubring.rootPublicKey;
-
-    var writeCells = {};
-    // - add the invitee as an authorized participant by their tell key
-    writeCells["d:s" + fanoutEnv.invitee] = oident.personSelfIdent;
-    // - add the join entry in the message sequence
-    var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-    writeCells["d:m" + msgNum] = {type: 'join', id: inviteeRootKey};
-
-    // XXX update in-memory reps
-    var timestamp = fanoutEnv.receivedAt;
-
-    var self = this;
-    return $Q.join(
-      this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
-      // - create peep conversation involvement index entry
-      this._db.updateIndexValue(
-        TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
-        convMeta.id, timestamp),
-      // - touch peep activity entry
-      this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteeRootKey, timestamp),
-      // - boost their involved conversation count
-      this._db.incrementCell(TBL_PEEP_DATA, inviteeRootKey, 'd:nconvs', 1),
-      function() {
-        self._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
-      }
-    );
-  },
-
-  /**
-   * Meta-data about a conversation from other participants.
-   */
-  _procConvMetaMsg: function(convMeta, fanoutEnv, cells) {
-    // -- update anyone subscribed to the full conversation
-
-
-    // --- metadata message
-    // -- write
-    // -- posit latched notification for active subscribers
-    // -- nuke pending new message notification if our user saw something...
-  },
-
-  /**
-   * Add a message (human or machine) to a conversation.
-   *
-   * If this is a join notification, we will name-check the added person.
-   */
-  _procConvMessage: function(convMeta, fanoutEnv, cells) {
-    var authorTellKey = fanoutEnv.sentBy;
-    var authorCellName = "d:s" + authorTellKey;
-    if (!cells.hasOwnProperty(authorCellName))
-      throw new $taskerror.UnauthorizedUserDataLeakError();
-    var authorPubring =
-      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-        cells[authorCellName]);
-    var authorRootKey = authorPubring.rootPublicKey;
-
-    var authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
-
-    // - decrypt conversation envelope
-    var convEnv = $msg_gen.assertGetConversationHumanMessageEnvelope(
-                    fanoutEnv.payload, fanoutEnv.nonce, convMeta);
-
-    // - decrypt conversation body
-    var convBody = $msg_gen.assertGetConversationHumanMessageBody(
-                     convEnv.body, fanoutEnv.nonce, convMeta,
-                     fanoutEnv.receivedAt, authorPubring);
-
-
-    // - persist the message
-    var writeCells = {};
-    var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-    var msgRec = {
-      type: 'message',
-      authorId: authorRootKey,
-      composedAt: convBody.composedAt,
-      text: convBody.body
-    };
-    writeCells["d:m" + msgNum] = msgRec;
-
-    // - message notification
-    this._notif.trackNewishMessage(convMeta.id, msgNum, msgRec);
-
-    var timestamp = fanoutEnv.receivedAt;
-
-    var promises = [
-      this._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
-      // -- conversation indices
-      // - all conversation index
-      // - per-peep conversation indices
-    ];
-
-    // - all recipients stuff
-    var recipRootKeys = [];
-    for (var key in cells) {
-      if (!/^d:s/.test(key) || key === authorCellName)
-        continue;
-      // this must be the cell for one of the other recipients
-      var recipPubring =
-        $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(cells[key]);
-      recipRootKeys.push(recipPubring.rootPublicKey);
-    }
-
-    this._updateConvIndices(convMeta.id, /* pinned */ false,
-                            authorRootKey, recipRootKeys, timestamp);
-
-    // - author is not us
-    if (!authorIsOurUser) {
-      // - peep indices
-      promises.push(this._db.maximizeIndexValue(
-        TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '',
-        authorRootKey, timestamp));
-      // - boost unread message count
-      promises.push(this._db.incrementCell(
-        TBL_PEEP_DATA, authorRootKey, 'd:nunread', authorIsOurUser ? 0 : 1));
-    }
-
-    // XXX notifications
-    var self = this;
-    return $Q.join(
-      function() {
-        self._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
-      }
-    );
   },
 
   /**
@@ -739,12 +462,12 @@ LocalStore.prototype = {
     var idx;
     switch (by) {
       case 'recency':
-        idx = IDX_PEEP_ANY_INVOLVEMENT;
+        idx = $lss.IDX_PEEP_ANY_INVOLVEMENT;
         break;
       default:
         throw new Error("Unsupported ordering: " + by);
     }
-    return when(this._db.scanIndex(TBL_PEEP_DATA, idx, '',
+    return when(this._db.scanIndex($lss.TBL_PEEP_DATA, idx, '',
                                    null, null, null, null, null, null),
       function(rootKeys) {
         var promises = [];
@@ -755,12 +478,6 @@ LocalStore.prototype = {
       }
       // rejection pass-through is desired
       );
-  },
-
-  loadAndWatchPeepBlurb: function(rootKey) {
-  },
-
-  unwatchPeepBlurb: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -778,32 +495,27 @@ LocalStore.prototype = {
    *   are connected.  Here's everything you know about him now..."'.
    * }
    */
-  _cmd_addContact: function(peepRootKey, oident) {
+  _cmd_addContact: function(peepRootKey, signedOident) {
     var now = Date.now();
 
-    // -- persist
-    this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
-      'd:oident': oident,
-      'd:meta': {},
-      'd:nunread': 0,
-      'd:nconvs': 0,
-    });
-    // -- bump indices
-    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT,
-                              peepRootKey, now);
-    this._db.updateIndexValue(TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT,
-                              peepRootKey, now);
-
-    // -- notify peep queries
-    this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
-                                   {oident: oident});
+    var arg = {
+      store: this, peepOident: signedOident, othPubring: this._pubring,
+    };
+    return $Q.wait(
+      (new $ls_tasks.PeepNameTrackTask(arg, this._log)).run(),
+      this._db.updateIndexValue($lss.TBL_PEEP_DATA,
+                                $lss.IDX_PEEP_ANY_INVOLVEMENT,
+                                peepRootKey, now),
+      this._db.updateIndexValue($lss.TBL_PEEP_DATA,
+                                $lss.IDX_PEEP_WRITE_INVOLVEMENT,
+                                peepRootKey, now));
   },
 
   /**
    * Set some meta-data about a contact in our address book (pinned, etc.)
    */
   _cmd_metaContact: function(peepRootKey, meta) {
-    this._db.putCells(TBL_PEEP_DATA, peepRootKey, {
+    this._db.putCells($lss.TBL_PEEP_DATA, peepRootKey, {
       'd:meta': meta,
     });
     // -- persist
@@ -865,11 +577,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     calls: {
       replicaCmd: {command: true},
-      procConv: {type: true},
     },
     TEST_ONLY_calls: {
       replicaCmd: {id: true},
-      procConv: {convMeta: false, fanoutEnv: false, cells: false},
     },
   },
 });

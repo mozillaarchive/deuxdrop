@@ -221,6 +221,8 @@ NotificationKing.prototype = {
       namespace: namespace,
       queryDef: queryDef,
       members: makeEmptyMapsByNS(),
+      // - data yet required (from dependencies)
+      dataNeeded: makeEmptyListsByNS(),
       // - data to send over the wire once this round is done
       splices: [],
       dataDelta: makeEmptyMapsByNS(),
@@ -294,6 +296,31 @@ NotificationKing.prototype = {
   // Generic Notifications from LocalStore
 
   /**
+   * Find queries potentially affected by a change.
+   *
+   * Basic strategy (for each query source):
+   * - Fast bail if there are no queries for the namespace.
+   * - Map the name of the changed item into the query source namespace,
+   *    coincidentally determining if it is already present in any queries.
+   * - Loop over the queries:
+   *   - see if the query's test function matches the item
+   *   - infer add/modified/removed based on whether the item was already known
+   *      to the query and the reslt of the test invocation
+   *   - if the query has ordered results, figure out the new view index,
+   *      generate a splice if there was a change/this is an addition.
+   */
+  _findAffectedQueries: function(namespace) {
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      var queryHandles = querySource.queryHandlesByNS[namespace];
+
+      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+
+      }
+    }
+  },
+
+  /**
    * We are now up-to-speed and should generate any notifications we were
    *  holding off on because we were concerned a subsequent update would have
    *  mooted the notification.
@@ -321,7 +348,7 @@ NotificationKing.prototype = {
    * A completely new-to-us peep/whatever has come into existence.  The new
    *  thing needs to be checked for eligible sets and update any live queries.
    */
-  namespaceItemAdded: function(namespace, name, item) {
+  namespaceItemAdded: function(namespace, name, baseCells, mutatedCells) {
   },
 
   /**
@@ -333,8 +360,8 @@ NotificationKing.prototype = {
    * - If the indexed value used by any queries has changed.
    * - If a query's test result changes to merit addition/removal.
    */
-  namespaceItemModified: function(namespace, name, item,
-                                  changedAttr, newVal, oldVal) {
+  namespaceItemModified: function(namespace, name,
+                                  baseCells, mutatedCells) {
 
   },
   /**

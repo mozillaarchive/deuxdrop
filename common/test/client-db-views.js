@@ -79,11 +79,20 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
         delta: $log.STATEDELTA,
       },
     },
+    errors: {
+      noSuchQuery: {uniqueName: true},
+    }
   },
 });
 
 var TD = exports.TD = $tc.defineTestsFor($module, LOGFAB, null,
                                          ['client:db']);
+
+function markListIntoObj(list, obj, value) {
+  for (var i = 0; i < list.length; i++) {
+    obj[list[i].id] = value;
+  }
+}
 
 function TestQuerySource(name) {
   this.king = new $notifking.NotificationKing(null);
@@ -100,17 +109,23 @@ TestQuerySource.prototype = {
     var queryInfo = this._queries[id] = {
       handle: this.king.newTrackedQuery(this._source, id,
                                         $notifking.NS_PEEPS, query),
+      items: [],
     };
     return queryInfo;
   },
 
   sendQueryUpdate: function(msg) {
+    if (!this._queries.hasOwnProperty(msg.uniqueId)) {
+      this.log.noSuchQuery(msg.uniqueId);
+    }
+    var queryInfo = this._queries[msg.uniqueId];
+
     var preAnno = {}, state = {}, postAnno = {};
 
-
-
+    var items = queryInfo.items;
     for (var iSplice = 0; iSplice < msg.splices.length; iSplice++) {
-
+      var splice = msg.splices[iSplice];
+      markListIntoObj(items.slice(splice.index, splice.index + splice.howMany));
     }
 
     this.log.delta({
@@ -131,9 +146,11 @@ TD.commonCase('new record', function(T) {
   });
 
   T.action(eQS, 'add first record', function() {
-    eQS.expect_deltaAndResult(
-      delta: {}
-    );
+    eQS.expect_deltaAndResult({
+      preAnno: {},
+      state: {},
+      postAnno: {},
+    });
   });
 
   T.action(eQS, 'add record before', function() {

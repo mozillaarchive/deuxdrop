@@ -564,6 +564,11 @@ RawClientAPI.prototype = {
     var othPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
       personSelfIdentBlob);
 
+    // XXX temporary simplification: copy out the displayName so we can be sure
+    //  it's always in the poco.
+    if (!localPoco.hasOwnProperty("displayName"))
+      localPoco.displayName = identPayload.poco.displayName;
+
     // generate and secretbox an OtherPersonIdentPayload for replica purposes
     var otherPersonIdentBlob = $pubident.generateOtherPersonIdent(
       this._longtermKeyring, personSelfIdentBlob, localPoco);

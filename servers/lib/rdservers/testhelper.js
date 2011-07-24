@@ -765,13 +765,20 @@ var TestClientActorMixins = {
 
       for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
         var tMsg = tConv.data.backlog[iMsg];
-        els.expect_procConv(tMsg.data.type);
+        self.expectLocalStoreTaskToRun(
+          self._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
         els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
       }
       self._eRawClient.expect_replicaCaughtUp();
 
       self._usingServer.releaseAllReplicaBlocksFor(self);
     });
+  },
+
+  _MSG_TYPE_TO_LOCAL_STORE_TASK: {
+    'join': 'convJoin',
+    'message': 'convMessage',
+    'meta': 'convMeta',
   },
 
   /**
@@ -804,7 +811,8 @@ var TestClientActorMixins = {
       self.RT.reportActiveActorThisStep(self._eLocalStore);
       var els = self._eLocalStore;
 
-      els.expect_procConv(tMsg.data.type);
+      self.expectLocalStoreTaskToRun(
+        self._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
       els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
 
       self._eRawClient.expect_replicaCaughtUp();
@@ -1067,6 +1075,12 @@ var TestServerActorMixins = {
 
   // XXX this needs more thought about who to attribute it to
   expectServerTaskToRun: function(taskName) {
+    var eTask = this.T.actor(taskName, [this.__name], null, this);
+    this.RT.reportActiveActorThisStep(eTask);
+    eTask.expectOnly__die();
+  },
+
+  expectLocalStoreTaskToRun: function(taskName) {
     var eTask = this.T.actor(taskName, [this.__name], null, this);
     this.RT.reportActiveActorThisStep(eTask);
     eTask.expectOnly__die();
