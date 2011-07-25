@@ -35,7 +35,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*jslint indent: 2, strict: false, plusplus: false */
-/*global define: false, console: false, window: false */
+/*global define: false, console: false, window: false, document: false */
 
 // from https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
 // bootstrap the JS env in some browsers that do not have full ES5
@@ -112,24 +112,39 @@ define(function (require, exports) {
 
     // Listen to transport messages via postMessage
     window.addEventListener('message', function (evt) {
-      var data, requestId, method, response;
-
       // Pass data as JSON strings, so that it works in Firefox 5, later
       // firefoxen can use structured clone objects, but staying away
       // from that since it is still a bit new.
       if (evt.origin === targetOrigin && typeof evt.data === 'string' &&
           evt.data.indexOf('modaResponse') !== -1) {
 
-        data = JSON.parse(evt.data);
-        requestId = data.requestId;
-        method = data.method;
-        response = data.response;
+        var data = JSON.parse(evt.data);
 
-        handleResponse(requestId, method, response);
+        handleResponse(data.requestId, data.method, data.response);
       }
     }, false);
   } else if (env.name === 'addon') {
+    // Define the request function as using custom messages, due to this
+    // jetpack bug: https://bugzilla.mozilla.org/show_bug.cgi?id=666547,
+    // convert to a postMessage API once it is fixed.
+    request = function (requestId, method, args) {
+      var data = {
+        kind: 'modaRequest',
+        requestId: requestId,
+        method: method,
+        args: args
+      }, event;
 
+      event = document.createEvent("MessageEvent");
+      event.initMessageEvent('moda-addon-message', false, false, JSON.stringify(data), '*', null,
+                             null, null);
+      window.dispatchEvent(event);
+    };
+
+    window.addEventListener('moda-content-message', function (evt) {
+      var data = JSON.parse(evt.data);
+      handleResponse(data.requestId, data.method, data.args);
+    }, false);
   }
 
   /**
@@ -309,6 +324,7 @@ Peeps
       users = users.map(function (user) {
         var peep = new User(user);
         peep.perms.peep = true;
+        return peep;
       });
 
       this.items = users;

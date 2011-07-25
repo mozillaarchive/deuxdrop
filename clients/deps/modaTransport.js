@@ -50,7 +50,7 @@ define(function (require, exports) {
       waitingDeferreds = {},
       targetOrigin = window && window.location ? window.location.protocol +
                      '//' + window.location.host : '',
-      actions, socket, me, respond;
+      actions, socket, me, respond, addOnWorker;
 
   function send(obj) {
     socket.emit('serverMessage', JSON.stringify(obj));
@@ -241,6 +241,8 @@ define(function (require, exports) {
   /**
    * Sets up the communication channel with the server. Must be called
    * from application code.
+   * TODO: Figure out a .destroy() method for add-on case? When should
+   * the server connection be shut down?
    */
   transport.init = function () {
     // Right now socket.io in the browser does not use define() so grab
@@ -352,6 +354,14 @@ define(function (require, exports) {
   }
 
   /**
+   * Listener for messages from the addon's content listener. Only
+   * used in the addon case.
+   */
+  function onContentMessage(data) {
+    route(data.requestId, data.method, data.args);
+  }
+
+  /**
    * Sets up listening and broadcasting of messaging APIs.
    * In the browser uses window.postMessage, in a jetpack,
    * uses either custom events (due to a bug) or jetpack-specific
@@ -383,7 +393,27 @@ define(function (require, exports) {
       }
     }, false);
   } else if (env.name === 'addon') {
-    //TODO
+
+    respond = function (requestId, method, data) {
+      var response = {
+        kind: 'modaResponse',
+        requestId: requestId,
+        method: method,
+        response: data
+      };
+
+      addOnWorker.postMessage(JSON.stringify(response), targetOrigin);
+    };
+
+    transport.configAddOnWorker = function (worker) {
+      if (addOnWorker) {
+        //TODO: unsubscribe to old on listener if already have an addOnWorker.
+        addOnWorker.removeListener('message', onContentMessage);
+      }
+
+      addOnWorker = worker;
+      addOnWorker.on('message', onContentMessage);
+    };
   }
 
   makePerCallPassThroughApi('peeps', ['query'], 'items');

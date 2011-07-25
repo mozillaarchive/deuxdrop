@@ -20,6 +20,9 @@
     </script>
     <script src="../deps/require.js"></script>
     <script>
+      var deps = location.protocol === 'resource:' ? [] : ['modaTransport'];
+      deps.push('../firefox/js/main');
+
       require(
         {
           baseUrl: '../deps',
@@ -29,7 +32,7 @@
             //'browserId': 'https://browserid.org/include'
           }
         },
-        ['modaTransport', '../firefox/js/main']
+        deps
       );
     </script>
   </head>
