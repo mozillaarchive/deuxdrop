@@ -25,9 +25,9 @@
 /*global define: false */
 
 define([ 'exports', 'self', 'page-mod', 'Moda', 'chrome',
-         './jetpack-protocol/index'],
+         'modaTransport', './jetpack-protocol/index'],
 function (exports,   self,   pageMod,    Moda,   chrome,
-          protocol) {
+          modaTransport, protocol) {
 
   var Cu = chrome.Cu,
       jsm = {},
@@ -58,9 +58,7 @@ function (exports,   self,   pageMod,    Moda,   chrome,
   //about: URLs
   handler = protocol.about('deuxdrop', {
     onRequest: function (request, response) {
-      console.log('>>>', JSON.stringify(request, '', '  '));
       response.uri = aboutUrl;
-      console.log('<<<', JSON.stringify(response, '', '  '));
     }
   });
   handler.register();
@@ -96,10 +94,13 @@ function (exports,   self,   pageMod,    Moda,   chrome,
       contentScriptWhen: 'start',
       contentScriptFile: modaContentUrl,
       onAttach: function onAttach(worker) {
-        worker.on('message', function (data) {
-          console.log('pagemod/main.js: ' + data);
-          worker.postMessage(data + '+' + (new Date()).getTime());
+        // Let the transport know there is listener now.
+        worker.on('detach', function () {
+          modaTransport.configAddOnWorker(null);
         });
+
+        // Inform the transport the listener went away.
+        modaTransport.configAddOnWorker(worker);
       }
     });
   };

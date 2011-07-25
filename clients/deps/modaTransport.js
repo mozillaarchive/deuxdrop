@@ -247,9 +247,7 @@ define(function (require, exports) {
   transport.init = function () {
     // Right now socket.io in the browser does not use define() so grab
     // the global.
-    io = window.io;
-
-    socket = io.connect(null, {rememberTransport: false,
+    socket = window.io.connect(null, {rememberTransport: false,
                   transports: ['websocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']
                   });
 
@@ -289,6 +287,14 @@ define(function (require, exports) {
       respond(null, 'networkDisconnect');
     });
 
+  };
+
+  /**
+   * Destroys the transport connection to the server.
+   */
+  transport.destroy = function () {
+    socket.disconnect();
+    socket = null;
   };
 
   /**
@@ -407,12 +413,23 @@ define(function (require, exports) {
 
     transport.configAddOnWorker = function (worker) {
       if (addOnWorker) {
-        //TODO: unsubscribe to old on listener if already have an addOnWorker.
+        // Unsubscribe to old on listener if already have an addOnWorker.
         addOnWorker.removeListener('message', onContentMessage);
+      } else {
+        // No existing addOnWorker, so it means the server connection is
+        // not running, so start it up.
+        transport.init();
       }
 
       addOnWorker = worker;
-      addOnWorker.on('message', onContentMessage);
+
+      if (worker) {
+        addOnWorker.on('message', onContentMessage);
+      } else {
+        // Shut down the connection to server for now. Need to re-evaluate
+        // later if we should keep it running.
+        transport.destroy();
+      }
     };
   }
 
