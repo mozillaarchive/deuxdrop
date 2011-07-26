@@ -49,7 +49,30 @@
  *   @key[prefix String]{
  *     Currently unused short unique string, allocated by the king.
  *   }
+ *   @key[nextUniqueIdAlloc Number]{
+ *     The next unique identifer to allocate to this query source.  While we
+ *     currently allocate identifiers from the same pool across all schema
+ *     types, we do not need to do so.  Identifiers are retrieved from separate
+ *     maps for safety purposes.
+ *   }
  *   @key[queryHandlesByNS QueryHandlesByNS]
+ * ]]
+ *
+ * @typedef[LocallyNamedClientData @dict[
+ *   @key[localName String]{
+ *     The name of the object as known by the moda bridge instance.
+ *   }
+ *   @key[fullName String]{
+ *   }
+ *   @key[count]
+ *   @key[data]{
+ *     The actual client data that we might need to react to requests involving
+ *     this instance from the moda bridge.
+ *
+ *     For example, we need/want for each of the following:
+ *     - Peeps: Other-person ident, if available; self ident.
+ *     - Conversation: Conversation meta structure.
+ *   }
  * ]]
  *
  * @typedef[QueryHandle @dict[
@@ -60,7 +83,32 @@
  *   }
  *   @param[namespace QueryNamespace]
  *   @param[queryDef QueryDef]
- *   @param[members]
+ *   @param[index]{
+ *     The view index that provides the ordering
+ *   }
+ *   @param[membersByLocal @dictof[
+ *     @key[namespace QueryNamespace]
+ *     @value[nsMembers @dictof[
+ *       @key[trueName String]{
+ *         The full, unique-ish name, such as the crypto key value for the item.
+ *       }
+ *       @value[data LocallyNamedClientData]
+ *     ]]
+ *   ]]
+ *   @param[membersByFull]{
+ *     Same as `membersByLocal` but keyed by the full name.
+ *   }
+ *
+ *   @param[dataNeeded]{
+ *     The running set of data pieces named by their full name that need to get
+ *     loaded before we can call this query loaded.  This is used to consolidate
+ *     derived data requests for batching so that we can leverage locality.
+ *
+ *     The lists should always contain the names of items not yet queried.
+ *     In cases where speculative naming is required (ex: peeps), we will
+ *     add the peep full id to the dataNeeded list at the same time we add the
+ *     empty entry to the members tables.
+ *   }
  *
  *   @param[splices @listof[@dict[
  *     @key[index]
@@ -71,7 +119,7 @@
  *     because we may change things up to the full wmsy viewslice proto later
  *     on.
  *   }
- *   @param[dataDelta @dictof[
+ *   @param[dataMap @dictof[
  *     @key[namespace QueryNamespace]
  *     @value[@dictof[
  *       @key[id QSNSId]
@@ -108,6 +156,8 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
       NS_CONVALL = exports.NS_CONVALL = 'convall';
 
+const PENDING_NOT = 0, PENDING_INITIAL = 1, PENDING_NOTIF = 2;
+
 function makeEmptyListsByNS() {
   return {
     peeps: [],
@@ -141,6 +191,7 @@ function makeEmptyMapsByNS() {
  * - All queries have a per-namespace map of id's to the relevant server side
  *    info and serves an indicator that the user-facing data is known (or
  *    in-flight to) the UI thread.
+ * XXX reference counting is coming back for simplicit...
  * - No reference counting is used; the data is kept alive by the assumption
  *    that the user-facing thread is still alive and would have told us prior
  *    to going away.  Some type of heartbeat mechanism might be an appropriate
@@ -195,6 +246,7 @@ NotificationKing.prototype = {
       name: verboseUniqueName,
       listener: listener,
       prefix: prefixId,
+      nextUniqueIdAlloc: 0,
       queryHandlesByNS: makeEmptyListsByNS(),
     };
     return prefixId;
@@ -219,12 +271,21 @@ NotificationKing.prototype = {
       owner: querySource,
       uniqueId: uniqueId,
       namespace: namespace,
+      pending: PENDING_INITIAL,
+      //
       queryDef: queryDef,
+      index: null,
+      // currently we don't subset view slices, so there is always no bound.
+      sliceRange: {
+        low: null,
+        high: null,
+      },
       members: makeEmptyMapsByNS(),
       // - data yet required (from dependencies)
       dataNeeded: makeEmptyListsByNS(),
       // - data to send over the wire once this round is done
       splices: [],
+      dataMap: makeEmptyMapsByNS(),
       dataDelta: makeEmptyMapsByNS(),
     };
     querySource.queryHandlesByNS[namespace].push(queryHandle);
@@ -241,18 +302,80 @@ NotificationKing.prototype = {
 
 
   //////////////////////////////////////////////////////////////////////////////
+  // Transmission to the bridge
+  sendQueryResults: function(queryHandle, isInitial) {
+    var msg = {
+      handle: queryHandle.uniqueId,
+      op: isInitial ? 'initial' : 'update',
+      splices: queryHandle.splices,
+      dataMap: queryHandle.dataMap,
+      dataDelta: queryHandle.dataDelta,
+    };
+    queryHandle.pending = PENDING_NOT;
+    // - reset state
+    queryHandle.dataNeeded = makeEmptyListsByNS();
+    queryHandle.splices = [];
+    queryHandle.dataMap = makeEmptyMapsByNS();
+    queryHandle.dataDelta = makeEmptyMapsByNS();
+
+    queryHandle.owner.listener.send(msg);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Cache checks
 
-  checkIfIdAlreadyKnown: function(querySource, namespace, fullId) {
-    var queryHandles = qsHandle.queryHandlesByNS[namespace];
+  /**
+   * Check if the query source associated with the query handle already knows
+   *  about the named item in question.  If so, increment the client data
+   *  structure's count, put it in the members table, and return it.  Returns
+   *  null if the item was not yet known.
+   *
+   * @args[
+   *   @param[writeQueryHandle QueryHandle]
+   *   @param[namespace]
+   *   @param[fullId]
+   * ]
+   */
+  reuseIfAlreadyKnown: function(writeQueryHandle, namespace, fullId) {
+    // fast-path if the given query already knows the answer
+    var clientData;
+    if (writeQueryHandle.membersByFull[namespace].hasOwnProperty(fullId)) {
+      clientData = writeQueryHandle.membersByFull[namespace];
+      clientData.count++;
+    }
+
+    // scan other queries
+    var querySource = writeQueryHandle.owner;
+    var queryHandles = querySource.queryHandlesByNS[namespace];
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
       var queryHandle = queryHandles[iQuery];
-      var nsMembers = queryHandle.members[namespace];
+      if (queryHandle === writeQueryHandle)
+        continue;
+      var nsMembers = queryHandle.membersByFull[namespace];
       if (nsMembers.hasOwnProperty(fullId)) {
-        return nsMembers[fullId];
+        clientData = nsMembers[fullId];
+        clientData.count++;
+        writeQueryHandle.membersByLocal[namespace][clientData.localName] =
+          writeQueryHandle.membersbyFull[namespace][clientData.fullName] =
+            clientData;
+        return clientData;
       }
     }
     return null;
+  },
+
+  mapLocalNameToFullName: function(querySource, localName) {
+    var queryHandles = querySource.queryHandlesByNS[namespace];
+    for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+      var queryHandle = queryHandles[iQuery];
+      if (queryHandle === writeQueryHandle)
+        continue;
+      var nsMembers = queryHandle.membersByLocal[namespace];
+      if (nsMembers.hasOwnProperty(localName)) {
+        return nsMembers[localName].fullName;
+      }
+    }
+    throw new Error("No such local name '" + localName + "'");
   },
 
   //////////////////////////////////////////////////////////////////////////////

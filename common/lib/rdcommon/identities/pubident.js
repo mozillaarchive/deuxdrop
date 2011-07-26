@@ -288,6 +288,18 @@ exports.assertGetPersonSelfIdent = function(personSelfIdentBlob, checkRootKey) {
   return payload;
 };
 
+/**
+ * Return the contents of a self-identification blob without verification.  Only
+ *  use this method when you have previously validated the self-ident (and
+ *  expiration is not a concern) and just want at the data.  You would likely
+ *  do this if you still need the signature around but don't want to redundantly
+ *  store its contents.
+ */
+exports.peekPersonSelfIdentNOVERIFY = function(signedPersonSelfIdent) {
+  return JSON.parse(
+    $keyops.generalPeekInsideSignatureUtf8(signedPersonSelfIdent));
+};
+
 exports.generateOtherPersonIdent = function(longtermKeyring,
                                             otherPersonSelfIdent,
                                             localPoco) {
@@ -314,6 +326,18 @@ exports.assertGetOtherPersonIdent = function(otherPersonIdentBlob,
           otherPersonIdentBlob, timestamp,
           'assertedBy', 'issuedAt',
           'LONGTERM', 'LONGTERM');
+};
+
+/**
+ * Return the contents of an other-person-ident blob without verification.  Only
+ *  use this method when you have previously validated the ident (and expiration
+ *  is not a concern) and just want at the data.  You would likely do this if
+ *  you still need the signature around but don't want to redundantly store its
+ *  contents.
+ */
+exports.peekOtherPersonIdentNOVERIFY = function(signedOtherPersonIdent) {
+  return JSON.parse(
+    $keyops.generalPeekInsideSignatureUtf8(signedOtherPersonIdent));
 };
 
 }); // end define

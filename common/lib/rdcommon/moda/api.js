@@ -46,24 +46,19 @@ define(
     exports
   ) {
 
-/**
- * Address-book type information about a person: their name, etc.
- */
-function PeepCard() {
-  this.ourPoco;
-  this.selfPoco;
-}
-PeepCard.prototype = {
-};
+const NS_PEEPS = 'peeps',
+      NS_CONVBLURBS = 'convblurbs',
+      NS_CONVALL = 'convall';
+
 
 /**
  * Provides summary information about the peep's activities as they relate to
  *  our user: # of unread messages from the user, # of conversations involving
  *  the user, meta-data our user has annotated them with (ex: pinned).
- *
- * Contains a copy of the `PeepCard` for the user in question to name them.
  */
 function PeepBlurb() {
+  this.ourPoco;
+  this.selfPoco;
 }
 PeepBlurb.prototype = {
   get pinned() {
@@ -123,9 +118,16 @@ ConversationInFull.prototype = {
 function LiveOrderedSet(handle, ns, query) {
   this._handle = handle;
   this._ns = ns;
+  this._dataByNS = {
+    peeps: {},
+    convblurbs: {},
+    convall: {},
+  };
   this.query = query;
 }
 LiveOrderedSet.prototype = {
+  _notifySplice: function(index, howMany, addedItems) {
+  },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -154,6 +156,7 @@ function ModaBridge() {
   this._nextHandle = 0;
 
   this._handleMap = {};
+  this._sets = [];
 }
 exports.ModaBridge = ModaBridge;
 ModaBridge.prototype = {
@@ -174,6 +177,134 @@ ModaBridge.prototype = {
   _normalizePeepsToIds: function(peeps) {
   },
 
+  /**
+   * @args[
+   *   @param[msg @dict[
+   *     @key[handle]
+   *     @key[op @oneof['initial' 'update' 'dead']]
+   *     @key[splices]
+   *     @key[dataMap]
+   *     @key[dataDelta]
+   *   ]]
+   * ]
+   */
+  _receive: function(msg) {
+    if (!this._handleMap.hasOwnProperty(msg.handle))
+      throw new Error("Received notification about unknown handle: " +
+                      msg.handle);
+    var liveset = this._handleMap[msg.handle];
+    if (liveset === null) {
+      // if this is the other side confirming the death of the query, delete it
+      //  from our table
+      if (msg.op === 'dead')
+        delete this._handleMap[msg.handle];
+      // (otherwise this is a notifcation we no longer care about)
+      return;
+    }
+
+    // -- perform transformation / cache unification
+    // We perform these in the order: peep, conv blurb, conv full because
+    //  the dependency situation is such that peeps can't mention anything
+    //  else (directly), and conversations can reference peeps.
+    // Messages aren't treated separately because they are immutable and small
+    //  so we don't care about tracking them independently.
+    var i, key, values, val, dataMap;
+    if (msg.dataMap.hasOwnProperty(NS_PEEPS)) {
+      values = msg.dataDelta[NS_PEEPS];
+      dataMap = liveset._dataByNS[NS_PEEPS];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(NS_PEEPS, key);
+        else
+          dataMap[key] = this._transformPeepBlurb(val, liveset);
+      }
+    }
+    if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
+    }
+    if (msg.dataMap.hasOwnProperty(NS_CONVBLURBS)) {
+      values = msg.dataDelta[NS_CONVBLURBS];
+      dataMap = liveset._dataByNS[NS_CONVBLURBS];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(NS_CONVBLURBS, key);
+        else
+          dataMap[key] = this._transformConvBlurb(val, liveset);
+      }
+    }
+    if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
+    }
+    if (msg.dataMap.hasOwnProperty(NS_CONVALL)) {
+      values = msg.dataDelta[NS_CONVALL];
+      dataMap = liveset._dataByNS[NS_CONVALL];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(NS_CONVALL, key);
+        else
+          dataMap[key] = this._transformConvFull(val, liveset);
+      }
+    }
+    if (msg.dataDelta.hasOwnProperty(NS_CONVALL)) {
+    }
+
+    // -- populate / apply the splices.
+    for (i = 0; i < msg.splices.length; i++) {
+      dataMap = liveset._dataByNS[liveset._ns];
+      var spliceInfo = msg.splices[i];
+      var objItems = [];
+      for (var iName = 0; iName < spliceInfo.items.length; iName++) {
+        objItems.push(dataMap[spliceInfo.items[iName]]);
+      }
+      liveset._notifySplice(spliceInfo.index, spliceInfo.howMany, objItems);
+    }
+  },
+
+  /**
+   * Look up the associated data that we know must exist in
+   */
+  _cacheLookupOrExplode: function(ns, localName) {
+    var sets = this._sets;
+    for (var iSet = 0; iSet < sets.length; iSet++) {
+      var lset = sets[iSet];
+      var nsMap = lset._dataByNS[ns];
+      if (nsMap.hasOwnProperty(localName))
+        return nsMap[localName];
+    }
+    throw new Error("No such entry in namespace '" + ns + "' with name '" +
+                    localName + "'");
+  },
+
+  /**
+   * Create a `PeepBlurb` representation from the wire rep.
+   */
+  _transformPeepBlurb: function(data, liveset) {
+  },
+
+  /**
+   * Create a `Message` representation from the wire rep.
+   */
+  _transformMessage: function(data, liveset) {
+  },
+
+  /**
+   * Create a `ConversationBlurb` representation from the wire rep.
+   */
+  _transformConvBlurb: function(data, liveset) {
+  },
+
+  /**
+   * Create a `ConversationInFull` representation from the wire rep.
+   */
+  _transformConvFull: function(data, liveset) {
+  },
+
+
+
   //////////////////////////////////////////////////////////////////////////////
   // Data Queries
 
@@ -181,6 +312,7 @@ ModaBridge.prototype = {
     var handle = this._nextHandle++;
     var liveset = new LiveOrderedSet(handle, query);
     this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
     this._send('queryPeeps', handle, query);
     return liveset;
   },
@@ -189,7 +321,8 @@ ModaBridge.prototype = {
     var handle = this._nextHandle++;
     var liveset = new LiveOrderedSet(handle, query);
     this._handleMap[handle] = liveset;
-    this._send('queryPeeps', handle, query);
+    this._sets.push(liveset);
+    this._send('queryPeeps', handle, {peep: peep._id, query: query});
     return liveset;
   },
 

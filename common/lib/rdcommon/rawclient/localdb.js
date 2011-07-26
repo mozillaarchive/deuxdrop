@@ -68,7 +68,9 @@ var when = $Q.when;
 
 const PINNED = 'pinned';
 
-const NS_PEEPS = 'peeps';
+const NS_PEEPS = 'peeps',
+      NS_CONVBLURBS = 'convblurbs',
+      NS_CONVALL = 'convall';
 
 /**
  * An optimization we are capable of performing is that we do not have to store
@@ -126,7 +128,7 @@ LocalStore.prototype = {
   // Bootstrap
   _bootstrap: function() {
     // - load our list of pinned peeps by root key
-    // XXX actually load
+    // XXX actually load after we actually support pinned peeps
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -225,31 +227,142 @@ LocalStore.prototype = {
 
   },
 
+  /**
+   * If there are any required dataDeps for the queryHandle, then retrieve them
+   *  and re-run, otherwise send the query results.
+   */
+  _fillOutQueryDepsAndSend: function(queryHandle) {
+    if (queryHandle.dataNeeded[NS_CONVBLURBS].length) {
+      var convIds = queryHandle.dataNeeded[NS_CONVBLURBS].splice(0,
+                      queryHandle.dataNeeded[NS_CONVBLURBS].length);
+      return this._fetchAndReportPeepBlurbsById(query, convIds);
+    }
+    if (queryHandle.dataNeeded[NS_PEEPS].length) {
+      var peepRootKeys = queryHandle.dataNeeded[NS_PEEPS].splice(0,
+                           queryHandle.dataNeeded[NS_PEEPS].length);
+      return this._fetchAndReportPeepBlurbsById(queryHandle, peepRootKeys);
+    }
+    return this._notif.sendQueryResults(queryHandle);
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Lookup
 
-  _fetchAndReportConversationBlurbsById: function(qhandle, conversationIds) {
+  _fetchAndReportConversationBlurbsById: function(queryHandle,
+                                                  conversationIds) {
     var deferred = $Q.defer();
-    var iConv = 0, self = this;
-    function getNextMaybeGot(row) {
-      while (iConv < conversationIds.length) {
+    var iConv = 0, self = this,
+        viewItems = [];
+    queryHandle.splices.push({
+      index: 0, howMany: 0, items: viewItems,
+    });
+    function getNextMaybeGot() {
+      while (iConv++ < conversationIds.length) {
+        var convId = conversationIds[iConv], clientData;
+        // - attempt cache re-use
+        if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle,
+                                                          NS_CONVBLURBS,
+                                                          convId))) {
+          viewItems.push(clientData.localName);
+          continue;
+        }
 
-
-        return when(self._fetchConversationBlurb(qhandle,
+        return when(self._fetchConversationBlurb(queryHandle,
                                                  conversationIds[iConv]),
-                    function() {
-
+                    function(clientData) {
+          viewItems.push(clientData.localName);
+          getNextMaybeGot();
         });
       }
-      return msgBack;
+
+      return self._fillOutQueryDepsAndSend(queryHandle);
     }
 
-
-    return getNextMaybeGot(null);
+    return getNextMaybeGot();
   },
 
-  _fetchConversationBlurb: function(qhandle, convId) {
+  /**
+   * Retrieve a query blurb from the datastore for inclusion in the provided
+   *  query.  Only invoked after failing to retrieve the data from cache, and so
+   *  always generates a new data structure.  The structure is immediately
+   *  named and contributed to the members map prior to yielding control flow so
+   *  that no duplicate loading occurs.
+   */
+  _fetchConversationBlurb: function(queryHandle, convId) {
+    var querySource = queryHandle.owner;
+    var localName = "" + (querySource.nextUniqueIdAlloc++);
+    var deps = [];
+    var clientData = {
+      localName: localName,
+      fullName: convId,
+      count: 1,
+      data: null,
+      deps: deps,
+    };
+    queryHandle.membersByLocal[NS_CONVBLURBS][localName] = clientData;
+    queryHandle.membersByFull[NS_CONVBLURBS][convId] = clientData;
 
+    return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
+                function(cells) {
+      // we need the meta on our side...
+      clientData.data = cells['d:meta'];
+      // -- build the client rep
+      var numMessages = cells['m'];
+      var participants = [];
+      for (var key in cells) {
+        // - participants
+        if (/^d:p/.test(key)) {
+          participants.push(self._deferringPeepQueryResolve(queryHandle,
+                                                            cells[key],
+                                                            deps));
+        }
+      }
+      // - first (non-join) message...
+      var msg, iMsg, firstMsgRep;
+      for (iMsg = 0; iMsg < numMessages; iMsg++) {
+        msg = cells['d:m' + iMsg];
+        if (msg.type === 'message') {
+          firstMsgRep = {
+            type: 'message',
+            author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
+                                                    deps),
+            composedAt: msg.composedAt,
+            text: msg.text,
+          };
+          break;
+        }
+      }
+
+      // - number of unread
+      // XXX unread status not yet dealt with. pragmatism!
+      var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
+      for (; iMsg < numMessages; iMsg++) {
+        msg = cells['d:m' + iMsg];
+        if (msg.type === 'message') {
+          numUnreadTextMessages++;
+          // - first unread (non-join) message...
+          if (!firstUnreadMsgRep) {
+            firstUnreadMsgRep = {
+              type: 'message',
+              author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
+                                                      deps),
+              composedAt: msg.composedAt,
+              text: msg.text,
+            };
+          }
+        }
+      }
+
+      queryHandle.dataMap[NS_CONVBLURBS][localName] = {
+        participants: participants,
+        firstMessage: firstMsgRep,
+        firstUnreadMessage: firstUnreadMsgRep,
+        pinned: false,
+        numUnread: numUnreadTextMessages,
+      };
+
+      return clientData;
+    });
   },
 
   /**
@@ -262,10 +375,10 @@ LocalStore.prototype = {
    *   ]
    * ]
    */
-  queryAndWatchPeepConversationBlurbs: function(handle, peepRootKey, query) {
+  queryAndWatchPeepConversationBlurbs: function(queryHandle, peepRootKey) {
     // - pick the index to use
     var index;
-    switch (query.involvement) {
+    switch (queryHandle.queryDef.involvement) {
       case 'any':
         index = $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT;
         break;
@@ -282,14 +395,7 @@ LocalStore.prototype = {
     // - generate an index scan, netting us the conversation id's, hand-off
     return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey,
                                    null, null, null, null, null, null),
-      this._fetchAndReportConversationBlurbsById.bind(this, handle));
-  },
-
-  /**
-   * Request notifications whenever new/unseen messages are added.  This results
-   *  in us providing the specific message record plus the conversation blurb.
-   */
-  subscribeToNewUnseenMessages: function() {
+      this._fetchAndReportConversationBlurbsById.bind(this, queryHandle));
   },
 
 
@@ -454,30 +560,137 @@ LocalStore.prototype = {
    *  the set.
    *
    * @args[
-   *   @param[by @oneof['recency' 'alphabet']]
+   *   @param[by @oneof['alphabet' 'any' 'recip' 'write']]
    *   @param[filter @oneof[null 'pinned']]
    * ]
    */
-  queryAndWatchPeepBlurbs: function(by, filter) {
+  queryAndWatchPeepBlurbs: function(queryHandle) {
     var idx;
-    switch (by) {
-      case 'recency':
+    switch (queryHandle.queryDef.by) {
+      case 'alphabet':
+        idx = $lss.IDX_PEEP_CONTACT_NAME;
+        break;
+      case 'any':
         idx = $lss.IDX_PEEP_ANY_INVOLVEMENT;
+        break;
+      case 'recip':
+        idx = $lss.IDX_PEEP_RECIP_INVOLVEMENT;
+        break;
+      case 'write':
+        idx = $lss.IDX_PEEP_WRITE_INVOLVEMENT;
         break;
       default:
         throw new Error("Unsupported ordering: " + by);
     }
     return when(this._db.scanIndex($lss.TBL_PEEP_DATA, idx, '',
                                    null, null, null, null, null, null),
-      function(rootKeys) {
-        var promises = [];
-        for (var iKey = 0; iKey < rootKeys.length; iKey++) {
-          var rootKey = rootKeys[iKey];
-          promises.push();
+      this._fetchAndReportPeepBlurbsById.bind(this, queryHandle));
+  },
+
+  _fetchAndReportPeepBlurbsById: function(queryHandle, peepRootKeys) {
+    var deferred = $Q.defer();
+    var iPeep = 0, self = this,
+        viewItems = [];
+    if (queryHandle.namespace === NS_PEEPS)
+      queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+    function getNextMaybeGot() {
+      while (iPeep++ < peepRootKeys.length) {
+        var peepRootKey = peepRootKeys[iPeep], clientData;
+        // - perform cache lookup, reuse only if valid
+        // (_deferringPeepQueryResolve creates speculative entries and we are
+        //  the logic that actually fulfills them.)
+        if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle,
+                                                          NS_CONVBLURBS,
+                                                          peepRootKey))) {
+          if (clientData.data) {
+            viewItems.push(clientData.localName);
+            continue;
+          }
         }
+
+        return when(self._fetchPeepBlurb(queryHandle, peepRootKeys[iPeep],
+                                         clientData),
+                    function(resultClientData) {
+          viewItems.push(resultClientData.localName);
+          getNextMaybeGot();
+        });
       }
-      // rejection pass-through is desired
-      );
+
+      return self._fillOutQueryDepsAndSend(queryHandle);
+    }
+
+    return getNextMaybeGot();
+  },
+
+  _fetchPeepBlurb: function(queryHandle, peepRootKey, clientData) {
+    // if we don't already have a data-empty structure, create one
+    if (!clientData) {
+      var querySource = queryHandle.owner;
+      var localName = "" + (querySource.nextUniqueIdAlloc++);
+      clientData = {
+        localName: localName,
+        fullName: peepRootKey,
+        count: 1,
+        data: null,
+        deps: null,
+      };
+      queryHandle.membersByLocal[NS_CONVBLURBS][localName] = clientData;
+      queryHandle.membersByFull[NS_CONVBLURBS][convId] = clientData;
+    }
+    return when(this._db.getRow($lss.TBL_PEEP_DATA, peepRootKey, null),
+                function(cells) {
+      // -- our data
+      var signedOident = cells.hasOwnProperty('d:oident') ?
+                           cells['d:oident'] : null;
+      clientData.data = {
+        oident: signedOident,
+        sident: cells['d:sident'],
+      };
+      // -- client data
+      var ourPoco = signedOident ?
+        $pubident.peekOtherPersonIdentNOVERIFY(signedOident).localPoco : null;
+
+      var selfPoco =
+        $pubident.peekPersonSelfIdentNOVERIFY(cells['d:sident']).poco;
+      queryHandle.dataMap[NS_PEEPS][clientData.localName] = {
+        ourPoco: ourPoco,
+        selfPoco: selfPoco,
+        numUnread: cells['d:nunread'],
+        numConvs: cells['d:nconvs'],
+        pinned: false,
+      };
+
+      return clientData;
+    });
+  },
+
+  /**
+   * Resolve the peepRootKey to a local name for the given handle, adding it
+   *  to the list of records to look up during the appropriate batch phase if
+   *  not already known.
+   */
+  _deferringPeepQueryResolve: function(queryHandle, peepRootKey, addToDeps) {
+    var fullMap = queryHandle.membersByFull[NS_PEEPS], clientData;
+    if (fullMap.hasOwnProperty(peepRootKey)) {
+      clientData = fullMap[peepRootKey];
+      clientData.count++;
+      return clientData.localName;
+    }
+
+    queryHandle.dataNeeded[NS_PEEPS].push(peepRootKey);
+    var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
+    clientData = {
+      localName: localName,
+      fullName: peepRootKey,
+      count: 1,
+      data: null,
+      deps: null, // peeps have no additional deps
+    };
+    queryHandle.membersByLocal[localName] = clientData;
+    fullMap[peepRootKey] = clientData;
+    addToDeps.push(clientData);
+
+    return clientData.localName;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -535,31 +748,6 @@ LocalStore.prototype = {
   _cmd_delContact: function() {
   },
   */
-
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Peeps
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Contact/Peep overlap
-
-  /**
-   * A person was added in a conversation; if the person is not a contact
-   *  but rather a peep, boost the reference count and make note of their
-   *  relationship.
-   *
-   * XXX this is speculative work that needs to be filled out
-   */
-  _nameTrack: function(oidentPayload, inviterPubring) {
-  },
-
-  /**
-   * A previously namechecked name is no longer relevant because the
-   *  conversation is being expired, etc.
-   */
-  _nameGone: function() {
-  },
-
 
   //////////////////////////////////////////////////////////////////////////////
 };

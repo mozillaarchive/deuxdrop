@@ -74,12 +74,16 @@ function ModaBackside(rawClient) {
   this._bridgeName = null;
   this._sendObjFunc = null;
 
-  this._prefix = null;
+  this._querySource = null;
 }
 exports.ModaBackside = ModaBackside;
 ModaBackside.prototype = {
   _received: function(binfo, boxedObj) {
 
+  },
+
+  send: function(msg) {
+    this._sendObjFunc(msg);
   },
 
   /**
@@ -89,7 +93,7 @@ ModaBackside.prototype = {
     this._bridgeName = name;
     this._sendObjFunc = bridgeHandlerFunc;
 
-    this._prefix = this._notif.registerNewQuerySource(name);
+    this._querySource = this._notif.registerNewQuerySource(name);
 
     var self = this;
     return function(msg) {
@@ -97,16 +101,23 @@ ModaBackside.prototype = {
     };
   },
 
-  _cmd_queryPeeps: function(bridgeHandle, query) {
-    var handle = this._prefix + bridgeHandle;
-    this._notif.newTrackedQuery(handle, NS_PEEPS, query);
-    //this._store.queryAndWatchPeepBlurbs();
+  _cmd_queryPeeps: function(bridgeQueryName, queryDef) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_PEEPS, queryDef);
+    this._store.queryAndWatchPeepBlurbs(queryHandle);
   },
 
   _cmd_queryPeepConversations: function(bridgeHandle, payload) {
-    var handle = this._prefix + bridgeHandle;
-    this._notif.newTrackedQuery(handle, NS_PEEPS, query);
-    this._store.queryAndWatchPeepConversationBlurbs(handle,
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_CONVBLURBS, payload.query);
+    // map the provided peep local name to z true name
+    var peepRootKey = this._notif.mapLocalNameToFullName(this._querySource,
+                                                         payload.peep);
+    this._store.queryAndWatchPeepConversationBlurbs(queryHandle,
+                                                    peepRootKey,
+                                                    payload.query);
   },
 };
 
