@@ -282,11 +282,11 @@ LocalStore.prototype = {
   },
 
   /**
-   * Retrieve a query blurb from the datastore for inclusion in the provided
-   *  query.  Only invoked after failing to retrieve the data from cache, and so
-   *  always generates a new data structure.  The structure is immediately
-   *  named and contributed to the members map prior to yielding control flow so
-   *  that no duplicate loading occurs.
+   * Retrieve a converation blurb from the datastore for inclusion in the
+   *  provided query.  Only invoked after failing to retrieve the data from
+   *  cache, and so always generates a new data structure.  The structure is
+   *  immediately named and contributed to the members map prior to yielding
+   *  control flow so that no duplicate loading occurs.
    */
   _fetchConversationBlurb: function(queryHandle, convId) {
     var querySource = queryHandle.owner;
@@ -327,6 +327,7 @@ LocalStore.prototype = {
             author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
                                                     deps),
             composedAt: msg.composedAt,
+            receivedAt: msg.receivedAt,
             text: msg.text,
           };
           break;
@@ -347,6 +348,7 @@ LocalStore.prototype = {
               author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
                                                       deps),
               composedAt: msg.composedAt,
+              receivedAt: msg.receivedAt,
               text: msg.text,
             };
           }
@@ -359,6 +361,99 @@ LocalStore.prototype = {
         firstUnreadMessage: firstUnreadMsgRep,
         pinned: false,
         numUnread: numUnreadTextMessages,
+      };
+
+      return clientData;
+    });
+  },
+
+  /**
+   * Retrieve full conversation data.  Only invoked on cache miss, so creates a
+   *  new clientData data structure that is immediately linked into our rep.
+   */
+  _fetchConversationInFull: function(queryHandle, convId) {
+    var querySource = queryHandle.owner;
+    var localName = "" + (querySource.nextUniqueIdAlloc++);
+    var deps = [];
+    var clientData = {
+      localName: localName,
+      fullName: convId,
+      count: 1,
+      data: null,
+      deps: deps,
+    };
+    queryHandle.membersByLocal[NS_CONVALL][localName] = clientData;
+    queryHandle.membersByFull[NS_CONVALL][convId] = clientData;
+
+    return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
+                function(cells) {
+      // we need the meta on our side...
+      clientData.data = cells['d:meta'];
+      // -- build the client rep
+      var numMessages = cells['m'];
+      var participants = [];
+      for (var key in cells) {
+        // - participants
+        if (/^d:p/.test(key)) {
+          participants.push(self._deferringPeepQueryResolve(queryHandle,
+                                                            cells[key],
+                                                            deps));
+        }
+      }
+      // - all messages
+      var msg, iMsg, messages = [];
+      for (iMsg = 0; iMsg < numMessages; iMsg++) {
+        msg = cells['d:m' + iMsg];
+        if (msg.type === 'message') {
+          messages.push({
+            type: 'message',
+            author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
+                                                    deps),
+            composedAt: msg.composedAt,
+            receivedAt: msg.receivedAt,
+            text: msg.text,
+          });
+          break;
+        }
+        else if (msg.type === 'join') {
+          messages.push({
+            type: 'join',
+            inviter: self._deferringPeepQueryResolve(queryHandle, msg.by, deps),
+            invitee: self._deferringPeepQueryResolve(queryHandle, msg.id, deps),
+            receivedAt: msg.receivedAt,
+            text: msg.text,
+          });
+        }
+        else {
+          throw new Error("Unknown message type '" + msg.type + "'");
+        }
+      }
+
+      // - number of unread
+      // XXX unread status not yet dealt with. pragmatism!
+      var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
+      for (; iMsg < numMessages; iMsg++) {
+        msg = cells['d:m' + iMsg];
+        if (msg.type === 'message') {
+          numUnreadTextMessages++;
+          // - first unread (non-join) message...
+          if (!firstUnreadMsgRep) {
+            firstUnreadMsgRep = {
+              type: 'message',
+              author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
+                                                      deps),
+              composedAt: msg.composedAt,
+              receivedAt: msg.receivedAt,
+              text: msg.text,
+            };
+          }
+        }
+      }
+
+      queryHandle.dataMap[NS_CONVBLURBS][localName] = {
+        participants: participants,
+        messages: messages,
+        pinned: false,
       };
 
       return clientData;

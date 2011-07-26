@@ -56,29 +56,53 @@ const NS_PEEPS = 'peeps',
  *  our user: # of unread messages from the user, # of conversations involving
  *  the user, meta-data our user has annotated them with (ex: pinned).
  */
-function PeepBlurb() {
-  this.ourPoco;
-  this.selfPoco;
+function PeepBlurb(_bridge, ourPoco, selfPoco,
+                   numUnread, numConvs, pinned) {
+  this._bridge = _bridge;
+  this.ourPoco = ourPoco;
+  this.selfPoco = selfPoco;
+  this._numUnread = numUnread;
+  this._numConvs = numConvs;
+  this._pinned = pinned;
 }
 PeepBlurb.prototype = {
+  // -- getters exist so writes loudly fail
   get pinned() {
+    return this._pinned;
   },
 
   get numInvolvedConversations() {
+    return this._numConvs;
   },
 
   get numUnreadAuthoredMessages() {
+    return this._numUnread;
   },
+};
+
+function JoinMessage(_owner, inviter, invitee, receivedAt) {
+  this._ownerConv = _owner;
+  this.inviter = inviter;
+  this.invitee = invitee;
+  this.receivedAt = receivedAt;
+}
+JoinMessage.prototype = {
+  type: 'join',
 };
 
 /**
  * Message representation; this is only ever provided in a single
  *  representation.
  */
-function Message(_fullConv) {
-  this._fullConv = _fullConv;
+function HumanMessage(_owner, author, composedAt, receivedAt, text) {
+  this._ownerConv = _owner;
+  this.author = author;
+  this.composedAt = composedAt;
+  this.receivedAt = receivedAt;
+  this.text = text;
 }
-Message.prototype = {
+HumanMessage.prototype = {
+  type: 'message',
   markAsLastSeenMessage: function() {
   },
 
@@ -90,25 +114,40 @@ Message.prototype = {
  * Provides summary information about a conversation: its participants, initial
  *  message text, most recent activity, # of unread messages.
  */
-function ConversationBlurb() {
+function ConversationBlurb(_bridge, participants,
+                           pinned, numUnread) {
+  this._bridge = _bridge;
+  this.participants = participants;
+  // the messages have a reference to us and so cannot be created yet
+  this.firstMessage = null;
+  this.firstUnreadMessage = null;
+  this._pinned = pinned;
+  this._numUnread = numUnread;
 }
 ConversationBlurb.prototype = {
+  get pinned() {
+    return this._pinned;
+  },
+  get numUnreadMessages() {
+    return this._numUnread;
+  },
 };
 
 /**
  * All of the data about a conversation, including its messages.
  */
-function ConversationInFull(_bridge) {
+function ConversationInFull(_bridge, participants, messages, pinned) {
   this._bridge = bridge;
+  this.participants = participants;
+  this.messages = messages;
+  this._pinned = pinned;
 }
 ConversationInFull.prototype = {
+  get pinned() {
+    return this._pinned;
+  },
+
   writeMessage: function(text) {
-  },
-
-  markAsSeenThrough: function() {
-  },
-
-  markAsReadThrough: function() {
   },
 };
 
@@ -206,6 +245,9 @@ ModaBridge.prototype = {
     // We perform these in the order: peep, conv blurb, conv full because
     //  the dependency situation is such that peeps can't mention anything
     //  else (directly), and conversations can reference peeps.
+    // An intentional effect of this is that it is okay for subsequent steps to
+    //  use _dataByNS to peek into the liveset for their dependencies rather
+    //  than needing to use _cacheLookupOrExplode themselves.
     // Messages aren't treated separately because they are immutable and small
     //  so we don't care about tracking them independently.
     var i, key, values, val, dataMap;
@@ -265,7 +307,7 @@ ModaBridge.prototype = {
   },
 
   /**
-   * Look up the associated data that we know must exist in
+   * Look up the associated representation that we know must exist somewhere.
    */
   _cacheLookupOrExplode: function(ns, localName) {
     var sets = this._sets;
@@ -282,25 +324,71 @@ ModaBridge.prototype = {
   /**
    * Create a `PeepBlurb` representation from the wire rep.
    */
-  _transformPeepBlurb: function(data, liveset) {
+  _transformPeepBlurb: function(data, /* unused */ liveset) {
+    return new PeepBlurb(this, data.ourPoco, data.selfPoco,
+                         data.numUnread, data.numConvs, data.pinned);
   },
 
   /**
    * Create a `Message` representation from the wire rep.
    */
-  _transformMessage: function(data, liveset) {
+  _transformMessage: function(msg, owner, liveset) {
+    switch (msg.type) {
+      case 'message':
+        return new HumanMessage(
+          owner,
+          liveset._dataByNS.peeps[msg.author],
+          new Date(msg.composedAt),
+          new Date(msg.receivedAt),
+          msg.text
+        );
+      case 'join':
+        return new JoinMessage(
+          owner,
+          liveset._dataByNS.peeps[msg.inviter],
+          liveset._dataByNS.peeps[msg.invitee],
+          new Date(msg.receivedAt)
+        );
+      default:
+        throw new Error("Unhandled message type: '" + msg.type + "'");
+    }
   },
 
   /**
    * Create a `ConversationBlurb` representation from the wire rep.
    */
-  _transformConvBlurb: function(data, liveset) {
+  _transformConvBlurb: function(wireConv, liveset) {
+    var participants = [];
+    for (var i = 0; i < wireConv.participants.length; i++) {
+      participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
+    }
+    var blurb = new ConversationBlurb(
+      this, participants, wireConv.pinned, wireConv.numUnread
+    );
+    blurb.firstMessage =
+      this._transformMessage(wireConv.firstMessage, blurb, liveset);
+    blurb.firstUnreadMessage =
+      this._transformMessage(wireConv.firstUnreadMessage, blurb, liveset);
+    return blurb;
   },
 
   /**
    * Create a `ConversationInFull` representation from the wire rep.
    */
   _transformConvFull: function(data, liveset) {
+    var participants = [];
+    for (var i = 0; i < wireConv.participants.length; i++) {
+      participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
+    }
+    var messages = [];
+    var conv = new ConversationInFull(
+      this, participants, messages, wireConv.pinned
+    );
+    for (var iMsg = 0; iMsg < wireConv.messages.length; iMsg++) {
+      messages.push(
+        this._transformConvFull(wireConv.messages[iMsg], conv, liveset));
+    }
+    return conv;
   },
 
 

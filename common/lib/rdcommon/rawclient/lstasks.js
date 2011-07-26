@@ -290,7 +290,8 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
       writeCells["d:m" + msgNum] = {
         type: 'join',
         by: inviterRootKey,
-        id: inviteeRootKey
+        id: inviteeRootKey,
+        receivedAt: this.fanoutEnv.receivedAt,
       };
 
       // XXX update in-memory reps
@@ -328,6 +329,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
   args: ['store', 'convMeta', 'fanoutEnv', 'cells'],
   steps: {
     all: function() {
+      var fanoutEnv = this.fanoutEnv;
       var authorTellKey = fanoutEnv.sentBy;
       var authorCellName = "d:p" + authorTellKey;
       if (!cells.hasOwnProperty(authorCellName))
@@ -357,6 +359,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
         type: 'message',
         authorId: authorRootKey,
         composedAt: convBody.composedAt,
+        receivedAt: fanoutEnv.receivedAt,
         text: convBody.body
       };
       writeCells["d:m" + msgNum] = msgRec;
