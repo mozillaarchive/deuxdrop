@@ -24,15 +24,15 @@
 /*jslint indent: 2, strict: false  */
 /*global define: false */
 
-define([ 'exports', 'self', 'page-mod', 'Moda', 'chrome',
-         'modaTransport', './jetpack-protocol/index'],
-function (exports,   self,   pageMod,    Moda,   chrome,
-          modaTransport, protocol) {
+define([ 'exports', 'self', 'page-mod', 'chrome', 'modaTransport',
+         './jetpack-protocol/index'],
+function (exports,   self,   pageMod,    chrome,   modaTransport,
+          protocol) {
 
   var Cu = chrome.Cu,
       jsm = {},
       data = self.data,
-      url = data.url('index.html'),
+      url = data.url('web/firefox/index.html'),
       aboutUrl = data.url('content/about.html'),
       redirectorUrl = data.url('content/redirector.js'),
       modaContentUrl = data.url('content/modaContent.js'),

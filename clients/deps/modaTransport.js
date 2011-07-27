@@ -48,7 +48,7 @@ define(function (require, exports) {
       localMeCheck = false,
       deferIdCounter = 0,
       waitingDeferreds = {},
-      targetOrigin = window && window.location ? window.location.protocol +
+      targetOrigin = typeof window !== 'undefined' && window.location ? window.location.protocol +
                      '//' + window.location.host : '',
       actions, socket, me, respond, addOnWorker;
 
