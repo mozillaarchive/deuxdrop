@@ -632,6 +632,7 @@ define(function (require) {
   init = function (state) {
     states[state] = true;
 
+console.log('index.html/main.js called init: ' + state);
     if (!states.domReady || !states.userDetermined) {
       return;
     }

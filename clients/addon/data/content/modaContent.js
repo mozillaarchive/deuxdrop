@@ -42,9 +42,7 @@ var targetOrigin = window.location.protocol + '//' + window.location.host;
 // self is an injected variable done by the add-on SDK
 
 function sendContentMessage(data) {
-
-  console.log('modaContent.js, sending moda-content-message: ' + JSON.stringify(data));
-
+  //console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-content-message: ' + JSON.stringify(data));
   var event = document.createEvent('MessageEvent');
   event.initMessageEvent('moda-content-message', false, false, JSON.stringify(data),
                          '*', null, null, null);
@@ -52,8 +50,7 @@ function sendContentMessage(data) {
 }
 
 window.addEventListener('moda-addon-message', function (event) {
-
-  console.log('modaContent.js, sending moda-addon-message to addon: ' + event.data);
+  //console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-addon-message to addon: ' + event.data);
   self.postMessage(JSON.parse(event.data));
 }, false);
 

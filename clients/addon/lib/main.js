@@ -32,7 +32,10 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
   var Cu = chrome.Cu,
       jsm = {},
       data = self.data,
+
+      // Set to the correct server host.
       serverHost = 'http://127.0.0.1:8888',
+
       url = data.url('web/firefox/index.html'),
       aboutUrl = data.url('content/about.html'),
       transportUrl = data.url('web/firefox/transport.html'),
@@ -111,14 +114,11 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
               pageWorkerReady = true;
               if (waiting.length) {
                 waiting.forEach(function (message) {
-console.log('MAINJS: sending waiting message: ' + JSON.stringify(message));
                   pageWorker.postMessage(message);
                 });
               }
               waiting = [];
             } else {
-
-console.log('MAINJS: sending message to UI: ' + JSON.stringify(message));
               worker.postMessage(message);
             }
           }

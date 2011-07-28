@@ -135,7 +135,7 @@ define(function (require, exports) {
         args: args
       }, event;
 
-//alert('moda.js moda-addon-message: ' + JSON.stringify(data));
+//console.log('moda.js moda-addon-message: ' + JSON.stringify(data));
 
       event = document.createEvent("MessageEvent");
       event.initMessageEvent('moda-addon-message', false, false, JSON.stringify(data), '*', null,
@@ -144,9 +144,9 @@ define(function (require, exports) {
     };
 
     window.addEventListener('moda-content-message', function (evt) {
-//alert('moda-content-message: ' + JSON.stringify(evt.data));
+//console.log('moda-content-message: ' + JSON.stringify(evt.data));
       var data = JSON.parse(evt.data);
-      handleResponse(data.requestId, data.method, data.args);
+      handleResponse(data.requestId, data.method, data.response);
     }, false);
   }
 

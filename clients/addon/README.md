@@ -19,7 +19,12 @@ include the targetApplication for mobile firefox:
       </Description>
     </em:targetApplication>
 
-In packages/api-utils/lib, line 50, comment out this check:
+In these two files:
+
+* packages/api-utils/lib/hidden-frame.js
+* packages/addon-kit/lib/page-worker.js
+
+comment out this check:
 
     if (!require("xul-app").isOneOf(["Firefox", "Thunderbird"])) {
       throw new Error([
