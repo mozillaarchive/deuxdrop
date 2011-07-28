@@ -5,19 +5,6 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Deuxdrop</title>
     <link rel="stylesheet" type="text/css" href="style.css">
-    <script>
-      var console;
-      if (!console)
-        console = {
-          log: function() {},
-          error: function() {},
-          info: function() {},
-          warn: function() {},
-      };
-      function dump(aMsgWithNewline) {
-        console.log(aMsgWithNewline.replace("\n", "", "g"));
-      }
-    </script>
     <script src="../deps/require.js"></script>
     <script>
       var deps = location.protocol === 'resource:' ? [] : ['modaTransport'];

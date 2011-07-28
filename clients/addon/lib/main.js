@@ -24,16 +24,18 @@
 /*jslint indent: 2, strict: false  */
 /*global define: false */
 
-define([ 'exports', 'self', 'page-mod', 'chrome', 'modaTransport',
+define([ 'exports', 'self', 'page-mod', 'page-worker', 'chrome',
          './jetpack-protocol/index'],
-function (exports,   self,   pageMod,    chrome,   modaTransport,
+function (exports,   self,   pageMod,    pageWorkers,   chrome,
           protocol) {
 
   var Cu = chrome.Cu,
       jsm = {},
       data = self.data,
+      serverHost = 'http://127.0.0.1:8888',
       url = data.url('web/firefox/index.html'),
       aboutUrl = data.url('content/about.html'),
+      transportUrl = data.url('web/firefox/transport.html'),
       redirectorUrl = data.url('content/redirector.js'),
       modaContentUrl = data.url('content/modaContent.js'),
       handler, Services, XPCOMUtils;
@@ -94,13 +96,43 @@ function (exports,   self,   pageMod,    chrome,   modaTransport,
       contentScriptWhen: 'start',
       contentScriptFile: modaContentUrl,
       onAttach: function onAttach(worker) {
-        // Let the transport know there is listener now.
-        worker.on('detach', function () {
-          modaTransport.configAddOnWorker(null);
+        // start up the transport via a page mod.
+        var pageWorkerReady = false,
+            waiting = [],
+            pageWorker;
+
+        pageWorker = pageWorkers.Page({
+          contentURL: transportUrl,
+          contentScriptFile: modaContentUrl,
+          contentScript: 'sendContentMessage({serverHost: "' + serverHost + '"});',
+          contentScriptWhen: 'ready',
+          onMessage: function (message) {
+            if (!pageWorkerReady && message.transportLoaded) {
+              pageWorkerReady = true;
+              if (waiting.length) {
+                waiting.forEach(function (message) {
+console.log('MAINJS: sending waiting message: ' + JSON.stringify(message));
+                  pageWorker.postMessage(message);
+                });
+              }
+              waiting = [];
+            } else {
+
+console.log('MAINJS: sending message to UI: ' + JSON.stringify(message));
+              worker.postMessage(message);
+            }
+          }
         });
 
-        // Inform the transport the listener went away.
-        modaTransport.configAddOnWorker(worker);
+        // Listen to messages in the UI and send them to the transport via
+        // the pageWorker.
+        worker.on('message', function (message) {
+          if (pageWorkerReady) {
+            pageWorker.postMessage(message);
+          } else {
+            waiting.push(message);
+          }
+        });
       }
     });
   };

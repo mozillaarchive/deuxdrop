@@ -25,11 +25,10 @@
 /*global define: false, gBrowser: false, window: false, document: false */
 
 define(function (require, exports) {
-
-  if (typeof gBrowser !== 'undefined') {
-    exports.name = 'addon';
-  } else if (typeof window !== 'undefined' && window.location) {
+  if (typeof window !== 'undefined' && window.location &&
+      window.location.protocol !== 'resource:') {
     exports.name = 'browser';
+  } else {
+    exports.name = 'addon';
   }
-
 });

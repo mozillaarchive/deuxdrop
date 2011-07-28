@@ -135,6 +135,8 @@ define(function (require, exports) {
         args: args
       }, event;
 
+//alert('moda.js moda-addon-message: ' + JSON.stringify(data));
+
       event = document.createEvent("MessageEvent");
       event.initMessageEvent('moda-addon-message', false, false, JSON.stringify(data), '*', null,
                              null, null);
@@ -142,6 +144,7 @@ define(function (require, exports) {
     };
 
     window.addEventListener('moda-content-message', function (evt) {
+//alert('moda-content-message: ' + JSON.stringify(evt.data));
       var data = JSON.parse(evt.data);
       handleResponse(data.requestId, data.method, data.args);
     }, false);
@@ -586,7 +589,7 @@ moda.on({
   };
 
   moda.init = function () {
-    transport('init');
+    transport('init', null);
   };
 
   /**

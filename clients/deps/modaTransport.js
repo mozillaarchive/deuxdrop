@@ -36,7 +36,7 @@
 
 /*jslint indent: 2, strict: false, nomen: false, plusplus: false */
 /*global define: false, localStorage: false, window: false, location: false,
-  console: false */
+  console: false, document: false */
 
 define(function (require, exports) {
   var env = require('env'),
@@ -50,7 +50,11 @@ define(function (require, exports) {
       waitingDeferreds = {},
       targetOrigin = typeof window !== 'undefined' && window.location ? window.location.protocol +
                      '//' + window.location.host : '',
-      actions, socket, me, respond, addOnWorker;
+      actions, socket, me, respond;
+
+  // In browser, the require does not expose a module, but is instead off
+  // window, but in addon, it is a real module.
+  io = io || window.io;
 
   function send(obj) {
     socket.emit('serverMessage', JSON.stringify(obj));
@@ -244,12 +248,15 @@ define(function (require, exports) {
    * TODO: Figure out a .destroy() method for add-on case? When should
    * the server connection be shut down?
    */
-  transport.init = function () {
+  transport.init = function (url) {
     // Right now socket.io in the browser does not use define() so grab
     // the global.
-    socket = window.io.connect(null, {rememberTransport: false,
-                  transports: ['websocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']
-                  });
+
+try {
+    socket = io.connect(url || transport.serverHost || null, {
+      rememberTransport: false,
+      transports: ['websocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']
+    });
 
     socket.on('clientMessage', function (data) {
       if (data) {
@@ -286,7 +293,9 @@ define(function (require, exports) {
     socket.on('reconnect_failed', function () {
       respond(null, 'networkDisconnect');
     });
-
+} catch (e) {
+  return e.toString();
+}
   };
 
   /**
@@ -360,14 +369,6 @@ define(function (require, exports) {
   }
 
   /**
-   * Listener for messages from the addon's content listener. Only
-   * used in the addon case.
-   */
-  function onContentMessage(data) {
-    route(data.requestId, data.method, data.args);
-  }
-
-  /**
    * Sets up listening and broadcasting of messaging APIs.
    * In the browser uses window.postMessage, in a jetpack,
    * uses either custom events (due to a bug) or jetpack-specific
@@ -399,38 +400,30 @@ define(function (require, exports) {
       }
     }, false);
   } else if (env.name === 'addon') {
-
+    // Define the request function as using custom messages, due to this
+    // jetpack bug: https://bugzilla.mozilla.org/show_bug.cgi?id=666547,
+    // convert to a postMessage API once it is fixed.
     respond = function (requestId, method, data) {
       var response = {
         kind: 'modaResponse',
         requestId: requestId,
         method: method,
         response: data
-      };
+      }, event;
 
-      addOnWorker.postMessage(JSON.stringify(response), targetOrigin);
+      event = document.createEvent("MessageEvent");
+      event.initMessageEvent('moda-addon-message', false, false, JSON.stringify(response), '*', null,
+                             null, null);
+      window.dispatchEvent(event);
     };
 
-    transport.configAddOnWorker = function (worker) {
-      if (addOnWorker) {
-        // Unsubscribe to old on listener if already have an addOnWorker.
-        addOnWorker.removeListener('message', onContentMessage);
-      } else {
-        // No existing addOnWorker, so it means the server connection is
-        // not running, so start it up.
-        transport.init();
-      }
+    window.addEventListener('moda-content-message', function (evt) {
 
-      addOnWorker = worker;
+respond(null, 'ECHO', 'transport received message: ' + evt.data)
 
-      if (worker) {
-        addOnWorker.on('message', onContentMessage);
-      } else {
-        // Shut down the connection to server for now. Need to re-evaluate
-        // later if we should keep it running.
-        transport.destroy();
-      }
-    };
+      var data = JSON.parse(evt.data);
+      route(data.requestId, data.method, data.args);
+    }, false);
   }
 
   makePerCallPassThroughApi('peeps', ['query'], 'items');

@@ -22,7 +22,7 @@
  * */
 
 /*jslint indent: 2, strict: false  */
-/*global self: false, window: false */
+/*global self: false, window: false, document: false */
 
 
 /**
@@ -41,15 +41,24 @@ var targetOrigin = window.location.protocol + '//' + window.location.host;
 
 // self is an injected variable done by the add-on SDK
 
-window.addEventListener('addon-message', function (event) {
+function sendContentMessage(data) {
+
+  console.log('modaContent.js, sending moda-content-message: ' + JSON.stringify(data));
+
+  var event = document.createEvent('MessageEvent');
+  event.initMessageEvent('moda-content-message', false, false, JSON.stringify(data),
+                         '*', null, null, null);
+  window.dispatchEvent(event);
+}
+
+window.addEventListener('moda-addon-message', function (event) {
+
+  console.log('modaContent.js, sending moda-addon-message to addon: ' + event.data);
   self.postMessage(JSON.parse(event.data));
 }, false);
 
 self.on('message', function (data) {
-  var event = document.createEvent('MessageEvent');
-  event.initMessageEvent('content-message', false, false, JSON.stringify(data),
-                         '*', null, null, null);
-  window.dispatchEvent(event);
+  sendContentMessage(data);
 });
 
 /*
