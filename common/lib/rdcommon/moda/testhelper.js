@@ -99,24 +99,26 @@ var TestModaActorMixins = {
     if (!opts.client)
       throw new Error("Moda actors must be associated with a client!");
     self._testClient = opts.client;
-    self._notif = self._testClient._rawClient.store._notif;
-
-    self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
 
     /** Dynamically updated list of contacts (by canon client). */
     self._dynamicContacts = [];
     self._contactMetaInfoByName = {};
 
     self.T.convenienceSetup(self, 'initialize', function() {
+      // - create our self-corresponding logger, it will automatically hookup
+      self._logger = LOGFAB.testModa(self, self._testClient._logger,
+                                     self.__name);
+
+      self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
       self.RT.reportActiveActorThisStep(self._eBackside);
 
-      // - create our self-corresponding logger, it will automatically hookup
-      self._logger = LOGFAB.modaClient(self, null, self.__name);
+      self._notif = self._testClient._rawClient.store._notif;
 
       // - create the moda worker daemon
       //self._eWorker = self.T.actor();
       self._backside = new $moda_worker.ModaBackside(
-                             self._testClient._rawClient, self.__name);
+                             self._testClient._rawClient, self.__name,
+                             self._logger);
 
       // - create the moda bridge
       // (It has no logger and thus we create no actor; all its events get
@@ -303,10 +305,11 @@ var TestModaActorMixins = {
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
-  modaClient: {
+  testModa: {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.CLIENT,
+    topBilling: true,
 
     events: {
       queryCompleted: {name: true},
@@ -318,10 +321,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 exports.TESTHELPER = {
   // we leave it to the testClient TESTHELPER to handle most stuff, leaving us
   //  to just worry about moda.
-  LOGFAB_DEPS: [LOGFAB],
+  LOGFAB_DEPS: [LOGFAB,
+    $moda_worker.LOGFAB,
+  ],
 
   actorMixins: {
-    modaClient: TestModaActorMixins,
+    testModa: TestModaActorMixins,
   },
 };
 

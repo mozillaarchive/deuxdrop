@@ -131,9 +131,11 @@ TestContext.prototype = {
    *  associated logger to be created.  Convenience functions can automate this
    *  process but still need to abide by it.
    *
-   * At this time, an actor itself is not a logger and does not contain a secret
-   *  internal logger, but we're going to leave that door open and pretend like
-   *  an actor is itself a (potentially cross-cutting) logger.
+   * An actor itself is not a logger and by default does not contain a secret
+   *  internal logger.  However, testhelper implementations tend to create
+   *  synthetic actors that self-create a logger implementation of their own
+   *  defined in the same file.  This allows the testhelper to define events
+   *  that can be waited on.
    */
   actor: function actor(type, name, opts, optionalParentActor) {
     var fabs = this.__testCase.definer.__logfabs;

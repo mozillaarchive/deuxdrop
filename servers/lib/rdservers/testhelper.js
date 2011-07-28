@@ -61,8 +61,6 @@ var $Q = require('q'),
 var $testdata = require('rdcommon/testdatafab');
 
 var $log = require('rdcommon/log'),
-    $rawclient_api = require('rdcommon/rawclient/api'),
-    $client_localdb = require('rdcommon/rawclient/localdb'),
     $authconn = require('rdcommon/transport/authconn'),
     $keyring = require('rdcommon/crypto/keyring'),
     $pubring = require('rdcommon/crypto/pubring'),
@@ -75,6 +73,11 @@ var $signup_server = require('rdservers/signup/server'),
     $maildrop_server = require('rdservers/maildrop/server'),
     $mailstore_uproc = require('rdservers/mailstore/uproc'),
     $mailsender_local_api = require('rdservers/mailsender/localapi');
+
+var $rawclient_api = require('rdcommon/rawclient/api'),
+    $client_localdb = require('rdcommon/rawclient/localdb'),
+    $client_notif = require('rdcommon/rawclient/notifking');
+
 
 var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
     $testwrap_mailstore = require('rdservers/mailstore/testwrappers');
@@ -219,7 +222,7 @@ var TestClientActorMixins = {
       var param = paramInstances[iParamInst];
       stepArgs[iArg] = param;
       stepArgs[iFunc] = stepFunc.bind(null, param);
-      this.T[stepMethod].apply(this, stepArgs);
+      this.T[stepMethod].apply(this.T, stepArgs);
     }
   },
 
@@ -378,9 +381,12 @@ var TestClientActorMixins = {
                                                          other);
 
       // initiate the connect process, save off the othident for test needs.
+      var localPoco = {
+        displayName: other.__name,
+      };
       self._peepsByName[other.__name] =
         self._rawClient.connectToPeepUsingSelfIdent(
-          other._rawClient._selfIdentBlob);
+          other._rawClient._selfIdentBlob, localPoco);
     }).log.boring(!interesting);
     // - release to sender, their drop, mailstore. hold replica.
     this.T.convenienceSetup(other._usingServer,
@@ -404,7 +410,7 @@ var TestClientActorMixins = {
       paramClient._eRawClient.expect_replicaCaughtUp();
 
       other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
-    }).log.boring(!interesting);
+    });
 
 
     // -- OTHER req SELF
@@ -420,9 +426,12 @@ var TestClientActorMixins = {
       other._usingServer.holdAllReplicaBlocksForUser(other);
       other._usingServer.expectReplicaBlocksForUser(other, 1);
 
+      var localPoco = {
+        displayName: other.__name,
+      };
       other._peepsByName[self.__name] =
         other._rawClient.connectToPeepUsingSelfIdent(
-          self._rawClient._selfIdentBlob);
+          self._rawClient._selfIdentBlob, localPoco);
     }).log.boring(!interesting);
     // - release replica of addcontact
     other._T_connectedClientsStep(other._usingServer,
@@ -447,7 +456,7 @@ var TestClientActorMixins = {
 
       other._usingServer.releaseContactRequestToServerUser(self._usingServer,
                                                            self);
-    }).log.boring(!interesting);
+    });
     // - release replica, boring.
     this._T_connectedClientsStep(self._usingServer,
         'delivers contact request to', '*PARAM*', function(paramClient) {
@@ -460,7 +469,7 @@ var TestClientActorMixins = {
       paramClient._dynamicNotifyModaActors('addingContact', other);
 
       self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
-    }).log.boring(!interesting);
+    });
 
   },
 
@@ -1223,7 +1232,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB,
     $authconn.LOGFAB, $gendb.LOGFAB,
-    $rawclient_api.LOGFAB, $client_localdb.LOGFAB,
+    $rawclient_api.LOGFAB, $client_localdb.LOGFAB, $client_notif.LOGFAB,
 
     $signup_server.LOGFAB,
     $maildrop_server.LOGFAB,

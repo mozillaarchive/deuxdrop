@@ -128,6 +128,8 @@ ModaBackside.prototype = {
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   modaBackside: {
+    type: $log.DAEMON,
+    subtype: $log.DAEMON,
     calls: {
       handle: {cmd: true},
     },
