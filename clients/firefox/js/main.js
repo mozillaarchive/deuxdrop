@@ -227,6 +227,8 @@ define(function (require) {
       // event bubbling does not allow the window to open.
       dom.find('.browserSignIn')
         .click(function (evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
           browserId.getVerifiedEmail(function (assertion) {
             if (assertion) {
               moda.signIn(assertion);
@@ -234,8 +236,6 @@ define(function (require) {
               // Do not do anything. User stays on sign in screen.
             }
           });
-          evt.preventDefault();
-          evt.stopPropagation();
         });
     },
 

@@ -252,50 +252,50 @@ define(function (require, exports) {
     // Right now socket.io in the browser does not use define() so grab
     // the global.
 
-try {
-    socket = io.connect(url || transport.serverHost || null, {
-      rememberTransport: false,
-      transports: ['websocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']
-    });
-
-    socket.on('clientMessage', function (data) {
-      if (data) {
-        data = JSON.parse(data);
-      }
-
-      if (actions[data.action]) {
-        actions[data.action](data);
-      } else {
-        console.log('Unhandled socket message: ' + JSON.stringify(data));
-      }
-    });
-
-    socket.on('connect', function () {
-      respond(null, 'networkConnected');
-      userConnect();
-    });
-
-    socket.on('disconnect', function () {
-      respond(null, 'networkDisconnect');
-    });
-
-    socket.on('reconnect', function () {
-      respond(null, 'networkReconnect');
-      userConnect();
-    });
-
-    socket.on('reconnecting', function (nextRetry) {
-      respond(null, 'networkReconnecting', {
-        nextRetry: nextRetry
+    try {
+      socket = io.connect(url || transport.serverHost || null, {
+        rememberTransport: false,
+        transports: ['websocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']
       });
-    });
 
-    socket.on('reconnect_failed', function () {
-      respond(null, 'networkDisconnect');
-    });
-} catch (e) {
-  return e.toString();
-}
+      socket.on('clientMessage', function (data) {
+        if (data) {
+          data = JSON.parse(data);
+        }
+
+        if (actions[data.action]) {
+          actions[data.action](data);
+        } else {
+          console.log('Unhandled socket message: ' + JSON.stringify(data));
+        }
+      });
+
+      socket.on('connect', function () {
+        respond(null, 'networkConnected');
+        userConnect();
+      });
+
+      socket.on('disconnect', function () {
+        respond(null, 'networkDisconnect');
+      });
+
+      socket.on('reconnect', function () {
+        respond(null, 'networkReconnect');
+        userConnect();
+      });
+
+      socket.on('reconnecting', function (nextRetry) {
+        respond(null, 'networkReconnecting', {
+          nextRetry: nextRetry
+        });
+      });
+
+      socket.on('reconnect_failed', function () {
+        respond(null, 'networkDisconnect');
+      });
+    } catch (e) {
+      respond(null, 'ERROR', e.toString());
+    }
   };
 
   /**
@@ -418,9 +418,6 @@ try {
     };
 
     window.addEventListener('moda-content-message', function (evt) {
-
-respond(null, 'ECHO', 'transport received message: ' + evt.data)
-
       var data = JSON.parse(evt.data);
       route(data.requestId, data.method, data.args);
     }, false);
