@@ -229,13 +229,7 @@ define(function (require) {
         .click(function (evt) {
           browserId.getVerifiedEmail(function (assertion) {
             if (assertion) {
-              moda.signIn(assertion, function (me) {
-                // Remove the sign in card
-                $('[data-cardid="signIn"]', '#cardContainer').remove();
-
-                // Show the start card
-                cards.onNav('start', {});
-              });
+              moda.signIn(assertion);
             } else {
               // Do not do anything. User stays on sign in screen.
             }
@@ -551,10 +545,20 @@ define(function (require) {
   // Listen to events from moda
   moda.on({
     'unknownUser': function () {
-      init('userDetermined');
+      if (init) {
+        init('userDetermined');
+      }
     },
     'signedIn': function () {
-      init('userDetermined');
+      if (init) {
+        init('userDetermined');
+      } else {
+        // Remove the sign in card
+        $('[data-cardid="signIn"]', '#cardContainer').remove();
+
+        // Show the start card
+        cards.onNav('start', {});
+      }
     },
     'signedOut': function () {
       // User signed out/no longer valid.
@@ -632,7 +636,6 @@ define(function (require) {
   init = function (state) {
     states[state] = true;
 
-console.log('index.html/main.js called init: ' + state);
     if (!states.domReady || !states.userDetermined) {
       return;
     }
@@ -756,5 +759,8 @@ console.log('index.html/main.js called init: ' + state);
         dom.text(text);
       });
     }, 60000);
+
+    // Set init to null, to indicate init work has already been done.
+    init = null;
   };
 });

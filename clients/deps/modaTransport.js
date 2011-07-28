@@ -71,8 +71,6 @@ define(function (require, exports) {
       transport.signIn(localStorage.assertion, function (user) {
         if (!user) {
           triggerSignOut();
-        } else {
-          respond(null, 'signedIn', user);
         }
       });
     } else {
@@ -227,6 +225,8 @@ define(function (require, exports) {
       cbs.forEach(function (callback) {
         callback(me);
       });
+
+      respond(null, 'signedIn', me);
     },
 
     'message': function (data) {

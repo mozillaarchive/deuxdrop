@@ -518,12 +518,28 @@ moda.on({
     delete listeners[listenerId];
   };
 
+  function notifyListeners(name, data) {
+    // Cycle through listeners and notify them.
+    var triggered = false,
+        prop;
+
+    for (prop in listeners) {
+      if (listeners.hasOwnProperty(prop) && listeners[prop][name]) {
+        listeners[prop][name](data);
+        triggered = true;
+      }
+    }
+
+    if (!triggered) {
+      console.log('moda event [' + name + ']: ' + JSON.stringify(data));
+    }
+  }
+
   /**
    * Triggers an on event.
    */
   moda.trigger = function (name, data) {
-    var triggered = false,
-        prop, conv, user;
+    var conv, user;
 
     // Some messages require updates to cached objects
     if (name === 'message') {
@@ -567,6 +583,32 @@ moda.on({
       data.user = user;
     } else if (name === 'signedIn') {
       me = new User(data);
+
+      // Get list of people we can chat with. Needed before
+      // being able to do useful things with people.
+      transport('chatPerms', function (ids) {
+        if (ids && ids.length) {
+          ids.forEach(function (id) {
+            chatPerms[id] = true;
+          });
+        }
+
+        // Get all the peeps, since notifications need to
+        // know if a person that added you is a peep.
+        moda.peeps({}, {
+          peepsComplete: function () {
+            //Trigger the loading of unseen items.
+            moda.listUnseen();
+
+            notifyListeners(name, data);
+          }
+        });
+      });
+
+      // Return since notification of listeners will not happen
+      // until after the data above is retrieved.
+      return;
+
     } else if (name === 'chatPermsAdd') {
       chatPerms[data] = true;
       user = userCache[data];
@@ -575,17 +617,7 @@ moda.on({
       }
     }
 
-    // Cycle through listeners and notify them.
-    for (prop in listeners) {
-      if (listeners.hasOwnProperty(prop) && listeners[prop][name]) {
-        listeners[prop][name](data);
-        triggered = true;
-      }
-    }
-
-    if (!triggered) {
-      console.log('moda event [' + name + ']: ' + JSON.stringify(data));
-    }
+    notifyListeners(name, data);
   };
 
   moda.init = function () {
@@ -647,33 +679,8 @@ moda.on({
     transport('startConversation', args);
   };
 
-  moda.signIn = function (assertion, callback) {
-    return transport('signIn', assertion, function (serverMe) {
-      if (serverMe && serverMe.id) {
-        me = new User(serverMe);
-
-        // Get list of people we can chat with. Needed before
-        // being able to do useful things with people.
-        transport('chatPerms', function (ids) {
-          if (ids && ids.length) {
-            ids.forEach(function (id) {
-              chatPerms[id] = true;
-            });
-          }
-
-          // Get all the peeps, since notifications need to
-          // know if a person that added you is a peep.
-          moda.peeps({}, {
-            peepsComplete: function () {
-              callback(me);
-
-              //Trigger the loading of unseen items.
-              moda.listUnseen();
-            }
-          });
-        });
-      }
-    });
+  moda.signIn = function (assertion) {
+    return transport('signIn', assertion);
   };
 
   moda.signOut = function (callback) {
