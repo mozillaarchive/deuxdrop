@@ -43,8 +43,11 @@
  *  do need to make sure to actually create all the permutations that need
  *  to be tested in the unit test.)
  *
+ * Our interaction with the moda layer is one of direct consumer which we then
+ *  expose into the logging framework.
+ *
  * Our knowledge of (expected) state is (intentionally) limited to what we infer
- *  from the actions taking by the testing layer in the test.  Specifically, we
+ *  from the actions taken by the testing layer in the test.  Specifically, we
  *  don't query the database to find out the (already) known contacts but rather
  *  rely on the test command to add a contact.  This is a desirable limitation
  *  because it avoids having our tests use broken circular reasoning, but it
@@ -57,6 +60,10 @@
  *  this will not help, but that's why we generate human understandable logs;
  *  so that the author can sanity check what actions the tests actually took
  *  and check the results.
+ *
+ * In general, we try and leverage the internal structures of the "testClient"
+ *  and "thing" representations rather than building our own redundant shadow
+ *  data structures.
  *
  * Our interaction with testClient/testServer is handled by registering ourself
  *  with the testClient instances so that when testClient expectation
@@ -91,35 +98,154 @@ var TestModaActorMixins = {
   __constructor: function(self, opts) {
     if (!opts.client)
       throw new Error("Moda actors must be associated with a client!");
-    self._eRawClient = opts.client;
+    self._testClient = opts.client;
+    self._notif = self._testClient._rawClient.store._notif;
 
-    // - create the moda worker daemon
-    //self._eWorker = self.T.actor();
-    self._worker = new $moda_worker.ModaWorkerDaemon(
-                         self._eRawClient._rawClient);
+    self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
 
-    // - create the moda bridge
-    self._bridge = new $moda_api.ModaBridge();
+    /** Dynamically updated list of contacts (by canon client). */
+    self._dynamicContacts = [];
+    self._contactMetaInfoByName = {};
 
-    // - link worker and bridge (hackily)
-    self._bridge._sendObjFunc = self._worker.XXXcreateBridgeChannel(
-                                  self.__name,
-                                  self._bridge._send.bind(self._bridge));
+    self.T.convenienceSetup(self, 'initialize', function() {
+      self.RT.reportActiveActorThisStep(self._eBackside);
 
+      // - create our self-corresponding logger, it will automatically hookup
+      self._logger = LOGFAB.modaClient(self, null, self.__name);
+
+      // - create the moda worker daemon
+      //self._eWorker = self.T.actor();
+      self._backside = new $moda_worker.ModaBackside(
+                             self._testClient._rawClient, self.__name);
+
+      // - create the moda bridge
+      // (It has no logger and thus we create no actor; all its events get
+      //   logged by us on our logger.)
+      self._bridge = new $moda_api.ModaBridge();
+
+      // - link worker and bridge (hackily)
+      self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
+                                    self._bridge._send.bind(self._bridge));
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Notifications from rawClient
+  // Shadow Contact Information
+
+  /**
+   * Retrieve our test-only contact info meta-structure from the perspective
+   *  of the moda bridge.
+   */
+  _lookupContactInfo: function(contactTestClient) {
+    return this._contactMetaInfoByName[contactTestClient.__name];
+  },
+
+  _getAllContactInfos: function(sortFunc) {
+    var infos = [];
+    for (var key in this._contactMetaInfoByName) {
+      infos.push(this._contactMetaInfoByName[key]);
+    }
+    if (sortFunc)
+      infos.sort(sortFunc);
+    return infos;
+  },
+
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Notifications from testClient
 
   /**
    * Invoked during the action step
    */
   __addingContact: function(other) {
+    var nowSeq = this.RT.testDomainSeq;
+    this._dynamicClients.push(other);
+    this._contactMetaInfoByName[other.__name] = {
+      rootKey: testClient._rawClient.rootPublicKey,
+      name: other.__name,
+      any: nowSeq,
+      write: nowSeq,
+      recip: nowSeq,
+    };
+    // XXX generate peep query delta expectations
   },
 
+  __receiveConvWelcome: function(tConv) {
+    // nb: tConv's backlog is a dynamic state correlated with the global
+    //  conversation state as opposed to a snapshot at the time a welcome was
+    //  issued.
+    var backlog = tConv.data.backlog;
+    for (var iMsg = 0; iMsg < backlog.length; iMsg++) {
+      this.__receiveConvMessage(tConv, backlog[iMsg]);
+    }
+  },
+
+  __receiveConvMessage: function(tConv, tMsg) {
+    if (tMsg.type === 'message') {
+      var ainfo = this._lookupContactInfo(tMsg.data.author);
+      ainfo.write = Math.max(ainfo.write, tMsg.seq);
+      ainfo.any = Math.max(ainfo.any, tMsg.seq);
+
+      for (var iPart = 0; iPart < tConv.participants.length; iPart++) {
+        var participant = tConv.participants[iPart];
+        if (participant === this || participant === tMsg.data.author)
+          continue;
+        var pinfo = this._lookupContactInfo(participant);
+        pinfo.recip = Math.max(pinfo.recip, tMsg.seq);
+      }
+    }
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // LiveSet Listener handling
+  //
+  // We translate the notifications into an ordered state representation that
+  //  uses only the root names of things.
+
+  _remapLocalToClientData: function(namespace, localName) {
+    return this._notif.mapLocalNameToFullName(this._backside._querySource,
+                                              namespace,
+                                              localName);
+  },
+
+  onItemsModified: function(items, liveSet) {
+  },
+
+  onSplice: function(index, howMany, addedItems, liveSet) {
+    if (!liveSet.completed)
+      return;
+    // XXX implement this, very similar to logic in `client-db-views.js`, steal.
+    //this._logger.queryUpdateSplice(liveSet.data.__name, deltaRep);
+  },
+
+  onCompleted: function(liveSet) {
+    var rootKeys;
+    for (var i = 0; i < liveSet.items.length; i++) {
+      rootKeys.push(this._remapLocalToClientData(liveSet._ns, liveSet.items[i])
+                      .fullName);
+    }
+
+    this._logger.queryCompleted(liveSet.data.__name, rootKeys);
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // Queries
+
+  _PEEP_QUERY_BY_TO_CMPFUNC: {
+    alphabet: function(a, b) {
+      return a.name.localeCompare(b.name);
+    },
+    any: function(a, b) {
+      return a.any - b.any;
+    },
+    recip: function(a, b) {
+      return a.recip - b.recip;
+    },
+    write: function(a, b) {
+      return a.write - b.write;
+    },
+  },
 
   /**
    * Instantiate a new live query.  We check the results of the query (once
@@ -129,10 +255,16 @@ var TestModaActorMixins = {
    *  done with the query.
    */
   do_queryPeeps: function(thingName, query) {
-    var lqt = this.T.thing('livequery', thingName);
+    var lqt = this.T.thing('livequery', thingName), self = this;
 
     this.T.action(this, 'create', lqt, function() {
-      // expectation on the query being completed
+      // -- generate the expectation
+      var cinfos = self._getAllContactInfos(
+                     self._PEEP_QUERY_BY_TO_CMPFUNC[query.by]);
+      var rootKeys = cinfos.map(function(x) {return x.rootKey;});
+      self.expect_queryCompleted(lqt.__name, rootKeys);
+
+      lqt._liveset = self.queryPeeps(query, self, lqt);
     });
 
     return lqt;
@@ -177,6 +309,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.CLIENT,
 
     events: {
+      queryCompleted: {name: true},
+      queryUpdateSplice: {},
     },
   },
 });

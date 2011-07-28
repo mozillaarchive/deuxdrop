@@ -107,9 +107,12 @@ TD.commonCase('moda basics', function(T) {
   // -- peep queries
   T.group("A friending");
 
+  // XXX initial test work; only test final query state, not deltas
+  client_a.setup_friendClique([client_b, client_c]);
+
   // - create a live query on the set of our peeps
-  var lqAllPeeps = moda_a.do_queryPeeps();
-  var lqPinnedPeeps = moda_a.do_queryPeeps();
+  var lqAllPeeps = moda_a.do_queryPeeps("allPeeps", {by: 'alphabet'});
+  //var lqPinnedPeeps = moda_a.do_queryPeeps();
 
   // - add B as a friend
 
@@ -119,8 +122,6 @@ TD.commonCase('moda basics', function(T) {
   // - pin B
   // the all query should have noticed that B is pinned
   // the pinned query should have gained B
-
-
 
 });
 

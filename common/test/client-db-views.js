@@ -45,7 +45,7 @@
  * - Proper removal of records no longer matching a query.
  *
  * Future work that is not currently dealt with:
- * - Everything involved subset/bounded view slices.
+ * - Everything involved with subset/bounded view slices.
  *
  * This logic is all tested by generating synthetic events at a
  *  NotificationKing; nothing ever hits the database.  We use the real domain
@@ -94,6 +94,10 @@ function markListIntoObj(list, obj, value) {
   }
 }
 
+/**
+ * Testing stand-in for the `ModaBridge` that generates test events where
+ *  the `ModaBridge` would be sending a message over the wire.
+ */
 function TestQuerySource(name) {
   this.king = new $notifking.NotificationKing(null);
   this.log = LOGFAB.testQuerySource();

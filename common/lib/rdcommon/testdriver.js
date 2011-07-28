@@ -66,6 +66,14 @@ function TestRuntimeContext() {
   this._loggerStack = [];
   this._pendingActorsByLoggerType = {};
 
+  /**
+   * Strictly increasing value for use in tests that want a relative time
+   *  ordering for comparison purposes.  Intentionally separate from the logging
+   *  subsystem's global sequence identifier because they have different
+   *  purposes and scopes.
+   */
+  this.testDomainSeq = 0;
+
   this._liveActors = null;
 }
 TestRuntimeContext.prototype = {

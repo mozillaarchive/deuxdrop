@@ -36,6 +36,12 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
+ * Moda API, communicates via a postMessage bridge with the work thread.  This
+ *  implementation tries to be more minimal/standalone than the rest of the
+ *  system so we don't impose much on UI implementations beyond our excellent
+ *  semantics.  The most obvious manifestation of this is we do not hook up
+ *  to our logging system.  (System unit tests instead hook the logging system
+ *  up to our consumer.)
  **/
 
 define(
@@ -67,6 +73,10 @@ function PeepBlurb(_bridge, ourPoco, selfPoco,
 }
 PeepBlurb.prototype = {
   // -- getters exist so writes loudly fail
+  get isContact() {
+    return this.ourPoco !== null;
+  },
+
   get pinned() {
     return this._pinned;
   },
@@ -154,7 +164,7 @@ ConversationInFull.prototype = {
 /**
  * An ordered set (aka list).
  */
-function LiveOrderedSet(handle, ns, query) {
+function LiveOrderedSet(handle, ns, query, listener, data) {
   this._handle = handle;
   this._ns = ns;
   this._dataByNS = {
@@ -163,9 +173,35 @@ function LiveOrderedSet(handle, ns, query) {
     convall: {},
   };
   this.query = query;
+  this.items = [];
+  this.completed = false;
+  this._listener = listener;
+  this.data = data;
 }
 LiveOrderedSet.prototype = {
+  /**
+   * Generate a notification that one or more of the already-present members
+   *  in the set of items has been modified.
+   */
+  _notifyItemsModified: function() {
+    // XXX do.
+  },
+
+  /**
+   * Generate a notification and perform the splice.  Note that the notification
+   *  occurs *prior* to the splice since that is when the most information is
+   *  available.
+   */
   _notifySplice: function(index, howMany, addedItems) {
+    if (this._listener)
+      this._listener.onSplice(index, howMany, addedItems, this);
+    this.items.splice.apply(this.items, [index, howMany].concat(addedItems));
+  },
+
+  _notifyCompleted: function() {
+    this.completed = true;
+    if (this._listener)
+      this._listener.onCompleted(this);
   },
 };
 
@@ -396,25 +432,29 @@ ModaBridge.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Data Queries
 
-  queryPeeps: function(query) {
+  queryPeeps: function(query, listener, data) {
     var handle = this._nextHandle++;
-    var liveset = new LiveOrderedSet(handle, query);
+    var liveset = new LiveOrderedSet(handle, NS_PEEPS, query, listener, data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryPeeps', handle, query);
     return liveset;
   },
 
-  queryPeepConversations: function(peep, query) {
+  queryPeepConversations: function(peep, query, listener, data) {
     var handle = this._nextHandle++;
-    var liveset = new LiveOrderedSet(handle, query);
+    var liveset = new LiveOrderedSet(handle, NS_CONVBLURBS, query,
+                                     listener, data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryPeeps', handle, {peep: peep._id, query: query});
     return liveset;
   },
 
-  queryConversations: function(query) {
+  queryFullConversation: function(convBlurb, listener) {
+  },
+
+  queryAllConversations: function(query, listener) {
   },
 
   killQuery: function(liveSet) {
@@ -422,6 +462,14 @@ ModaBridge.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Actions
+
+  /**
+   * Connect to a peep we already know about somehow.  Likely sources include:
+   *  conversation participant we did not invite, request, some kind of search
+   *  mechanism that surfaces peeps somehow.
+   */
+  connectToPeep: function(peep) {
+  },
 
   /**
    * Connect to a new person using their self-ident blob.  This is being added

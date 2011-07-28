@@ -146,9 +146,13 @@
 
 define(
   [
+    'rdcommon/log',
+    'module',
     'exports'
   ],
   function(
+    $log,
+    $module,
     exports
   ) {
 
@@ -209,7 +213,8 @@ function makeEmptyMapsByNS() {
  *    it already knows the data to avoid accidental rollback of data.  (Likewise
  *    we double check before transmitting the user-data.)
  */
-function NotificationKing(store) {
+function NotificationKing(store, _logger) {
+  this._log = LOGFAB.notificationKing(this, _logger);
   this._newishMessagesByConvId = {};
   this._store = store;
 
@@ -267,6 +272,7 @@ NotificationKing.prototype = {
    * @return[QueryHandle]
    */
   newTrackedQuery: function(querySource, uniqueId, namespace, queryDef) {
+    this._log.queryFill_begin(namespace, uniqueId);
     var queryHandle = {
       owner: querySource,
       uniqueId: uniqueId,
@@ -318,6 +324,8 @@ NotificationKing.prototype = {
     queryHandle.dataMap = makeEmptyMapsByNS();
     queryHandle.dataDelta = makeEmptyMapsByNS();
 
+    if (isInitial)
+      this._log.queryFill_end(queryHandle.namespace, queryHandle.uniqueId);
     queryHandle.owner.listener.send(msg);
   },
 
@@ -364,7 +372,7 @@ NotificationKing.prototype = {
     return null;
   },
 
-  mapLocalNameToFullName: function(querySource, localName) {
+  mapLocalNameToFullName: function(querySource, namespace, localName) {
     var queryHandles = querySource.queryHandlesByNS[namespace];
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
       var queryHandle = queryHandles[iQuery];
@@ -501,5 +509,13 @@ NotificationKing.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
 };
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  notificationKing: {
+    asyncJobs: {
+      queryFill: {namespace: true, uniqueId: true},
+    },
+  },
+});
 
 }); // end define

@@ -93,7 +93,7 @@ function LocalStore(dbConn, keyring, _logger) {
 
   this._db = dbConn;
   this._keyring = keyring;
-  this._notif = new $notifking.NotificationKing(this);
+  this._notif = new $notifking.NotificationKing(this, this._log);
 
   /**
    * The set of root keys of pinned peeps.

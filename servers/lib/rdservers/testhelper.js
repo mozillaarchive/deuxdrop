@@ -137,6 +137,8 @@ var TestClientActorMixins = {
     else {
       self._allClones = [self];
     }
+    /** static connection indication; get dynamic indication off the client */
+    self._connected = false;
 
     /** Dynamic list of known moda actors. */
     self._modaActors = [];
@@ -199,13 +201,45 @@ var TestClientActorMixins = {
     });
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Helpers: Multiple Client
+
+  _parameterizedSteps: function(stepMethod, stepArgs, paramInstances) {
+    // scan and find the '*PARAM*' index
+    var iArg;
+    for (iArg = 0; iArg < stepArgs.length; iArg++) {
+      if (stepArgs[iArg] === '*PARAM*')
+        break;
+    }
+    if (iArg === stepArgs.length)
+      throw new Error("Bad parameterizedSteps argument; missing *PARAM*");
+    var iFunc = stepArgs.length - 1, stepFunc = stepArgs[iFunc];
+
+    for (var iParamInst = 0; iParamInst < paramInstances.length; iParamInst++) {
+      var param = paramInstances[iParamInst];
+      stepArgs[iArg] = param;
+      stepArgs[iFunc] = stepFunc.bind(null, param);
+      this.T[stepMethod].apply(this, stepArgs);
+    }
+  },
+
   /**
    * Define a step that should be invoked once per associated client.  This
    *  should be used for handling notifications that originated elsewhere and so
    *  all clients are equally interested.
    */
   _T_allClientsStep: function() {
+    this._parameterizedSteps('action', arguments, this._allClones);
+  },
 
+  /**
+   * Define a step that should be invoked once per connected/associated client.
+   */
+  _T_connectedClientsStep: function() {
+    var connectedClients = this._allClones.filter(function(client) {
+                                                    return client._connected;
+                                                  });
+    this._parameterizedSteps('action', arguments, connectedClients);
   },
 
   /**
@@ -214,6 +248,21 @@ var TestClientActorMixins = {
    *  hear about via replicated blocks played at them.
    */
   _T_otherClientsStep: function() {
+    var self = this;
+    var otherClients = this._allClones.filter(function(client) {
+                                                return client !== self;
+                                              });
+    this._parameterizedSteps('action', arguments, connectedClients);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Helpers: Moda Bridges
+  _dynamicNotifyModaActors: function(what, data1, data2) {
+    var methodName = '__' + what;
+    for (var i = 0; i < this._modaActors.length; i++) {
+      var modaActor = this._modaActors[i];
+      modaActor[methodName].call(modaActor, data1, data2);
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -295,6 +344,7 @@ var TestClientActorMixins = {
 
   setup_connect: function() {
     var self = this;
+    this._connected = true;
     return this.T.convenienceSetup(this._eRawClient, 'connects to server',
                                    this._usingServer._eServer, function() {
       self.connect();
@@ -337,20 +387,23 @@ var TestClientActorMixins = {
         'receives contact request for', other, 'from', self, function() {
       other.expectServerTaskToRun('userIncomingContactRequest');
 
-      other._usingServer.holdAllReplicaBlocksFor(other);
-      other._usingServer.expectReplicaBlocksFor(other, 1);
+      other._usingServer.holdAllReplicaBlocksForUser(other);
+      other._usingServer.expectReplicaBlocksForUser(other, 1);
 
       self._usingServer.releaseContactRequestToServerUser(other._usingServer,
                                                           other);
     }).log.boring(!interesting);
     // - release replica of request
-    this.T.convenienceSetup(other._usingServer,
-        'delivers contact request to', other._eRawClient, function() {
-      self.RT.reportActiveActorThisStep(other._eLocalStore);
-      other._eLocalStore.expect_contactRequest(self._rawClient.tellBoxKey);
-      other._eRawClient.expect_replicaCaughtUp();
+    other._T_connectedClientsStep(other._usingServer,
+        'delivers contact request to', '*PARAM*',
+        function(paramClient) {
+      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
+      paramClient._eLocalStore.expect_contactRequest(
+        self._rawClient.tellBoxKey);
+      paramClient._eRawClient.expect_replicaCaughtUp();
 
-      other._usingServer.releaseAllReplicaBlocksFor(other);
+      other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     }).log.boring(!interesting);
 
 
@@ -364,43 +417,49 @@ var TestClientActorMixins = {
       other._usingServer.expectContactRequestToServerUser(self._usingServer,
                                                           self);
       // add-contact replica block is good to go!
-      other._usingServer.holdAllReplicaBlocksFor(other);
-      other._usingServer.expectReplicaBlocksFor(other, 1);
+      other._usingServer.holdAllReplicaBlocksForUser(other);
+      other._usingServer.expectReplicaBlocksForUser(other, 1);
 
       other._peepsByName[self.__name] =
         other._rawClient.connectToPeepUsingSelfIdent(
           self._rawClient._selfIdentBlob);
     }).log.boring(!interesting);
     // - release replica of addcontact
-    this.T.convenienceSetup(other._usingServer,
-        'delivers contact request to', other._eRawClient, function() {
-      self.RT.reportActiveActorThisStep(other._eLocalStore);
-      other._eLocalStore.expect_replicaCmd('addContact',
-                                           self._rawClient.rootPublicKey);
-      other._eRawClient.expect_replicaCaughtUp();
+    other._T_connectedClientsStep(other._usingServer,
+        'delivers contact request to', '*PARAM*', function(paramClient) {
+      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
+      paramClient._eLocalStore.expect_replicaCmd('addContact',
+                                                 self._rawClient.rootPublicKey);
+      paramClient._eRawClient.expect_replicaCaughtUp();
 
-      other._usingServer.releaseAllReplicaBlocksFor(other);
-    }).log.boring(!interesting);
+      paramClient._dynamicNotifyModaActors('addingContact', self);
+
+      other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
+    });
     // - release to sender, their drop, mailstore. hold replica.
     this.T.convenienceSetup(self._usingServer,
         'receives contact request for', self, 'from', other, function() {
       self.expectServerTaskToRun('userIncomingContactRequest');
 
-      self._usingServer.holdAllReplicaBlocksFor(self);
-      self._usingServer.expectReplicaBlocksFor(self, 1);
+      self._usingServer.holdAllReplicaBlocksForUser(self);
+      self._usingServer.expectReplicaBlocksForUser(self, 1);
 
       other._usingServer.releaseContactRequestToServerUser(self._usingServer,
                                                            self);
     }).log.boring(!interesting);
     // - release replica, boring.
-    this.T.convenienceSetup(self._usingServer,
-        'delivers contact request to', self._eRawClient, function() {
-      self.RT.reportActiveActorThisStep(self._eLocalStore);
-      self._eLocalStore.expect_replicaCmd('addContact',
-                                          other._rawClient.rootPublicKey);
-      self._eRawClient.expect_replicaCaughtUp();
+    this._T_connectedClientsStep(self._usingServer,
+        'delivers contact request to', '*PARAM*', function(paramClient) {
+      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
+      paramClient._eLocalStore.expect_replicaCmd('addContact',
+                                                 self._rawClient.rootPublicKey);
+      paramClient._eRawClient.expect_replicaCaughtUp();
 
-      self._usingServer.releaseAllReplicaBlocksFor(self);
+      paramClient._dynamicNotifyModaActors('addingContact', other);
+
+      self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     }).log.boring(!interesting);
 
   },
@@ -525,6 +584,8 @@ var TestClientActorMixins = {
         var tJoin = self.T.thing('message', 'join ' + recipTestClient.__name);
         tJoin.data = {
           type: 'join',
+          seq: self.RT.testDomainSeq++,
+          inviter: self,
           who: recipTestClient
         };
         tJoin.digitalName = convCreationInfo.joinNonces[iRecip];
@@ -533,13 +594,15 @@ var TestClientActorMixins = {
 
       tMsg.data = {
         type: 'message',
-        nonce: convCreationInfo.msgNonce,
+        seq: self.RT.testDomainSeq++,
+        author: self,
         text: messageText
       };
       backlog.push(tMsg);
 
       tConv.data = {
         id: convCreationInfo.convId,
+        seq: self.RT.testDomainSeq++,
         backlog: backlog,
         // XXX this is identical across all participants, but this is pretty
         //  sketchy for us to be extracting and storing.
@@ -590,6 +653,8 @@ var TestClientActorMixins = {
                                                         messageText);
       tNewMsg.data = {
         type: 'message',
+        seq: self.RT.testDomainSeq++,
+        author: self,
         text: messageText
       };
       tNewMsg.digitalName = msgInfo.msgNonce;
@@ -642,6 +707,8 @@ var TestClientActorMixins = {
 
       tJoin.data = {
         type: 'join',
+        seq: self.RT.testDomainSeq++,
+        inviter: self,
         who: invitedTestClient
       };
       tJoin.digitalName = msgInfo.msgNonce;
@@ -746,32 +813,34 @@ var TestClientActorMixins = {
       self.expectServerTaskToRun(
         isInitial ? 'initialFanoutToUserMessage' : 'fanoutToUserMessage');
 
-      self._usingServer.holdAllReplicaBlocksFor(self);
+      self._usingServer.holdAllReplicaBlocksForUser(self);
       // welcome + backlog
-      self._usingServer.expectReplicaBlocksFor(self,
+      self._usingServer.expectReplicaBlocksForUser(self,
                                                1 + tConv.data.backlog.length);
 
       tConv.sdata.fanoutServer.releaseSSMessageToServerUser(
         isInitial ? 'initialfan' : 'fannedmsg', self._usingServer, self);
     });
-    self.T.action(self._usingServer,
-        'delivers conversation welcome message to', self,
-        function() {
-      self.RT.reportActiveActorThisStep(self._eRawClient);
-      self.RT.reportActiveActorThisStep(self._eLocalStore);
-      var els = self._eLocalStore;
+    self._T_connectedClientsStep(self._usingServer,
+        'delivers conversation welcome message to', '*PARAM*',
+        function(paramClient) {
+      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
+      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      var els = paramClient._eLocalStore;
 
       els.expect_newConversation(tConv.data.id); // (unreported 'welcome')
 
       for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
         var tMsg = tConv.data.backlog[iMsg];
-        self.expectLocalStoreTaskToRun(
+        paramClient.expectLocalStoreTaskToRun(
           self._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
         els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
       }
-      self._eRawClient.expect_replicaCaughtUp();
+      paramClient._eRawClient.expect_replicaCaughtUp();
 
-      self._usingServer.releaseAllReplicaBlocksFor(self);
+      paramClient._dynamicNotifyModaActors('receiveConvWelcome', tConv);
+
+      self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
   },
 
@@ -797,27 +866,29 @@ var TestClientActorMixins = {
         'and the mailstore processes it.', function() {
       self.expectServerTaskToRun('fanoutToUserMessage');
 
-      self._usingServer.holdAllReplicaBlocksFor(self);
+      self._usingServer.holdAllReplicaBlocksForUser(self);
       // just the one message
-      self._usingServer.expectReplicaBlocksFor(self, 1);
+      self._usingServer.expectReplicaBlocksForUser(self, 1);
 
       tConv.sdata.fanoutServer.releaseSSMessageToServerUser(
         'fannedmsg', self._usingServer, self);
     });
-    self.T.action(self._usingServer,
-        'delivers', tMsg, 'to', self,
-        function() {
-      self.RT.reportActiveActorThisStep(self._eRawClient);
-      self.RT.reportActiveActorThisStep(self._eLocalStore);
-      var els = self._eLocalStore;
+    self._T_connectedClientsStep(self._usingServer,
+        'delivers', tMsg, 'to', '*PARAM*',
+        function(paramClient) {
+      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
+      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      var els = paramClient._eLocalStore;
 
-      self.expectLocalStoreTaskToRun(
+      paramClient.expectLocalStoreTaskToRun(
         self._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
       els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
 
-      self._eRawClient.expect_replicaCaughtUp();
+      paramClient._eRawClient.expect_replicaCaughtUp();
 
-      self._usingServer.releaseAllReplicaBlocksFor(self);
+      paramClient._dynamicNotifyModaActors('receiveConvMessage', tConv, tMsg);
+
+      self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
   },
 
@@ -1033,10 +1104,11 @@ var TestServerActorMixins = {
 
   /**
    * Tell our mailstore to hold all replica blocks (or other unsolicited
-   *  notifications) pending explicit release calls.  Used for step-sanity,
+   *  notifications) for all the clients of a user (identified by their
+   *  canonical client) pending explicit release calls.  Used for step-sanity,
    *  don't abuse.  Call `stopHoldingAndAssertNoHeldReplicaBlocks` when done.
    */
-  holdAllReplicaBlocksFor: function(testClient) {
+  holdAllReplicaBlocksForUser: function(testClient) {
     var csc = testClient._eServerConn._logger.__instance.appConn;
     // wrap it for hold support if not already wrapped
     if (!("__hold_all" in csc))
@@ -1046,16 +1118,27 @@ var TestServerActorMixins = {
   },
 
   /**
-   * Expect some number of replica blocks to be queued for the client.
+   * Expect some number of replica blocks to be queued for all of the clients of
+   *  a user.
+   *
+   * This does assume that all of the clones are fully subscribed to everything.
    */
-  expectReplicaBlocksFor: function(testClient, expectedCount) {
-    testClient.RT.reportActiveActorThisStep(testClient);
-    while (expectedCount--) {
-      testClient.expect_replicaBlockNotifiedOnServer();
+  expectReplicaBlocksForUser: function(testClient, expectedCount) {
+    for (var i = 0; i < testClient._allClones.length; i++) {
+      var cloneClient = testClient._allClones[i];
+      testClient.RT.reportActiveActorThisStep(cloneClient);
+      var count = expectedCount;
+      while (count--) {
+        cloneClient.expect_replicaBlockNotifiedOnServer();
+      }
     }
   },
 
-  releaseAllReplicaBlocksFor: function(testClient) {
+  /**
+   * Release the queued replica blocks for a specific client; intended to be
+   *  used within steps defined via `_T_connectedClientsStep` or similar.
+   */
+  releaseAllReplicaBlocksForClient: function(testClient) {
     var csc = testClient._eServerConn._logger.__instance.appConn;
     while(csc.__release_heyAReplicaBlock()) {
       // just keep calling that guy until it returns 0.
@@ -1065,7 +1148,7 @@ var TestServerActorMixins = {
   /**
    * Counterpart to `holdAllReplicaBlocks`.
    */
-  stopHoldingAndAssertNoHeldReplicaBlocks: function() {
+  stopHoldingAndAssertNoHeldReplicaBlocksForUse: function(testClient) {
     var csc = testClient._eServerConn._logger.__instance.appConn;
     csc.__hold_all(false);
   },

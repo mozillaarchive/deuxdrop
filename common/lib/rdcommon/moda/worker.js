@@ -66,7 +66,9 @@ const NS_PEEPS = 'peeps';
  * The other side of a ModaBridge instance/connection.  This is intended to be
  *  a reasonably lightweight layer on top
  */
-function ModaBackside(rawClient) {
+function ModaBackside(rawClient, name, _logger) {
+  this.name = name;
+  this._log = LOGFAB.modaBackside(this, _logger, name);
   this._rawClient = rawClient;
   this._store = rawClient.store;
   this._notif = this._store._notif;
@@ -78,16 +80,20 @@ function ModaBackside(rawClient) {
 }
 exports.ModaBackside = ModaBackside;
 ModaBackside.prototype = {
-  _received: function(binfo, boxedObj) {
-
+  _received: function(boxedObj) {
+    var cmdFunc = this['_cmd_' + boxedObj.cmd];
+    this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
+                     boxedObj.payload);
   },
 
   send: function(msg) {
-    this._sendObjFunc(msg);
+    var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
+    this._log.send(jsonRoundtripped);
+    this._sendObjFunc(jsonRoundtripped);
   },
 
   /**
-   *
+   * Hack to establish a *fake* *magic* link between us and a bridge.
    */
   XXXcreateBridgeChannel: function(name, bridgeHandlerFunc) {
     this._bridgeName = name;
@@ -96,9 +102,7 @@ ModaBackside.prototype = {
     this._querySource = this._notif.registerNewQuerySource(name);
 
     var self = this;
-    return function(msg) {
-      self._received(binfo, msg);
-    };
+    return this._received.bind(this);
   },
 
   _cmd_queryPeeps: function(bridgeQueryName, queryDef) {
@@ -114,6 +118,7 @@ ModaBackside.prototype = {
                         NS_CONVBLURBS, payload.query);
     // map the provided peep local name to z true name
     var peepRootKey = this._notif.mapLocalNameToFullName(this._querySource,
+                                                         NS_PEEPS,
                                                          payload.peep);
     this._store.queryAndWatchPeepConversationBlurbs(queryHandle,
                                                     peepRootKey,
@@ -122,12 +127,18 @@ ModaBackside.prototype = {
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
-  modaWorker: {
+  modaBackside: {
     calls: {
       handle: {cmd: true},
     },
     TEST_ONLY_calls: {
       handle: {name: true, payload: false},
+    },
+    events: {
+      send: {},
+    },
+    TEST_ONLY_events: {
+      send: {msg: false},
     },
   },
 });

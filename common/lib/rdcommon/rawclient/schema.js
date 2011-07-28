@@ -77,6 +77,7 @@ exports.TBL_PEEP_DATA = "peepData";
  * Peeps are inserted into this view index when we add them as contacts.
  */
 exports.IDX_PEEP_CONTACT_NAME = 'idxPeepName';
+
 /**
  * Peeps by recency of messages they have written to conversations (the user is
  *  involved in).
