@@ -1,9 +1,8 @@
-This is the addon add-on.  It contains:
+An add-on that runs in Mobile Firefox for deuxdrop. The addon hosts the UI
+from within the extension, and uses a separate worker for the data pipe to
+the server.
 
-* A program (lib/main.js).
-* A few tests.
-* Some meager documentation.
-
+## Modifications to Add-On SDK
 
 Updates to get it to run:
 
@@ -36,3 +35,11 @@ comment out this check:
     }
 
 This will allow the extension to work on mobile Firefox.
+
+## How to build
+
+* ./copyweb.sh
+* cfx xpi
+
+The copyweb.sh takes the UI that can be served from a web server and includes
+it in the add-on.
