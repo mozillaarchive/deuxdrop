@@ -124,6 +124,13 @@ function LocalStore(dbConn, keyring, _logger) {
 }
 exports.LocalStore = LocalStore;
 LocalStore.prototype = {
+  toString: function() {
+    return '[LocalStore]';
+  },
+  toJSON: function() {
+    return {type: 'LocalStore'};
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Bootstrap
   _bootstrap: function() {

@@ -87,7 +87,8 @@ var $testdata = require('rdcommon/testdatafab');
 var $log = require('rdcommon/log');
 
 var $moda_api = require('rdcommon/moda/api'),
-    $moda_worker = require('rdcommon/moda/worker');
+    $moda_worker = require('rdcommon/moda/worker'),
+    $ls_tasks = require('rdcommon/rawclient/lstasks');
 
 /**
  * There should be one moda-actor per moda-bridge.  So if we are simulating
@@ -127,6 +128,7 @@ var TestModaActorMixins = {
 
       // - link worker and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
+                                    self.__name,
                                     self._bridge._send.bind(self._bridge));
     });
   },
@@ -266,7 +268,7 @@ var TestModaActorMixins = {
       var rootKeys = cinfos.map(function(x) {return x.rootKey;});
       self.expect_queryCompleted(lqt.__name, rootKeys);
 
-      lqt._liveset = self.queryPeeps(query, self, lqt);
+      lqt._liveset = self._bridge.queryPeeps(query, self, lqt);
     });
 
     return lqt;
@@ -322,7 +324,7 @@ exports.TESTHELPER = {
   // we leave it to the testClient TESTHELPER to handle most stuff, leaving us
   //  to just worry about moda.
   LOGFAB_DEPS: [LOGFAB,
-    $moda_worker.LOGFAB,
+    $moda_worker.LOGFAB, $ls_tasks.LOGFAB,
   ],
 
   actorMixins: {

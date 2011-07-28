@@ -316,6 +316,13 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
   this._actionQueue = [];
 }
 RawClientAPI.prototype = {
+  toString: function() {
+    return '[RawClientAPI]';
+  },
+  toJSON: function() {
+    return {type: 'RawClientAPI'};
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Internal Client stuff
 

@@ -82,7 +82,7 @@ var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
  *  we have that user, we then just take their chain and add this new link to
  *  it.
  */
-var PeepNameTrackTask = exports.PeepNamecheckTask = taskMaster.defineTask({
+var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
   name: 'peepNameTrack',
   args: ['store', 'peepOident', 'othPubring'],
   steps: {

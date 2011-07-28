@@ -235,6 +235,13 @@ function ModaBridge() {
 }
 exports.ModaBridge = ModaBridge;
 ModaBridge.prototype = {
+  toString: function() {
+    return '[ModaBridge]';
+  },
+  toJSON: function() {
+    return {type: 'ModaBridge'};
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Internals
 

@@ -366,8 +366,10 @@ RedisDbConn.prototype = {
     var deferred = $Q.defer();
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
-
-    this._conn.zrangebyscore(key, maxValStr, minValStr, function(err, results) {
+    this._log.scanIndex(tableName, indexName, indexParam);
+    this._conn.zrangebyscore(
+        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+        maxValStr, minValStr, function(err, results) {
       if (err)
         deferred.reject(err);
       else
@@ -551,6 +553,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                          objectName: true, newValue: false},
       maximizeIndexValue: {tableName: true, indexName: true, indexParam: true,
                            objectName: true, newValue: false},
+
+      scanIndex: {tableName: true, indexName: true, indexParam: true},
 
       // - queue abstraction
       queueAppend: {tableName: false, queueName: false},

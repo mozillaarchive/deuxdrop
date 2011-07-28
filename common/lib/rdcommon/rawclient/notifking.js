@@ -195,12 +195,24 @@ function makeEmptyMapsByNS() {
  * - All queries have a per-namespace map of id's to the relevant server side
  *    info and serves an indicator that the user-facing data is known (or
  *    in-flight to) the UI thread.
- * XXX reference counting is coming back for simplicit...
- * - No reference counting is used; the data is kept alive by the assumption
- *    that the user-facing thread is still alive and would have told us prior
- *    to going away.  Some type of heartbeat mechanism might be an appropriate
- *    sanity-checking backstop.  (In unit tests we would manually cause
- *    heartbeats and heartbeat checks to occur.)
+ * - The server side info includes reference counts so that we can know when
+ *    to forget about the entry locally and also be able to tell the bridge
+ *    when it can forget about things to.  The alternative to this would be
+ *    implementing our own graph-traversing garbage collection based on the
+ *    roots of what the items included in the ordered set are.  Arguably, this
+ *    would be similar to the local traversal knowledge required to be able to
+ *    increment/decrement the reference counts, but we're using reference
+ *    counts.  An upside to this is it's slightly easier for unit tests to
+ *    verify logic correctness since we can check the count versus gc logic
+ *    which will be more boolean.  Using weak references when they become
+ *    pervasive may end up being a better mechanism; although we would still
+ *    need to perform a pass to find out what weak references are now empty so
+ *    we can generate the deletion notifications to the bridge.
+ * - Queries are kept alive by the assumption that the user-facing thread/query
+ *    source is still alive and would have told us prior to going away.  Some
+ *    type of heartbeat mechanism might be an appropriate sanity-checking
+ *    backstop.  (In unit tests we would manually cause heartbeats and heartbeat
+ *    checks to occur.)
  *
  * Cache management:
  * - We only hold onto the server-facing side of the data on this side of the
@@ -225,6 +237,13 @@ function NotificationKing(store, _logger) {
 }
 exports.NotificationKing = NotificationKing;
 NotificationKing.prototype = {
+  toString: function() {
+    return '[NotificationKing]';
+  },
+  toJSON: function() {
+    return {type: 'NotificationKing'};
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Queries from Moda / Elsewhere
 
@@ -235,6 +254,7 @@ NotificationKing.prototype = {
    */
   registerNewQuerySource: function(verboseUniqueName, listener) {
     var prefixNum, prefixId;
+    // XXX the prefix stuff is
     // we can have up to 17576 active query sources with this mechanism.  this
     //  is less chosen for active query sources and more to avoid reuse of
     //  identifiers to simplify testing situations.  not a biggie to change.
@@ -247,14 +267,14 @@ NotificationKing.prototype = {
       if (!this._activeQuerySources.hasOwnProperty(prefixId))
         break;
     }
-    this._activeQuerySources[prefixId] = {
+    var querySource = this._activeQuerySources[prefixId] = {
       name: verboseUniqueName,
       listener: listener,
       prefix: prefixId,
       nextUniqueIdAlloc: 0,
       queryHandlesByNS: makeEmptyListsByNS(),
     };
-    return prefixId;
+    return querySource;
   },
 
   /**

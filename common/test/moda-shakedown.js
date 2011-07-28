@@ -119,6 +119,7 @@ TD.commonCase('moda basics', function(T) {
   client_a.setup_friendClique([client_b, client_c]);
 
   // - create a live query on the set of our peeps
+  T.group("A queries");
   var lqAllPeeps = moda_a.do_queryPeeps("allPeeps", {by: 'alphabet'});
   //var lqPinnedPeeps = moda_a.do_queryPeeps();
 

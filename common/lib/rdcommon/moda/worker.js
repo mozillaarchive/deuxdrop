@@ -80,6 +80,13 @@ function ModaBackside(rawClient, name, _logger) {
 }
 exports.ModaBackside = ModaBackside;
 ModaBackside.prototype = {
+  toString: function() {
+    return '[ModaBackside]';
+  },
+  toJSON: function() {
+    return {type: 'ModaBackside'};
+  },
+
   _received: function(boxedObj) {
     var cmdFunc = this['_cmd_' + boxedObj.cmd];
     this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
