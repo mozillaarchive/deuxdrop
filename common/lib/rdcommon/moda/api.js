@@ -62,9 +62,10 @@ const NS_PEEPS = 'peeps',
  *  our user: # of unread messages from the user, # of conversations involving
  *  the user, meta-data our user has annotated them with (ex: pinned).
  */
-function PeepBlurb(_bridge, ourPoco, selfPoco,
+function PeepBlurb(_bridge, _localName, ourPoco, selfPoco,
                    numUnread, numConvs, pinned) {
   this._bridge = _bridge;
+  this._localName = _localName;
   this.ourPoco = ourPoco;
   this.selfPoco = selfPoco;
   this._numUnread = numUnread;
@@ -124,9 +125,10 @@ HumanMessage.prototype = {
  * Provides summary information about a conversation: its participants, initial
  *  message text, most recent activity, # of unread messages.
  */
-function ConversationBlurb(_bridge, participants,
+function ConversationBlurb(_bridge, _localName, participants,
                            pinned, numUnread) {
   this._bridge = _bridge;
+  this._localName = _localName;
   this.participants = participants;
   // the messages have a reference to us and so cannot be created yet
   this.firstMessage = null;
@@ -146,8 +148,10 @@ ConversationBlurb.prototype = {
 /**
  * All of the data about a conversation, including its messages.
  */
-function ConversationInFull(_bridge, participants, messages, pinned) {
+function ConversationInFull(_bridge, _localName, participants, messages,
+                            pinned) {
   this._bridge = bridge;
+  this._localName = _localName;
   this.participants = participants;
   this.messages = messages;
   this._pinned = pinned;
@@ -198,6 +202,9 @@ LiveOrderedSet.prototype = {
     this.items.splice.apply(this.items, [index, howMany].concat(addedItems));
   },
 
+  /**
+   * Invoked after every update pass completes.
+   */
   _notifyCompleted: function() {
     this.completed = true;
     if (this._listener)
@@ -295,7 +302,7 @@ ModaBridge.prototype = {
     //  so we don't care about tracking them independently.
     var i, key, values, val, dataMap;
     if (msg.dataMap.hasOwnProperty(NS_PEEPS)) {
-      values = msg.dataDelta[NS_PEEPS];
+      values = msg.dataMap[NS_PEEPS];
       dataMap = liveset._dataByNS[NS_PEEPS];
       for (key in values) {
         val = values[key];
@@ -303,13 +310,13 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(NS_PEEPS, key);
         else
-          dataMap[key] = this._transformPeepBlurb(val, liveset);
+          dataMap[key] = this._transformPeepBlurb(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
     }
     if (msg.dataMap.hasOwnProperty(NS_CONVBLURBS)) {
-      values = msg.dataDelta[NS_CONVBLURBS];
+      values = msg.dataMap[NS_CONVBLURBS];
       dataMap = liveset._dataByNS[NS_CONVBLURBS];
       for (key in values) {
         val = values[key];
@@ -317,13 +324,13 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(NS_CONVBLURBS, key);
         else
-          dataMap[key] = this._transformConvBlurb(val, liveset);
+          dataMap[key] = this._transformConvBlurb(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
     }
     if (msg.dataMap.hasOwnProperty(NS_CONVALL)) {
-      values = msg.dataDelta[NS_CONVALL];
+      values = msg.dataMap[NS_CONVALL];
       dataMap = liveset._dataByNS[NS_CONVALL];
       for (key in values) {
         val = values[key];
@@ -331,7 +338,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(NS_CONVALL, key);
         else
-          dataMap[key] = this._transformConvFull(val, liveset);
+          dataMap[key] = this._transformConvFull(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_CONVALL)) {
@@ -347,6 +354,7 @@ ModaBridge.prototype = {
       }
       liveset._notifySplice(spliceInfo.index, spliceInfo.howMany, objItems);
     }
+    liveset._notifyCompleted();
   },
 
   /**
@@ -367,8 +375,8 @@ ModaBridge.prototype = {
   /**
    * Create a `PeepBlurb` representation from the wire rep.
    */
-  _transformPeepBlurb: function(data, /* unused */ liveset) {
-    return new PeepBlurb(this, data.ourPoco, data.selfPoco,
+  _transformPeepBlurb: function(localName, data, /* unused */ liveset) {
+    return new PeepBlurb(this, localName, data.ourPoco, data.selfPoco,
                          data.numUnread, data.numConvs, data.pinned);
   },
 
@@ -400,13 +408,13 @@ ModaBridge.prototype = {
   /**
    * Create a `ConversationBlurb` representation from the wire rep.
    */
-  _transformConvBlurb: function(wireConv, liveset) {
+  _transformConvBlurb: function(localName, wireConv, liveset) {
     var participants = [];
     for (var i = 0; i < wireConv.participants.length; i++) {
       participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
     }
     var blurb = new ConversationBlurb(
-      this, participants, wireConv.pinned, wireConv.numUnread
+      this, localName, participants, wireConv.pinned, wireConv.numUnread
     );
     blurb.firstMessage =
       this._transformMessage(wireConv.firstMessage, blurb, liveset);
@@ -418,14 +426,14 @@ ModaBridge.prototype = {
   /**
    * Create a `ConversationInFull` representation from the wire rep.
    */
-  _transformConvFull: function(data, liveset) {
+  _transformConvFull: function(localName, data, liveset) {
     var participants = [];
     for (var i = 0; i < wireConv.participants.length; i++) {
       participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
     }
     var messages = [];
     var conv = new ConversationInFull(
-      this, participants, messages, wireConv.pinned
+      this, localName, participants, messages, wireConv.pinned
     );
     for (var iMsg = 0; iMsg < wireConv.messages.length; iMsg++) {
       messages.push(

@@ -160,7 +160,19 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
       NS_CONVALL = exports.NS_CONVALL = 'convall';
 
-const PENDING_NOT = 0, PENDING_INITIAL = 1, PENDING_NOTIF = 2;
+/**
+ * There is no pending message that must be sent regarding this query.
+ */
+const PENDING_NONE = 0,
+/**
+ * We are in the initial query population stage; we owe the initial results
+ *  message.
+ */
+      PENDING_INITIAL = 1,
+/**
+ * We have seen a delta that demands a notification event be sent.
+ */
+      PENDING_NOTIF = 2;
 
 function makeEmptyListsByNS() {
   return {
@@ -306,7 +318,8 @@ NotificationKing.prototype = {
         low: null,
         high: null,
       },
-      members: makeEmptyMapsByNS(),
+      membersByFull: makeEmptyMapsByNS(),
+      membersByLocal: makeEmptyMapsByNS(),
       // - data yet required (from dependencies)
       dataNeeded: makeEmptyListsByNS(),
       // - data to send over the wire once this round is done
@@ -329,7 +342,8 @@ NotificationKing.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Transmission to the bridge
-  sendQueryResults: function(queryHandle, isInitial) {
+  sendQueryResults: function(queryHandle) {
+    var isInitial = (queryHandle.pending === PENDING_INITIAL);
     var msg = {
       handle: queryHandle.uniqueId,
       op: isInitial ? 'initial' : 'update',
@@ -337,8 +351,8 @@ NotificationKing.prototype = {
       dataMap: queryHandle.dataMap,
       dataDelta: queryHandle.dataDelta,
     };
-    queryHandle.pending = PENDING_NOT;
     // - reset state
+    queryHandle.pending = PENDING_NONE;
     queryHandle.dataNeeded = makeEmptyListsByNS();
     queryHandle.splices = [];
     queryHandle.dataMap = makeEmptyMapsByNS();
@@ -346,6 +360,7 @@ NotificationKing.prototype = {
 
     if (isInitial)
       this._log.queryFill_end(queryHandle.namespace, queryHandle.uniqueId);
+
     queryHandle.owner.listener.send(msg);
   },
 
@@ -370,6 +385,7 @@ NotificationKing.prototype = {
     if (writeQueryHandle.membersByFull[namespace].hasOwnProperty(fullId)) {
       clientData = writeQueryHandle.membersByFull[namespace];
       clientData.count++;
+      return clientData;
     }
 
     // scan other queries
@@ -396,8 +412,6 @@ NotificationKing.prototype = {
     var queryHandles = querySource.queryHandlesByNS[namespace];
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
       var queryHandle = queryHandles[iQuery];
-      if (queryHandle === writeQueryHandle)
-        continue;
       var nsMembers = queryHandle.membersByLocal[namespace];
       if (nsMembers.hasOwnProperty(localName)) {
         return nsMembers[localName].fullName;

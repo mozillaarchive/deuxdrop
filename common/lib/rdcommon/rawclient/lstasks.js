@@ -44,7 +44,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
-    'rdcommon/crypto/pubring',
+    'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
     './schema',
     'module',
     'exports'
@@ -53,7 +53,7 @@ define(
     $Q,
     $log,
     $task, $taskerrors,
-    $pubring,
+    $pubident, $pubring,
     $lss,
     $module,
     exports
@@ -63,6 +63,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 });
 
 var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
+
+const NS_PEEPS = 'peeps',
+      NS_CONVBLURBS = 'convblurbs',
+      NS_CONVALL = 'convall';
 
 /**
  * Process an other-person-ident issued by us or someone else to ensure we have
@@ -130,7 +134,7 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
       }
       // - graph
       var graphInKey = 'd:gi' + this.othPubring.rootPublicKey;
-      if (!cells.hasOwnProperty(chainKey)) {
+      if (!cells.hasOwnProperty(graphInKey)) {
         writeCells[graphInKey] = this.peepOident.localPoco;
 
         var reverseCells = {};
@@ -159,10 +163,18 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
       }
     },
     write_peep_data: function() {
-      // XXX IDX_PEEP_CONTACT_NAME for addContact!!
       return this.store._db.putCells($lss.TBL_PEEP_DATA,
                                      this.peepPubring.rootPublicKey,
                                      this.writeCells);
+    },
+    add_contact_update_indices: function() {
+      if (this.isContactAdd) {
+        return this.store._db.updateStringIndexValue(
+          $lss.TBL_PEEP_DATA, $lss.IDX_PEEP_CONTACT_NAME, '',
+          this.peepPubring.rootPublicKey,
+          this.peepOident.localPoco.displayName);
+      }
+      return undefined;
     },
     generate_notifications: function() {
       if (this.isContactAdd)
@@ -306,8 +318,8 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
           convMeta.id, timestamp),
         // - touch peep activity entry
         this.store._db.maximizeIndexValue(
-          TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '', inviteeRootKey,
-          timestamp),
+          TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '',
+          inviteeRootKey, timestamp),
         // - boost their involved conversation count
         this.store._db.incrementCell(TBL_PEEP_DATA, inviteeRootKey,
                                      'd:nconvs', 1),

@@ -1225,7 +1225,7 @@ console.error("statistics only for: " + testerCon.prototype.__defName);
 };
 
 var LEGAL_FABDEF_KEYS = [
-  'implClass', 'type', 'subtype', 'topBilling', 'semanticIdent',
+  'implClass', 'type', 'subtype', 'topBilling', 'semanticIdent', 'dicing',
   'stateVars', 'latchState', 'events', 'asyncJobs', 'calls', 'errors',
   'TEST_ONLY_calls', 'TEST_ONLY_events', 'LAYER_MAPPING',
 ];

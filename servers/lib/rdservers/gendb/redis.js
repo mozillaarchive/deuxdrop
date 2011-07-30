@@ -366,8 +366,8 @@ RedisDbConn.prototype = {
     var deferred = $Q.defer();
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
-    this._log.scanIndex(tableName, indexName, indexParam);
-    this._conn.zrangebyscore(
+    this._log.scanIndex(tableName, indexName, indexParam, maxValStr, minValStr);
+    this._conn.zrevrangebyscore(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
         maxValStr, minValStr, function(err, results) {
       if (err)
@@ -379,11 +379,11 @@ RedisDbConn.prototype = {
   },
 
   /**
-   * Add/update the value associated with an objectName for the given index for
-   *  the given (index) table.
+   * Add/update the numeric value associated with an objectName for the given
+   *  index for the given (index) table.
    */
   updateIndexValue: function(tableName, indexName, indexParam,
-                             objectName, newValue, oldValueIfKnown) {
+                             objectName, newValue) {
     var deferred = $Q.defer();
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
@@ -399,8 +399,8 @@ RedisDbConn.prototype = {
   },
 
   /**
-   * Set the value associated with an objectName for the given index to the
-   *  maximum of its current value and the value we are providing.
+   * Set the numeric value associated with an objectName for the given index to
+   *  the maximum of its current value and the value we are providing.
    *
    * XXX COPOUT! this does not actually maximize! this just updates!
    */
@@ -417,6 +417,50 @@ RedisDbConn.prototype = {
         else
           deferred.resolve(result);
       });
+    return deferred.promise;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // String-Value Indices
+  //
+  // There's no great representation in redis for this.  We just concatenate the
+  //  object name onto the key with a delimeter.
+
+  updateStringIndexValue: function(tableName, indexName, indexParam,
+                                   objectName, newValue) {
+    var deferred = $Q.defer();
+    this._log.updateIndexValue(tableName, indexName, indexParam,
+                               objectName, newValue);
+    this._conn.sadd(
+      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+      newValue + "!" + objectName, function(err, result) {
+        if (err)
+          deferred.reject(err);
+        else
+          deferred.resolve(result);
+      });
+    return deferred.promise;
+  },
+
+  scanStringIndex: function(tableName, indexName, indexParam) {
+    var deferred = $Q.defer();
+    this._log.scanIndex(tableName, indexName, indexParam);
+    this._conn.sort(
+        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+        'ALPHA', function(err, results) {
+      if (err) {
+        deferred.reject(err);
+      }
+      else {
+        // "key!object name", get the object name
+        var objectNames = [];
+        for (var i = 0; i < results.length; i++) {
+          var idxBang = results[i].indexOf('!');
+          objectNames.push(results[i].substring(idxBang + 1));
+        }
+        deferred.resolve(objectNames);
+      }
+    });
     return deferred.promise;
   },
 
@@ -529,38 +573,63 @@ exports.cleanupTestDBConnection = function(conn) {
 };
 
 
+const DICE_TABLE = 'db:table', DICE_INDEX = 'db:index', DICE_QUEUE = 'db:queue';
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   gendbConn: {
     type: $log.DATABASE,
     subtype: $log.CLIENT,
+
+    dicing: {
+      name: 'Databases',
+      binGroups: {
+        'Tables': DICE_TABLE,
+        'Indices': DICE_INDEX,
+        'Queues': DICE_QUEUE,
+      },
+      attributes: {
+        read: {
+          nameMatch: "get|scan|Peek",
+        },
+        write: {
+          nameMatch:
+            "put|increment|Create|delete|update|maximize|Append|Consume",
+        },
+      },
+    },
+
     events: {
       connected: {},
       closed: {},
 
       // - hbase abstractions
-      getRowCell: {tableName: true, rowId: true, columnName: true},
-      getRow: {tableName: true, rowId: true, columnFamilies: false},
-      putCells: {tableName: true, rowId: true},
-      incrementCell: {tableName: true, rowId: true, columnName: true,
+      getRowCell: {tableName: DICE_TABLE, rowId: true, columnName: true},
+      getRow: {tableName: DICE_TABLE, rowId: true, columnFamilies: false},
+      putCells: {tableName: DICE_TABLE, rowId: true},
+      incrementCell: {tableName: DICE_TABLE, rowId: true, columnName: true,
                       delta: true},
-      raceCreateRow: {tableName: true, rowId: true},
+      raceCreateRow: {tableName: DICE_TABLE, rowId: true},
 
-      deleteRowCell: {tableName: true, rowId: true, columnName: true},
-      deleteRow: {tableName: true, rowId: true},
+      deleteRowCell: {tableName: DICE_TABLE, rowId: true, columnName: true},
+      deleteRow: {tableName: DICE_TABLE, rowId: true},
 
       // - reorderable collection abstraction
-      updateIndexValue: {tableName: true, indexName: true, indexParam: true,
+      updateIndexValue: {tableName: DICE_INDEX, indexName: DICE_INDEX,
+                         indexParam: DICE_INDEX,
                          objectName: true, newValue: false},
-      maximizeIndexValue: {tableName: true, indexName: true, indexParam: true,
+      maximizeIndexValue: {tableName: DICE_INDEX, indexName: DICE_INDEX,
+                           indexParam: DICE_INDEX,
                            objectName: true, newValue: false},
 
-      scanIndex: {tableName: true, indexName: true, indexParam: true},
+      scanIndex: {tableName: DICE_INDEX, indexName: DICE_INDEX,
+                  indexParam: DICE_INDEX,
+                  maxVal: false, minVal: true},
 
       // - queue abstraction
-      queueAppend: {tableName: false, queueName: false},
-      queuePeek: {tableName: false, queueName: false, count: false},
-      queueConsume: {tableName: false, queueName: false, count: false},
-      queueConsumeAndPeek: {tableName: false, queueName: false,
+      queueAppend: {tableName: DICE_QUEUE, queueName: DICE_QUEUE},
+      queuePeek: {tableName: DICE_QUEUE, queueName: DICE_QUEUE, count: false},
+      queueConsume: {tableName: DICE_QUEUE, queueName: DICE_QUEUE,
+                     count: false},
+      queueConsumeAndPeek: {tableName: DICE_QUEUE, queueName: DICE_QUEUE,
                             consumeCount: false, peekCount: false},
     },
     TEST_ONLY_events: {

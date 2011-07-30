@@ -50,15 +50,18 @@
 
 define(
   [
+    'q',
     'rdcommon/log',
     'module',
     'exports'
   ],
   function(
+    $Q,
     $log,
     $module,
     exports
   ) {
+const when = $Q.when;
 
 const NS_PEEPS = 'peeps';
 
@@ -77,6 +80,8 @@ function ModaBackside(rawClient, name, _logger) {
   this._sendObjFunc = null;
 
   this._querySource = null;
+
+  var self = this;
 }
 exports.ModaBackside = ModaBackside;
 ModaBackside.prototype = {
@@ -106,17 +111,32 @@ ModaBackside.prototype = {
     this._bridgeName = name;
     this._sendObjFunc = bridgeHandlerFunc;
 
-    this._querySource = this._notif.registerNewQuerySource(name);
+    this._querySource = this._notif.registerNewQuerySource(name, this);
 
     var self = this;
     return this._received.bind(this);
+  },
+
+  /**
+   * In the event that we encounter a problem procesing a query, we should
+   *  remove it from our tracking mechanism and report to the other side that
+   *  we failed and will not be providing any responses.
+   */
+  _needsbind_queryProblem: function(queryHandle, err) {
+    this._log.queryProblem(err);
+    this._notif.forgetTrackedQuery(queryHandle);
+    this.send({
+      handle: queryHandle.uniqueId,
+      op: 'nuke',
+    });
   },
 
   _cmd_queryPeeps: function(bridgeQueryName, queryDef) {
     var queryHandle = this._notif.newTrackedQuery(
                         this._querySource, bridgeQueryName,
                         NS_PEEPS, queryDef);
-    this._store.queryAndWatchPeepBlurbs(queryHandle);
+    when(this._store.queryAndWatchPeepBlurbs(queryHandle), null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
   },
 
   _cmd_queryPeepConversations: function(bridgeHandle, payload) {
@@ -127,9 +147,11 @@ ModaBackside.prototype = {
     var peepRootKey = this._notif.mapLocalNameToFullName(this._querySource,
                                                          NS_PEEPS,
                                                          payload.peep);
-    this._store.queryAndWatchPeepConversationBlurbs(queryHandle,
-                                                    peepRootKey,
-                                                    payload.query);
+    when(this._store.queryAndWatchPeepConversationBlurbs(queryHandle,
+                                                         peepRootKey,
+                                                         payload.query),
+         null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
   },
 };
 
@@ -148,6 +170,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     TEST_ONLY_events: {
       send: {msg: false},
+    },
+    errors: {
+      queryProblem: {ex: $log.EXCEPTION},
     },
   },
 });

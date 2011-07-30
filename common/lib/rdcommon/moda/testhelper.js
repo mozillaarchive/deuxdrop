@@ -100,12 +100,15 @@ var TestModaActorMixins = {
     if (!opts.client)
       throw new Error("Moda actors must be associated with a client!");
     self._testClient = opts.client;
+    self._testClient._staticModaActors.push(self);
 
     /** Dynamically updated list of contacts (by canon client). */
     self._dynamicContacts = [];
     self._contactMetaInfoByName = {};
 
     self.T.convenienceSetup(self, 'initialize', function() {
+      self._testClient._modaActors.push(self);
+
       // - create our self-corresponding logger, it will automatically hookup
       self._logger = LOGFAB.testModa(self, self._testClient._logger,
                                      self.__name);
@@ -129,7 +132,7 @@ var TestModaActorMixins = {
       // - link worker and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
                                     self.__name,
-                                    self._bridge._send.bind(self._bridge));
+                                    self._bridge._receive.bind(self._bridge));
     });
   },
 
@@ -155,7 +158,6 @@ var TestModaActorMixins = {
   },
 
 
-
   //////////////////////////////////////////////////////////////////////////////
   // Notifications from testClient
 
@@ -164,9 +166,9 @@ var TestModaActorMixins = {
    */
   __addingContact: function(other) {
     var nowSeq = this.RT.testDomainSeq;
-    this._dynamicClients.push(other);
+    this._dynamicContacts.push(other);
     this._contactMetaInfoByName[other.__name] = {
-      rootKey: testClient._rawClient.rootPublicKey,
+      rootKey: other._rawClient.rootPublicKey,
       name: other.__name,
       any: nowSeq,
       write: nowSeq,
@@ -207,7 +209,7 @@ var TestModaActorMixins = {
   // We translate the notifications into an ordered state representation that
   //  uses only the root names of things.
 
-  _remapLocalToClientData: function(namespace, localName) {
+  _remapLocalToFullName: function(namespace, localName) {
     return this._notif.mapLocalNameToFullName(this._backside._querySource,
                                               namespace,
                                               localName);
@@ -224,10 +226,10 @@ var TestModaActorMixins = {
   },
 
   onCompleted: function(liveSet) {
-    var rootKeys;
+    var rootKeys = [];
     for (var i = 0; i < liveSet.items.length; i++) {
-      rootKeys.push(this._remapLocalToClientData(liveSet._ns, liveSet.items[i])
-                      .fullName);
+      rootKeys.push(this._remapLocalToFullName(liveSet._ns,
+                                               liveSet.items[i]._localName));
     }
 
     this._logger.queryCompleted(liveSet.data.__name, rootKeys);
@@ -314,7 +316,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     topBilling: true,
 
     events: {
-      queryCompleted: {name: true},
+      queryCompleted: {name: true, keys: true},
       queryUpdateSplice: {},
     },
   },

@@ -48,7 +48,8 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
-    'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
+    'rdcommon/crypto/keyops',
+    'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
     'rdcommon/messages/generator',
     './schema', './notifking', './lstasks',
     'module',
@@ -58,7 +59,8 @@ define(
     $Q,
     $log,
     $task, $taskerrors,
-    $keyops, $pubring,
+    $keyops,
+    $pubident, $pubring,
     $msg_gen,
     $lss, $notifking, $ls_tasks,
     $module,
@@ -88,11 +90,12 @@ const NS_PEEPS = 'peeps',
  *
  * Our implementation is problem domain aware.
  */
-function LocalStore(dbConn, keyring, _logger) {
+function LocalStore(dbConn, keyring, pubring, _logger) {
   this._log = LOGFAB.localStore(this, _logger, null);
 
   this._db = dbConn;
   this._keyring = keyring;
+  this._pubring = pubring;
   this._notif = new $notifking.NotificationKing(this, this._log);
 
   /**
@@ -242,7 +245,7 @@ LocalStore.prototype = {
     if (queryHandle.dataNeeded[NS_CONVBLURBS].length) {
       var convIds = queryHandle.dataNeeded[NS_CONVBLURBS].splice(0,
                       queryHandle.dataNeeded[NS_CONVBLURBS].length);
-      return this._fetchAndReportPeepBlurbsById(query, convIds);
+      return this._fetchAndReportConversationBlurbsById(query, convIds);
     }
     if (queryHandle.dataNeeded[NS_PEEPS].length) {
       var peepRootKeys = queryHandle.dataNeeded[NS_PEEPS].splice(0,
@@ -264,13 +267,14 @@ LocalStore.prototype = {
       index: 0, howMany: 0, items: viewItems,
     });
     function getNextMaybeGot() {
-      while (iConv++ < conversationIds.length) {
+      while (iConv < conversationIds.length) {
         var convId = conversationIds[iConv], clientData;
         // - attempt cache re-use
         if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle,
                                                           NS_CONVBLURBS,
                                                           convId))) {
           viewItems.push(clientData.localName);
+          iConv++;
           continue;
         }
 
@@ -278,7 +282,8 @@ LocalStore.prototype = {
                                                  conversationIds[iConv]),
                     function(clientData) {
           viewItems.push(clientData.localName);
-          getNextMaybeGot();
+          iConv++;
+          return getNextMaybeGot();
         });
       }
 
@@ -667,10 +672,11 @@ LocalStore.prototype = {
    * ]
    */
   queryAndWatchPeepBlurbs: function(queryHandle) {
-    var idx;
+    var idx, scanFunc = 'scanIndex';
     switch (queryHandle.queryDef.by) {
       case 'alphabet':
         idx = $lss.IDX_PEEP_CONTACT_NAME;
+        scanFunc = 'scanStringIndex';
         break;
       case 'any':
         idx = $lss.IDX_PEEP_ANY_INVOLVEMENT;
@@ -684,19 +690,21 @@ LocalStore.prototype = {
       default:
         throw new Error("Unsupported ordering: " + by);
     }
-    return when(this._db.scanIndex($lss.TBL_PEEP_DATA, idx, '',
+    return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, '',
                                    null, null, null, null, null, null),
       this._fetchAndReportPeepBlurbsById.bind(this, queryHandle));
   },
 
   _fetchAndReportPeepBlurbsById: function(queryHandle, peepRootKeys) {
+    this._log.fetchPeepBlurbs(queryHandle.uniqueId, peepRootKeys);
     var deferred = $Q.defer();
     var iPeep = 0, self = this,
         viewItems = [];
+
     if (queryHandle.namespace === NS_PEEPS)
       queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
     function getNextMaybeGot() {
-      while (iPeep++ < peepRootKeys.length) {
+      while (iPeep < peepRootKeys.length) {
         var peepRootKey = peepRootKeys[iPeep], clientData;
         // - perform cache lookup, reuse only if valid
         // (_deferringPeepQueryResolve creates speculative entries and we are
@@ -706,6 +714,7 @@ LocalStore.prototype = {
                                                           peepRootKey))) {
           if (clientData.data) {
             viewItems.push(clientData.localName);
+            iPeep++;
             continue;
           }
         }
@@ -714,6 +723,7 @@ LocalStore.prototype = {
                                          clientData),
                     function(resultClientData) {
           viewItems.push(resultClientData.localName);
+          iPeep++;
           getNextMaybeGot();
         });
       }
@@ -736,11 +746,13 @@ LocalStore.prototype = {
         data: null,
         deps: null,
       };
-      queryHandle.membersByLocal[NS_CONVBLURBS][localName] = clientData;
-      queryHandle.membersByFull[NS_CONVBLURBS][convId] = clientData;
+      queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
+      queryHandle.membersByFull[NS_PEEPS][peepRootKey] = clientData;
     }
+    var self = this;
     return when(this._db.getRow($lss.TBL_PEEP_DATA, peepRootKey, null),
                 function(cells) {
+      self._log.fetchPeepBlurb(queryHandle.uniqueId, peepRootKey, cells);
       // -- our data
       var signedOident = cells.hasOwnProperty('d:oident') ?
                            cells['d:oident'] : null;
@@ -761,7 +773,6 @@ LocalStore.prototype = {
         numConvs: cells['d:nconvs'],
         pinned: false,
       };
-
       return clientData;
     });
   },
@@ -820,9 +831,11 @@ LocalStore.prototype = {
       (new $ls_tasks.PeepNameTrackTask(arg, this._log)).run(),
       this._db.updateIndexValue($lss.TBL_PEEP_DATA,
                                 $lss.IDX_PEEP_ANY_INVOLVEMENT,
+                                '',
                                 peepRootKey, now),
       this._db.updateIndexValue($lss.TBL_PEEP_DATA,
                                 $lss.IDX_PEEP_WRITE_INVOLVEMENT,
+                                '',
                                 peepRootKey, now));
   },
 
@@ -864,6 +877,15 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       newConversation: {convId: true},
       conversationMessage: {convId: true, nonce: true},
+
+      // -- query
+      fetchPeepBlurbs: {handle: false},
+      fetchPeepBlurb: {handle: false},
+    },
+    TEST_ONLY_events: {
+      // -- query
+      fetchPeepBlurbs: {peepRootKeys: false},
+      fetchPeepBlurb: {peepRootKey: false, cells: false},
     },
     calls: {
       replicaCmd: {command: true},

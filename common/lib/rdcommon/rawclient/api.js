@@ -271,9 +271,6 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
     ['user', this._keyring.rootPublicKey,
      'client', this._keyring.getPublicKeyFor('client', 'connBox')]);
 
-  // -- create store
-  this.store = new $localdb.LocalStore(dbConn, this._keyring, this._log);
-
   // -- copy self-ident-blob, verify it, extract canon bits
   // (The poco bit is coming from here.)
   this._selfIdentBlob = persistedBlob.selfIdent;
@@ -293,6 +290,10 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
   else
     this._transitServer = null;
   this._poco = selfIdentPayload.poco;
+
+  // -- create store
+  this.store = new $localdb.LocalStore(dbConn, this._keyring, this._pubring,
+                                       this._log);
 
 
   /**
