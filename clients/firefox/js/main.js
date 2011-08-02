@@ -241,7 +241,7 @@ define(function (require) {
 
     'start': function (data, dom) {
       // Use user ID as the title
-      dom[0].title = moda.me().id;
+      //dom[0].title = moda.me().id;
 
       // Bind the iscroll to allow horizontal scrolling of new messages.
       newMessageIScroll = new IScroll(dom.find('.newConversationNotifications')[0], {
@@ -323,9 +323,6 @@ define(function (require) {
       // loading all peeps or when peeps are already available.
       function onPeepsComplete() {
         var frag = document.createDocumentFragment();
-
-        // Put in the Add button.
-        frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
 
         // Generate nodes for each person.
         peeps.items.forEach(function (peep) {

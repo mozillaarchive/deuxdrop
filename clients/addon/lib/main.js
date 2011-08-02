@@ -34,7 +34,8 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
       data = self.data,
 
       // Set to the correct server host.
-      serverHost = 'http://127.0.0.1:8888',
+      serverHost = 'http://r.no.de',
+      //serverHost = 'http://127.0.0.1:8888',
 
       url = data.url('web/firefox/index.html'),
       aboutUrl = data.url('content/about.html'),
