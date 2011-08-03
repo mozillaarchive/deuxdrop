@@ -36,7 +36,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Verify the viewslice logic nuances.  Specifically:
+ * Verify the viewslice logic nuances of the `NotificationKing`.  Specifically:
  * - Proper insertion of new records by index value.
  * - Proper removal of deleted records.
  * - Proper net movement of records when indexed values (ex: display name,
@@ -59,6 +59,7 @@ define(
     'rdcommon/log',
     'rdcommon/testcontext',
     'rdcommon/rawclient/notifking',
+    'rdcommon/moda/testhelper',
     'module',
     'exports'
   ],
@@ -68,6 +69,7 @@ define(
     $log,
     $tc,
     $notifking,
+    $th_moda,
     $module,
     exports
   ) {
@@ -88,15 +90,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 var TD = exports.TD = $tc.defineTestsFor($module, LOGFAB, null,
                                          ['client:db']);
 
-function markListIntoObj(list, obj, value) {
-  for (var i = 0; i < list.length; i++) {
-    obj[list[i].id] = value;
-  }
-}
-
 /**
- * Testing stand-in for the `ModaBridge` that generates test events where
- *  the `ModaBridge` would be sending a message over the wire.
+ * Testing stand-in for the `ModaBackside` that generates test events where
+ *  the `ModaBackside` would be sending a message over the wire.
  */
 function TestQuerySource(name) {
   this.king = new $notifking.NotificationKing(null);
@@ -108,6 +104,12 @@ function TestQuerySource(name) {
   this._queries = {};
 }
 TestQuerySource.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Test Event Generation
+
+  /**
+   * Tell the `NotificationKing` about a new (peeps) query.
+   */
   createQuery: function(query) {
     var id = this._nextId++;
     var queryInfo = this._queries[id] = {
@@ -118,7 +120,23 @@ TestQuerySource.prototype = {
     return queryInfo;
   },
 
-  sendQueryUpdate: function(msg) {
+  /**
+   * Generate item notifications at the `NotificationKing` and producing actor
+   *  expectations as a byproduct.
+   */
+  synthAddition: function() {
+  },
+
+  synthModification: function() {
+  },
+
+  synthRemoval: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Process Notifications from the NotificationKing, log.
+
+  receiveQueryUpdate: function(msg) {
     if (!this._queries.hasOwnProperty(msg.uniqueId)) {
       this.log.noSuchQuery(msg.uniqueId);
     }
@@ -129,8 +147,13 @@ TestQuerySource.prototype = {
     var items = queryInfo.items;
     for (var iSplice = 0; iSplice < msg.splices.length; iSplice++) {
       var splice = msg.splices[iSplice];
-      markListIntoObj(items.slice(splice.index, splice.index + splice.howMany));
+      // mark the removals in preAnno
+      markListIntoObj(items.slice(splice.index, splice.index + splice.howMany),
+                      preAnno, -1);
+      // mark the additions in postlAnno
     }
+
+    // build a full
 
     this.log.delta({
       preAnno: preAnno,
@@ -138,6 +161,8 @@ TestQuerySource.prototype = {
       postAnno: postAnno,
     });
   },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 TD.commonCase('new record', function(T) {
@@ -145,7 +170,7 @@ TD.commonCase('new record', function(T) {
   var qs;
 
   T.action(eQS, 'initial empty query', function() {
-    qs = new TestQuerySource();
+    qs = new TestQuerySource("t");
 
   });
 

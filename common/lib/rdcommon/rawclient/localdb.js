@@ -662,6 +662,36 @@ LocalStore.prototype = {
   // Peep Lookup
 
   /**
+   * Return true if the cells indicate the peep is a contact.
+   */
+  _testfunc_peepContactNoFilter: function(baseCells, mutatedCells) {
+    // if the mutated cell has oident, then it is either an addition/deletion
+    if (mutatedCells.hasOwnProperty('d:oident')) {
+      return mutatedCells['d:oident'] !== null;
+    }
+    else if (baseCells.hasOwnProperty('d:oident')) {
+      return baseCells['d:oident'] !== null;
+    }
+    return false;
+  },
+
+  /**
+   * Return true if the cells indicate the peep is a pinned contact.  Being
+   *  pinned implies being a contact, so we only need to do that check.  The
+   *  pinned status is tracked in the general metadata blob, d:meta, which is
+   *  atomically updated.
+   */
+  _testfunc_peepContactPinnedFilter: function(baseCells, mutatedCells) {
+    if (mutatedCells.hasOwnProperty('d:meta')) {
+      return mutatedCells['d:meta'].pinned;
+    }
+    else if (baseCells.hasOwnProperty('d:meta')) {
+      return baseCells['d:meta'].pinned;
+    }
+    return false;
+  },
+
+  /**
    * Issue a live query on a (sub)set of peeps.  We care about changes to the
    *  peeps in the set after we return it, plus changes to the membership of
    *  the set.
@@ -672,7 +702,8 @@ LocalStore.prototype = {
    * ]
    */
   queryAndWatchPeepBlurbs: function(queryHandle) {
-    var idx, scanFunc = 'scanIndex';
+    var idx, scanFunc = 'scanIndex',
+        filterFunc, indexParam;
     switch (queryHandle.queryDef.by) {
       case 'alphabet':
         idx = $lss.IDX_PEEP_CONTACT_NAME;
@@ -688,9 +719,21 @@ LocalStore.prototype = {
         idx = $lss.IDX_PEEP_WRITE_INVOLVEMENT;
         break;
       default:
-        throw new Error("Unsupported ordering: " + by);
+        throw new Error("Unsupported ordering: " + queryHandle.queryDef.by);
     }
-    return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, '',
+    switch (queryHandle.queryDef.filter) {
+      case null:
+        indexParam = '';
+        queryHandle.testFunc = this._testfunc_peepContactNoFilter;
+        break;
+      case 'pinned':
+        indexParam = 'pinned';
+        queryHandle.testFunc = this._testfunc_peepContactPinnedFilter;
+        break;
+      default:
+        throw new Error("Unsupported filter: " + queryHandle.queryDef.filter);
+    }
+    return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, indexParam,
                                    null, null, null, null, null, null),
       this._fetchAndReportPeepBlurbsById.bind(this, queryHandle));
   },

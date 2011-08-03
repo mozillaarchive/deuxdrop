@@ -93,6 +93,8 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
     lookup_peep_data: function() {
       // if this is an addContact operation, we need to open up the other ident.
       this.isContactAdd = (typeof(this.peepOident) === 'string');
+      // may also become true based on the results of cell lookup.
+      this.isContact = this.isContactAdd;
       if (this.isContactAdd) {
         this.signedIdent = this.peepOident;
         // XXX we should be using the timestamp of the replica block
@@ -122,6 +124,8 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
         writeCells = this.writeCells = {};
         if (!this.isContactAdd)
           writeCells['d:nconvs'] = cells['d:nconvs'] + 1;
+        if (cells.hasOwnProperty('d:oident'))
+          this.isContact = true;
       }
       // - contact add
       if (this.isContactAdd) {
@@ -181,7 +185,7 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
         this.store._notif.namespaceItemAdded(NS_PEEPS,
                                              this.peepPubring.rootPublicKey,
                                              this.cells, this.writeCells);
-      else
+      else if (this.isContact)
         this.store._notif.namespaceItemModified(NS_PEEPS,
                                                 this.peepPubring.rootPublicKey,
                                                 this.cells, this.writeCells,

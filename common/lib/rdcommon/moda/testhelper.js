@@ -91,6 +91,87 @@ var $moda_api = require('rdcommon/moda/api'),
     $ls_tasks = require('rdcommon/rawclient/lstasks');
 
 /**
+ * Traverse `list`, using the "id" values of the items in the list as keys in
+ *  the dictionary `obj` whose values are set to `value`.
+ */
+function markListIntoObj(list, obj, value) {
+  for (var i = 0; i < list.length; i++) {
+    obj[list[i].id] = value;
+  }
+}
+
+/**
+ * Assists in generating delta-expectation representations related to persistent
+ *  queries.
+ */
+var DeltaHelper = exports.DeltaHelper = {
+  makeEmptyDelta: function() {
+    return {
+      preAnno: {},
+      state: {},
+      postAnno: {},
+    };
+  },
+
+  _PEEP_QUERY_KEYFUNC: function(x) { return x.rootKey; },
+
+  _PEEP_QUERY_BY_TO_CMPFUNC: {
+    alphabet: function(a, b) {
+      return a.name.localeCompare(b.name);
+    },
+    any: function(a, b) {
+      return a.any - b.any;
+    },
+    recip: function(a, b) {
+      return a.recip - b.recip;
+    },
+    write: function(a, b) {
+      return a.write - b.write;
+    },
+  },
+
+  peepExpDelta_base: function(lqt, cinfos, queryBy) {
+    var delta = this.makeEmptyDelta();
+
+    lqt._cinfos = cinfos;
+    lqt._sorter = this._PEEP_QUERY_BY_TO_CMPFUNC[query.by];
+    cinfos.sort(lqt._sorter);
+    var rootKeys = cinfos.map(this._PEEP_QUERY_KEYFUNC);
+    markListIntoObj(rootKeys, delta.state, null);
+    markListIntoObj(rootKeys, delta.postAnno, 1);
+
+    return delta;
+  },
+
+  /**
+   * Generate the delta rep for a completely new contact.
+   */
+  peepExpDelta_added: function(lqt, newCinfo) {
+    var delta = this.makeEmptyDelta();
+
+    // -- preAnno
+    // nothing to do for an addition; there are no removals
+
+    // -- state / postAnno
+    // - insert the cinfo, resort
+    // (This is less efficient than finding the sort point via binary search, but
+    //  since we may screw that logic up and that's how we do it for the actual
+    //  impl, we want to do it a different way for the expectation.)
+    var cinfos = lqt._cinfos;
+    cinfos.push(newCinfo);
+    cinfos.sort(lqt._sorter);
+
+    // - generate state
+    markListIntoObj(cinfos.map(this._PEEP_QUERY_KEYFUNC), delta.state, null);
+
+    // - postAnno update for the inserted dude.
+    delta.postAnno[this._PEEP_QUERY_KEYFUNC(newCinfo)] = 1;
+
+    return delta;
+  },
+};
+
+/**
  * There should be one moda-actor per moda-bridge.  So if we are simulating
  *  a desktop client UI that implements multiple tabs, each with their own
  *  moda bridge, then there should be multiple actor instances.
@@ -102,9 +183,11 @@ var TestModaActorMixins = {
     self._testClient = opts.client;
     self._testClient._staticModaActors.push(self);
 
-    /** Dynamically updated list of contacts (by canon client). */
+    /** Dynamically updated list of contacts (by owning client). */
     self._dynamicContacts = [];
     self._contactMetaInfoByName = {};
+
+    self._dynamicPeepQueries = [];
 
     self.T.convenienceSetup(self, 'initialize', function() {
       self._testClient._modaActors.push(self);
@@ -147,13 +230,11 @@ var TestModaActorMixins = {
     return this._contactMetaInfoByName[contactTestClient.__name];
   },
 
-  _getAllContactInfos: function(sortFunc) {
+  _getAllContactInfos: function() {
     var infos = [];
     for (var key in this._contactMetaInfoByName) {
       infos.push(this._contactMetaInfoByName[key]);
     }
-    if (sortFunc)
-      infos.sort(sortFunc);
     return infos;
   },
 
@@ -162,19 +243,33 @@ var TestModaActorMixins = {
   // Notifications from testClient
 
   /**
-   * Invoked during the action step
+   * Invoked during the action step where the replica block is released to the
+   *  client.  All data structure manipulations should be on dynamic ones.
    */
   __addingContact: function(other) {
     var nowSeq = this.RT.testDomainSeq;
+    // -- populate our metadata for the contact
+    // (most of this is for view ordering expectations)
     this._dynamicContacts.push(other);
-    this._contactMetaInfoByName[other.__name] = {
+    var newCinfo = this._contactMetaInfoByName[other.__name] = {
       rootKey: other._rawClient.rootPublicKey,
       name: other.__name,
       any: nowSeq,
       write: nowSeq,
       recip: nowSeq,
     };
-    // XXX generate peep query delta expectations
+
+    // -- generate expectations about peep query deltas
+    var queries = this._dynamicPeepQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      // in the case of an addition we expect a positioned splice followed
+      //  by a completion notification
+      var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCInfo);
+
+      self.expect_queryCompleted(lqt.__name, deltaRep);
+    }
   },
 
   __receiveConvWelcome: function(tConv) {
@@ -216,42 +311,70 @@ var TestModaActorMixins = {
   },
 
   onItemsModified: function(items, liveSet) {
+    var lqt = liveSet.data, delta;
+    if (!lqt._pendingDelta)
+      delta = lqt._pendingDelta = deltaHelper.makeEmptyDelta();
+    else
+      delta = lqt._pendingDelta;
+
+    for (var iModified = 0; iModified < items.length; iModified++) {
+      var rootKey = this._remapLocalToFullName(liveSet._ns,
+                                               items[iModified]._localName);
+      // don't overwrite a +1 with a zero, leave it +1
+      if (!delta.postAnno.hasOwnProperty(rootKey))
+        delta.postAnno[rootKey] = 0;
+    }
   },
 
   onSplice: function(index, howMany, addedItems, liveSet) {
-    if (!liveSet.completed)
-      return;
+    var lqt = liveSet.data, delta;
+    if (!lqt._pendingDelta)
+      delta = lqt._pendingDelta = deltaHelper.makeEmptyDelta();
+    else
+      delta = lqt._pendingDelta;
+
+    // - removals
+    // this happens prior to actually performing the splice on the set's items
+    var iRemoved = index, highRemoved = index + howMany, rootKey;
+    for (; iRemoved < highRemoved; iRemoved++) {
+      rootKey = this._remapLocalToFullName(liveSet._ns,
+                                           liveSet.items[iRemoved]._localName);
+      delta.preAnno[rootKey] = -1;
+    }
+
+    // - additions
+    for (var iAdded = 0; iAdded < addedItems.length; iAdded++) {
+      rootKey = this._remapLocalToFullName(liveSet._ns,
+                                           addedItems[iAdded]._localName);
+      delta.postAnno[rootKey] = 1;
+    }
+
+    // (state population happens during the completed notification)
+
     // XXX implement this, very similar to logic in `client-db-views.js`, steal.
     //this._logger.queryUpdateSplice(liveSet.data.__name, deltaRep);
   },
 
   onCompleted: function(liveSet) {
-    var rootKeys = [];
+    var lqt = liveSet.data, delta, rootKey;
+    if (!lqt._pendingDelta)
+      delta = lqt._pendingDelta = deltaHelper.makeEmptyDelta();
+    else
+      delta = lqt._pendingDelta;
+
+    // - revised state
     for (var i = 0; i < liveSet.items.length; i++) {
-      rootKeys.push(this._remapLocalToFullName(liveSet._ns,
-                                               liveSet.items[i]._localName));
+      rootKey = this._remapLocalToFullName(liveSet._ns,
+                                           liveSet.items[i]._localName);
+      delta.state[rootKey] = null;
     }
 
     this._logger.queryCompleted(liveSet.data.__name, rootKeys);
+    lqt._pendingDelta = null;
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Queries
-
-  _PEEP_QUERY_BY_TO_CMPFUNC: {
-    alphabet: function(a, b) {
-      return a.name.localeCompare(b.name);
-    },
-    any: function(a, b) {
-      return a.any - b.any;
-    },
-    recip: function(a, b) {
-      return a.recip - b.recip;
-    },
-    write: function(a, b) {
-      return a.write - b.write;
-    },
-  },
 
   /**
    * Instantiate a new live query.  We check the results of the query (once
@@ -262,15 +385,18 @@ var TestModaActorMixins = {
    */
   do_queryPeeps: function(thingName, query) {
     var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
 
     this.T.action(this, 'create', lqt, function() {
       // -- generate the expectation
-      var cinfos = self._getAllContactInfos(
-                     self._PEEP_QUERY_BY_TO_CMPFUNC[query.by]);
-      var rootKeys = cinfos.map(function(x) {return x.rootKey;});
-      self.expect_queryCompleted(lqt.__name, rootKeys);
+      // get and order the contact infos for generating the state; hold onto
+      //  this.
+      var delta = DeltaHelper.peepExpDelta_base(
+                    lqt, self._getAllContactInfos(), query.by);
+      self.expect_queryCompleted(lqt.__name, delta);
 
       lqt._liveset = self._bridge.queryPeeps(query, self, lqt);
+      self._dynamicPeepQueries.push(lqt);
     });
 
     return lqt;
@@ -317,7 +443,6 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
     events: {
       queryCompleted: {name: true, keys: true},
-      queryUpdateSplice: {},
     },
   },
 });

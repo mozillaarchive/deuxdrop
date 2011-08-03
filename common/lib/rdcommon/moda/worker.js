@@ -92,18 +92,6 @@ ModaBackside.prototype = {
     return {type: 'ModaBackside'};
   },
 
-  _received: function(boxedObj) {
-    var cmdFunc = this['_cmd_' + boxedObj.cmd];
-    this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
-                     boxedObj.payload);
-  },
-
-  send: function(msg) {
-    var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
-    this._log.send(jsonRoundtripped);
-    this._sendObjFunc(jsonRoundtripped);
-  },
-
   /**
    * Hack to establish a *fake* *magic* link between us and a bridge.
    */
@@ -115,6 +103,28 @@ ModaBackside.prototype = {
 
     var self = this;
     return this._received.bind(this);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Send to the ModaBridge from the NotificationKing
+
+  send: function(msg) {
+    var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
+    this._log.send(jsonRoundtripped);
+    this._sendObjFunc(jsonRoundtripped);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Receive from the ModaBridge, boss around NotificationKing, LocalStore
+
+  /**
+   * Handle messages from the `ModaBridge`, re-dispatching to helper methods
+   *  named like "_cmd_COMMANDNAME".
+   */
+  _received: function(boxedObj) {
+    var cmdFunc = this['_cmd_' + boxedObj.cmd];
+    this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
+                     boxedObj.payload);
   },
 
   /**
@@ -153,6 +163,8 @@ ModaBackside.prototype = {
          null,
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {

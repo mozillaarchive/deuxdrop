@@ -204,6 +204,7 @@ TestContext.prototype = {
     // directly copy across/bind the logger's event method for simplicity
     // XXX this is brittle if we add other methods
     actor.event = logger.event.bind(logger);
+    actor.value = logger.value.bind(logger);
 
     return actor;
   },
@@ -587,6 +588,7 @@ var LAZYLOGFAB = exports.__LAZYLOGFAB = $log.register(null, {
     subtype: $log.TEST_LAZY,
     events: {
       event: {name: true},
+      value: {value: true},
     }
   },
 });

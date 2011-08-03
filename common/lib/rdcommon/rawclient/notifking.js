@@ -190,6 +190,42 @@ function makeEmptyMapsByNS() {
   };
 };
 
+function funcThatJustReturnsFalse() {
+  return false;
+}
+
+/**
+ * Perform a binary search on an array to find the correct insertion point
+ *  in the array for an item.  Tested in `unit-simple-algos.js`.
+ *
+ * @return[Number]{
+ *   The correct insertion point in the array, thereby falling in the inclusive
+ *   range [0, arr.length].
+ * }
+ */
+var bsearchForInsert = exports._bsearchForInsert =
+    function bsearchForInsert(list, seekVal, cmpfunc) {
+  if (!list.length)
+    return 0;
+  var low  = 0, high = list.length - 1,
+      mid, cmpval;
+  while (low <= high) {
+    mid = low + Math.floor((high - low) / 2);
+    cmpval = cmpfunc(seekVal, list[mid]);
+    if (cmpval < 0)
+      high = mid - 1;
+    else if (cmpval > 0)
+      low = mid + 1;
+    else
+      break;
+  }
+  if (cmpval < 0)
+    return mid; // insertion is displacing, so use mid outright.
+  else if (cmpval > 0)
+    return mid + 1;
+  else
+    return mid;
+};
 
 /**
  * Tracks outstanding queries, notifies them about changes, and is also in
@@ -318,6 +354,7 @@ NotificationKing.prototype = {
         low: null,
         high: null,
       },
+      testFunc: funcThatJustReturnsFalse,
       membersByFull: makeEmptyMapsByNS(),
       membersByLocal: makeEmptyMapsByNS(),
       // - data yet required (from dependencies)
@@ -475,14 +512,6 @@ NotificationKing.prototype = {
    *      generate a splice if there was a change/this is an addition.
    */
   _findAffectedQueries: function(namespace) {
-    for (var qsKey in this._activeQuerySources) {
-      var querySource = this._activeQuerySources[qsKey];
-      var queryHandles = querySource.queryHandlesByNS[namespace];
-
-      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-
-      }
-    }
   },
 
   /**
@@ -513,7 +542,21 @@ NotificationKing.prototype = {
    * A completely new-to-us peep/whatever has come into existence.  The new
    *  thing needs to be checked for eligible sets and update any live queries.
    */
-  namespaceItemAdded: function(namespace, name, baseCells, mutatedCells) {
+  namespaceItemAdded: function(namespace, fullName, baseCells, mutatedCells) {
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      var queryHandles = querySource.queryHandlesByNS[namespace];
+
+      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+        var queryHandle = queryHandles[iQuery];
+        if (queryHandle.testFunc(baseCells, mutatedCells)) {
+          // - find the splice point
+
+          // - generate a splice
+
+        }
+      }
+    }
   },
 
   /**
