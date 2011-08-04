@@ -63,8 +63,12 @@
  *     The name of the object as known by the moda bridge instance.
  *   }
  *   @key[fullName String]{
+ *     The unique identifier for the object, usually the naming crypto key.
  *   }
- *   @key[count]
+ *   @key[count]{
+ *     The reference count for this client data; when it hits zero, we can tell
+ *     the `QuerySource` to forget about this datum.
+ *   }
  *   @key[data]{
  *     The actual client data that we might need to react to requests involving
  *     this instance from the moda bridge.
@@ -72,6 +76,34 @@
  *     For example, we need/want for each of the following:
  *     - Peeps: Other-person ident, if available; self ident.
  *     - Conversation: Conversation meta structure.
+ *   }
+ *   @key[indexValues #:optional @dictof[
+ *     @key[indexName]
+ *     @value[indexValue]
+ *   ]]{
+ *     Present only when there is a query on an index for this namespace
+ *     (there may not be for lookups explicitly by full name).  Only contains
+ *     entries for actively queried indices.
+ *
+ *     The base case is that we issue an index query, keeping the values in
+ *     memory and adding them to the ClientData structure.  Then, whenever
+ *     modifications occur, the notifications are issued along with all of the
+ *     index changes.  During our scan, we update any tracked index values with
+ *     the new values, if present.  Updating may be overwrite or maximize based
+ *     on the index (type).
+ *
+ *     Index parameters do not enter into the tracking equation because index
+ *   }
+ *   @key[deps @listof[ClientData]]{
+ *     A list of references to `ClientData` instances which our
+ *     QuerySource-side data structures make reference to and so which we need
+ *     to keep alive.
+ *
+ *     When the reference count for this structure hits zero, we should run down
+ *     the list of deps and decrement their reference counts, possibly
+ *     triggering them to hit zero and also need to convey a deletion to the QS.
+ *     Cycles are avoided by a strong requirement that our data model not allow
+ *     them.
  *   }
  * ]]
  *
@@ -193,6 +225,10 @@ function makeEmptyMapsByNS() {
 function funcThatJustReturnsFalse() {
   return false;
 }
+// this is our dummy comparator/sort func
+function funcThatJustReturnsZero() {
+  return 0;
+};
 
 /**
  * Perform a binary search on an array to find the correct insertion point
@@ -355,6 +391,7 @@ NotificationKing.prototype = {
         high: null,
       },
       testFunc: funcThatJustReturnsFalse,
+      cmpFunc: funcThatJustReturnsZero,
       membersByFull: makeEmptyMapsByNS(),
       membersByLocal: makeEmptyMapsByNS(),
       // - data yet required (from dependencies)
@@ -541,8 +578,31 @@ NotificationKing.prototype = {
   /**
    * A completely new-to-us peep/whatever has come into existence.  The new
    *  thing needs to be checked for eligible sets and update any live queries.
+   *
+   * XXX make sure deps get entangled
+   *
+   * @args[
+   *   @param[namespace]
+   *   @param[fullName]
+   *   @param[baseCells]{
+   *     The set of cells that already exist in storage, if any.
+   *   }
+   *   @param[mutatedCells]{
+   *     The new set of cells being written, with null values conveying a
+   *     cell deletion.
+   *   }
+   *   @param[indexValues @dictof[
+   *     @key[indexName]
+   *     @value[indexValue]
+   *   ]]{
+   *     The set of index values being used for the item.  Index values are
+   *     only used if there is a query against the index.  Once used, we
+   *     track the
+   *   }
+   * ]
    */
-  namespaceItemAdded: function(namespace, fullName, baseCells, mutatedCells) {
+  namespaceItemAdded: function(namespace, fullName, baseCells, mutatedCells,
+                               indexValues) {
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
@@ -551,6 +611,7 @@ NotificationKing.prototype = {
         var queryHandle = queryHandles[iQuery];
         if (queryHandle.testFunc(baseCells, mutatedCells)) {
           // - find the splice point
+          var insertIdx = bsearchForInsert(arr, seekVal, cmpfunc);
 
           // - generate a splice
 
@@ -569,7 +630,8 @@ NotificationKing.prototype = {
    * - If a query's test result changes to merit addition/removal.
    */
   namespaceItemModified: function(namespace, name,
-                                  baseCells, mutatedCells) {
+                                  baseCells, mutatedCells,
+                                  indexValuesModified) {
 
   },
   /**

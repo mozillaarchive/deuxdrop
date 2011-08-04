@@ -123,6 +123,43 @@ const TBL_SERVER_USER_AUTH = "auth:serverUserAuth";
  */
 const TBL_CONV_AUTH = "auth:convByConvId";
 
+exports.dbSchemaDef = {
+  tables: [
+    {
+      name: TBL_USER_ACCOUNT,
+      columnFamilies: ['d'],
+      indices: [],
+    },
+    {
+      name: TBL_USER_TELLKEY,
+      columnFamilies: ['d'],
+      indices: [],
+    },
+    {
+      name: TBL_CLIENT_AUTH,
+      columnFamilies: ['d'],
+      indices: [],
+    },
+    {
+      name: TBL_SERVER_AUTH,
+      columnFamilies: ['s'],
+      indices: [],
+    },
+    {
+      name: TBL_SERVER_USER_AUTH,
+      columnFamilies: ['u', 'c'],
+      indices: [],
+    },
+    {
+      name: TBL_CONV_AUTH,
+      columnFamilies: ['u'],
+      indices: [],
+    },
+
+  ],
+  queues: [],
+};
+
 /**
  * Authorization/authentication/account stuff.
  *
@@ -130,16 +167,6 @@ const TBL_CONV_AUTH = "auth:convByConvId";
  */
 function AuthApi(serverConfig, dbConn, _logger) {
   this._db = dbConn;
-
-  this._db.defineHbaseTable(TBL_USER_ACCOUNT, ["d"]);
-  this._db.defineHbaseTable(TBL_USER_TELLKEY, ["d"]);
-
-  this._db.defineHbaseTable(TBL_CLIENT_AUTH, ["d"]);
-
-  this._db.defineHbaseTable(TBL_SERVER_AUTH, ["s"]);
-  this._db.defineHbaseTable(TBL_SERVER_USER_AUTH, ["u", "c"]);
-
-  this._db.defineHbaseTable(TBL_CONV_AUTH, ["u"]);
 }
 exports.AuthApi = exports.Api = AuthApi;
 AuthApi.prototype = {

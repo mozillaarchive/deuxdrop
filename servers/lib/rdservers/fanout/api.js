@@ -52,6 +52,17 @@ var when = $Q.when;
 
 const TBL_CONV_DATA = "fanout:convData";
 
+exports.dbSchemaDef = {
+  tables: [
+    {
+      name: TBL_CONV_DATA,
+      columnFamilies: ['o', 'm'],
+      indices: [],
+    },
+  ],
+  queues: [],
+};
+
 /**
  * Provides database access for conversation data; authorizations to participate
  *  in a conversation (and thereby subscriptions) are handled by the `AuthApi`.
@@ -66,8 +77,6 @@ const TBL_CONV_DATA = "fanout:convData";
  */
 function FanoutApi(serverConfig, dbConn, _logger) {
   this._db = dbConn;
-
-  this._db.defineHbaseTable(TBL_CONV_DATA, ["o", "m"]);
 }
 exports.Api = FanoutApi;
 FanoutApi.prototype = {

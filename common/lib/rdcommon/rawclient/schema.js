@@ -134,6 +134,34 @@ exports.IDX_CONV_PEEP_WRITE_INVOLVEMENT = "idxPeepConvWrite";
 exports.IDX_CONV_PEEP_RECIP_INVOLVEMENT = "idxPeepConvRecip";
 exports.IDX_CONV_PEEP_ANY_INVOLVEMENT = "idxPeepConvAny";
 
+exports.dbSchemaDef = {
+  tables: [
+    {
+      name: exports.TBL_PEEP_DATA,
+      columnFamilies: ['d'],
+      indices: [
+        exports.IDX_PEEP_CONTACT_NAME,
+        exports.IDX_PEEP_WRITE_INVOLVEMENT,
+        exports.IDX_PEEP_RECIP_INVOLVEMENT,
+        exports.IDX_PEEP_ANY_INVOLVEMENT,
+      ],
+    },
+    {
+      name: exports.TBL_CONV_DATA,
+      columnFamilies: ['d'],
+      indices: [
+        exports.IDX_ALL_CONVS,
+        exports.IDX_CONV_PEEP_WRITE_INVOLVEMENT,
+        exports.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
+        exports.IDX_PEEP_ANY_INVOLVEMENT,
+      ],
+    },
+  ],
+
+  queues: [
+  ],
+};
+
 /**
  * Database table names are exposed for use by `testhelper.js` instances so
  *  they can issue checks on database state that do not make sense to expose

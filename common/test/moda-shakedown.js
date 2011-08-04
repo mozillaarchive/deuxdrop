@@ -132,7 +132,7 @@ TD.commonCase('moda basics', function(T) {
   // the pinned query should have gained B
 
   // - add C as a friend
-  client_a.setup_friendClique([client_C]);
+  client_a.setup_friendClique([client_c]);
 
   // -- peep final state queries.
   var lqFinalAllPeeps = moda_a.do_queryPeeps("allPeepsFinal", {by: 'alphabet'});

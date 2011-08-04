@@ -92,6 +92,8 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
   steps: {
     lookup_peep_data: function() {
       // if this is an addContact operation, we need to open up the other ident.
+      // XXX note that we do not support changing the contact name right now,
+      //  if we use this path for name changes too, we need to indicate that.
       this.isContactAdd = (typeof(this.peepOident) === 'string');
       // may also become true based on the results of cell lookup.
       this.isContact = this.isContactAdd;

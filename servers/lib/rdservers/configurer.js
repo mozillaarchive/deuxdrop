@@ -97,6 +97,10 @@ function ServerConfig(keyring, selfIdentBlob, dbConn) {
   this.selfIdentBlob = selfIdentBlob;
   this.db = dbConn;
   this._serverModules = [];
+  this.aggrDbSchema = {
+    tables: [],
+    queues: [],
+  };
 }
 ServerConfig.prototype = {
   toString: function() {
@@ -106,6 +110,9 @@ ServerConfig.prototype = {
     return {
       type: 'ServerConfig',
     };
+  },
+
+  mergeInDbSchema: function(dbSchema) {
   },
 
   __registerServers: function(server) {
@@ -182,6 +189,27 @@ exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, hostname,
  * Populate a `ServerConfig` for a unit test that has already done most of the
  *  legwork itself.  This exists because unit tests take whatever port they
  *  can get and can't know it a priori.
+ *
+ * @args[
+ *   @param[keyring]
+ *   @param[selfIdentBlob]
+ *   @param[dbConn GenDbConn]{
+ *     The database connection to be shared amongst all roles of this server.
+ *   }
+ *   @param[clobberNamespace @dictof[
+ *     @key[targetAttrName]{
+ *       The name on the `ServerConfig` that is attempting to be replaced.  For
+ *       example, "senderApi" should be used when attempting to replace the
+ *       senderApi with a decorated instance.
+ *     }
+ *     @value[testFriendlyModule]{
+ *       If replacing an API, the module should expose an ApiWrapFactory method,
+ *       presumably created by `testwrapmaker.js`.
+ *     }
+ *   ]]{
+ *     Allows the test to replace/wrap apis.
+ *   }
+ * ]
  */
 var populateTestConfig = exports.__populateTestConfig =
     function populateTestConfig(keyring, selfIdentBlob, dbConn, roles,
@@ -192,10 +220,15 @@ var populateTestConfig = exports.__populateTestConfig =
     var roleName = roles[iRole];
     var serverRoleInfo = SERVER_ROLE_MODULES[roleName];
     if (serverRoleInfo.apiModule) {
+      // - augment schema
+      if (serverRoleInfo.apiModule.hasOwnProperty("dbSchemaDef"))
+        serverConfig.mergeInDbSchema(serverRoleInfo.apiModule.dbSchemaDef);
+
+      // - instantiate, checking clobber
       if (clobberNamespace.hasOwnProperty(roleName + 'Api')) {
         serverConfig[roleName + 'Api'] =
-          new clobberNamespace[roleName + 'Api'].ApiWrapFactory(_logger,
-                [serverConfig, dbConn, _logger]);
+          clobberNamespace[roleName + 'Api'].ApiWrapFactory(_logger,
+              [serverConfig, dbConn, _logger]);
       }
       else {
         serverConfig[roleName + 'Api'] =

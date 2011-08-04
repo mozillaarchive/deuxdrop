@@ -56,18 +56,20 @@ define(
   [
     'q',
     'redis',
-    'rdcommon/log',
+    './logdef',
     'module',
     'exports'
   ],
   function(
     $Q,
     $redis,
-    $log,
+    $_logdef,
     $module,
     exports
   ) {
-var when = $Q.when;
+const when = $Q.when;
+
+const LOGFAB = $_logdef.LOGFAB;
 
 function boxPersisted(val) {
   switch (typeof(val)) {
@@ -125,6 +127,10 @@ RedisDbConn.prototype = {
     this._log.closed();
   },
 
+  defineSchema: function(schema) {
+    // no schema for redis stuffs, yo.
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Hbase model
   //
@@ -150,9 +156,6 @@ RedisDbConn.prototype = {
   // - We will not create undesirable disk hot-spotting.  Specifically, we want
   //    to avoid clustering seeks onto a spindle.  It's better to use a DHT
   //    model if we expect a request to result in a large number of seeks.
-
-  defineHbaseTable: function(tableName, columnFamilies) {
-  },
 
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
@@ -331,8 +334,6 @@ RedisDbConn.prototype = {
   //  to reflect this into hbase that will need analysis.  (We will likely use
   //  a naive stopgap for hbase initially.)
 
-  defineReorderableIndex: function(tableName, indexName) {
-  },
   /**
    * Very temporary scanning mechanism that will need to be revisted a few
    *  times.  The competing factors are a desire to implement something that's
@@ -369,7 +370,7 @@ RedisDbConn.prototype = {
     this._log.scanIndex(tableName, indexName, indexParam, maxValStr, minValStr);
     this._conn.zrevrangebyscore(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-        maxValStr, minValStr, function(err, results) {
+        maxValStr, minValStr, 'WITHSCORES', function(err, results) {
       if (err)
         deferred.reject(err);
       else
@@ -456,7 +457,10 @@ RedisDbConn.prototype = {
         var objectNames = [];
         for (var i = 0; i < results.length; i++) {
           var idxBang = results[i].indexOf('!');
+          // object name
           objectNames.push(results[i].substring(idxBang + 1));
+          // key ("score")
+          objectNames.push(results[i].substring(0, idxBang));
         }
         deferred.resolve(objectNames);
       }
@@ -466,9 +470,6 @@ RedisDbConn.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Queue Abstraction
-
-  defineQueueTable: function(tableName) {
-  },
 
   queueAppend: function(tableName, queueName, values) {
     var multi = this._conn.multi();
@@ -571,80 +572,5 @@ exports.cleanupTestDBConnection = function(conn) {
   conn._conn.flushdb();
   conn.close();
 };
-
-
-const DICE_TABLE = 'db:table', DICE_INDEX = 'db:index', DICE_QUEUE = 'db:queue';
-var LOGFAB = exports.LOGFAB = $log.register($module, {
-  gendbConn: {
-    type: $log.DATABASE,
-    subtype: $log.CLIENT,
-
-    dicing: {
-      name: 'Databases',
-      binGroups: {
-        'Tables': DICE_TABLE,
-        'Indices': DICE_INDEX,
-        'Queues': DICE_QUEUE,
-      },
-      attributes: {
-        read: {
-          nameMatch: "get|scan|Peek",
-        },
-        write: {
-          nameMatch:
-            "put|increment|Create|delete|update|maximize|Append|Consume",
-        },
-      },
-    },
-
-    events: {
-      connected: {},
-      closed: {},
-
-      // - hbase abstractions
-      getRowCell: {tableName: DICE_TABLE, rowId: true, columnName: true},
-      getRow: {tableName: DICE_TABLE, rowId: true, columnFamilies: false},
-      putCells: {tableName: DICE_TABLE, rowId: true},
-      incrementCell: {tableName: DICE_TABLE, rowId: true, columnName: true,
-                      delta: true},
-      raceCreateRow: {tableName: DICE_TABLE, rowId: true},
-
-      deleteRowCell: {tableName: DICE_TABLE, rowId: true, columnName: true},
-      deleteRow: {tableName: DICE_TABLE, rowId: true},
-
-      // - reorderable collection abstraction
-      updateIndexValue: {tableName: DICE_INDEX, indexName: DICE_INDEX,
-                         indexParam: DICE_INDEX,
-                         objectName: true, newValue: false},
-      maximizeIndexValue: {tableName: DICE_INDEX, indexName: DICE_INDEX,
-                           indexParam: DICE_INDEX,
-                           objectName: true, newValue: false},
-
-      scanIndex: {tableName: DICE_INDEX, indexName: DICE_INDEX,
-                  indexParam: DICE_INDEX,
-                  maxVal: false, minVal: true},
-
-      // - queue abstraction
-      queueAppend: {tableName: DICE_QUEUE, queueName: DICE_QUEUE},
-      queuePeek: {tableName: DICE_QUEUE, queueName: DICE_QUEUE, count: false},
-      queueConsume: {tableName: DICE_QUEUE, queueName: DICE_QUEUE,
-                     count: false},
-      queueConsumeAndPeek: {tableName: DICE_QUEUE, queueName: DICE_QUEUE,
-                            consumeCount: false, peekCount: false},
-    },
-    TEST_ONLY_events: {
-      putCells: {cells: $log.JSONABLE},
-      raceCreateRow: {probeCellName: false, cells: $log.JSONABLE},
-
-      queueAppend: {values: false},
-    },
-    errors: {
-      dbErr: {err: $log.EXCEPTION},
-    },
-    LAYER_MAPPING: {
-      layer: "db",
-    },
-  },
-});
 
 }); // end define

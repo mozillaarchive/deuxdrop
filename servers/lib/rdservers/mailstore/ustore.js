@@ -69,6 +69,48 @@ const TBL_REQUESTS_IN = 'store:contactRequestsIn';
 const TBL_REQUESTS_SUPPRESS = 'store:contactRequestsSuppress';
 const TBL_REQUESTS_PENDING = 'store:contactRequestsPending';
 
+exports.dbSchemaDef = {
+  tables: [
+    {
+      name: TBL_CONTACTS,
+      columnFamilies: ['d'],
+      indices: [
+        IDX_PEEP_WRITE_INVOLVEMENT,
+        IDX_PEEP_RECIP_INVOLVEMENT,
+        IDX_PEEP_ANY_INVOLVEMENT,
+      ],
+    },
+    {
+      name: TBL_CONVERSATIONS,
+      columnFamilies: ['m', 'd'],
+      indices: [
+        IDX_CONV_PEEP_WRITE_INVOLVEMENT,
+        IDX_CONV_PEEP_ANY_INVOLVEMENT,
+      ],
+    },
+    {
+      name: TBL_REQUESTS_IN,
+      columnFamilies: ['d'],
+      indices: [],
+    },
+    {
+      name: TBL_REQUESTS_SUPPRESS,
+      columnFamilies: ['d'],
+      indices: [],
+    },
+    {
+      name: TBL_REQUESTS_PENDING,
+      columnFamilies: ['d'],
+      indices: [],
+    },
+  ],
+  queues: [
+    {
+      name: TBQ_CLIENT_REPLICAS,
+    },
+  ],
+};
+
 /**
  * Lexicographically pad out a timestamp for use in a row.
  */
@@ -77,27 +119,6 @@ function lexipadTS(timestamp) {
   var s = "" + timestamp;
   return s;
 }
-
-exports.initializeUserTable = function(dbConn) {
-  dbConn.defineHbaseTable(TBL_CONTACTS, ["d"]);
-
-  dbConn.defineReorderableIndex(TBL_CONTACTS,
-                                IDX_PEEP_WRITE_INVOLVEMENT);
-  dbConn.defineReorderableIndex(TBL_CONTACTS,
-                                IDX_PEEP_RECIP_INVOLVEMENT);
-  dbConn.defineReorderableIndex(TBL_CONTACTS,
-                                IDX_PEEP_ANY_INVOLVEMENT);
-
-  dbConn.defineHbaseTable(TBL_CONVERSATIONS, ["m", "d"]);
-  dbConn.defineReorderableIndex(TBL_CONVERSATIONS,
-                                IDX_CONV_PEEP_WRITE_INVOLVEMENT);
-  dbConn.defineReorderableIndex(TBL_CONVERSATIONS,
-                                IDX_CONV_PEEP_ANY_INVOLVEMENT);
-
-  dbConn.defineHbaseTable(TBL_REQUESTS_IN, ["d"]);
-
-  dbConn.defineQueueTable(TBQ_CLIENT_REPLICAS);
-};
 
 /**
  * User data stored on behalf of the user by the mailstore (which can only see

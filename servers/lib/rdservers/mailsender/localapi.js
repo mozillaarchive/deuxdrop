@@ -61,13 +61,23 @@ define(
   ) {
 var when = $Q.when;
 
+exports.dbSchemaDef = {
+  tables: [
+    {
+      name: TBL_SERVER_URL,
+      columnFamilies: ['u'],
+      indices: [],
+    },
+  ],
+  queues: [],
+};
+
 const TBL_SERVER_URL = "sender:serverUrl";
 
 function MailsenderLocalApi(serverConfig, dbConn, _logger) {
   this._config = serverConfig;
   this._db = dbConn;
-
-  this._db.defineHbaseTable(TBL_SERVER_URL, ["u"]);
+  
   this._log = LOGFAB.senderLocalAPI(this, _logger);
 }
 exports.Api = MailsenderLocalApi;

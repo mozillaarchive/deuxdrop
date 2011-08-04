@@ -80,6 +80,7 @@ var $rawclient_api = require('rdcommon/rawclient/api'),
 
 
 var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
+    // the mailstore is not wrapping an API so does not go in the clobber ns.
     $testwrap_mailstore = require('rdservers/mailstore/testwrappers');
 
 var gClobberNamespace = {

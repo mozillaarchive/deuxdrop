@@ -89,6 +89,7 @@ const NS_PEEPS = 'peeps',
  *  existing.
  *
  * Our implementation is problem domain aware.
+ *
  */
 function LocalStore(dbConn, keyring, pubring, _logger) {
   this._log = LOGFAB.localStore(this, _logger, null);
@@ -309,6 +310,7 @@ LocalStore.prototype = {
       fullName: convId,
       count: 1,
       data: null,
+      indexValues: null,
       deps: deps,
     };
     queryHandle.membersByLocal[NS_CONVBLURBS][localName] = clientData;
@@ -392,6 +394,7 @@ LocalStore.prototype = {
       fullName: convId,
       count: 1,
       data: null,
+      indexValues: null,
       deps: deps,
     };
     queryHandle.membersByLocal[NS_CONVALL][localName] = clientData;
@@ -498,6 +501,7 @@ LocalStore.prototype = {
       default:
         throw new Error("bad involvement type: '" + query.involvement + "'");
     }
+    queryHandle.index = index;
 
     // - generate an index scan, netting us the conversation id's, hand-off
     return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey,
@@ -691,6 +695,18 @@ LocalStore.prototype = {
     return false;
   },
 
+  _cmpfunc_peepContactName: function(a, b) {
+  },
+
+  _cmpfunc_peepAnyInvolvement: function(a, b) {
+  },
+
+  _cmpfunc_peepRecipInvolvement: function(a, b) {
+  },
+
+  _cmpfunc_peepWriteInvolvement: function(a, b) {
+  },
+
   /**
    * Issue a live query on a (sub)set of peeps.  We care about changes to the
    *  peeps in the set after we return it, plus changes to the membership of
@@ -702,8 +718,7 @@ LocalStore.prototype = {
    * ]
    */
   queryAndWatchPeepBlurbs: function(queryHandle) {
-    var idx, scanFunc = 'scanIndex',
-        filterFunc, indexParam;
+    var idx, scanFunc = 'scanIndex', indexParam;
     switch (queryHandle.queryDef.by) {
       case 'alphabet':
         idx = $lss.IDX_PEEP_CONTACT_NAME;
@@ -721,6 +736,8 @@ LocalStore.prototype = {
       default:
         throw new Error("Unsupported ordering: " + queryHandle.queryDef.by);
     }
+    queryHandle.index = idx;
+
     switch (queryHandle.queryDef.filter) {
       case null:
         indexParam = '';
@@ -787,6 +804,7 @@ LocalStore.prototype = {
         fullName: peepRootKey,
         count: 1,
         data: null,
+        indexValues: null,
         deps: null,
       };
       queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
@@ -840,6 +858,7 @@ LocalStore.prototype = {
       fullName: peepRootKey,
       count: 1,
       data: null,
+      indexValues: null,
       deps: null, // peeps have no additional deps
     };
     queryHandle.membersByLocal[localName] = clientData;

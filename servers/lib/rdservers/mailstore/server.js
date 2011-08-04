@@ -471,6 +471,7 @@ ClientServicingConnection.prototype = {
 };
 exports.ClientServicingConnection = ClientServicingConnection;
 
+exports.dbSchemaDef = $ustore.dbSchemaDef;
 
 exports.makeServerDef = function(serverConfig) {
   // initialize our db
