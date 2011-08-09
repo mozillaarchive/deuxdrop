@@ -38,7 +38,9 @@
 /**
  * IndexedDB implementation of our database abstraction.  For now, all the
  *  generic documentation lives on the `redis.js` implementation.  Specifics
- *  about the IndexedDB mapping do live in here.
+ *  about the IndexedDB mapping do live in here.  Note that we are targeting
+ *  an IndexedDB backed by LevelDB; our performance when using
+ *  IndexedDB-on-SQLite is likely to be worse and we are fine with that.
  **/
 
 define(
@@ -59,11 +61,24 @@ const when = $Q.when;
 const LOGFAB = $_logdef.LOGFAB;
 
 var IndexedDB = mozIndexedDB;
+/*
+ * We are assuming we get the following magically in our global namespace:
+ * - IDBTransaction
+ * - IDBKeyRange
+ */
+
+/**
+ * The version to use for now; not a proper version, as we perform no upgrading,
+ *  etc. at this time.
+ */
+const DB_ONLY_VERSION = "ddp-1";
+
+const CELL_DELIM = '@', CELL_DELIM_LEN = CELL_DELIM.length,
+      INDEX_DELIM = '_', INDEX_PARAM_DELIM = '@';
 
 function IndexedDbConn(nsprefix, _logger) {
-  this._db = null;
-  this._tableToObjStore = {};
-  this._tableIndices = {};
+  var dbDeferred = $Q.defer();
+  this._db = dbDeferred.promise;
 
   this._log = LOGFAB.gendbConn(this, _logger, [nsprefix]);
 
@@ -71,12 +86,12 @@ function IndexedDbConn(nsprefix, _logger) {
   var self = this;
   dbOpenRequest.onerror = function(event) {
     self._log.dbErr(dbOpenRequest.errorCode);
+    dbDeferred.reject(dbOpenRequest.errorCode);
   };
   dbOpenRequest.onsuccess = function(event) {
     self._db = dbOpenRequest.result;
+    dbDeferred.resolve(self._db);
   };
-
-
 }
 IndexedDbConn.prototype = {
   toString: function() {
@@ -89,14 +104,47 @@ IndexedDbConn.prototype = {
   },
 
   /**
+   * One-shot schema definition; no migration support at the current time.
    *
+   * @return[Promise]{
+   *   Returns a promise that is resolved once the schema has been baked into
+   *   the database.
+   * }
    */
   defineSchema: function(schema) {
-    this._tableToObjStore[tableName] = this._db.createObjectStore(tableName);
-    var objStore = this._tableToObjStore[tableName];
-    var dbIndex = objStore.createIndex(indexName);
-    this._tableIndices[tableName + indexName] = dbIndex;
+    return when(this._db, function(db) {
+      if (db.version == DB_ONLY_VERSION)
+        return true;
 
+      var deferred = $Q.defer();
+      var req = db.setVersion(DB_ONLY_VERSION), self = this;
+      req.onerror = function() {
+        deferred.reject(request.errorCode);
+      };
+      req.onsuccess = function() {
+        for (var iTable = 0; iTable < schema.tables.length; iTable++) {
+          var tableDef = schema.tables[iTable],
+              tableName = tableDef.name;
+
+          db.createObjectStore(tableName);
+
+          for (var iIndex = 0; iIndex < tableDef.indices.length; iIndex++) {
+            var indexName = tableDef.indices[iIndex];
+            var aggrName = tableName + INDEX_DELIM + indexName;
+
+            db.createObjectStore(aggrName);
+          }
+        }
+        for (var iQueue = 0; iQueue < schema.queues.length; iQueue++) {
+          var queueDef = schema.queues[iQueue],
+              queueName = queueDef.name;
+
+          db.createObjectStore(queueName);
+        }
+      };
+
+      return deferred.promise;
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -119,115 +167,176 @@ IndexedDbConn.prototype = {
   // The hygienic argument against is that there is much greater risk for
   //  atomic replacement causing data to be lost.  The counterpoint is that
   //  we're already trying quite hard to ensure that all logic is serialized
-  //  so that shouldn't be a notable risk.
+  //  so that shouldn't be a notable risk (although one that exists at a higher
+  //  abstraction level than us.)
+  //
+  // There is no need for us to box our data because IndexedDB handles that
+  //  for us because it's intimately aware of the JS object system.
 
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    this._conn.hget(this._prefix + ':' + tableName + ':' + rowId, columnName,
-                     function(err, result) {
-      if (err)
-        deferred.reject(err);
-      else
-        deferred.resolve(unboxPersisted(result));
-    });
+    var transaction = this._db.transaction([tableName]
+                                           IDBTransaction.READ_ONLY);
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    store.get(rowId + CELL_DELIM + columnName).onsuccess = function(event) {
+      deferred.resolve(event.target.result);
+    };
     return deferred.promise;
   },
 
   boolcheckRowCell: function(tableName, rowId, columnName) {
-    return when(this.getRowCell(tableName, rowId, columnName),
-                Boolean
-                // rejection pass-through is fine
-               );
+    var deferred = $Q.defer();
+    this._log.getRowCell(tableName, rowId, columnName);
+    var transaction = this._db.transaction([tableName]
+                                           IDBTransaction.READ_ONLY);
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    store.get(rowId + CELL_DELIM + columnName).onsuccess = function(event) {
+      deferred.resolve(Boolean(event.target.result));
+    };
+    return deferred.promise;
   },
 
   assertBoolcheckRowCell: function(tableName, rowId, columnName, exClass) {
-    return when(this.getRowCell(tableName, rowId, columnName),
-      function(val) {
-        if (!val)
-          throw new (exClass || Error)(columnName + " was falsy");
-        return Boolean(val);
-      }
-      // rejection pass-through is fine
-    );
+    var deferred = $Q.defer();
+    this._log.getRowCell(tableName, rowId, columnName);
+    var transaction = this._db.transaction([tableName]
+                                           IDBTransaction.READ_ONLY);
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    store.get(rowId + CELL_DELIM + columnName).onsuccess = function(event) {
+      var val = Boolean(event.target.result);
+      if (!val)
+        deferred.reject(new (exClass || Error)(columnName + "was falsy"));
+      else
+        deferred.resolve(val);
+    };
+    return deferred.promise;
   },
 
   getRow: function(tableName, rowId, columnFamilies) {
     var deferred = $Q.defer();
     this._log.getRow(tableName, rowId, columnFamilies);
-    this._conn.hgetall(this._prefix + ':' + tableName + ':' + rowId,
-                       function(err, result) {
-      if (err) {
-        deferred.reject(err);
+    var transaction = this._db.transaction([tableName],
+                                           IDBTransaction.READ_WRITE);
+    var odict = {};
+    transaction.oncomplete = function() {
+      deferred.resolve(odict);
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+
+    // we need to open a cursor to spin over all possible cells
+    var range = IDBKeyRange.bound(rowId, rowId + '\ufff0', true, false);
+    const cellNameOffset = rowId.length + CELL_DELIM_LEN;
+    store.openCursor(range).onsuccess = function(event) {
+      var cursor = event.target.result;
+      if (cursor) {
+        odict[cursor.key.substring(cellNameOffset)] = cursor.value;
+        cursor.continue();
       }
-      else {
-        var odict = {};
-        for (var key in result) {
-          odict[key] = unboxPersisted(result[key]);
-        }
-        deferred.resolve(odict);
-      }
-    });
+    };
     return deferred.promise;
   },
 
   putCells: function(tableName, rowId, cells) {
     var deferred = $Q.defer();
-    var ocells = {};
-    for (var key in cells) {
-      ocells[key] = boxPersisted(cells[key]);
-    }
     this._log.putCells(tableName, rowId, cells);
-    this._conn.hmset(this._prefix + ':' + tableName + ':' + rowId, ocells,
-                     function(err, replies) {
-      if (err)
-        deferred.reject(err);
-      else
-        deferred.resolve(null);
-    });
+
+    var transaction = this._db.transaction([tableName],
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    for (var key in cells) {
+      store.put(cells[key], rowId + CELL_DELIM + key);
+    }
     return deferred.promise;
   },
 
   deleteRow: function(tableName, rowId) {
     var deferred = $Q.defer();
     this._log.deleteRow(tableName, rowId);
-    this._conn.del(this._prefix + ':' + tableName + ':' + rowId,
-                     function(err, result) {
-      if (err)
-        deferred.reject(err);
-      else
-        deferred.resolve(result);
-    });
+    var transaction = this._db.transaction([tableName],
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    // we need to open a cursor to spin over all possible cells
+    var range = IDBKeyRange.bound(rowId, rowId + '\ufff0', true, false);
+    store.openCursor(range).onsuccess = function(event) {
+      var cursor = event.target.result;
+      if (cursor) {
+        cursor.delete();
+        cursor.continue();
+      }
+    };
     return deferred.promise;
   },
 
   deleteRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.deleteRowCell(tableName, rowId, columnName);
-    this._conn.hdel(this._prefix + ':' + tableName + ':' + rowId, columnName,
-                     function(err, result) {
-      if (err)
-        deferred.reject(err);
-      else
-        deferred.resolve(result);
-    });
+    var transaction = this._db.transaction([tableName],
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    store.delete(rowId + CELL_DELIM + columnName);
     return deferred.promise;
   },
 
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
     this._log.incrementCell(tableName, rowId, columnName, delta);
-    this._conn.hincrby(this._prefix + ':' + tableName + ':' + rowId,
-                       columnName, delta, function(err, result) {
-      if (err)
-        deferred.reject(err);
+    var transaction = this._db.transaction([tableName]
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    var cellName = rowId + CELL_DELIM + columnName;
+    store.get(cellName).onsuccess = function(event) {
+      var result = event.target.result;
+      if (result === undefined)
+        store.add(1, cellName);
       else
-        deferred.resolve(result);
-    });
+        newVal = store.put(result + 1, cellName);
+      }
+      deferred.resolve(event.target.result);
+    };
     return deferred.promise;
   },
 
   raceCreateRow: function(tableName, rowId, probeCellName, cells) {
+    // note: we are just reusing the implementation from our redis impl since
+    //  this is already posed in terms of other operations.  For efficiency
+    //  we may want to specialize this at some point.
     var self = this;
     this._log.raceCreateRow(tableName, rowId, probeCellName, cells);
     return when(this.incrementCell(tableName, rowId, probeCellName, 1),
@@ -305,6 +414,32 @@ IndexedDbConn.prototype = {
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
     this._log.scanIndex(tableName, indexName, indexParam, maxValStr, minValStr);
+    var transaction = this._db.transaction([tableName],
+                                           IDBTransaction.READ_ONLY);
+    var odict = {};
+    transaction.oncomplete = function() {
+      deferred.resolve(odict);
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+
+    // we need to open a cursor to spin over all possible cells
+    var cellName =  + objectName;
+    var range = IDBKeyRange.bound(
+                  indexParam + INDEX_PARAM_DELIM,
+                  indexParam + INDEX_PARAM_DELIM + '\ufff0',
+                  true, false);
+    const cellNameOffset = rowId.length + CELL_DELIM_LEN;
+    store.openCursor(range).onsuccess = function(event) {
+      var cursor = event.target.result;
+      if (cursor) {
+        odict[cursor.key.substring(cellNameOffset)] = cursor.value;
+        cursor.continue();
+      }
+    };
+    return deferred.promise;
     this._conn.zrevrangebyscore(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
         maxValStr, minValStr, 'WITHSCORES', function(err, results) {
@@ -325,38 +460,58 @@ IndexedDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
-    this._conn.zadd(
-      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-      newValue, objectName, function(err, result) {
-        if (err)
-          deferred.reject(err);
-        else
-          deferred.resolve(result);
-      });
+    var aggrName = tableName + INDEX_DELIM + indexName;
+    var transaction = this._db.transaction([aggrName]
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(aggrName);
+    var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
+    store.put(newValue, cellName);
     return deferred.promise;
   },
 
   /**
    * Set the numeric value associated with an objectName for the given index to
    *  the maximum of its current value and the value we are providing.
-   *
-   * XXX COPOUT! this does not actually maximize! this just updates!
    */
   maximizeIndexValue: function(tableName, indexName, indexParam,
                                objectName, newValue) {
     var deferred = $Q.defer();
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
-    this._conn.zadd(
-      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-      newValue, objectName, function(err, result) {
-        if (err)
-          deferred.reject(err);
-        else
-          deferred.resolve(result);
-      });
+    var transaction = this._db.transaction([tableName]
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+    var store = transaction.objectStore(tableName);
+    var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
+    store.get(cellName).onsuccess = function(event) {
+      var existing = event.target.result;
+      if (existing === undefined)
+        store.add(newValue, cellName);
+      else
+        newVal = store.put(Math.max(existing, newValue), cellName);
+      }
+      deferred.resolve(event.target.result);
+    };
     return deferred.promise;
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // String-Value Indices
+  //
+  // Same as the numeric-value indices; these only exist because of our redis
+  //  impl and this 
+
   //////////////////////////////////////////////////////////////////////////////
 };
 

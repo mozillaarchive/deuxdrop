@@ -104,27 +104,11 @@ function LocalStore(dbConn, keyring, pubring, _logger) {
    */
   this._pinnedPeepRootKeys = null;
 
-  this._db.defineHbaseTable($lss.TBL_PEEP_DATA, ["d"]);
-  this._db.defineReorderableIndex($lss.TBL_PEEP_DATA,
-                                  $lss.IDX_PEEP_WRITE_INVOLVEMENT);
-  this._db.defineReorderableIndex($lss.TBL_PEEP_DATA,
-                                  $lss.IDX_PEEP_RECIP_INVOLVEMENT);
-  this._db.defineReorderableIndex($lss.TBL_PEEP_DATA,
-                                  $lss.IDX_PEEP_ANY_INVOLVEMENT);
-
-  // conversation data proper: just data for now, (Was: meta, overview, data)
-  this._db.defineHbaseTable($lss.TBL_CONV_DATA, ["d"]);
-
-  this._db.defineReorderableIndex($lss.TBL_CONV_DATA, $lss.IDX_ALL_CONVS);
-
-  this._db.defineReorderableIndex($lss.TBL_CONV_DATA,
-                                  $lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT);
-  this._db.defineReorderableIndex($lss.TBL_CONV_DATA,
-                                  $lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT);
-  this._db.defineReorderableIndex($lss.TBL_CONV_DATA,
-                                  $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT);
-
-  this._bootstrap();
+  // initialize the db schema and kickoff the bootstrap once the db is happy
+  var self = this;
+  when(this._db.defineSchema($lss.dbSchemaDef), function() {
+    self._bootstrap();
+  });
 }
 exports.LocalStore = LocalStore;
 LocalStore.prototype = {

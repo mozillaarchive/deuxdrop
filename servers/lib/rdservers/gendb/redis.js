@@ -281,6 +281,10 @@ RedisDbConn.prototype = {
    *  dependent; to help out implementations that don't make this super easy,
    *  you must provide the name of a probe cell that we can use to perform
    *  an increment on and that we will leave around as long as the row exists.
+   *
+   * The assumption is that it is very likely that we will win this race, but
+   *  for correctness/security reasons, it is vital that we not just naively
+   *  assume a race/collision is impossible.
    */
   raceCreateRow: function(tableName, rowId, probeCellName, cells) {
     var self = this;
@@ -364,6 +368,7 @@ RedisDbConn.prototype = {
   scanIndex: function(tableName, indexName, indexParam,
                       lowValue, lowObjectName, lowInclusive,
                       highValue, highObjectName, highInclusive) {
+    // XXX actually use the range support
     var deferred = $Q.defer();
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
@@ -402,22 +407,27 @@ RedisDbConn.prototype = {
   /**
    * Set the numeric value associated with an objectName for the given index to
    *  the maximum of its current value and the value we are providing.
-   *
-   * XXX COPOUT! this does not actually maximize! this just updates!
    */
   maximizeIndexValue: function(tableName, indexName, indexParam,
                                objectName, newValue) {
-    var deferred = $Q.defer();
+    var deferred = $Q.defer(), self = this;
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
-    this._conn.zadd(
-      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-      newValue, objectName, function(err, result) {
-        if (err)
-          deferred.reject(err);
-        else
-          deferred.resolve(result);
-      });
+    var keyName =
+      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam;
+    this._conn.zscore(keyName, objectName, function(err, result) {
+      if (err) {
+        deferred.reject(err);
+        return;
+      }
+      newValue = Math.max(newValue, parseInt(result));
+      self._conn.zadd(keyName, newValue, objectName, function(err, result) {
+          if (err)
+            deferred.reject(err);
+          else
+            deferred.resolve(result);
+        });
+    });
     return deferred.promise;
   },
 
