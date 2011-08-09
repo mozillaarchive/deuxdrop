@@ -512,7 +512,31 @@ IndexedDbConn.prototype = {
   // Same as the numeric-value indices; these only exist because of our redis
   //  impl and this 
 
+  updateStringIndexValue: null,
+  scanStringIndex: null,
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Queue Abstraction
+  //
+  // XXX not yet implemented; not required for client logic
+
+  queueAppend: null,
+  queuePeek: null,
+  queueConsume: null,
+  queueConsumeandPeek: null,
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Session Management
+
+  close: function() {
+    this._db.close();
+  },
+
   //////////////////////////////////////////////////////////////////////////////
 };
+IndexedDbConn.prototype.updateStringIndexValue =
+  IndexedDbConn.prototype.updateIndexValue;
+IndexedDBConn.prototype.scanStringIndex =
+  IndexedDbConn.prototype.scanIndex;
 
 }); // end define
