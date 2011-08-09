@@ -1,2 +1,7 @@
 clients/node_modules
-
+clients/addon/data/web
+clients/addon/lib/env.js
+clients/addon/lib/modaTransport.js
+clients/addon/lib/q.js
+clients/addon/lib/socket.io.js
+clients/addon/lib/socket.io-client

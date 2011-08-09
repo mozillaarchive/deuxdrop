@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop Transport</title>
+    <script src="../deps/require.js"></script>
+    <script>
+      function sendAddOnMessage(data) {
+        var event = document.createEvent("MessageEvent");
+        event.initMessageEvent('moda-addon-message', false, false, JSON.stringify(data), '*', null,
+                           null, null);
+        window.dispatchEvent(event);
+      }
+
+      function bootstrap(serverHost) {
+        require(
+          {
+            baseUrl: '../deps',
+            paths: {
+              'socket.io': serverHost + '/socket.io/socket.io'
+            }
+          },
+          ['modaTransport'],
+          function (transport) {
+            transport.serverHost = serverHost;
+            sendAddOnMessage({transportLoaded: true});
+          }
+        );
+      }
+
+      window.onerror = function (err) {
+        sendAddOnMessage({'ERROR': err.toString()});
+      };
+
+      function listenForServerHost(evt) {
+        var data = JSON.parse(evt.data);
+        if (data.serverHost) {
+          bootstrap(data.serverHost);
+          window.removeEventListener('moda-content-message', listenForServerHost, false);
+        }
+      }
+
+      window.addEventListener('moda-content-message', listenForServerHost, false);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

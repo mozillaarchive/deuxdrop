@@ -35,7 +35,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*jslint indent: 2, strict: false, plusplus: false */
-/*global define: false, console: false */
+/*global define: false, console: false, window: false, document: false */
 
 // from https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
 // bootstrap the JS env in some browsers that do not have full ES5
@@ -65,13 +65,118 @@ if (!Function.prototype.bind) {
  */
 define(function (require, exports) {
   var q = require('q'),
-      transport = require('modaTransport'),
+      array = require('blade/array'),
+      env = require('env'),
       listeners = {},
       listenerCounter = 0,
       moda = exports,
       convCache = {},
-      peepCache = {},
-      me;
+      userCache = {},
+      chatPerms = {},
+      requestIds = {},
+      requestIdCounter = 0,
+      targetOrigin = window && window.location ? window.location.protocol +
+               '//' + window.location.host : '',
+
+      me, request;
+
+  /**
+   * Matches responses from the serialized message transport to the
+   * requests. If no request ID then it is a broadcast message from
+   * the server.
+   */
+  function handleResponse(requestId, method, response) {
+    if (requestId) {
+      if (requestIds[requestId]) {
+        requestIds[requestId](response);
+        delete requestIds[requestId];
+      }
+    } else {
+      // No request ID means it is a broadcast message.
+      moda.trigger(method, response);
+    }
+  }
+
+  if (env.name === 'browser') {
+    // Make a request via the message transport suitable for web
+    request = function (requestId, method, args) {
+      var data = {
+        kind: 'modaRequest',
+        requestId: requestId,
+        method: method,
+        args: args
+      };
+
+      window.postMessage(JSON.stringify(data), targetOrigin);
+    };
+
+    // Listen to transport messages via postMessage
+    window.addEventListener('message', function (evt) {
+      // Pass data as JSON strings, so that it works in Firefox 5, later
+      // firefoxen can use structured clone objects, but staying away
+      // from that since it is still a bit new.
+      if (evt.origin === targetOrigin && typeof evt.data === 'string' &&
+          evt.data.indexOf('modaResponse') !== -1) {
+
+        var data = JSON.parse(evt.data);
+
+        handleResponse(data.requestId, data.method, data.response);
+      }
+    }, false);
+  } else if (env.name === 'addon') {
+    // Define the request function as using custom messages, due to this
+    // jetpack bug: https://bugzilla.mozilla.org/show_bug.cgi?id=666547,
+    // convert to a postMessage API once it is fixed.
+    request = function (requestId, method, args) {
+      var data = {
+        kind: 'modaRequest',
+        requestId: requestId,
+        method: method,
+        args: args
+      }, event;
+
+//console.log('moda.js moda-addon-message: ' + JSON.stringify(data));
+
+      event = document.createEvent("MessageEvent");
+      event.initMessageEvent('moda-addon-message', false, false, JSON.stringify(data), '*', null,
+                             null, null);
+      window.dispatchEvent(event);
+    };
+
+    window.addEventListener('moda-content-message', function (evt) {
+//console.log('moda-content-message: ' + JSON.stringify(evt.data));
+      var data = JSON.parse(evt.data);
+      handleResponse(data.requestId, data.method, data.response);
+    }, false);
+  }
+
+  /**
+   * Sends a transport request through the correct channel, setting up
+   * the callback-matching for the async transport response.
+   * @param {String} method the name of the method to call on the transport
+   * Arguments between the method and callback args are data args passed
+   * to the transport method.
+   * @param {Function} callback the very last argument to this function. If
+   * the very last argument to this function is a function, then it is meant
+   * to be a callback function, to be called with the transport response.
+   */
+  function transport() {
+    var args = array.to(arguments),
+        method = args.splice(0, 1)[0],
+        requestId = '',
+        callback;
+
+    if (typeof args[args.length - 1] === 'function') {
+      callback = args.splice(args.length - 1, 1)[0];
+    }
+
+    if (method) {
+      requestId = 'id' + (requestIdCounter++);
+      requestIds[requestId] = callback;
+    }
+
+    request(requestId, method, args);
+  }
 
   /**
    * Trigger listeners on an object an any global listeners.
@@ -126,25 +231,30 @@ Peep
 * rejected
 */
 
-  function Peep(obj) {
+  function User(obj) {
+    // If user is already in the cache, return that
+    if (userCache[obj.id]) {
+      return userCache[obj.id];
+    }
+
     this.id = obj.id;
     this.name = obj.name;
     this.pic = obj.pic;
     this.pinned = false;
     this.frecency = 0;
 
-    //TODO: this should start as false
-    this.connected = true;
-
-    this.rejected = false;
+    this.perms = {
+      chat: chatPerms[obj.id]
+    };
 
     // Add the peep to the peepCache
-    if (!peepCache[this.id]) {
-      peepCache[this.id] = this;
+    if (!userCache[this.id]) {
+      userCache[this.id] = this;
     }
+    return this;
   }
 
-  Peep.prototype = {
+  User.prototype = {
     /**
      * Gets the conversations for this user.
      * @param {Function} callback a callback to call when the conversations
@@ -152,7 +262,14 @@ Peep
      * objects.
      */
     getConversations: function (callback) {
-      transport.getPeepConversations(this.id, callback);
+      // Only ask the server if there are chat permissions on the user.
+      if (this.perms.chat) {
+        transport('getPeepConversations', this.id, callback);
+      } else {
+        var d = q.defer();
+        q.when(d.promise, callback);
+        d.resolve([]);
+      }
     }
   };
 
@@ -167,7 +284,7 @@ Peep
 
       // Convert users into instance of peep objects
       users = users.map(function (user) {
-        return new Peep(user);
+        return new User(user);
       });
 
       this.items = users;
@@ -176,7 +293,7 @@ Peep
 
     //Ignore the query for now, use
     //dummy data.
-    transport.users(query, function (users) {
+    transport('users', query, function (users) {
       d.resolve(users);
     });
   }
@@ -205,21 +322,23 @@ Peeps
     this.on = on;
 
     var d = q.defer();
-    q.when(d.promise, function (peeps) {
+    q.when(d.promise, function (users) {
       // Convert peeps into instance of peep objects
-      peeps = peeps.map(function (peep) {
-        return new Peep(peep);
+      users = users.map(function (user) {
+        var peep = new User(user);
+        peep.perms.peep = true;
+        return peep;
       });
 
-      this.items = peeps;
-      trigger(this, 'peepsComplete', [peeps]);
+      this.items = users;
+      trigger(this, 'peepsComplete', [users]);
     }.bind(this));
 
     //Ignore the query for now, use
     //dummy data.
 
-    transport.peeps(query, function (peeps) {
-      d.resolve(peeps);
+    transport('peeps', query, function (users) {
+      d.resolve(users);
     });
   }
 
@@ -229,12 +348,15 @@ Peeps
      * @param {String} peepId
      */
     addPeep: function (peepId, callback) {
-      transport.addPeep(peepId, function (peep) {
-        this.items.push(new Peep(peep));
+      transport('addPeep', peepId, function (user) {
+        var peep = new User(user);
+        peep.perms.peep = true;
+
+        this.items.push(peep);
         this.items.sort(peepSort);
 
         if (callback) {
-          callback(peep);
+          callback(user);
         }
         trigger(this, 'addPeep', arguments);
       }.bind(this));
@@ -252,7 +374,7 @@ Peeps
   function Message(msg) {
     this.convId = msg.convId;
     this.id = msg.id;
-    this.from = peepCache[msg.from];
+    this.from = userCache[msg.from];
     this.text = msg.text;
     this.time = msg.time;
   }
@@ -296,10 +418,10 @@ Conversation
     convCache[id] = this;
 
     // Set up the retrieval of the messages and people.
-    transport.loadConversation(id, function (details) {
+    transport('loadConversation', id, function (details) {
       this.peeps = [];
       details.peepIds.forEach(function (peepId) {
-        this.peeps.push(peepCache[peepId]);
+        this.peeps.push(userCache[peepId]);
       }.bind(this));
 
       this.messages = details.messages.map(function (message) {
@@ -329,13 +451,13 @@ Conversation
     },
 
     sendMessage: function (message) {
-      transport.sendMessage(message);
+      transport('sendMessage', message);
     },
 
     setSeen: function () {
       var message = this.messages.length ? this.messages[this.messages.length - 1] : null;
       if (message) {
-        transport.messageSeen(this.id, message.id);
+        transport('messageSeen', this.id, message.id);
       }
     }
   };
@@ -396,41 +518,11 @@ moda.on({
     delete listeners[listenerId];
   };
 
-  /**
-   * Triggers an on event.
-   */
-  moda.trigger = function (name, data) {
-    var triggered = false,
-        prop, conv, peep;
-
-    // Some messages require updates to cached objects
-    if (name === 'message') {
-      conv = convCache[data.convId];
-
-      // The from field should be a reference to the peepCache.
-      peep = peepCache[data.from];
-      if (!peep) {
-        // Need to fetch the peep and bail out.
-        transport.peep(data.from, function (peepData) {
-          var peep = new Peep(peepData);
-
-          //Re-trigger the event.
-          moda.trigger(name, data);
-        });
-
-        // Bail on this trigger, wait for peep response to re-trigger.
-        return;
-      }
-
-      data.from = peep;
-      if (conv && conv.messages) {
-        conv.messages.push(data);
-      }
-    } else if (name === 'me') {
-      me = new Peep(data);
-    }
-
+  function notifyListeners(name, data) {
     // Cycle through listeners and notify them.
+    var triggered = false,
+        prop;
+
     for (prop in listeners) {
       if (listeners.hasOwnProperty(prop) && listeners[prop][name]) {
         listeners[prop][name](data);
@@ -441,6 +533,95 @@ moda.on({
     if (!triggered) {
       console.log('moda event [' + name + ']: ' + JSON.stringify(data));
     }
+  }
+
+  /**
+   * Triggers an on event.
+   */
+  moda.trigger = function (name, data) {
+    var conv, user;
+
+    // Some messages require updates to cached objects
+    if (name === 'message') {
+      conv = convCache[data.convId];
+
+      // The from field should be a reference to the peepCache.
+      user = userCache[data.from];
+      if (!user) {
+        // Need to fetch the peep and bail out.
+        transport('user', data.from, function (userData) {
+          // temp is used to prevent jslint warning.
+          var temp = new User(userData);
+
+          //Re-trigger the event.
+          moda.trigger(name, data);
+        });
+
+        // Bail on this trigger, wait for peep response to re-trigger.
+        return;
+      }
+
+      data.from = user;
+      if (conv && conv.messages) {
+        conv.messages.push(data);
+      }
+    } else if (name === 'addedYou') {
+      user = userCache[data.id];
+      if (!user) {
+        // Need to fetch the peep and bail out.
+        transport('user', data.id, function (userData) {
+          // temp is used to prevent jslint warning.
+          var temp = new User(userData);
+
+          //Re-trigger the event.
+          moda.trigger(name, data);
+        });
+
+        // Bail on this trigger, wait for peep response to re-trigger.
+        return;
+      }
+      data.user = user;
+    } else if (name === 'signedIn') {
+      me = new User(data);
+
+      // Get list of people we can chat with. Needed before
+      // being able to do useful things with people.
+      transport('chatPerms', function (ids) {
+        if (ids && ids.length) {
+          ids.forEach(function (id) {
+            chatPerms[id] = true;
+          });
+        }
+
+        // Get all the peeps, since notifications need to
+        // know if a person that added you is a peep.
+        moda.peeps({}, {
+          peepsComplete: function () {
+            //Trigger the loading of unseen items.
+            moda.listUnseen();
+
+            notifyListeners(name, data);
+          }
+        });
+      });
+
+      // Return since notification of listeners will not happen
+      // until after the data above is retrieved.
+      return;
+
+    } else if (name === 'chatPermsAdd') {
+      chatPerms[data] = true;
+      user = userCache[data];
+      if (user) {
+        user.perms.chat = true;
+      }
+    }
+
+    notifyListeners(name, data);
+  };
+
+  moda.init = function () {
+    transport('init', null);
   };
 
   /**
@@ -461,6 +642,25 @@ moda.on({
     return new Users(query, on);
   };
 
+  moda.user = function (userId, callback) {
+    var user = userCache[userId],
+        d;
+    if (user) {
+      d = q.defer();
+      q.when(d.promise, callback);
+      d.resolve(user);
+    } else {
+      transport('user', userId, function (userData) {
+        user = new User(userData);
+        callback(user);
+      });
+    }
+  };
+
+  moda.markBulkSeen = function (ids) {
+    transport('markBulkSeen', ids);
+  };
+
   moda.conversation = function (query) {
     // only support by ID filtering
     var conv;
@@ -476,29 +676,35 @@ moda.on({
   };
 
   moda.startConversation = function (args) {
-    transport.startConversation(args);
+    transport('startConversation', args);
   };
 
-  moda.signIn = function (assertion, callback) {
-    return transport.signIn(assertion, callback);
+  moda.signIn = function (assertion) {
+    return transport('signIn', assertion);
   };
 
   moda.signOut = function (callback) {
-    return transport.signOut(callback);
+    return transport('signOut', callback);
   };
 
   moda.listUnseen = function () {
-    return transport.listUnseen(function (unseen) {
+    return transport('listUnseen', function (unseen) {
       // TODO: may want to optimize this display at some point
       // but passing it through the trigger machinery since it
       // has logic to make sure the peep object is loaded for
       // the message senders.
-      var prop, message;
+      var prop, data;
 
       for (prop in unseen) {
         if (unseen.hasOwnProperty(prop)) {
-          message = unseen[prop];
-          moda.trigger('message', message);
+          data = unseen[prop];
+
+          if (prop.indexOf('addedYou-') !== -1) {
+            moda.trigger('addedYou', data);
+          } else {
+            // A message from a conversation.
+            moda.trigger('message', data);
+          }
         }
       }
     });
@@ -509,9 +715,6 @@ moda.on({
    * then it means the user is not signed in, and signIn should be called.
    */
   moda.me = function () {
-    if (!me) {
-      me = transport.me();
-    }
     return me;
   };
 

@@ -546,31 +546,33 @@ if (!navigator.id.getVerifiedEmail || navigator.id._getVerifiedEmailIsShimmed)
   navigator.id.getVerifiedEmail = function(callback) {
     var w = _open_window();
 
-    // clean up a previous channel that never was reaped
-    if (chan) chan.destroy();
-    chan = Channel.build({window: w, origin: ipServer, scope: "mozid"});
+    setTimeout(function () {
+      // clean up a previous channel that never was reaped
+      if (chan) chan.destroy();
+      chan = Channel.build({window: w, origin: ipServer, scope: "mozid"});
 
-    function cleanup() {
-      chan.destroy();
-      chan = undefined;
-      w.close();
-    }
-
-    chan.call({
-      method: "getVerifiedEmail",
-      success: function(rv) {
-        if (callback) {
-          // return the string representation of the JWT, the client is responsible for unpacking it.
-          callback(rv);
-        }
-        cleanup();
-      },
-      error: function(code, msg) {
-        // XXX: we don't make the code and msg available to the user.
-        if (callback) callback(null);
-        cleanup();
+      function cleanup() {
+        chan.destroy();
+        chan = undefined;
+        w.close();
       }
-    });
+
+      chan.call({
+        method: "getVerifiedEmail",
+        success: function(rv) {
+          if (callback) {
+            // return the string representation of the JWT, the client is responsible for unpacking it.
+            callback(rv);
+          }
+          cleanup();
+        },
+        error: function(code, msg) {
+          // XXX: we don't make the code and msg available to the user.
+          if (callback) callback(null);
+          cleanup();
+        }
+      });
+    }, 1000);
   };
 
   // preauthorize a particular email
