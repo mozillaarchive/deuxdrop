@@ -69,7 +69,7 @@ define(
   ) {
 const when = $Q.when;
 
-const LOGFAB = $_logdef.LOGFAB;
+const LOGFAB = exports.LOGFAB = $_logdef.LOGFAB;
 
 function boxPersisted(val) {
   switch (typeof(val)) {
@@ -261,6 +261,11 @@ RedisDbConn.prototype = {
    *
    * XXX Although hbase can do increments, I'm not sure stargate exposes it,
    *  so this might not be totally do-able in an efficient fashion.
+   *
+   * @return[Number]{
+   *   The value after incrementing.  We might need to change this depending
+   *   on hbase.
+   * }
    */
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
@@ -310,6 +315,10 @@ RedisDbConn.prototype = {
   /**
    * XXX unacceptable performance characteristics on redis, non-conformant
    *  as it relates to hbase semantics... all kinds of issues.
+   *
+   * XXX this only exists for `fakefakeserver.js` which is not yet a thing and
+   *  probably may not end up being a thing.  This should ideally just get
+   *  removed.
    */
   XXX_scanTableBatch_rowNames: function(tableName) {
     var deferred = $Q.defer();
@@ -420,7 +429,9 @@ RedisDbConn.prototype = {
         deferred.reject(err);
         return;
       }
-      newValue = Math.max(newValue, parseInt(result));
+      // there may be no existing value
+      if (result != null)
+        newValue = Math.max(newValue, parseInt(result));
       self._conn.zadd(keyName, newValue, objectName, function(err, result) {
           if (err)
             deferred.reject(err);

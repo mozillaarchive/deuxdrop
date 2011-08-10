@@ -322,13 +322,13 @@ IndexedDbConn.prototype = {
     var store = transaction.objectStore(tableName);
     var cellName = rowId + CELL_DELIM + columnName;
     store.get(cellName).onsuccess = function(event) {
-      var result = event.target.result;
+      var result = event.target.result, newVal;
       if (result === undefined)
-        store.add(1, cellName);
+        store.add((newVal = 1), cellName);
       else
-        newVal = store.put(result + 1, cellName);
+        newVal = store.put((newVal = result + 1), cellName);
       }
-      deferred.resolve(event.target.result);
+      deferred.resolve(newVal);
     };
     return deferred.promise;
   },

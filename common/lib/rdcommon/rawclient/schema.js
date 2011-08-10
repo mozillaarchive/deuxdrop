@@ -162,22 +162,4 @@ exports.dbSchemaDef = {
   ],
 };
 
-/**
- * Database table names are exposed for use by `testhelper.js` instances so
- *  they can issue checks on database state that do not make sense to expose
- *  via explicit API's.
- */
-exports._DB_NAMES = {
-  TBL_CONV_DATA: exports.TBL_CONV_DATA,
-  IDX_ALL_CONVS: exports.IDX_ALL_CONVS,
-  IDX_CONV_PEEP_WRITE_INVOLVEMENT: exports.IDX_CONV_PEEP_WRITE_INVOLVEMENT,
-  IDX_CONV_PEEP_RECIP_INVOLVEMENT: exports.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
-  IDX_CONV_PEEP_ANY_INVOLVEMENT: exports.IDX_CONV_PEEP_ANY_INVOLVEMENT,
-
-  TBL_PEEP_DATA: exports.TBL_PEEP_DATA,
-  IDX_PEEP_WRITE_INVOLVEMENT: exports.IDX_PEEP_WRITE_INVOLVEMENT,
-  IDX_PEEP_RECIP_INVOLVEMENT: exports.IDX_PEEP_RECIP_INVOLVEMENT,
-  IDX_PEEP_ANY_INVOLVEMENT: exports.IDX_PEEP_ANY_INVOLVEMENT,
-};
-
 }); // end define

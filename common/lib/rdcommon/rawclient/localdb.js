@@ -79,17 +79,15 @@ const NS_PEEPS = 'peeps',
  *  things in a particularly encrypted form.  This allows us to potentially
  *  save a lot of CPU/power.
  *
- * XXX the below is speculative; we are using our DB abstraction for now and
- *  will ideally implement one that provides the below characteristics.  We
- *  are also writing things without thinking out the SSD ramifications too much
- *  because we are under time pressure.
+ * Our local storage implementation is targeting an IndexedDB-on-LevelDB
+ *  implementation.
  *
- * Local storage implementation will be targeting a LevelDB implementation,
- *  although we will likely be using SQLite initially owing to bindings already
- *  existing.
- *
- * Our implementation is problem domain aware.
- *
+ * Our implementation is problem domain aware to make things more readable and
+ *  because previous efforts (gloda) have suggested the extra abstraction just
+ *  proves confusing or never gets used.  This specifically means that when
+ *  loading a conversation, we have the conversation loading code trigger the
+ *  load of the related contacts, etc. rather than defining a more abstract
+ *  schema or set of helper classes that try and magically do it for us.
  */
 function LocalStore(dbConn, keyring, pubring, _logger) {
   this._log = LOGFAB.localStore(this, _logger, null);
@@ -363,6 +361,25 @@ LocalStore.prototype = {
 
       return clientData;
     });
+  },
+
+  /**
+   * Notification about a new conversation; we check if there are any affected
+   *  conversation queries and if so perform the required contact
+   *  lookup/dependency generation.
+   *
+   * We are notified about conversations once our user is joined to them.
+   */
+  _notifyNewConversation: function(convMeta, cells) {
+    //if (this._notif.checkForInterestedQueries(NS_CONVBLURBS
+  },
+
+  /**
+   * Notification about a new message in a conversation; we trigger updates
+   *  for both blurbs (about message counts) and full conversations (provide
+   *  the message with lookups and deps).
+   */
+  _notifyNewMessage: function(messageType) {
   },
 
   /**

@@ -192,6 +192,9 @@ TestContext.prototype = {
   lazyLogger: function lazyLogger(name) {
     // create the actor
     var actor = new LAZYLOGFAB._actorCons.lazyLogger(name);
+    actor.T = this;
+    actor.RT = this.__testCase.definer._runtimeContext;
+    this._log._named[actor._uniqueName] = actor;
     // set our global to that when we create the logger, it gets linked up...
     // (this happens at the bottom of this file, and the global gets cleared)
     gNextLazyLoggerActor = actor;
@@ -205,6 +208,8 @@ TestContext.prototype = {
     // XXX this is brittle if we add other methods
     actor.event = logger.event.bind(logger);
     actor.value = logger.value.bind(logger);
+    actor.namedValue = logger.namedValue.bind(logger);
+    actor.error = logger.error.bind(logger);
 
     return actor;
   },
@@ -589,7 +594,11 @@ var LAZYLOGFAB = exports.__LAZYLOGFAB = $log.register(null, {
     events: {
       event: {name: true},
       value: {value: true},
-    }
+      namedValue: {name: true, value: true},
+    },
+    errors: {
+      error: {what: $log.EXCEPTION},
+    },
   },
 });
 
@@ -600,6 +609,10 @@ LAZYLOGFAB.lazyLogger._underTest = {
     if (gNextLazyLoggerActor) {
       gNextLazyLoggerActor._logger = logger;
       logger._actor = gNextLazyLoggerActor;
+      if (!currentParent && gNextLazyLoggerActor.RT._loggerStack.length) {
+        currentParent = gNextLazyLoggerActor.RT._loggerStack[
+                          gNextLazyLoggerActor.RT._loggerStack.length - 1];
+      }
       gNextLazyLoggerActor = null;
     }
     return currentParent;

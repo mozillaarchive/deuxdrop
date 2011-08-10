@@ -165,7 +165,7 @@ TestQuerySource.prototype = {
   //////////////////////////////////////////////////////////////////////////////
 };
 
-TD.commonCase('new record', function(T) {
+TD.DISABLED_commonCase('new record', function(T) {
   var eQS = T.actor('testQuerySource', 't');
   var qs;
 
@@ -192,7 +192,7 @@ TD.commonCase('new record', function(T) {
   });
 });
 
-TD.commonCase('deleted record', function(T) {
+TD.DISABLED_commonCase('deleted record', function(T) {
   var eQS = T.actor('testQuerySource', 't');
   var qs;
 
@@ -210,19 +210,19 @@ TD.commonCase('deleted record', function(T) {
   });
 });
 
-TD.commonCase('record movement', function(T) {
+TD.DISABLED_commonCase('record movement', function(T) {
 });
 
-TD.commonCase('record now matches', function(T) {
+TD.DISABLED_commonCase('record now matches', function(T) {
 });
 
-TD.commonCase('record no longer matches', function(T) {
+TD.DISABLED_commonCase('record no longer matches', function(T) {
 });
 
-TD.commonCase('reuse of cached data', function(T) {
+TD.DISABLED_commonCase('reuse of cached data', function(T) {
 });
 
-TD.commonCase('multiple concurrent queries', function(T) {
+TD.DISABLED_commonCase('multiple concurrent queries', function(T) {
 });
 
 

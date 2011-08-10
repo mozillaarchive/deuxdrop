@@ -616,6 +616,11 @@ function boundedCmpObjs(a, b, depthLeft) {
   return true;
 }
 
+/**
+ * @return[Boolean]{
+ *   True when equivalent, false when not equivalent.
+ * }
+ */
 function smartCompareEquiv(a, b, depthLeft) {
   if (typeof(a) !== 'object' || (a == null))
     return a === b;
@@ -726,7 +731,7 @@ LoggestClassMaker.prototype = {
       return this;
     };
     this.testActorProto['_verify_' + name] = function(exp, entry) {
-      return !smartCompareEquiv(exp[1], entry[1], COMPARE_DEPTH);
+      return smartCompareEquiv(exp[1], entry[1], COMPARE_DEPTH);
     };
   },
   /**

@@ -118,6 +118,40 @@
  *   @param[index]{
  *     The view index that provides the ordering
  *   }
+ *
+ *   @param[sliceRange]{
+ *     Eventually used to allow only viewing a subset of an ordered set because
+ *     the set might become large and the UI doesn't need to know about it all
+ *     at once.
+ *   }
+ *
+ *   @param[testFunc @func[
+ *     @args[
+ *       @param[baseCells]{
+ *         The set of hbase-style cells that already exist in the database.
+ *       }
+ *       @param[mutatedCells]{
+ *         The set of hbase-style cells that we are writing to the database.
+ *       }
+ *     ]
+ *     @return[Boolean]{
+ *       Based on the provided cells, should the described item be in this set?
+ *       If access to `queryDef` is required, it should be provided via bind or
+ *       a closure.
+ *     }
+ *   ]]
+ *   @param[cmpFunc @func]{
+ *     @args[
+ *       @param[a LocallyNamedClientData]
+ *       @param[b LocallyNamedClientData]
+ *     ]
+ *     @return[Number]{
+ *       Your general comparison function; return zero if `a` and `b` are equal,
+ *       return less-than-zero if `a` is less than `b`, and greater-than-zero
+ *       otherwise.
+ *     }
+ *   }
+ *
  *   @param[membersByLocal @dictof[
  *     @key[namespace QueryNamespace]
  *     @value[nsMembers @dictof[
@@ -163,7 +197,21 @@
  *         for it.
  *       }
  *     ]]
- *   ]]
+ *   ]]{
+ *     The set of full representation data to send across the wire to moda.  The
+ *     representation is namespace dependent and specialized (read: not the
+ *     database cells).  The map is reset after being sent to the front-side;
+ *     the back-side does not continue to hold onto it.
+ *   }
+ *   @param[dataDelta @dictof[
+ *   ]]{
+ *     Deltas conveying specific changes to affect on the front-side moda
+ *     representations.  For example, if the number of conversations a peep is
+ *     involved in changes, we just send the difference across the wire rather
+ *     than resending the other data about the peep.  This is done both for
+ *     efficiency and because the back-side may no longer have all the
+ *     information the front-side needs/uses when the change occurs.
+ *   }
  * ]]
  * @typedef[QueryNamespace @oneof[
  *   NS_PEEPS
@@ -311,7 +359,6 @@ var bsearchForInsert = exports._bsearchForInsert =
  */
 function NotificationKing(store, _logger) {
   this._log = LOGFAB.notificationKing(this, _logger);
-  this._newishMessagesByConvId = {};
   this._store = store;
 
   this._highPrefixNum = 0;
@@ -338,7 +385,7 @@ NotificationKing.prototype = {
    */
   registerNewQuerySource: function(verboseUniqueName, listener) {
     var prefixNum, prefixId;
-    // XXX the prefix stuff is
+    // XXX the prefix stuff is currently moot, may be used again soon...
     // we can have up to 17576 active query sources with this mechanism.  this
     //  is less chosen for active query sources and more to avoid reuse of
     //  identifiers to simplify testing situations.  not a biggie to change.
@@ -366,6 +413,7 @@ NotificationKing.prototype = {
    *  tracked queries should be killed.
    */
   unregisterQuerySource: function(verboseUniqueName) {
+    // XXX implement (with tests tracking dead and ensuring no notifications)
   },
 
   /**
@@ -501,6 +549,8 @@ NotificationKing.prototype = {
   //  of messages into conversations is unique within our system.
 
   /**
+   * XXX speculative, probably should be nuked or moved
+   *
    * Track a message that appears to be new but we won't know for sure until we
    *  are done with our update phase (because it might be marked read by a later
    *  replica block).
@@ -515,6 +565,8 @@ NotificationKing.prototype = {
   },
 
   /**
+   * XXX speculative, probably should be nuked or moved
+   *
    * Moot potential new message events in the given conversation.
    */
   mootNewForMessages: function(convId, firstUnreadMessage) {
@@ -533,6 +585,22 @@ NotificationKing.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Generic Notifications from LocalStore
+
+  /**
+   * Find out if there are any queries that care about the item in question
+   *  so the caller can determine if it needs to perform additional lookups
+   *  in order to generate a proper notification.
+   */
+  checkForInterestedQueries: function(namespace) {
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      var queryHandles = querySource.queryHandlesByNS[namespace];
+
+      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+        var queryHandle = queryHandles[iQuery];
+      }
+    }
+  },
 
   /**
    * Find queries potentially affected by a change.
@@ -609,7 +677,8 @@ NotificationKing.prototype = {
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
-        if (queryHandle.testFunc(baseCells, mutatedCells)) {
+        if (queryHandle.testFunc(queryHandle.queryDef,
+                                 baseCells, mutatedCells)) {
           // - find the splice point
           var insertIdx = bsearchForInsert(arr, seekVal, cmpfunc);
 

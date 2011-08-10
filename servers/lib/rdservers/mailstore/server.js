@@ -474,9 +474,6 @@ exports.ClientServicingConnection = ClientServicingConnection;
 exports.dbSchemaDef = $ustore.dbSchemaDef;
 
 exports.makeServerDef = function(serverConfig) {
-  // initialize our db
-  $ustore.initializeUserTable(serverConfig.db);
-
   serverConfig.userConnTracker = new UserConnectionsTracker();
 
   return {

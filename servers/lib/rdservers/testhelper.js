@@ -75,8 +75,10 @@ var $signup_server = require('rdservers/signup/server'),
     $mailsender_local_api = require('rdservers/mailsender/localapi');
 
 var $rawclient_api = require('rdcommon/rawclient/api'),
+    $client_schema = require('rdcommon/rawclient/schema'),
     $client_localdb = require('rdcommon/rawclient/localdb'),
-    $client_notif = require('rdcommon/rawclient/notifking');
+    $client_notif = require('rdcommon/rawclient/notifking'),
+    $client_tasks = require('rdcommon/rawclient/lstasks');
 
 
 var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
@@ -491,7 +493,7 @@ var TestClientActorMixins = {
     this.expect_localStoreContactCheck(userRootKey, otherRootKey, true);
 
     var self = this;
-    when(storeDb.getRowCell($client_localdb._DB_NAMES.TBL_PEEP_DATA,
+    when(storeDb.getRowCell($client_schema.TBL_PEEP_DATA,
                             otherRootKey, "d:oident"),
          function(val) {
            self._logger.localStoreContactCheck(userRootKey, otherRootKey,
@@ -1234,6 +1236,7 @@ exports.TESTHELPER = {
   LOGFAB_DEPS: [LOGFAB,
     $authconn.LOGFAB, $gendb.LOGFAB,
     $rawclient_api.LOGFAB, $client_localdb.LOGFAB, $client_notif.LOGFAB,
+    $client_tasks.LOGFAB,
 
     $signup_server.LOGFAB,
     $maildrop_server.LOGFAB,
