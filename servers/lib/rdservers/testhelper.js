@@ -905,6 +905,15 @@ var TestClientActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // General Expectations
+
+  expectLocalStoreTaskToRun: function(taskName) {
+    var eTask = this.T.actor(taskName, [this.__name], null, this);
+    this.RT.reportActiveActorThisStep(eTask);
+    eTask.expectOnly__die();
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 var TestServerActorMixins = {
@@ -1170,12 +1179,6 @@ var TestServerActorMixins = {
 
   // XXX this needs more thought about who to attribute it to
   expectServerTaskToRun: function(taskName) {
-    var eTask = this.T.actor(taskName, [this.__name], null, this);
-    this.RT.reportActiveActorThisStep(eTask);
-    eTask.expectOnly__die();
-  },
-
-  expectLocalStoreTaskToRun: function(taskName) {
     var eTask = this.T.actor(taskName, [this.__name], null, this);
     this.RT.reportActiveActorThisStep(eTask);
     eTask.expectOnly__die();

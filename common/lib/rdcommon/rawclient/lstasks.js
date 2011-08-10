@@ -45,6 +45,7 @@ define(
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
+    'rdcommon/messages/generator',
     './schema',
     'module',
     'exports'
@@ -54,10 +55,12 @@ define(
     $log,
     $task, $taskerrors,
     $pubident, $pubring,
+    $msg_gen,
     $lss,
     $module,
     exports
   ) {
+const when = $Q.when;
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
 });
@@ -247,7 +250,8 @@ var ConvInviteTask = exports.ConvInviteTask = taskMaster.defineTask({
       cells["d:p" + creatorPubring.getPublicKeyFor('messaging', 'tellBox')] =
         creatorPubring.rootPublicKey;
       var self = this;
-      return when(this.store._db.putCells(TBL_CONV_DATA, convMeta.id, cells),
+      return when(this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id,
+                                          cells),
                   function() {
                     self.store._log.newConversation(convMeta.id);
                   });
@@ -317,17 +321,17 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
 
       var self = this;
       return $Q.join(
-        this.store._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
+        this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id, writeCells),
         // - create peep conversation involvement index entry
         this.store._db.updateIndexValue(
-          TBL_CONV_DATA, IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
+          $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
           convMeta.id, timestamp),
         // - touch peep activity entry
         this.store._db.maximizeIndexValue(
-          TBL_PEEP_DATA, IDX_PEEP_ANY_INVOLVEMENT, '',
+          $lss.TBL_PEEP_DATA, $lss.IDX_PEEP_ANY_INVOLVEMENT, '',
           inviteeRootKey, timestamp),
         // - boost their involved conversation count
-        this.store._db.incrementCell(TBL_PEEP_DATA, inviteeRootKey,
+        this.store._db.incrementCell($lss.TBL_PEEP_DATA, inviteeRootKey,
                                      'd:nconvs', 1),
         function() {
           self.store._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
@@ -388,7 +392,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
       var timestamp = fanoutEnv.receivedAt;
 
       var promises = [
-        this.store._db.putCells(TBL_CONV_DATA, convMeta.id, writeCells),
+        this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id, writeCells),
         // -- conversation indices
         // - all conversation index
         // - per-peep conversation indices
@@ -410,11 +414,12 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
       if (!authorIsOurUser) {
         // - peep indices
         promises.push(this.store._db.maximizeIndexValue(
-          TBL_PEEP_DATA, IDX_PEEP_WRITE_INVOLVEMENT, '',
+          $lss.TBL_PEEP_DATA, $lss.IDX_PEEP_WRITE_INVOLVEMENT, '',
           authorRootKey, timestamp));
         // - boost unread message count
         promises.push(this.store._db.incrementCell(
-          TBL_PEEP_DATA, authorRootKey, 'd:nunread', authorIsOurUser ? 0 : 1));
+          $lss.TBL_PEEP_DATA, authorRootKey, 'd:nunread',
+          authorIsOurUser ? 0 : 1));
       }
 
       // XXX notifications

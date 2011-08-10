@@ -78,6 +78,12 @@ function TestStep(_log, kind, descBits, actors, testFunc, isBoring, groupName) {
     this.log.group(groupName);
 }
 TestStep.prototype = {
+  toString: function() {
+    return '[TestStep]';
+  },
+  toJSON: function() {
+    return {type: 'TestStep'};
+  },
 };
 
 /**
@@ -116,6 +122,13 @@ function TestContext(testCase, permutationIndex) {
   this._actors = [];
 }
 TestContext.prototype = {
+  toString: function() {
+    return '[TestContext]';
+  },
+  toJSON: function() {
+    return {type: 'TestContext'};
+  },
+
   /**
    * A testing stand-in for a player in the test that does stuff; for example, a
    *  client or a server.  An actor correlates with and is associated with
@@ -430,6 +443,12 @@ function TestCase(definer, kind, desc, setupFunc) {
   this.context = null;
 }
 TestCase.prototype = {
+  toString: function() {
+    return '[TestCase]';
+  },
+  toJSON: function() {
+    return {type: 'TestCase'};
+  },
 };
 
 function TestDefiner(modname, logfabs, testHelpers, tags) {
@@ -443,6 +462,13 @@ function TestDefiner(modname, logfabs, testHelpers, tags) {
   this.__testCases = [];
 }
 TestDefiner.prototype = {
+  toString: function() {
+    return '[TestDefine]';
+  },
+  toJSON: function() {
+    return {type: 'TestDefiner'};
+  },
+
   _newCase: function(kind, desc, setupFunc) {
     var testCase = new TestCase(this, kind, desc, setupFunc);
     this.__testCases.push(testCase);

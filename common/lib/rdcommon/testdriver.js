@@ -77,6 +77,13 @@ function TestRuntimeContext() {
   this._liveActors = null;
 }
 TestRuntimeContext.prototype = {
+  toString: function() {
+    return '[TestRuntimeContext]';
+  },
+  toJSON: function() {
+    return {type: 'TestRuntimeContext'};
+  },
+
   /**
    * Push a logger onto the logger stack; the top of the stack becomes the
    *  parent logger for loggers that do not have an explicit parent logger at
@@ -179,6 +186,13 @@ function TestDefinerRunner(testDefiner, superDebug) {
   this._logBadThingsToLogger = null;
 }
 TestDefinerRunner.prototype = {
+  toString: function() {
+    return '[TestDefinerRunner]';
+  },
+  toJSON: function() {
+    return {type: 'TestDefinerRunner'};
+  },
+
   /**
    * Asynchronously run a test step, non-rejecting promise-style.
    *
