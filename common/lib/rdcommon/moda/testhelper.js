@@ -96,7 +96,7 @@ var $moda_api = require('rdcommon/moda/api'),
  */
 function markListIntoObj(list, obj, value) {
   for (var i = 0; i < list.length; i++) {
-    obj[list[i].id] = value;
+    obj[list[i]] = value;
   }
 }
 
@@ -117,6 +117,8 @@ var DeltaHelper = exports.DeltaHelper = {
 
   _PEEP_QUERY_BY_TO_CMPFUNC: {
     alphabet: function(a, b) {
+      if (!a.name)
+        throw new Error("A is weird: " + JSON.stringify(a));
       return a.name.localeCompare(b.name);
     },
     any: function(a, b) {
@@ -188,6 +190,7 @@ var TestModaActorMixins = {
 
     /** Dynamically updated list of contacts (by owning client). */
     self._dynamicContacts = [];
+    self._dynamicContactInfos = [];
     self._contactMetaInfoByName = {};
 
     self._dynamicPeepQueries = [];
@@ -233,12 +236,8 @@ var TestModaActorMixins = {
     return this._contactMetaInfoByName[contactTestClient.__name];
   },
 
-  _getAllContactInfos: function() {
-    var infos = [];
-    for (var key in this._contactMetaInfoByName) {
-      infos.push(this._contactMetaInfoByName[key]);
-    }
-    return infos;
+  _getDynContactInfos: function() {
+    return this._dynamicContactInfos.concat();
   },
 
 
@@ -256,11 +255,13 @@ var TestModaActorMixins = {
     this._dynamicContacts.push(other);
     var newCinfo = this._contactMetaInfoByName[other.__name] = {
       rootKey: other._rawClient.rootPublicKey,
+      // in our test we always use the testing name as the displayName
       name: other.__name,
       any: nowSeq,
       write: nowSeq,
       recip: nowSeq,
     };
+    this._dynamicContactInfos.push(newCinfo);
 
     // -- generate expectations about peep query deltas
     var queries = this._dynamicPeepQueries;
@@ -341,6 +342,7 @@ var TestModaActorMixins = {
     // this happens prior to actually performing the splice on the set's items
     var iRemoved = index, highRemoved = index + howMany, rootKey;
     for (; iRemoved < highRemoved; iRemoved++) {
+      // (this is dealing with the moda 'user' visible representations)
       rootKey = this._remapLocalToFullName(liveSet._ns,
                                            liveSet.items[iRemoved]._localName);
       delta.preAnno[rootKey] = -1;
@@ -348,6 +350,7 @@ var TestModaActorMixins = {
 
     // - additions
     for (var iAdded = 0; iAdded < addedItems.length; iAdded++) {
+      // (this is dealing with the wire rep)
       rootKey = this._remapLocalToFullName(liveSet._ns,
                                            addedItems[iAdded]._localName);
       delta.postAnno[rootKey] = 1;
@@ -396,7 +399,7 @@ var TestModaActorMixins = {
       // get and order the contact infos for generating the state; hold onto
       //  this.
       var delta = DeltaHelper.peepExpDelta_base(
-                    lqt, self._getAllContactInfos(), query.by);
+                    lqt, self._getDynContactInfos(), query.by);
       self.expect_queryCompleted(lqt.__name, delta);
 
       lqt._liveset = self._bridge.queryPeeps(query, self, lqt);

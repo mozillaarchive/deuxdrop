@@ -706,15 +706,23 @@ LocalStore.prototype = {
   },
 
   _cmpfunc_peepContactName: function(a, b) {
+    return a.indexValues[$lss.IDX_PEEP_CONTACT_NAME].localeCompare(
+             b.indexValues[$lss.IDX_PEEP_CONTACT_NAME]);
   },
 
   _cmpfunc_peepAnyInvolvement: function(a, b) {
+    return a.indexValues[$lss.IDX_PEEP_ANY_INVOLVEMENT] -
+             b.indexValues[$lss.IDX_PEEP_ANY_INVOLVEMENT];
   },
 
   _cmpfunc_peepRecipInvolvement: function(a, b) {
+    return a.indexValues[$lss.IDX_PEEP_RECIP_INVOLVEMENT] -
+             b.indexValues[$lss.IDX_PEEP_RECIP_INVOLVEMENT];
   },
 
   _cmpfunc_peepWriteInvolvement: function(a, b) {
+    return a.indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT] -
+             b.indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT];
   },
 
   /**
@@ -733,15 +741,19 @@ LocalStore.prototype = {
       case 'alphabet':
         idx = $lss.IDX_PEEP_CONTACT_NAME;
         scanFunc = 'scanStringIndex';
+        queryHandle.cmpFunc = this._cmpfunc_peepContactName;
         break;
       case 'any':
         idx = $lss.IDX_PEEP_ANY_INVOLVEMENT;
+        queryHandle.cmpFunc = this._cmpfunc_peepAnyInvolvement;
         break;
       case 'recip':
         idx = $lss.IDX_PEEP_RECIP_INVOLVEMENT;
+        queryHandle.cmpFunc = this._cmpfunc_peepRecipInvolvement;
         break;
       case 'write':
         idx = $lss.IDX_PEEP_WRITE_INVOLVEMENT;
+        queryHandle.cmpFunc = this._cmpfunc_peepWriteInvolvement;
         break;
       default:
         throw new Error("Unsupported ordering: " + queryHandle.queryDef.by);
@@ -763,7 +775,7 @@ LocalStore.prototype = {
     }
     return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, indexParam,
                                    null, null, null, null, null, null),
-      this._fetchAndReportPeepBlurbsById.bind(this, queryHandle));
+      this._fetchAndReportPeepBlurbsById.bind(this, queryHandle, idx));
   },
 
   _notifyNewContact: function(peepRootKey, cells, mutatedCells) {
@@ -790,21 +802,33 @@ LocalStore.prototype = {
       numConvs: mutatedCells['d:nconvs'] || cells['d:nconvs'],
     };
 
+    // XXX either we should not be fully populating or item added should
+    //  eliminate the un-needed index values.
+    var indexValues = {};
+    indexValues[$lss.IDX_PEEP_CONTACT_NAME] = ourPoco.displayName;
+    // XXX we probably need to perform a lookup to populate these, since
+    //  the values should already exist, etc.
+    indexValues[$lss.IDX_PEEP_ANY_INVOLVEMENT] = 0;
+    indexValues[$lss.IDX_PEEP_RECIP_INVOLVEMENT] = 0;
+    indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT] = 0;
+
     // -- generate the notification
     this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
-                                   cells, mutatedCells, null,
+                                   cells, mutatedCells, indexValues,
                                    blurbRep, ourRep);
   },
 
-  _fetchAndReportPeepBlurbsById: function(queryHandle, peepRootKeys) {
+  _fetchAndReportPeepBlurbsById: function(queryHandle, usingIndex,
+                                          peepRootKeys) {
     this._log.fetchPeepBlurbs(queryHandle.uniqueId, peepRootKeys);
     var deferred = $Q.defer();
-    var iPeep = 0, self = this,
+    var iPeep = 0, stride = 1, self = this,
         viewItems = [], clientDataItems = null;
 
-    if (queryHandle.namespace === NS_PEEPS) {
+    if (usingIndex) {
       queryHandle.items = clientDataItems = [];
       queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+      stride = 2;
     }
     function getNextMaybeGot() {
       while (iPeep < peepRootKeys.length) {
@@ -819,7 +843,7 @@ LocalStore.prototype = {
             viewItems.push(clientData.localName);
             if (clientDataItems)
               clientDataItems.push(clientData);
-            iPeep++;
+            iPeep += stride;
             continue;
           }
         }
@@ -830,7 +854,7 @@ LocalStore.prototype = {
           viewItems.push(resultClientData.localName);
           if (clientDataItems)
             clientDataItems.push(resultClientData);
-          iPeep++;
+          iPeep += stride;
           getNextMaybeGot();
         });
       }

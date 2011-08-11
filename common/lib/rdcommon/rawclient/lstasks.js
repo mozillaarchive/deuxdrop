@@ -189,13 +189,14 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
     },
     generate_notifications: function() {
       if (this.isContactAdd)
-        this.store._notifyNewContact(this.peepPubring.rootPublicKey,
-                                     this.cells, this.writeCells);
+        return this.store._notifyNewContact(this.peepPubring.rootPublicKey,
+                                            this.cells, this.writeCells);
       else if (this.isContact)
-        this.store._notif.namespaceItemModified(NS_PEEPS,
+        return this.store._notif.namespaceItemModified(NS_PEEPS,
                                                 this.peepPubring.rootPublicKey,
                                                 this.cells, this.writeCells,
                                                 'd:nconvs');
+      return null;
     },
     all_done: function() {
       return this.peepPubring;

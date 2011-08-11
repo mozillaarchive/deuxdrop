@@ -491,6 +491,7 @@ NotificationKing.prototype = {
     if (isInitial)
       this._log.queryFill_end(queryHandle.namespace, queryHandle.uniqueId);
 
+    this._log.sendQueryResults(queryHandle.uniqueId, msg);
     queryHandle.owner.listener.send(msg);
   },
 
@@ -691,48 +692,52 @@ NotificationKing.prototype = {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
-
       var localName = null, clientData = null;
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
-        if (queryHandle.testFunc(queryHandle.queryDef,
-                                 baseCells, mutatedCells)) {
-          // - ensure client data exists
-          if (!clientData) {
-            localName = "" + (querySource.nextUniqueIdAlloc++);
-            clientData = {
-              localName: localName,
-              fullName: fullName,
-              count: 1,
-              data: backData,
-              indexValues: indexValues,
-              // XXX dep propagation (we should either pass in the names or
-              //  have the caller explicitly speak to us about a specific
-              //  querysource so we can just consume existing clientdata
-              //  refeerences)
-              deps: null,
-            };
-          }
-          else {
-            clientData.count++;
-          }
-          queryHandle.membersByLocal[namespace][localName] = clientData;
-          queryHandle.membersByFull[namespace][fullName] = clientData;
+        if (!queryHandle.testFunc(baseCells, mutatedCells))
+          continue;
 
-          // - find the splice point
-          var insertIdx = bsearchForInsert(queryHandle.items, clientData,
-                                           cmpfunc);
+        // - ensure client data exists
+        if (!clientData) {
+          localName = "" + (querySource.nextUniqueIdAlloc++);
+          clientData = {
+            localName: localName,
+            fullName: fullName,
+            count: 1,
+            data: backData,
+            indexValues: indexValues,
+            // XXX dep propagation (we should either pass in the names or
+            //  have the caller explicitly speak to us about a specific
+            //  querysource so we can just consume existing clientdata
+            //  refeerences)
+            deps: null,
+          };
+        }
+        else {
+          clientData.count++;
+        }
+        queryHandle.membersByLocal[namespace][localName] = clientData;
+        queryHandle.membersByFull[namespace][fullName] = clientData;
 
-          // - generate a splice
-          queryHandle.splices.push(
-            { index: insertIdx, howMany: 0, items: [localName]});
-          queryHandle.items.splice(insertIdx, 0, clientData);
+        queryHandle.dataMap[namespace][localName] = frontData;
 
-          if (queryHandle.pending !== PENDING_NONE) {
-            queryHandle.pending = PENDING_NOTIF;
-            querySource.pending.push(queryHandle);
-          }
+        // - find the splice point
+        var insertIdx = bsearchForInsert(queryHandle.items, clientData,
+                                         queryHandle.cmpFunc);
+
+        // - generate a splice
+        queryHandle.splices.push(
+          { index: insertIdx, howMany: 0, items: [localName]});
+        queryHandle.items.splice(insertIdx, 0, clientData);
+
+        this._log.nsItemAdded(queryHandle.uniqueId, fullName,
+                              clientData.count, insertIdx, queryHandle.pending);
+
+        if (queryHandle.pending === PENDING_NONE) {
+          queryHandle.pending = PENDING_NOTIF;
+          querySource.pending.push(queryHandle);
         }
       }
     }
@@ -769,6 +774,15 @@ NotificationKing.prototype = {
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   notificationKing: {
+    events: {
+      nsItemAdded: {queryId: true, fullName: true},
+      sendQueryResults: {queryId: true},
+    },
+    TEST_ONLY_events: {
+      nsItemAdded: {clientDataCount: false, spliceIndex: false,
+                    prePending: false},
+      sendQueryResults: {msg: false},
+    },
     asyncJobs: {
       queryFill: {namespace: true, uniqueId: true},
     },
