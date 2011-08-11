@@ -362,19 +362,34 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
   name: 'convMessage',
   args: ['store', 'convMeta', 'fanoutEnv', 'cells'],
   steps: {
-    all: function() {
+    lookup_peep_data: function() {
       var fanoutEnv = this.fanoutEnv, cells = this.cells;
       var authorTellKey = fanoutEnv.sentBy;
       var authorCellName = "d:p" + authorTellKey;
       if (!cells.hasOwnProperty(authorCellName))
         throw new $taskerror.UnauthorizedUserDataLeakError();
-      var authorPubring =
-        $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-          cells[authorCellName]);
-      var authorRootKey = authorPubring.rootPublicKey;
-
+      var authorRootKey = cells[authorCellName];
       var authorIsOurUser = (authorRootKey ===
                              this.store._keyring.rootPublicKey);
+      if (authorIsOurUser)
+        return this.store._pubring;
+      return this.store._db.getRowCell($lss.TBL_PEEP_DATA,
+                                       authorRootKey, 'd:sident');
+    },
+    got_peep_data: function(authorSelfIdentOrPubring) {
+      var fanoutEnv = this.fanoutEnv, cells = this.cells,
+          convMeta = this.convMeta;
+      var authorPubring, authorIsOurUser;
+      if (authorSelfIdentOrPubring instanceof $pubring.PersonPubring) {
+        authorPubring = authorSelfIdentOrPubring;
+        authorIsOurUser = true;
+      }
+      else {
+        authorPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                          authorSelfIdentOrPubring);
+        authorIsOurUser = false;
+      }
+      var authorRootKey = authorPubring.rootPublicKey;
 
       // - decrypt conversation envelope
       var convEnv = $msg_gen.assertGetConversationHumanMessageEnvelope(
@@ -412,6 +427,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
 
       // - all recipients stuff
       var recipRootKeys = [];
+      var authorCellName = "d:p" + fanoutEnv.sentBy;
       for (var key in cells) {
         if (!/^d:p/.test(key) || key === authorCellName)
           continue;

@@ -556,6 +556,7 @@ NotificationKing.prototype = {
    *  replica block).
    */
   trackNewishMessage: function(convId, msgIndex, msgData) {
+    return;
     var newishForConv;
     if (!this._newishMessagesByConvId.hasOwnProperty(convId))
       newishForConv = this._newishMessagesByConvId[convId] = [];
@@ -570,6 +571,7 @@ NotificationKing.prototype = {
    * Moot potential new message events in the given conversation.
    */
   mootNewForMessages: function(convId, firstUnreadMessage) {
+    return;
     if (!this._newishMessagesByConvId.hasOwnProperty(convId))
       return;
     var newishForConv = this._newishMessagesByConvId[convId];
