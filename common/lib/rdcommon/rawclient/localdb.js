@@ -725,16 +725,6 @@ LocalStore.prototype = {
              b.indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT];
   },
 
-  /**
-   * Issue a live query on a (sub)set of peeps.  We care about changes to the
-   *  peeps in the set after we return it, plus changes to the membership of
-   *  the set.
-   *
-   * @args[
-   *   @param[by @oneof['alphabet' 'any' 'recip' 'write']]
-   *   @param[filter @oneof[null 'pinned']]
-   * ]
-   */
   queryAndWatchPeepBlurbs: function(queryHandle) {
     var idx, scanFunc = 'scanIndex', indexParam;
     switch (queryHandle.queryDef.by) {
@@ -857,9 +847,9 @@ LocalStore.prototype = {
                                          clientData),
                     function(resultClientData) {
           if (usingIndex) {
-            if (!clientData.indexValues)
-              clientData.indexValues = {};
-            clientData.indexValues[usingIndex] = peepRootKeys[iPeep + 1];
+            if (!resultClientData.indexValues)
+              resultClientData.indexValues = {};
+            resultClientData.indexValues[usingIndex] = peepRootKeys[iPeep + 1];
           }
           viewItems.push(resultClientData.localName);
           if (clientDataItems)
