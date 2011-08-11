@@ -44,7 +44,8 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
-    'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
+    'rdcommon/crypto/keyops', 'rdcommon/crypto/pubring',
+    'rdcommon/identities/pubident',
     'rdcommon/messages/generator',
     './schema',
     'module',
@@ -54,7 +55,8 @@ define(
     $Q,
     $log,
     $task, $taskerrors,
-    $pubident, $pubring,
+    $keyops, $pubring,
+    $pubident,
     $msg_gen,
     $lss,
     $module,
@@ -275,6 +277,11 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
                     "uncool inviter: " + fanoutEnv.sentBy);
 
       var inviterRootKey = this.cells[inviterCellName];
+
+      // we may be the inviter; avoid hitting disk in that case.
+      if (inviterRootKey === this.store._pubring.rootPublicKey)
+        return this.store._pubring;
+
       // PeepNameTrackTask may retrieve data from this row too, it might make
       //  sense to rejigger out interaction with it so we only issue one read.
       return this.store._db.getRowCell($lss.TBL_PEEP_DATA,
@@ -283,20 +290,23 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
     },
     got_inviter_selfident: function(inviterSelfIdent) {
       var inviterPubring = this.inviterPubring =
+        // we may have fastpathed if we are the inviter...
+        (inviterSelfIdent instanceof $pubring.PersonPubring) ?
+        inviterSelfIdent :
         $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
           inviterSelfIdent);
 
       // - unsbox the attestation
       var signedAttestation = $keyops.secretBoxOpen(
-                                fanoutEnv.payload, fanoutEnv.nonce,
+                                this.fanoutEnv.payload, this.fanoutEnv.nonce,
                                 this.convMeta.bodySharedSecretKey);
       // - validate the attestation
       var oident = $msg_gen.assertCheckConversationInviteAttestation(
                      signedAttestation, inviterPubring, this.convMeta.id,
-                     fanoutEnv.receivedAt);
+                     this.fanoutEnv.receivedAt);
 
       return new PeepNameTrackTask(
-        { store: this.store, oident: oident, othPubring: inviterPubring },
+        { store: this.store, peepOident: oident, othPubring: inviterPubring },
         this.log);
     },
     // PeepNameTrackTask returns the pubring from the oident to be nice.
@@ -321,11 +331,12 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
 
       var self = this;
       return $Q.join(
-        this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id, writeCells),
+        this.store._db.putCells($lss.TBL_CONV_DATA, this.convMeta.id,
+                                writeCells),
         // - create peep conversation involvement index entry
         this.store._db.updateIndexValue(
           $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
-          convMeta.id, timestamp),
+          this.convMeta.id, timestamp),
         // - touch peep activity entry
         this.store._db.maximizeIndexValue(
           $lss.TBL_PEEP_DATA, $lss.IDX_PEEP_ANY_INVOLVEMENT, '',
@@ -334,7 +345,8 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
         this.store._db.incrementCell($lss.TBL_PEEP_DATA, inviteeRootKey,
                                      'd:nconvs', 1),
         function() {
-          self.store._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
+          self.store._log.conversationMessage(self.convMeta.id,
+                                              self.fanoutEnv.nonce);
         }
       );
     },
@@ -351,7 +363,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
   args: ['store', 'convMeta', 'fanoutEnv', 'cells'],
   steps: {
     all: function() {
-      var fanoutEnv = this.fanoutEnv;
+      var fanoutEnv = this.fanoutEnv, cells = this.cells;
       var authorTellKey = fanoutEnv.sentBy;
       var authorCellName = "d:p" + authorTellKey;
       if (!cells.hasOwnProperty(authorCellName))

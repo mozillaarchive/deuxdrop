@@ -617,7 +617,7 @@ LocalStore.prototype = {
         var convMeta = cells["d:meta"];
 
         var arg = {
-          store: this,
+          store: self,
           convMeta: convMeta,
           fanoutEnv: fanoutEnv,
           cells: cells,

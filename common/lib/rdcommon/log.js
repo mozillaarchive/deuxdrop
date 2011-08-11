@@ -259,6 +259,9 @@ var ThingProto = exports.ThingProto = {
   set digitalName(val) {
     this.__diginame = val;
   },
+  toString: function() {
+    return '[Thing:' + this.__type + ']';
+  },
   toJSON: function() {
     return {
       type: this.__type,
@@ -299,6 +302,9 @@ function NOP() {
  */
 var DummyLogProtoBase = {
   _kids: undefined,
+  toString: function() {
+    return '[Log]';
+  },
   toJSON: function() {
     // will this actually break JSON.stringify or just cause it to not use us?
     throw new Error("I WAS NOT PLANNING ON BEING SERIALIZED");
@@ -406,6 +412,9 @@ var TestLogProtoBase = {
 const DIED_EVENTNAME = '(died)', DIED_EXP = [DIED_EVENTNAME];
 
 var TestActorProtoBase = {
+  toString: function() {
+    return '[Actor]';
+  },
   toJSON: function() {
     return {
       actorIdent: this.__defName,

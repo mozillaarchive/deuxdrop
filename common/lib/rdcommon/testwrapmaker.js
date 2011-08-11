@@ -73,6 +73,12 @@ function WrapMaker(wrapDef) {
   this.protish = null;
 }
 WrapMaker.prototype = {
+  toString: function() {
+    return '[WrapMaker]';
+  },
+  toJSON: function() {
+    return {type: 'WrapMaker'};
+  },
   defineHoldPool: function(poolName) {
     const holdPoolAttr = "__hpool_" + poolName,
           holdEnabledAttr = "__hen_" + poolName;

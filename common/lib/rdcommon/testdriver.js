@@ -513,7 +513,13 @@ console.error("   resolving!");
     }
     catch (ex) {
       console.error("JSON problem:", ex.message, ex.stack, ex);
-      console.error($util.inspect(dumpObj, false, 12));
+      try {
+        detectAndReportJsonCycles(definer._log);
+        //console.error($util.inspect(dumpObj, false, 8 /* 12 */));
+      }
+      catch(exx) {
+        console.error("exx y", exx);
+      }
     }
     console.error("##### LOGGEST-TEST-RUN-END #####");
     //console.error("AND FOR THE HUMANS...");
@@ -521,6 +527,44 @@ console.error("   resolving!");
   }
 };
 
+
+function detectAndReportJsonCycles(obj) {
+
+  var objStack = [];
+  var traverseStack = [];
+  function recurse(what) {
+    if (what == null || typeof(what) !== 'object')
+      return;
+
+    // - cycle?
+    if (objStack.indexOf(what) !== -1) {
+      console.error("CYCLE with traversal", traverseStack);
+      return;
+    }
+    objStack.push(what);
+    traverseStack.push(".");
+    var level = traverseStack.length - 1;
+
+    var use;
+    if ("toJSON" in what)
+      use = what.toJSON();
+    else
+      use = what;
+
+    for (var key in use) {
+      // JSON traversal is shallow; nb: we could use ES5 instead of this hack
+      if (!use.hasOwnProperty(key))
+        continue;
+      var val = use[key];
+      traverseStack[level] = key;
+      recurse(val);
+    }
+
+    objStack.pop();
+    traverseStack.pop();
+  }
+  recurse(obj);
+}
 
 /**
  * In the event require()ing a test module fails, we want to report this

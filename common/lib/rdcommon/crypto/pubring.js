@@ -71,6 +71,7 @@ const VERSION = 1;
 function PersonPubring(persistedBlob) {
   this.data = persistedBlob;
 }
+exports.PersonPubring = PersonPubring;
 PersonPubring.prototype = {
   toString: function() {
     return '[PersonPubring]';

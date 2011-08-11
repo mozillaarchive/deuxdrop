@@ -55,6 +55,13 @@ define(
 const MAGIC_EARLY_RETURN = {};
 
 var TaskProto = exports.TaskProto = {
+  toString: function() {
+    return '[Task:' + this.__name + ']';
+  },
+  toJSON: function() {
+    return {type: 'Task:' + this.__name};
+  },
+
   run: function() {
     this.__deferred = $Q.defer();
     this.__runNextStep(this.arg);
@@ -233,6 +240,13 @@ function TaskMaster(mod, logfab) {
   this.taskConstructorsByType = {};
 }
 TaskMaster.prototype = {
+  toString: function() {
+    return '[TaskMaster]';
+  },
+  toJSON: function() {
+    return {type: 'TaskMaster'};
+  },
+
   _commonDefineTask: function(taskDef, useTaskProto) {
     var stepName;
 
@@ -273,6 +287,7 @@ TaskMaster.prototype = {
 
     var proto = {
       __proto__: useTaskProto,
+      __name: taskDef.name,
       __steps: steps,
       __cleanup: ("cleanup" in taskDef ? taskDef.cleanup : null),
     };
