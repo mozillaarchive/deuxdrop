@@ -137,6 +137,11 @@ TD.commonCase('moda basics', function(T) {
   // -- peep final state queries.
   var lqFinalAllPeeps = moda_a.do_queryPeeps("allPeepsFinal", {by: 'alphabet'});
 
+
+  // --- conversations
+  T.group("A live-updating conversation query");
+
+  T.group("cleanup");
 });
 
 }); // end define

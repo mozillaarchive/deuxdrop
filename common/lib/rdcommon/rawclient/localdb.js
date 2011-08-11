@@ -840,6 +840,11 @@ LocalStore.prototype = {
                                                           NS_CONVBLURBS,
                                                           peepRootKey))) {
           if (clientData.data) {
+            if (usingIndex) {
+              if (!clientData.indexValues)
+                clientData.indexValues = {};
+              clientData.indexValues[usingIndex] = peepRootKeys[iPeep + 1];
+            }
             viewItems.push(clientData.localName);
             if (clientDataItems)
               clientDataItems.push(clientData);
@@ -851,6 +856,11 @@ LocalStore.prototype = {
         return when(self._fetchPeepBlurb(queryHandle, peepRootKeys[iPeep],
                                          clientData),
                     function(resultClientData) {
+          if (usingIndex) {
+            if (!clientData.indexValues)
+              clientData.indexValues = {};
+            clientData.indexValues[usingIndex] = peepRootKeys[iPeep + 1];
+          }
           viewItems.push(resultClientData.localName);
           if (clientDataItems)
             clientDataItems.push(resultClientData);

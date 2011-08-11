@@ -447,6 +447,18 @@ ModaBridge.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Data Queries
 
+  /**
+   * Issue a live query on a (sub)set of peeps.  We care about changes to the
+   *  peeps in the set after we return it, plus changes to the membership of
+   *  the set.
+   *
+   * @args[
+   *   @param[query @dict[
+   *     @key[by @oneof['alphabet' 'any' 'recip' 'write']]
+   *     @key[filter @oneof[null 'pinned']]
+   *   ]
+   * ]
+   */
   queryPeeps: function(query, listener, data) {
     var handle = this._nextHandle++;
     var liveset = new LiveOrderedSet(handle, NS_PEEPS, query, listener, data);
