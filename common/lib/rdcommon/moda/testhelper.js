@@ -130,11 +130,14 @@ var DeltaHelper = exports.DeltaHelper = {
     },
   },
 
+  /**
+   * Generate the delta rep for the initial result set of a peep query.
+   */
   peepExpDelta_base: function(lqt, cinfos, queryBy) {
     var delta = this.makeEmptyDelta();
 
     lqt._cinfos = cinfos;
-    lqt._sorter = this._PEEP_QUERY_BY_TO_CMPFUNC[query.by];
+    lqt._sorter = this._PEEP_QUERY_BY_TO_CMPFUNC[queryBy];
     cinfos.sort(lqt._sorter);
     var rootKeys = cinfos.map(this._PEEP_QUERY_KEYFUNC);
     markListIntoObj(rootKeys, delta.state, null);
@@ -266,9 +269,10 @@ var TestModaActorMixins = {
 
       // in the case of an addition we expect a positioned splice followed
       //  by a completion notification
-      var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCInfo);
+      var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCinfo);
 
-      self.expect_queryCompleted(lqt.__name, deltaRep);
+      this.RT.reportActiveActorThisStep(this);
+      this.expect_queryCompleted(lqt.__name, deltaRep);
     }
   },
 
@@ -313,7 +317,7 @@ var TestModaActorMixins = {
   onItemsModified: function(items, liveSet) {
     var lqt = liveSet.data, delta;
     if (!lqt._pendingDelta)
-      delta = lqt._pendingDelta = deltaHelper.makeEmptyDelta();
+      delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
     else
       delta = lqt._pendingDelta;
 
@@ -329,7 +333,7 @@ var TestModaActorMixins = {
   onSplice: function(index, howMany, addedItems, liveSet) {
     var lqt = liveSet.data, delta;
     if (!lqt._pendingDelta)
-      delta = lqt._pendingDelta = deltaHelper.makeEmptyDelta();
+      delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
     else
       delta = lqt._pendingDelta;
 
@@ -358,7 +362,7 @@ var TestModaActorMixins = {
   onCompleted: function(liveSet) {
     var lqt = liveSet.data, delta, rootKey;
     if (!lqt._pendingDelta)
-      delta = lqt._pendingDelta = deltaHelper.makeEmptyDelta();
+      delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
     else
       delta = lqt._pendingDelta;
 
@@ -369,7 +373,7 @@ var TestModaActorMixins = {
       delta.state[rootKey] = null;
     }
 
-    this._logger.queryCompleted(liveSet.data.__name, rootKeys);
+    this._logger.queryCompleted(liveSet.data.__name, delta);
     lqt._pendingDelta = null;
   },
 

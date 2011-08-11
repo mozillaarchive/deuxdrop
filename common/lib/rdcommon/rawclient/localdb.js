@@ -213,6 +213,15 @@ LocalStore.prototype = {
     return serialized;
   },
 
+  /**
+   * Notification from the client that the server has conveyed that we are
+   *  caught up, and, accordingly, we can release any notifications we were
+   *  batching up.
+   */
+  replicaCaughtUp: function() {
+    this._notif.updatePhaseDoneReleaseNotifications();
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Notifications
 
@@ -740,6 +749,7 @@ LocalStore.prototype = {
     queryHandle.index = idx;
 
     switch (queryHandle.queryDef.filter) {
+      case undefined:
       case null:
         indexParam = '';
         queryHandle.testFunc = this._testfunc_peepContactNoFilter;
@@ -756,14 +766,46 @@ LocalStore.prototype = {
       this._fetchAndReportPeepBlurbsById.bind(this, queryHandle));
   },
 
+  _notifyNewContact: function(peepRootKey, cells, mutatedCells) {
+    // -- bail if no one cares
+    if (!this._notif.checkForInterestedQueries(NS_PEEPS, cells, mutatedCells))
+      return;
+
+    // -- normalize the cells into the blurb rep
+    // XXX much of this could probably be refactored to avoid duplication
+    //  between us an _fetchPeepBlurb.
+    var ourRep = {
+      oident: mutatedCells['d:oident'] || cells['d:oident'] || null,
+      sident: mutatedCells['d:sident'] || cells['d:sident'],
+    };
+
+    var ourPoco = ourRep.oident ?
+      $pubident.peekOtherPersonIdentNOVERIFY(ourRep.oident).localPoco : null;
+    var selfPoco =
+      $pubident.peekPersonSelfIdentNOVERIFY(ourRep.sident).poco;
+    var blurbRep = {
+      ourPoco: ourPoco,
+      selfPoco: selfPoco,
+      numUnread: mutatedCells['d:nunread'] || cells['d:nunread'],
+      numConvs: mutatedCells['d:nconvs'] || cells['d:nconvs'],
+    };
+
+    // -- generate the notification
+    this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
+                                   cells, mutatedCells, null,
+                                   blurbRep, ourRep);
+  },
+
   _fetchAndReportPeepBlurbsById: function(queryHandle, peepRootKeys) {
     this._log.fetchPeepBlurbs(queryHandle.uniqueId, peepRootKeys);
     var deferred = $Q.defer();
     var iPeep = 0, self = this,
-        viewItems = [];
+        viewItems = [], clientDataItems = null;
 
-    if (queryHandle.namespace === NS_PEEPS)
+    if (queryHandle.namespace === NS_PEEPS) {
+      queryHandle.items = clientDataItems = [];
       queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+    }
     function getNextMaybeGot() {
       while (iPeep < peepRootKeys.length) {
         var peepRootKey = peepRootKeys[iPeep], clientData;
@@ -775,6 +817,8 @@ LocalStore.prototype = {
                                                           peepRootKey))) {
           if (clientData.data) {
             viewItems.push(clientData.localName);
+            if (clientDataItems)
+              clientDataItems.push(clientData);
             iPeep++;
             continue;
           }
@@ -784,6 +828,8 @@ LocalStore.prototype = {
                                          clientData),
                     function(resultClientData) {
           viewItems.push(resultClientData.localName);
+          if (clientDataItems)
+            clientDataItems.push(resultClientData);
           iPeep++;
           getNextMaybeGot();
         });

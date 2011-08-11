@@ -189,9 +189,8 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
     },
     generate_notifications: function() {
       if (this.isContactAdd)
-        this.store._notif.namespaceItemAdded(NS_PEEPS,
-                                             this.peepPubring.rootPublicKey,
-                                             this.cells, this.writeCells);
+        this.store._notifyNewContact(this.peepPubring.rootPublicKey,
+                                     this.cells, this.writeCells);
       else if (this.isContact)
         this.store._notif.namespaceItemModified(NS_PEEPS,
                                                 this.peepPubring.rootPublicKey,

@@ -56,6 +56,9 @@
  *     maps for safety purposes.
  *   }
  *   @key[queryHandlesByNS QueryHandlesByNS]
+ *   @key[pending @listof[QueryHandle]]{
+ *     The set of queries that have pending data to be sent.
+ *   }
  * ]]
  *
  * @typedef[LocallyNamedClientData @dict[
@@ -123,6 +126,9 @@
  *     Eventually used to allow only viewing a subset of an ordered set because
  *     the set might become large and the UI doesn't need to know about it all
  *     at once.
+ *   }
+ *   @param[items @listof[LocallyNamedClientData]]{
+ *     The items in the view in their sorted order.
  *   }
  *
  *   @param[testFunc @func[
@@ -404,6 +410,7 @@ NotificationKing.prototype = {
       prefix: prefixId,
       nextUniqueIdAlloc: 0,
       queryHandlesByNS: makeEmptyListsByNS(),
+      pending: [],
     };
     return querySource;
   },
@@ -438,6 +445,7 @@ NotificationKing.prototype = {
         low: null,
         high: null,
       },
+      items: null,
       testFunc: funcThatJustReturnsFalse,
       cmpFunc: funcThatJustReturnsZero,
       membersByFull: makeEmptyMapsByNS(),
@@ -593,15 +601,19 @@ NotificationKing.prototype = {
    *  so the caller can determine if it needs to perform additional lookups
    *  in order to generate a proper notification.
    */
-  checkForInterestedQueries: function(namespace) {
+  checkForInterestedQueries: function(namespace, baseCells, mutatedCells) {
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
+        if (queryHandle.testFunc(baseCells, mutatedCells))
+          return true;
       }
     }
+
+    return false;
   },
 
   /**
@@ -630,18 +642,13 @@ NotificationKing.prototype = {
    * - When we first connect to the server until we work through our backlog.
    */
   updatePhaseDoneReleaseNotifications: function() {
-    var store = this._store;
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
 
-    // -- generate new message notifications
-    for (var convId in this._newishMessagesByConvId) {
-      var newishForConv = this._newishMessagesByConvId[convId];
-
-      var msgDataItems = [];
-      for (var i = 0; i < newishForConv.length; i++) {
-        msgDataItems.push(newishForConv[i].data);
+      while (querySource.pending.length) {
+        var queryHandle = querySource.pending.pop();
+        this.sendQueryResults(queryHandle);
       }
-
-      store.__notifyNewMessagesInConversation(convId, msgDataItems);
     }
   },
 
@@ -669,23 +676,63 @@ NotificationKing.prototype = {
    *     only used if there is a query against the index.  Once used, we
    *     track the
    *   }
+   *   @param[frontData]{
+   *     The client-side representation of the data.
+   *   }
+   *   @param[backData]{
+   *     The back-side representation of the data;
+   *   }
    * ]
    */
-  namespaceItemAdded: function(namespace, fullName, baseCells, mutatedCells,
-                               indexValues) {
+  namespaceItemAdded: function(namespace, fullName,
+                               baseCells, mutatedCells, indexValues,
+                               frontData, backData) {
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
+
+
+      var localName = null, clientData = null;
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
         if (queryHandle.testFunc(queryHandle.queryDef,
                                  baseCells, mutatedCells)) {
+          // - ensure client data exists
+          if (!clientData) {
+            localName = "" + (querySource.nextUniqueIdAlloc++);
+            clientData = {
+              localName: localName,
+              fullName: fullName,
+              count: 1,
+              data: backData,
+              indexValues: indexValues,
+              // XXX dep propagation (we should either pass in the names or
+              //  have the caller explicitly speak to us about a specific
+              //  querysource so we can just consume existing clientdata
+              //  refeerences)
+              deps: null,
+            };
+          }
+          else {
+            clientData.count++;
+          }
+          queryHandle.membersByLocal[namespace][localName] = clientData;
+          queryHandle.membersByFull[namespace][fullName] = clientData;
+
           // - find the splice point
-          var insertIdx = bsearchForInsert(arr, seekVal, cmpfunc);
+          var insertIdx = bsearchForInsert(queryHandle.items, clientData,
+                                           cmpfunc);
 
           // - generate a splice
+          queryHandle.splices.push(
+            { index: insertIdx, howMany: 0, items: [localName]});
+          queryHandle.items.splice(insertIdx, 0, clientData);
 
+          if (queryHandle.pending !== PENDING_NONE) {
+            queryHandle.pending = PENDING_NOTIF;
+            querySource.pending.push(queryHandle);
+          }
         }
       }
     }

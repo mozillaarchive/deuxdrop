@@ -385,6 +385,7 @@ RawClientAPI.prototype = {
 
   _replicaCaughtUp: function() {
     this._log.replicaCaughtUp();
+    this.store.replicaCaughtUp();
   },
 
   //////////////////////////////////////////////////////////////////////////////
