@@ -176,7 +176,7 @@ IndexedDbConn.prototype = {
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_ONLY);
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -191,7 +191,7 @@ IndexedDbConn.prototype = {
   boolcheckRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_ONLY);
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -206,7 +206,7 @@ IndexedDbConn.prototype = {
   assertBoolcheckRowCell: function(tableName, rowId, columnName, exClass) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_ONLY);
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -311,7 +311,7 @@ IndexedDbConn.prototype = {
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
     this._log.incrementCell(tableName, rowId, columnName, delta);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -327,7 +327,6 @@ IndexedDbConn.prototype = {
         store.add((newVal = 1), cellName);
       else
         newVal = store.put((newVal = result + 1), cellName);
-      }
       deferred.resolve(newVal);
     };
     return deferred.promise;
@@ -461,7 +460,7 @@ IndexedDbConn.prototype = {
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
     var aggrName = tableName + INDEX_DELIM + indexName;
-    var transaction = this._db.transaction([aggrName]
+    var transaction = this._db.transaction([aggrName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -484,7 +483,7 @@ IndexedDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -500,7 +499,6 @@ IndexedDbConn.prototype = {
         store.add(newValue, cellName);
       else
         newVal = store.put(Math.max(existing, newValue), cellName);
-      }
       deferred.resolve(event.target.result);
     };
     return deferred.promise;
@@ -510,7 +508,7 @@ IndexedDbConn.prototype = {
   // String-Value Indices
   //
   // Same as the numeric-value indices; these only exist because of our redis
-  //  impl and this 
+  //  impl and this
 
   updateStringIndexValue: null,
   scanStringIndex: null,

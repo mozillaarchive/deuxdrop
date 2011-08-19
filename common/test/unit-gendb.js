@@ -45,7 +45,7 @@ define(
     'rdcommon/log',
     'rdcommon/testcontext',
     // XXX HARDCODING THE DATABASE IS OBVIOUSLY DUBIOUS AND LOUD
-    'rdservers/gendb/redis',
+    'rdservers/gendb/indexeddb',
     'module',
     'exports'
   ],
