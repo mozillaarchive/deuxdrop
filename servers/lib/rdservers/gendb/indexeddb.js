@@ -43,6 +43,14 @@
  *  IndexedDB-on-SQLite is likely to be worse and we are fine with that.
  **/
 
+/**
+ * LIMITATIONS for jetpack use:
+ * Right now IndexedDB is not exposed to chrome code, see this bug:
+ * https://bugzilla.mozilla.org/show_bug.cgi?id=587797
+ * There is a "@mozilla.org/dom/indexeddb/manager;1" exposed, but
+ * it only gives macro usage stat and ability to clear all for a given URI.
+ */
+
 define(
   [
     'q',

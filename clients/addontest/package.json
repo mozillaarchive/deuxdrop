@@ -1,8 +1,9 @@
 {
-  "name": "addontest",
-  "fullName": "addontest",
-  "description": "a basic add-on",
-  "author": "",
-  "license": "MPL 1.1/GPL 2.0/LGPL 2.1",
-  "version": "0.1"
+    "name": "addontest", 
+    "license": "MPL 1.1/GPL 2.0/LGPL 2.1", 
+    "author": "", 
+    "version": "0.1", 
+    "fullName": "addontest", 
+    "id": "jid1-R0LwNEMhBCacbQ", 
+    "description": "a basic add-on"
 }

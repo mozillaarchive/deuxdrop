@@ -5,3 +5,5 @@ clients/addon/lib/modaTransport.js
 clients/addon/lib/q.js
 clients/addon/lib/socket.io.js
 clients/addon/lib/socket.io-client
+
+clients/addontest/lib
