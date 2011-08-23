@@ -1,0 +1,518 @@
+* {
+  margin: 0;
+  padding: 0;
+
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+}
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, Sans-serif;
+  font-size: 12px;
+  line-height: 21px;
+  color: #222;
+  overflow: hidden;
+  min-width: 320px;
+}
+
+a {
+  color: #2EA4FF;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  height: 24px;
+  padding: 0 10px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #e6e6e6 #bbb #bbb #e6e6e6;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  cursor: pointer;
+
+  -webkit-border-radius: 2px;
+     -moz-border-radius: 2px;
+          border-radius: 2px;
+
+  background-image: -moz-linear-gradient(top, #fafafa 0%, #f2f2f2 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fafafa), color-stop(100%, #f2f2f2));
+}
+
+.hidden {
+  display: none;
+}
+
+/* Used by card.js to hide inputs on other cards
+  so that mobile firefox does not do the up/down arrow
+  controls over the screen.
+*/
+.inputHidden {
+  visibility: hidden;
+}
+
+#header {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 41px;
+  z-index: 100;
+  overflow: hidden;
+  background-color: #fff;
+  padding: 10px;
+  border-bottom: 1px solid #e6e6e6;
+  border-top: 1px solid #e6e6e6;
+  margin-top: -1px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 20px;
+  background: -moz-linear-gradient(top, #fefefe, #e6e6e6);
+  background: -webkit-gradient(linear, left top, left bottom, from(#fefefe), to(#e6e6e6));
+}
+
+.mblArrowButtonHead {
+  position: absolute;
+  left: 0;
+}
+.mblArrowButtonBody {
+  position: absolute;
+  left: 10px;
+}
+
+.mblArrowButtonNeck {
+  position: absolute;
+  left: 0;
+}
+
+.mblArrowButtonText {
+  color: #777777;
+  font-size: 16px;
+}
+
+#notify {
+  display: none;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 20px;
+  height: 20px;
+  line-height: 16px;
+  border: 1px solid red;
+  color: red;
+}
+
+#notify.active {
+  display: block;
+}
+
+#cardContainer {
+  position: relative;
+  top: 40px;
+  left: 0;
+  overflow: hidden;
+}
+
+#cards {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition-property: left;
+  transition-duration: 300ms;
+  transition-timing-function: linear;
+  -moz-transition-property: left;
+  -moz-transition-duration: 300ms;
+  -moz-transition-timing-function: linear;
+  -webkit-transition-property: left;
+  -webkit-transition-duration: 300ms;
+  -webkit-transition-timing-function: linear;
+  -o-transition-property: left;
+  -o-transition-duration: 300ms;
+  -otransition-timing-function: linear;
+
+  /* To trigger hardward acceleration for webkit:
+     http://www.html5rocks.com/en/tutorials/speed/quick/#toc-hwaccel
+     May need to remove */
+  -webkit-transform: translateZ(0);
+}
+
+.card {
+  float: left;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.scroller {
+}
+
+a.item {
+  display: block;
+  position: relative;
+  background-color: #fff;
+  padding: 10px;
+  border-bottom: 1px solid #e6e6e6;
+  border-top: 1px solid #e6e6e6;
+  margin-top: -1px;
+  cursor: pointer;
+  font-size: 20px;
+
+  background-image: -moz-linear-gradient(top, #fff 0%, #fafafa 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fff), color-stop(100%, #fafafa));
+}
+
+a.item:hover,
+a.item.selected {
+  border-bottom: 1px solid #BFD5DE;
+  border-top: 1px solid #BFD5DE;
+  z-index: 100;
+  position: relative;
+
+  background-image: -moz-linear-gradient(top, #EDF2F5 0%, #E6EDF0 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #EDF2F5), color-stop(100%, #E6EDF0));
+}
+
+a.item.block {
+  float: left;
+  width: 65px;
+  height: 65px;
+  margin: 20px;
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 10px;
+}
+
+.tileImage {
+  width: 24px;
+  height: 24px;
+}
+
+.tileName.notifications {
+  font-size: smaller;
+}
+
+.notificationCount {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background-color: red;
+  color: white;
+  padding: 0 2px;
+
+  -webkit-border-radius: 5px;
+     -moz-border-radius: 5px;
+          border-radius: 5px;
+}
+
+.peepInfoPic {
+  width: 48px;
+  height: 48px;
+}
+
+
+.conversationMessages {
+  list-style: none;
+  margin: 0 10px;
+}
+
+
+.newConversationNotifications {
+  display: block;
+  clear: both;
+}
+
+.newConversationScroller {
+  overflow-y: hidden;
+  overflow-x: auto;
+  height: 180px;
+}
+
+.compose {
+  padding: 10px 10px 41px 10px;
+  height: 22px;
+
+  -webkit-box-sizing: content-box;
+     -moz-box-sizing: content-box;
+          box-sizing: content-box;
+}
+
+.compose textarea {
+  width: 100%;
+  height: 20px;
+  line-height: 20px;
+}
+
+.compose input[type="text"] {
+  width: 100%;
+}
+
+/* START chat bubble styles */
+
+  .bubble {
+    position: relative;
+    margin: 40px 20px;
+    box-sizing: border-box;
+  }
+  .bubble.right {
+    text-align: right;
+  }
+  .chat-bubble-arrow-border {
+    border-color: transparent transparent #c4c4c4 transparent;
+    border-style: solid;
+    border-width: 10px;
+    height:0;
+    width:0;
+    position:absolute;
+    top:-20px;
+    left:30px;
+  }
+  .chat-bubble-arrow {
+    border-color: transparent transparent #f2f2f2 transparent;
+    border-style: solid;
+    border-width: 10px;
+    height:0;
+    width:0;
+    position:absolute;
+    top:-19px;
+    left:30px;
+  }
+  .sender {
+    display: block;
+    text-decoration: none;
+    position: absolute;
+    z-index: 1;
+    cursor: pointer;
+  }
+
+  a.sender:hover {
+    text-decoration: none;
+  }
+
+  .bubble.right .sender {
+    right: -20px;
+  }
+  .bubble.left .sender {
+    left: -20px;
+  }
+  span.avatar {
+    width: 52px;
+    height: 52px;
+    border: 1px solid #888;
+    display: inline-block;
+    border-radius: 2px;
+    -moz-box-shadow:0 0 5px #888888;
+    -webkit-box-shadow:0 0 5px #888888;
+  }
+  img.avatar {
+    margin: 1px;
+    width: 48px;
+    height: 48px;
+  }
+  span.name {
+    color: #0066dd;
+    font-size: 11pt;
+    vertical-align: top;
+  }
+  .body {
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+
+    position: relative;
+    top: 20px;
+    padding: 15px 40px 30px 40px;
+    min-width: 200px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+    display: inline-block;
+    border-radius: 5px;
+    color: #111;
+    background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
+    background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
+  }
+
+  .meta {
+    position: absolute;
+    bottom: 5px;
+    font-size: 8pt;
+    color: #777;
+  }
+
+  .left .meta {
+    left: 35px;
+  }
+
+  .right .meta {
+    right: 35px;
+  }
+
+  .peepConversations .meta {
+    bottom: 10px;
+    right: 10px;
+  }
+
+/* END chat bubble styles */
+
+
+
+
+.card .newConversation {
+  float: left;
+  position: relative;
+  margin: 10px;
+  padding: 10px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+  display: inline-block;
+  width: 180px;
+  height: 160px;
+  border-radius: 5px;
+  color: #111;
+  background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
+}
+
+.newConversation span.avatar {
+  float: left;
+  margin-right: 10px;
+  width: 28px;
+  height: 28px;
+}
+
+.newConversation .newConversationPeep {
+  color: #2EA4FF;
+}
+
+.newConversation img.avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.newConversationText {
+  display: block;
+}
+
+.newConversationTime {
+  display: block;
+  color: #777;
+  font-size: smaller;
+}
+
+
+
+
+
+/*
+    hbox & vbox
+*/
+
+.hbox {
+	display: -webkit-box;
+	-webkit-box-orient: horizontal;
+	-webkit-box-align: stretch;
+
+	display: -moz-box;
+	-moz-box-orient: horizontal;
+	-moz-box-align: stretch;
+
+	display: box;
+	box-orient: horizontal;
+	box-align: stretch;
+
+	width: 100%;
+}
+
+.hbox > * {
+	-webkit-box-flex: 0;
+	-moz-box-flex: 0;
+	box-flex: 0;
+	display: block;
+}
+
+.vbox {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-box-align: stretch;
+
+	display: -moz-box;
+	-moz-box-orient: vertical;
+	-moz-box-align: stretch;
+
+	display: box;
+	box-orient: vertical;
+	box-align: stretch;
+}
+
+.vbox > * {
+	-webkit-box-flex: 0;
+	-moz-box-flex: 0;
+	box-flex: 0;
+	display: block;
+}
+
+.spacer {
+	-webkit-box-flex: 1;
+	-moz-box-flex: 1;
+	box-flex: 1;
+}
+
+.reverse {
+	-webkit-box-direction: reverse;
+	-moz-box-direction: reverse;
+	box-direction: reverse;
+}
+
+.boxFlex0 {
+	-webkit-box-flex: 0;
+	-moz-box-flex: 0;
+	box-flex: 0;
+}
+
+.boxFlex1, .boxFlex {
+	-webkit-box-flex: 1;
+	-moz-box-flex: 1;
+	box-flex: 1;
+}
+
+.boxFlex2 {
+	-webkit-box-flex: 2;
+	-moz-box-flex: 2;
+	box-flex: 2;
+}
+
+.boxGroup1 {
+	-webkit-box-flex-group: 1;
+	-moz-box-flex-group: 1;
+	box-flex-group: 1;
+}
+
+.boxGroup2 {
+	-webkit-box-flex-group: 2;
+	-moz-box-flex-group: 2;
+	box-flex-group: 2;
+}
+
+.start {
+	-webkit-box-pack: start;
+	-moz-box-pack: start;
+	box-pack: start;
+}
+
+.end {
+	-webkit-box-pack: end;
+	-moz-box-pack: end;
+	box-pack: end;
+}
+
+.center {
+	-webkit-box-pack: center;
+	-moz-box-pack: center;
+	box-pack: center;
+}

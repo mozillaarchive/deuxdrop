@@ -36,7 +36,7 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
       // Set to the correct server host.
       serverHost = 'http://127.0.0.1:8888',
 
-      url = data.url('web/firefox/index.html'),
+      url = data.url('addon/index.html'),
       aboutUrl = data.url('content/about.html'),
       transportUrl = data.url('web/firefox/transport.html'),
       redirectorUrl = data.url('content/redirector.js'),
@@ -57,11 +57,14 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
     "nsINavBookmarksService"
   );
 
+  function log(msg) {
+    dump(msg + '\n');
+  }
 
   //Uses Irakli's jetpack-protocol to register about:deuxdrop, but
   //concerned the url will not update correctly for state info with
   //about: URLs
-  handler = protocol.about('deuxdrop', {
+  handler = protocol.about('dd', {
     onRequest: function (request, response) {
       response.uri = aboutUrl;
     }
@@ -84,7 +87,7 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
 */
 
     pageMod.PageMod({
-      include: ['about:deuxdrop'],
+      include: ['about:dd'],
       contentScriptWhen: 'start',
       contentScriptFile: redirectorUrl,
       onAttach: function onAttach(worker) {
@@ -94,6 +97,7 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
       }
     });
 
+log('SETTING UP PAGE MOD');
     pageMod.PageMod({
       include: [url],
       contentScriptWhen: 'start',
@@ -127,6 +131,7 @@ function (exports,   self,   pageMod,    pageWorkers,   chrome,
         // Listen to messages in the UI and send them to the transport via
         // the pageWorker.
         worker.on('message', function (message) {
+log('RECEIVED UI MESSAGE: ' + JSON.stringify(message));
           if (pageWorkerReady) {
             pageWorker.postMessage(message);
           } else {
