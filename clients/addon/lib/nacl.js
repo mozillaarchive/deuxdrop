@@ -66,6 +66,9 @@ $unload.when(function() {
   NACL.close();
 });
 
+////////////////////////////////////////////////////////////////////////////////
+// Strings, Types
+
 const pustr = $ctypes.unsigned_char.ptr,
       Sizey = $ctypes.unsigned_long_long;
 
@@ -88,7 +91,9 @@ function BinStrToJSStr(ctypesBinStr, offset, length) {
 }
 
 /**
- * Convert a utf8-encoded string stored in a ctypes rep to a JS string rep.
+ * Convert a *null-terminated* utf8-encoded string stored in a ctypes rep to a
+ *  JS string rep.  You need to make sure you allocated space for an put a nul
+ *  in!
  */
 function Utf8StrToJSStr(ctypesUtf8Str, offset) {
   if (offset)
@@ -108,9 +113,20 @@ function JSStrToBinStr(jsStr, offset) {
   return binStr;
 }
 
+/**
+ * Convert a standard utf-16 JS string into a ctypes 8-bit utf-8 encoded string.
+ */
+function JSStrToUtf8Str(jsStr) {
+  return $ctypes.unsigned_char.array()(jsStr);
+}
+
 // XXX we really want to expose friendly symbols instead of requiring this
 //  absurdity...
-const BOX_IMPL = "_curve25519xsalsa20poly1305_ref";
+const SIGN_IMPL = '_edwards25519sha512batch_ref',
+      BOX_IMPL = "_curve25519xsalsa20poly1305_ref";
+
+////////////////////////////////////////////////////////////////////////////////
+// Custom Exceptions
 
 function BadBoxError(msg) {
   this.message = msg;
@@ -120,6 +136,18 @@ BadBoxError.prototype = {
   __proto__: Error.prototype,
  name: 'BadBoxError',
 };
+
+function BadSignatureError(msg) {
+  this.message = msg;
+}
+exports.BadSignatureError = BadSignatureError;
+BadSignatureError.prototype = {
+  __proto__: Error.prototype,
+ name: 'BadSignatureError',
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Random Data Support
 
 let randombytes = NACL.declare("randombytes",
                                $ctypes.default_abi,
@@ -134,6 +162,128 @@ function random_byte_getter(howmany) {
     return BinStrToJSStr(arr, 0, howmany);
   };
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Signing
+
+
+const crypto_sign_SECRETKEYBYTES = 64,
+      crypto_sign_PUBLICKEYBYTES = 32,
+      crypto_sign_BYTES = 64;
+
+const SignPublicKeyBstr = ustr_t(crypto_sign_PUBLICKEYBYTES),
+      SignSecretKeyBstr = ustr_t(crypto_sign_SECRETKEYBYTES),
+      SignMessageBstr = pustr,
+      SignSignedMessageBstr = pustr;
+
+let crypto_sign_keypair = NACL.declare("crypto_sign" + SIGN_IMPL + "_keypair",
+                                      $ctypes.default_abi,
+                                      $ctypes.int,
+                                      SignPublicKeyBstr,
+                                      SignSecretKeyBstr);
+
+exports.sign_keypair = function() {
+  let pk = SignPublicKeyBstr(),
+      sk = SignSecretKeyBstr();
+
+  if (crypto_sign_keypair(pk, sk) !== 0)
+    throw new BadSignatureError("inexplicably failed to create keypair");
+
+  return {
+    sk: BinStrToJSStr(sk, 0, crypto_sign_SECRETKEYBYTES),
+    pk: BinStrToJSStr(pk, 0, crypto_sign_PUBLICKEYBYTES),
+  };
+};
+
+let crypto_sign = NACL.declare("crypto_sign" + SIGN_IMPL,
+                               $ctypes.default_abi,
+                               $ctypes.int,
+                               SignSignedMessageBstr,
+                               Sizey.ptr,
+                               SignMessageBstr,
+                               Sizey,
+                               SignSecretKeyBstr);
+
+exports.sign = function(jsm, sk) {
+  if (sk.length !== crypto_sign_SECRETKEYBYTES)
+    throw new BadSignatureError("incorrect secret-key length");
+
+  let m = JSStrToBinStr(jsm, 0), m_len = m.length;
+  let sm = alloc_ustr(m_len + crypto_sign_BYTES);
+
+  let sm_len = Sizey();
+  if (crypto_sign(sm, sm_len.address(), m, m_len, JSStrToBinStr(sk, 0)) !== 0)
+    throw new BadSignatureError("inexplicably failed to sign message");
+
+  return BinStrToJSStr(sm, 0, sm_len.address().contents);
+};
+
+exports.sign_utf8 = function(jsm, sk) {
+  if (sk.length !== crypto_sign_SECRETKEYBYTES)
+    throw new BadSignatureError("incorrect secret-key length");
+
+  let m = JSStrToUtf8Str(jsm, 0), m_len = m.length - 1; //eat nul
+  let sm = alloc_ustr(m_len + crypto_sign_BYTES);
+
+  let sm_len = Sizey();
+  if (crypto_sign(sm, sm_len.address(), m, m_len, JSStrToBinStr(sk, 0)) !== 0)
+    throw new BadSignatureError("inexplicably failed to sign message");
+  return BinStrToJSStr(sm, 0, sm_len.address().contents);
+};
+
+let crypto_sign_open = NACL.declare("crypto_sign" + SIGN_IMPL + "_open",
+                                    $ctypes.default_abi,
+                                    $ctypes.int,
+                                    SignMessageBstr,
+                                    Sizey.ptr,
+                                    SignMessageBstr,
+                                    Sizey,
+                                    SignSecretKeyBstr);
+
+exports.sign_open = function(js_sm, pk) {
+  if (pk.length !== crypto_sign_PUBLICKEYBYTES)
+    throw new BadSignatureError("incorrect public-key length");
+  if (js_sm.length < crypto_sign_BYTES)
+    throw new BadSignatureError(
+      "message is smaller than the minimum signed message size");
+
+  let sm = JSStrToBinStr(js_sm, 0), sm_len = sm.length;
+
+  let m = alloc_ustr(sm_len),
+      m_len = Sizey();
+
+  if (crypto_sign_open(m, m_len.address(), sm, sm_len, JSStrToBinStr(pk, 0)))
+    throw new BadSignatureError("ciphertext fails verification");
+
+  return BinStrToJSStr(m, 0, m_len.address().contents);
+}
+
+exports.sign_open_utf8 = function(js_sm, pk) {
+  if (pk.length !== crypto_sign_PUBLICKEYBYTES)
+    throw new BadSignatureError("incorrect public-key length");
+  if (js_sm.length < crypto_sign_BYTES)
+    throw new BadSignatureError(
+      "message is smaller than the minimum signed message size");
+
+  let sm = JSStrToBinStr(js_sm, 0), sm_len = sm.length;
+
+  let m = alloc_ustr(sm_len + 1), // null terminator needs a spot
+      m_len = Sizey();
+
+  if (crypto_sign_open(m, m_len.address(), sm, sm_len, JSStrToBinStr(pk, 0)))
+    throw new BadSignatureError("ciphertext fails verification");
+  m[m_len] = 0;
+
+  return Utf8StrToJSStr(m, 0, m_len.address().contents);
+}
+
+exports.sign_peek = exports.sign_peek_utf8 = function(js_sm) {
+  return js_sm.substring(crypto_sign_BYTES / 2,
+                         js_sm.length - crypto_sign_BYTES / 2);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Boxing
 
 const crypto_box_PUBLICKEYBYTES = 32,
       crypto_box_SECRETKEYBYTES = 32,
@@ -328,3 +478,5 @@ exports.box_open_utf8 = function(c, n, pk, sk) {
 };
 
 exports.box_random_nonce = random_byte_getter(crypto_box_NONCEBYTES);
+
+////////////////////////////////////////////////////////////////////////////////

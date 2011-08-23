@@ -191,7 +191,6 @@ function checkSignatureOf(message, binaryMode, test) {
 /**
  * Test the signature generation and verification using freshly generated keys.
  */
-/*
 exports.testSigning = function(test) {
   checkSignatureOf('Hello World!', false, test);
   checkSignatureOf(ALPHA_STEW, false, test);
@@ -202,7 +201,6 @@ exports.testSigning = function(test) {
 
   test.done();
 };
-*/
 
 function checkBoxRoundTripOf(message, binaryMode, test) {
   var boxer, unboxer;
