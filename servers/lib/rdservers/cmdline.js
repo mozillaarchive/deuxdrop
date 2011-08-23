@@ -221,6 +221,21 @@ parser.command('fake-in-one')
     });
   });
 
+parser.command('echo-server')
+  .help("Run an echo server for jetpack/gecko authconn tests.")
+  .opts({
+    port: {
+      string: "--port",
+      default: 9232,
+      help: "What port should we bind on?",
+    },
+  })
+  .callback(function(options) {
+    applyGlobalOptions(options);
+    require(['rdservers/echotestserver'], function($echotest) {
+      $echotest.echoServe(options.port);
+    });
+  });
 
 parser.command('test')
   .help("Run tests!")

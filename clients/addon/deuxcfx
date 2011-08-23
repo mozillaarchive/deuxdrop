@@ -1,5 +1,8 @@
 #!/bin/sh
 
-cfx \
+EXTRA=
+
+cfx $EXTRA \
  --package-path ../../common \
+ --extra-packages "addon-kit,rdcommon" \
  "$@"

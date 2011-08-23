@@ -266,19 +266,21 @@ var AuthClientCommon = {
    */
   _onMessage: function(wsmsg) {
     var msg;
-    if (wsmsg.type === 'utf8') {
+    // XXX Gecko's websockets can't do binary frames right now
+    if (wsmsg.utf8Data[0] === 'T') { // (wsmsg.type === 'utf8') {
       // app frames and the vouch frame are binary.
       if (this.connState === 'app' && this.connState !== 'authClientVouch') {
         this.log.badProto();
         this.close();
         return;
       }
-      msg = JSON.parse(wsmsg.utf8Data);
+      msg = JSON.parse(wsmsg.utf8Data.substring(1));
     }
     else {
-      var expNonce = this._otherNextNonce;
+      var expNonce = this._otherNextNonce,
+          data = wsmsg.utf8Data.substring(1); // wsmsg.binaryData
       try {
-        msg = $nacl.box_open(wsmsg.binaryData, expNonce,
+        msg = $nacl.box_open(data, expNonce,
                              this._otherPublicKey, this._ephemKeyPair.sk);
       }
       catch(ex) {
@@ -393,7 +395,8 @@ var AuthClientCommon = {
 
   _writeRaw: function(obj) {
     this.log.send(obj.type, obj);
-    this._conn.sendUTF(JSON.stringify(obj));
+    // XXX prefixing because of gecko websocket limitations (no binary frames)
+    this._conn.sendUTF('T' + JSON.stringify(obj));
   },
 
   writeMessage: function(obj) {
@@ -402,9 +405,13 @@ var AuthClientCommon = {
     var nonce = this._myNextNonce;
     var boxedJsonMsg = $nacl.box(jsonMsg, nonce, this._otherPublicKey,
                                  this._ephemKeyPair.sk);
+    // XXX Gecko's websockets only supports DOMStrings right now...
+    /*
     // it wants a buffer...
     var buf = new Buffer(boxedJsonMsg, 'binary');
     this._conn.sendBytes(buf);
+    */
+    this._conn.sendUTF('B' + boxedJsonMsg);
 
     this._myNextNonce = incNonce(this._myNextNonce);
   },
