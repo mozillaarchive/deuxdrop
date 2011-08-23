@@ -124,7 +124,8 @@ function JSStrToUtf8Str(jsStr) {
 //  absurdity...
 const SIGN_IMPL = "_edwards25519sha512batch_ref",
       BOX_IMPL = "_curve25519xsalsa20poly1305_ref",
-      SECRETBOX_IMPL = "_xsalsa20poly1305_ref";
+      SECRETBOX_IMPL = "_xsalsa20poly1305_ref",
+      AUTH_IMPL = "_hmacsha512256_ref";
 
 ////////////////////////////////////////////////////////////////////////////////
 // Custom Exceptions
@@ -154,6 +155,15 @@ exports.BadSecretBoxError = BadSecretBoxError;
 BadSecretBoxError.prototype = {
   __proto__: Error.prototype,
  name: 'BadSecretBoxError',
+};
+
+function BadAuthenticatorError(msg) {
+  this.message = msg;
+}
+exports.BadAuthenticatorError = BadAuthenticatorError;
+BadAuthenticatorError.prototype = {
+  __proto__: Error.prototype,
+ name: 'BadAuthenticatorError',
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -646,5 +656,89 @@ exports.secretbox_open_utf8 = function(c, n, k) {
 
 exports.secretbox_random_nonce = random_byte_getter(crypto_secretbox_NONCEBYTES);
 exports.secretbox_random_key = random_byte_getter(crypto_secretbox_KEYBYTES);
+
+////////////////////////////////////////////////////////////////////////////////
+// Authenticators
+
+const crypto_auth_BYTES = 32,
+      crypto_auth_KEYBYTES = 32;
+
+exports.auth_KEYBYTES = crypto_auth_KEYBYTES;
+
+const AuthKeyBstr = ustr_t(crypto_auth_KEYBYTES),
+      AuthMessageBstr = pustr,
+      AuthAuthenticatorBstr = ustr_t(crypto_auth_BYTES);
+
+let crypto_auth = NACL.declare("crypto_auth" + AUTH_IMPL,
+                               $ctypes.default_abi,
+                               $ctypes.int,
+                               AuthAuthenticatorBstr,
+                               AuthMessageBstr,
+                               Sizey,
+                               AuthKeyBstr);
+
+exports.auth = function(m, k) {
+  if (k.length !== crypto_auth_KEYBYTES)
+    throw new BadAuthenticatorError("incorrect key length");
+
+  let a = AuthAuthenticatorBstr();
+  if (crypto_auth(a, JSStrToBinStr(m, 0), m.length,
+                  JSStrToBinStr(k, 0)) !== 0)
+    throw new BadAuthenticatorError("inexplicable auth gen failure");
+
+  return BinStrToJSStr(a, 0, crypto_auth_KEYBYTES);
+};
+exports.auth_utf8 = function(js_m, k) {
+  if (k.length !== crypto_auth_KEYBYTES)
+    throw new BadAuthenticatorError("incorrect key length");
+
+  let m = $ctypes.unsigned_char.array()(js_m), m_len = m.length - 1;
+
+  let a = AuthAuthenticatorBstr();
+  if (crypto_auth(a, m, m_len,
+                  JSStrToBinStr(k, 0)) !== 0)
+    throw new BadAuthenticatorError("inexplicable auth gen failure");
+
+  return BinStrToJSStr(a, 0, crypto_auth_KEYBYTES);
+};
+
+let crypto_auth_verify = NACL.declare("crypto_auth" + AUTH_IMPL + "_verify",
+                                      $ctypes.default_abi,
+                                      $ctypes.int,
+                                      AuthAuthenticatorBstr,
+                                      AuthMessageBstr,
+                                      Sizey,
+                                      AuthKeyBstr);
+exports.auth_verify = function(a, m, k) {
+  if (k.length !== crypto_auth_KEYBYTES)
+    throw new BadAuthenticatorError("incorrect key length");
+  if (a.length !== crypto_auth_BYTES)
+    throw new BadAuthenticatorError("incorrect authenticator length");
+
+  if (crypto_auth_verify(JSStrToBinStr(a, 0),
+                         JSStrToBinStr(m, 0), m.length,
+                         JSStrToBinStr(k, 0)) !== 0)
+    throw new BadAuthenticatorError("invalid authenticator");
+};
+
+exports.auth_verify_utf8 = function(a, js_m, k) {
+  if (k.length !== crypto_auth_KEYBYTES)
+    throw new BadAuthenticatorError("incorrect key length");
+  if (a.length !== crypto_auth_BYTES)
+    throw new BadAuthenticatorError("incorrect authenticator length");
+
+  let m = $ctypes.unsigned_char.array()(js_m), m_len = m.length - 1;
+
+  if (crypto_auth_verify(JSStrToBinStr(a, 0),
+                         m, m_len,
+                         JSStrToBinStr(k, 0)) !== 0)
+    throw new BadAuthenticatorError("invalid authenticator");
+};
+
+
+exports.auth_random_key = random_byte_getter(crypto_auth_KEYBYTES);
+
+////////////////////////////////////////////////////////////////////////////////
+// Hashers
 
 ////////////////////////////////////////////////////////////////////////////////

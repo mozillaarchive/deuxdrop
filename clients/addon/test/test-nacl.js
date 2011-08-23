@@ -366,7 +366,6 @@ function checkAuthenticatorFor(message, binaryMode, test) {
   }, nacl.BadAuthenticatorError);
 }
 
-/*
 exports.testAuthenticators = function(test) {
   checkAuthenticatorFor('Hello World!', false, test);
   checkAuthenticatorFor(ALPHA_STEW, false, test);
@@ -377,13 +376,11 @@ exports.testAuthenticators = function(test) {
 
   test.done();
 };
-*/
 
 /**
  * Make sure we expose our constants and they are correct.  The constants
  *  are accordingly hard-coded here.
  */
-/*
 exports.testConstants = function(test) {
   test.assertEqual(nacl.box_PUBLICKEYBYTES, 32);
   test.assertEqual(nacl.box_SECRETKEYBYTES, 32);
@@ -392,7 +389,6 @@ exports.testConstants = function(test) {
 
   test.done();
 };
-*/
 
 // XXX need to use mozilla hash mechanism to check
 /*
