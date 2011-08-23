@@ -125,13 +125,25 @@ function JSStrToUtf8Str(jsStr) {
 const SIGN_IMPL = "_edwards25519sha512batch_ref",
       BOX_IMPL = "_curve25519xsalsa20poly1305_ref",
       SECRETBOX_IMPL = "_xsalsa20poly1305_ref",
-      AUTH_IMPL = "_hmacsha512256_ref";
+      AUTH_IMPL = "_hmacsha512256_ref",
+      HASH_IMPL = "_sha512_ref";
 
 ////////////////////////////////////////////////////////////////////////////////
 // Custom Exceptions
 
+function gimmeStack() {
+  try {
+    throw new Error("blah");
+  }
+  catch(ex) {
+    return ex.stack;
+  }
+  return null;
+}
+
 function BadBoxError(msg) {
   this.message = msg;
+  this.stack = gimmeStack();
 }
 exports.BadBoxError = BadBoxError;
 BadBoxError.prototype = {
@@ -141,6 +153,7 @@ BadBoxError.prototype = {
 
 function BadSignatureError(msg) {
   this.message = msg;
+  this.stack = gimmeStack();
 }
 exports.BadSignatureError = BadSignatureError;
 BadSignatureError.prototype = {
@@ -150,6 +163,7 @@ BadSignatureError.prototype = {
 
 function BadSecretBoxError(msg) {
   this.message = msg;
+  this.stack = gimmeStack();
 }
 exports.BadSecretBoxError = BadSecretBoxError;
 BadSecretBoxError.prototype = {
@@ -159,6 +173,7 @@ BadSecretBoxError.prototype = {
 
 function BadAuthenticatorError(msg) {
   this.message = msg;
+  this.stack = gimmeStack();
 }
 exports.BadAuthenticatorError = BadAuthenticatorError;
 BadAuthenticatorError.prototype = {
@@ -740,5 +755,39 @@ exports.auth_random_key = random_byte_getter(crypto_auth_KEYBYTES);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Hashers
+//
+//
+
+const crypto_hash_BYTES = 64,
+      crypto_hash_TRUNCATED = 32;
+
+const HashHashBstr = ustr_t(crypto_hash_BYTES),
+      HashMessageBstr = pustr;
+
+let crypto_hash = NACL.declare("crypto_hash" + HASH_IMPL,
+                               $ctypes.default_abi,
+                               $ctypes.int,
+                               HashHashBstr,
+                               HashMessageBstr,
+                               Sizey);
+
+exports.hash512_256 = function(m) {
+  let h = HashHashBstr();
+  
+  if (crypto_hash(h, JSStrToBinStr(m, 0), m.length) !== 0)
+    throw new Error("inexplicable hashing failure");
+  // truncate to just the first 32 bytes.
+  return BinStrToJSStr(h, 0, crypto_hash_TRUNCATED);
+};
+exports.hash512_256_utf8 = function(js_m) {
+  let h = HashHashBstr();
+  
+  let m = JSStrToUtf8Str(js_m, 0), m_len = m.length - 1; // ignore nul
+
+  if (crypto_hash(h, m, m_len) !== 0)
+    throw new Error("inexplicable hashing failure");
+  // truncate to just the first 32 bytes.
+  return BinStrToJSStr(h, 0, crypto_hash_TRUNCATED);
+};
 
 ////////////////////////////////////////////////////////////////////////////////

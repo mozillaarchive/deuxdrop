@@ -1,5 +1,7 @@
 var nacl = require('nacl');
 
+var {Cc, Ci} = require('chrome');
+
 // mimic node.js's assert.throws impl
 var assert = {
   "throws": function(func, check) {
@@ -75,7 +77,6 @@ function corruptString(msg) {
          msg.substring(indexToCorrupt + 1);
 }
 
-/*
 exports.testCustomErrors = function(test) {
   // - make sure we exposed the types
   test.assertNotEqual(nacl.BadBoxError, undefined);
@@ -112,7 +113,6 @@ exports.testCustomErrors = function(test) {
   }
   test.done();
 };
-*/
 
 function checkSignatureOf(message, binaryMode, test) {
   console.log("===== Planning to sign: '" + message + "' aka " +
@@ -390,15 +390,22 @@ exports.testConstants = function(test) {
   test.done();
 };
 
-// XXX need to use mozilla hash mechanism to check
-/*
-
 function checkHashFor(msg, binaryMode, test) {
-  var nodeHasher = $crypto.createHash('sha512');
-  nodeHasher.update(msg);
+  var converter = Cc["@mozilla.org/intl/scriptableunicodeconverter"]
+                    .createInstance(Ci.nsIScriptableUnicodeConverter);
+  // we should vary on binaryMode if/when we start doing that...
+  converter.charset = "UTF-8";
+  var data = converter.convertToByteArray(msg, {});
+
+  var jetHasher = Cc["@mozilla.org/security/hash;1"]
+                    .createInstance(Ci.nsICryptoHash);
+  jetHasher.init(jetHasher.SHA512);
+  jetHasher.update(data, data.length);
+  var jetHash = jetHasher.finish(false).substring(0, 32);
+
   var naclHasher = binaryMode ? nacl.hash512_256 : nacl.hash512_256_utf8;
 
-  test.assertEqual(naclHasher(msg), nodeHasher.digest('binary').substring(0, 32));
+  test.assertEqual(naclHasher(msg), jetHash);
 }
 exports.testHash = function(test) {
   checkHashFor('Hello World!', false, test);
@@ -406,5 +413,3 @@ exports.testHash = function(test) {
 
   test.done();
 };
-
-*/
