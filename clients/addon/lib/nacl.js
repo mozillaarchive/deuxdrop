@@ -122,8 +122,9 @@ function JSStrToUtf8Str(jsStr) {
 
 // XXX we really want to expose friendly symbols instead of requiring this
 //  absurdity...
-const SIGN_IMPL = '_edwards25519sha512batch_ref',
-      BOX_IMPL = "_curve25519xsalsa20poly1305_ref";
+const SIGN_IMPL = "_edwards25519sha512batch_ref",
+      BOX_IMPL = "_curve25519xsalsa20poly1305_ref",
+      SECRETBOX_IMPL = "_xsalsa20poly1305_ref";
 
 ////////////////////////////////////////////////////////////////////////////////
 // Custom Exceptions
@@ -144,6 +145,15 @@ exports.BadSignatureError = BadSignatureError;
 BadSignatureError.prototype = {
   __proto__: Error.prototype,
  name: 'BadSignatureError',
+};
+
+function BadSecretBoxError(msg) {
+  this.message = msg;
+}
+exports.BadSecretBoxError = BadSecretBoxError;
+BadSecretBoxError.prototype = {
+  __proto__: Error.prototype,
+ name: 'BadSecretBoxError',
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -361,6 +371,7 @@ exports.box = function(m, n, pk, sk) {
 
   return BinStrToJSStr(c_padded, crypto_box_BOXZEROBYTES, m_padded_len);
 };
+
 /**
  * Box a utf8 message string, producing a binary string.
  */
@@ -478,5 +489,162 @@ exports.box_open_utf8 = function(c, n, pk, sk) {
 };
 
 exports.box_random_nonce = random_byte_getter(crypto_box_NONCEBYTES);
+
+////////////////////////////////////////////////////////////////////////////////
+// Secretbox
+
+const crypto_secretbox_KEYBYTES = 32,
+      crypto_secretbox_NONCEBYTES = 24,
+      crypto_secretbox_ZEROBYTES = 32,
+      crypto_secretbox_BOXZEROBYTES = 16;
+
+exports.secretbox_KEYBYTES = crypto_secretbox_KEYBYTES;
+
+const SecretBoxKeyBstr = ustr_t(crypto_secretbox_KEYBYTES),
+      SecretBoxNonceBstr = ustr_t(crypto_secretbox_NONCEBYTES),
+      SecretBoxMessageBstr = pustr,
+      SecretBoxCiphertextBstr = pustr;
+
+let crypto_secretbox = NACL.declare("crypto_secretbox" + SECRETBOX_IMPL,
+                                    $ctypes.default_abi,
+                                    $ctypes.int,
+                                    SecretBoxCiphertextBstr,
+                                    SecretBoxMessageBstr,
+                                    Sizey,
+                                    SecretBoxNonceBstr,
+                                    SecretBoxKeyBstr);
+                              
+/**
+ * Secretbox a binary message string (*not* utf8), producing a binary string.
+ */
+exports.secretbox = function(m, n, k) {
+  if (k.length !== crypto_secretbox_KEYBYTES)
+    throw new BadSecretBoxError("incorrect public-key length");
+  if (n.length !== crypto_secretbox_NONCEBYTES)
+    throw new BadSecretBoxError("incorrect nonce length");
+
+  // the message needs to get zero padded (from the beginning)
+  let m_padded_len = m.length + crypto_secretbox_ZEROBYTES,
+      m_padded = alloc_ustr(m_padded_len);
+  for (let i = 0; i < crypto_secretbox_ZEROBYTES; i++) {
+    m_padded[i] = 0;
+  }
+  for (let i = crypto_secretbox_ZEROBYTES; i < m_padded_len; i++) {
+    m_padded[i] = m.charCodeAt(i - crypto_secretbox_ZEROBYTES);
+  }
+
+  // the output message will accordingly also be padded
+  let c_padded = alloc_ustr(m_padded_len);
+
+  if (crypto_secretbox(c_padded, m_padded, m_padded_len,
+                       JSStrToBinStr(n, 0),
+                       JSStrToBinStr(k, 0)) !== 0)
+    throw new BadSecretBoxError("inexplicable binary string boxing failure");
+
+  return BinStrToJSStr(c_padded, crypto_secretbox_BOXZEROBYTES, m_padded_len);
+};
+/**
+ * Secretbox a binary message string (*not* utf8), producing a binary string.
+ */
+exports.secretbox_utf8 = function(js_m, n, k) {
+  if (k.length !== crypto_secretbox_KEYBYTES)
+    throw new BadSecretBoxError("incorrect public-key length");
+  if (n.length !== crypto_secretbox_NONCEBYTES)
+    throw new BadSecretBoxError("incorrect nonce length");
+
+  let m = $ctypes.unsigned_char.array()(js_m);
+
+  // the message needs to get zero padded (from the beginning), but we don't
+  //  need to care about the nul-padded character
+  let m_padded_len = m.length - 1 + crypto_secretbox_ZEROBYTES,
+      m_padded = alloc_ustr(m_padded_len);
+  for (let i = 0; i < crypto_secretbox_ZEROBYTES; i++) {
+    m_padded[i] = 0;
+  }
+  for (let i = crypto_secretbox_ZEROBYTES; i < m_padded_len; i++) {
+    m_padded[i] = m[i - crypto_secretbox_ZEROBYTES];
+  }
+
+  // the output message will accordingly also be padded
+  let c_padded = alloc_ustr(m_padded_len);
+
+  if (crypto_secretbox(c_padded, m_padded, m_padded_len,
+                       JSStrToBinStr(n, 0),
+                       JSStrToBinStr(k, 0)) !== 0)
+    throw new BadSecretBoxError("inexplicable binary string boxing failure");
+
+  return BinStrToJSStr(c_padded, crypto_secretbox_BOXZEROBYTES, m_padded_len);
+};
+
+let crypto_secretbox_open = 
+  NACL.declare("crypto_secretbox" + SECRETBOX_IMPL + "_open",
+               $ctypes.default_abi,
+               $ctypes.int,
+               SecretBoxMessageBstr,
+               SecretBoxCiphertextBstr,
+               Sizey,
+               SecretBoxNonceBstr,
+               SecretBoxKeyBstr);
+
+exports.secretbox_open = function(c, n, k) {
+  if (k.length !== crypto_secretbox_KEYBYTES)
+    throw new BadSecretBoxError("incorrect public-key length");
+  if (n.length !== crypto_secretbox_NONCEBYTES)
+    throw new BadSecretBoxError("incorrect nonce length");
+
+  // the ciphertext gets padded out with zeroes just like when boxing.
+  let c_padded_len = c.length + crypto_secretbox_BOXZEROBYTES,
+      c_padded = alloc_ustr(c_padded_len);
+  for (let i = 0; i < crypto_secretbox_BOXZEROBYTES; i++) {
+    c_padded[i] = 0;
+  }
+  for (let i = crypto_secretbox_BOXZEROBYTES; i < c_padded_len; i++) {
+    c_padded[i] = c.charCodeAt(i - crypto_secretbox_BOXZEROBYTES);
+  }
+
+  let m_padded = alloc_ustr(c_padded_len);
+  if (crypto_secretbox_open(m_padded, c_padded, c_padded_len,
+                            JSStrToBinStr(n, 0),
+                            JSStrToBinStr(k, 0)) !== 0)
+    throw new BadSecretBoxError("ciphertext fails verification");
+  // we are mimicking the C++ binding here even though we will have crashed by
+  //  this point... (we guard at a higher level because this is dumb)
+  if (c_padded_len < crypto_secretbox_ZEROBYTES)
+    throw new BadSecretBoxError("ciphertext too short");
+  return BinStrToJSStr(m_padded, crypto_secretbox_ZEROBYTES, c_padded_len);
+};
+exports.secretbox_open_utf8 = function(c, n, k) {
+  if (k.length !== crypto_secretbox_KEYBYTES)
+    throw new BadSecretBoxError("incorrect public-key length");
+  if (n.length !== crypto_secretbox_NONCEBYTES)
+    throw new BadSecretBoxError("incorrect nonce length");
+
+  // the ciphertext gets padded out with zeroes just like when boxing.
+  let c_padded_len = c.length + crypto_secretbox_BOXZEROBYTES,
+      c_padded = alloc_ustr(c_padded_len);
+  for (let i = 0; i < crypto_secretbox_BOXZEROBYTES; i++) {
+    c_padded[i] = 0;
+  }
+  for (let i = crypto_secretbox_BOXZEROBYTES; i < c_padded_len; i++) {
+    c_padded[i] = c.charCodeAt(i - crypto_secretbox_BOXZEROBYTES);
+  }
+
+  let m_padded = alloc_ustr(c_padded_len + 1); // add one for the nul
+  if (crypto_secretbox_open(m_padded, c_padded, c_padded_len,
+                            JSStrToBinStr(n, 0),
+                            JSStrToBinStr(k, 0)) !== 0)
+    throw new BadSecretBoxError("ciphertext fails verification");
+  // we are mimicking the C++ binding here even though we will have crashed by
+  //  this point... (we guard at a higher level because this is dumb)
+  if (c_padded_len < crypto_secretbox_ZEROBYTES)
+    throw new BadSecretBoxError("ciphertext too short");
+
+  // poke the nul in.
+  m_padded[c_padded_len] = 0;
+  return Utf8StrToJSStr(m_padded, crypto_secretbox_ZEROBYTES);
+};
+
+exports.secretbox_random_nonce = random_byte_getter(crypto_secretbox_NONCEBYTES);
+exports.secretbox_random_key = random_byte_getter(crypto_secretbox_KEYBYTES);
 
 ////////////////////////////////////////////////////////////////////////////////

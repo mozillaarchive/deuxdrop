@@ -310,7 +310,6 @@ function checkSecretBoxRoundTripOf(message, binaryMode, test) {
   }, nacl.BadSecretBoxError);
 }
 
-/*
 exports.testSecretBoxing = function(test) {
   checkSecretBoxRoundTripOf('Hello World!', false, test);
   checkSecretBoxRoundTripOf(ALPHA_STEW, false, test);
@@ -321,7 +320,6 @@ exports.testSecretBoxing = function(test) {
 
   test.done();
 };
-*/
 
 function checkAuthenticatorFor(message, binaryMode, test) {
   var auther, verifier;
