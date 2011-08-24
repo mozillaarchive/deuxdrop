@@ -227,9 +227,10 @@ define(function (require) {
 
     // Generate nodes for each person.
     peeps.items.forEach(function (peep) {
-      var node = clonable.cloneNode(true);
+      var node = clonable.cloneNode(true),
+          poco = peep.ourPoco;
 
-      updateDom($(node), peep);
+      updateDom($(node), poco);
 
       node.href += '?id=' + encodeURIComponent(peep.id);
 
