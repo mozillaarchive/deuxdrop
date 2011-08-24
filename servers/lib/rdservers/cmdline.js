@@ -268,7 +268,7 @@ parser.command('test')
         when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
                                         SUPER_DEBUG),
           function() {
-console.error("  !! performing exit");
+//console.error("  !! performing exit");
             // pass or fail, we want to exit normally; only the death clock
             //  should result in a non-zero exit.
             process.exit(0);
