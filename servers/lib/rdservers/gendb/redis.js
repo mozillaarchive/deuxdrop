@@ -385,10 +385,15 @@ RedisDbConn.prototype = {
     this._conn.zrevrangebyscore(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
         maxValStr, minValStr, 'WITHSCORES', function(err, results) {
-      if (err)
+      if (err) {
         deferred.reject(err);
-      else
+      }
+      else {
+        for (var i = 1; i < results.length; i += 2) {
+          results[i] = parseInt(results[i]);
+        }
         deferred.resolve(results);
+      }
     });
     return deferred.promise;
   },
@@ -445,17 +450,17 @@ RedisDbConn.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // String-Value Indices
   //
-  // There's no great representation in redis for this.  We just concatenate the
-  //  object name onto the key with a delimeter.
+  // There's no great representation in redis for this.  We just use a hash and
+  //  sort it when needed.
 
   updateStringIndexValue: function(tableName, indexName, indexParam,
                                    objectName, newValue) {
     var deferred = $Q.defer();
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
-    this._conn.sadd(
+    this._conn.hset(
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-      newValue + "!" + objectName, function(err, result) {
+      objectName, newValue, function(err, result) {
         if (err)
           deferred.reject(err);
         else
@@ -467,23 +472,26 @@ RedisDbConn.prototype = {
   scanStringIndex: function(tableName, indexName, indexParam) {
     var deferred = $Q.defer();
     this._log.scanIndex(tableName, indexName, indexParam);
-    this._conn.sort(
+    this._conn.hgetall(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-        'ALPHA', function(err, results) {
+        function(err, results) {
       if (err) {
         deferred.reject(err);
       }
       else {
-        // "key!object name", get the object name
-        var objectNames = [];
-        for (var i = 0; i < results.length; i++) {
-          var idxBang = results[i].indexOf('!');
-          // object name
-          objectNames.push(results[i].substring(idxBang + 1));
-          // key ("score")
-          objectNames.push(results[i].substring(0, idxBang));
+        var sortie = [];
+        for (var key in results) {
+          sortie.push({obj: key, val: results[key]});
         }
-        deferred.resolve(objectNames);
+        sortie.sort(function(a, b) {
+          return a.val.localeCompare(b.val);
+        });
+        var listyResults = [];
+        for (var i = 0; i < sortie.length; i++) {
+          listyResults.push(sortie[i].obj);
+          listyResults.push(sortie[i].val);
+        }
+        deferred.resolve(listyResults);
       }
     });
     return deferred.promise;
@@ -590,7 +598,10 @@ exports.makeTestDBConnection = function(uniqueName, _logger) {
 };
 
 exports.cleanupTestDBConnection = function(conn) {
-  conn._conn.flushdb();
+  // We do not flush the database afterwards so that we can inspect it if we
+  //  want.  (Which is why when the test connects it clears it.)
+  // nb: This could have some performance misattribution issues if we don't
+  //  specially treat (at least some) 'setup' nodes so they don't count.
   conn.close();
 };
 
