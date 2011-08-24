@@ -48,7 +48,7 @@ let $hframe = require('hidden-frame'), $self = require('self');
 
 var afterLoaded = [];
 
-let mozIndexedDB = null;
+let mozIndexedDB = null, IDBTransaction = null, IDBKeyRange = null;
 let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
   onReady: function() {
     // now that we have a frame, point it at a URL so we get a principal...
@@ -59,7 +59,10 @@ let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
     let self = this;
     this.element.addEventListener("DOMContentLoaded", function() {
       try {
-        mozIndexedDB = self.element.contentWindow.mozIndexedDB;
+        var win = self.element.contentWindow;
+        mozIndexedDB = win.mozIndexedDB;
+        IDBTransaction = win.IDBTransaction;
+        IDBKeyRange = win.IDBKeyRange;
       }
       catch(ex) {
         console.error("Problem getting mozIndexedDB!");
@@ -72,14 +75,14 @@ let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
 
 function fireLoaded() {
  for (var i = 0; i < afterLoaded.length; i++) {
-    afterLoaded[i](mozIndexedDB);
+    afterLoaded[i](mozIndexedDB, IDBTransaction, IDBKeyRange);
   }
   afterLoaded = null;
 }
 
 exports.afterLoaded = function(callback) {
   if (mozIndexedDB) {
-    callback(mozIndexedDB);
+    callback(mozIndexedDB, IDBTransaction, IDBKeyRange);
   }
   else {
     afterLoaded.push(callback);

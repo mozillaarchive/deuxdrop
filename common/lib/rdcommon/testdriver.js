@@ -41,7 +41,7 @@
 
 define(
   [
-    'util', 'fs', 'child_process',
+    'util', 'fs', 'child_process', 'timers',
     'q',
     './testcontext',
     './extransform',
@@ -49,7 +49,7 @@ define(
     'exports'
   ],
   function(
-    $util, $fs, $subproc,
+    $util, $fs, $subproc, $timers,
     $Q,
     $testcontext,
     $extransform,
@@ -267,7 +267,7 @@ TestDefinerRunner.prototype = {
       // create a deferred so we can generate a timeout.
       var deferred = $Q.defer(), self = this;
       // -- timeout handler
-      var countdownTimer = setTimeout(function() {
+      var countdownTimer = $timers.setTimeout(function() {
         if (!deferred) return;
         // - tell the actors to fail any remaining expectations
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
@@ -423,7 +423,7 @@ TestDefinerRunner.prototype = {
     }
   },
 
-  runAll: function() {
+  runAll: function(errorTrapper) {
 console.error(" runAll()");
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
@@ -434,8 +434,9 @@ console.error(" runAll()");
 console.error("  runNextTestCase()");
       // - all done
       if (iTestCase >= definer.__testCases.length) {
-        process.removeListener('exit', earlyBailHandler);
-        process.removeListener('uncaughtException', uncaughtExceptionHandler);
+        errorTrapper.removeListener('exit', earlyBailHandler);
+        errorTrapper.removeListener('uncaughtException',
+                                    uncaughtExceptionHandler);
 
         definer._log.run_end();
         self._clearDefinerUnderTest(definer);
@@ -458,7 +459,7 @@ console.error("   resolving!");
                     "DUMPING LOG.");
       self.dumpLogResultsToConsole();
     }
-    process.once('exit', earlyBailHandler);
+    errorTrapper.once('exit', earlyBailHandler);
 
     /**
      * Log uncaught exceptions to the currently active test step.
@@ -467,7 +468,7 @@ console.error("   resolving!");
       if (self._logBadThingsToLogger)
         self._logBadThingsToLogger.uncaughtException(ex);
     }
-    process.on('uncaughtException', uncaughtExceptionHandler);
+    errorTrapper.on('uncaughtException', uncaughtExceptionHandler);
 
     runNextTestCase();
     return deferred.promise;
@@ -652,7 +653,7 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
 
     // now that it is loaded, run it
     runner = new TestDefinerRunner(tmod.TD, superDebug);
-    when(runner.runAll(), itAllGood, itAllGood);
+    when(runner.runAll(ErrorTrapper), itAllGood, itAllGood);
   });
   return deferred.promise;
 };

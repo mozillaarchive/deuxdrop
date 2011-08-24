@@ -47,12 +47,14 @@ define(
   [
     'q',
     'rdcommon/gendb-logdef',
+    'indexdbshim',
     'module',
     'exports'
   ],
   function(
     $Q,
     $_logdef,
+    $shim,
     $module,
     exports
   ) {
@@ -60,12 +62,7 @@ const when = $Q.when;
 
 const LOGFAB = $_logdef.LOGFAB;
 
-var IndexedDB = mozIndexedDB;
-/*
- * We are assuming we get the following magically in our global namespace:
- * - IDBTransaction
- * - IDBKeyRange
- */
+var IndexedDB = null, IDBTransaction, IDBKeyRange;
 
 /**
  * The version to use for now; not a proper version, as we perform no upgrading,
@@ -82,16 +79,22 @@ function IndexedDbConn(nsprefix, _logger) {
 
   this._log = LOGFAB.gendbConn(this, _logger, [nsprefix]);
 
-  var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
   var self = this;
-  dbOpenRequest.onerror = function(event) {
-    self._log.dbErr(dbOpenRequest.errorCode);
-    dbDeferred.reject(dbOpenRequest.errorCode);
-  };
-  dbOpenRequest.onsuccess = function(event) {
-    self._db = dbOpenRequest.result;
-    dbDeferred.resolve(self._db);
-  };
+
+  $shim.afterLoaded(function(mozIndexedDB, _IDBTransaction, _IDBKeyRange) {
+    IndexedDB = mozIndexedDB;
+    IDBTransaction = _IDBTransaction;
+    IDBKeyRange = _IDBKeyRange;
+    var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
+    dbOpenRequest.onerror = function(event) {
+      self._log.dbErr(dbOpenRequest.errorCode);
+      dbDeferred.reject(dbOpenRequest.errorCode);
+    };
+    dbOpenRequest.onsuccess = function(event) {
+      self._db = dbOpenRequest.result;
+      dbDeferred.resolve(self._db);
+    };
+  });
 }
 IndexedDbConn.prototype = {
   toString: function() {
@@ -460,7 +463,7 @@ IndexedDbConn.prototype = {
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
     var aggrName = tableName + INDEX_DELIM + indexName;
-    var transaction = this._db.transaction([aggrName]
+    var transaction = this._db.transaction([aggrName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -483,7 +486,7 @@ IndexedDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -534,7 +537,7 @@ IndexedDbConn.prototype = {
 };
 IndexedDbConn.prototype.updateStringIndexValue =
   IndexedDbConn.prototype.updateIndexValue;
-IndexedDBConn.prototype.scanStringIndex =
+IndexedDbConn.prototype.scanStringIndex =
   IndexedDbConn.prototype.scanIndex;
 
 }); // end define

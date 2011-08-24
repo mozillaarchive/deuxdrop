@@ -73,6 +73,11 @@ var ErrorTrapper = {
     this._trappedErrors = null;
     return errs;
   },
+
+  // 'process' helpers pushed out here for dependency reasons across platforms
+  on: process.on.bind(process),
+  once: process.once.bind(process),
+  removeListener: process.removeListener.bind(process),
 };
 
 require.onError = function(err) {
