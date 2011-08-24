@@ -201,6 +201,39 @@ function incNonce(old) {
   return nonce;
 }
 
+/*
+ * XXX gecko-related hack.  We need to send our binary data in websocket text
+ *  frames because the gecko websockets implementation does not support binary
+ *  frames.  We are experiencing failures when marshaling the data naively,
+ *  suggesting that I need to deep dive on the utf8 conversion, but time is
+ *  short.  I briefly tried an explicit utf8 'expansion' so that our binary
+ *  representations would take on legal forms, but that outright broke, so we're
+ *  roundtripping through base64 for now.
+ */
+var transitHackBinary, unTransitHackBinary;
+if (!$ws.GECKO) {
+  // node.js case
+  transitHackBinary = function(binString) {
+    // interpret the string as binary data when converting to octets
+    var buf = new Buffer(binString, 'binary');
+    return buf.toString('base64');
+  };
+  unTransitHackBinary = function(utf8String) {
+    var buf = new Buffer(utf8String, 'base64');
+    return buf.toString('binary');
+  };
+}
+else {
+  // gecko case
+  transitHackBinary = function(s) {
+    return $ws.helpers.btoa(s);
+  };
+  unTransitHackBinary = function(s) {
+    return $ws.helpers.atob(s);
+  };
+}
+
+
 var MAGIC_CLOSE_MARKER = {};
 
 /**
@@ -278,7 +311,8 @@ var AuthClientCommon = {
     }
     else {
       var expNonce = this._otherNextNonce,
-          data = wsmsg.utf8Data.substring(1); // wsmsg.binaryData
+          // XXX gecko issues... was: wsmsg.binaryData
+          data = unTransitHackBinary(wsmsg.utf8Data.substring(1));
       try {
         msg = $nacl.box_open(data, expNonce,
                              this._otherPublicKey, this._ephemKeyPair.sk);
@@ -411,7 +445,7 @@ var AuthClientCommon = {
     var buf = new Buffer(boxedJsonMsg, 'binary');
     this._conn.sendBytes(buf);
     */
-    this._conn.sendUTF('B' + boxedJsonMsg);
+    this._conn.sendUTF('B' + transitHackBinary(boxedJsonMsg));
 
     this._myNextNonce = incNonce(this._myNextNonce);
   },

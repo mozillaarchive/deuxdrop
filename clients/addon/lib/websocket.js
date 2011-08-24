@@ -47,10 +47,15 @@ let $hframe = require('hidden-frame');
 
 var afterLoaded = [];
 
+exports.GECKO = true;
+exports.helpers = {};
+
 let MozWebSocket = null;
 let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
   onReady: function() {
     MozWebSocket = this.element.contentWindow.MozWebSocket;
+    exports.helpers.btoa = this.element.contentWindow.btoa;
+    exports.helpers.atob = this.element.contentWindow.atob;
 
     for (var i = 0; i < afterLoaded.length; i++) {
       afterLoaded[i]();
