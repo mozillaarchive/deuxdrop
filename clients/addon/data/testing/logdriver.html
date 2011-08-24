@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Test Driver</title>
+    <script src="../web/deps/require.js"></script>
+    <script>
+// The built-in console is not useful to us here in a page-worker!
+var log = function() {
+  dump(Array.prototype.join.call(arguments, ' ') + "\n");
+};
+var console = {
+  log: log,
+  info: log,
+  warn: log,
+  error: log,
+  debug: log,
+};
+
+// this is taken from rdservers/cmdline.js
+var SUPER_DEBUG = 1;
+var MAGIC_ERROR_TRAPPER = {
+  _trappedErrors: null,
+  _handlerCallback: null,
+  /**
+   * Express interest in errors.
+   */
+  trapErrors: function() {
+    this._trappedErrors = [];
+  },
+  callbackOnError: function(handler) {
+    this._handlerCallback = handler;
+    this._trappedErrors = [];
+  },
+  yoAnError: function(err, moduleName) {
+    if (this._trappedErrors == null || SUPER_DEBUG) {
+      console.error("==== REQUIREJS ERR ====", moduleName);
+      console.error(err.message);
+      console.error(err.stack);
+    }
+    if (this._handlerCallback)
+      this._handlerCallback(err, moduleName);
+    else if (this._trappedErrors)
+      this._trappedErrors.push(err);
+  },
+  gobbleAndStopTrappingErrors: function() {
+    this._handlerCallback = null;
+    var errs = this._trappedErrors;
+    this._trappedErrors = null;
+    return errs;
+  },
+
+  // 'process' helpers pushed out here for dependency reasons across platforms
+  on: function() {},
+  once: function() {},
+  removeListener: function() {},
+
+  reliableOutput: log,
+};
+
+require.onError = function(err) {
+  var useErr = err;
+  if (err.originalError)
+    useErr = err.originalError;
+  MAGIC_ERROR_TRAPPER.yoAnError(useErr, err.moduleName);
+};
+dump("about to perform require() call!\n");
+      require(
+        {
+          baseUrl: '../web/deps',
+          paths: {
+            'child_process': '../../addon/js/child_process',
+            'event-queue': '../../addon/js/event-queue',
+            'fs': '../../addon/js/fs',
+            'http': '../../addon/js/http',
+            'microtime': '../../addon/js/microtime',
+            'path': '../../addon/js/path',
+            'timers': '../../addon/js/timers',
+            'util': '../../addon/js/util'
+          },
+          catchError: {
+            define: true,
+          }
+        },
+        ['../../testing/logdriver']
+      );
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

@@ -3,10 +3,6 @@
  *  unit test in a content page.
  */
 
-var $Q = require('q'), when = $Q.when,
-    $td = require('rdcommon/testdriver'),
-    $equeue = require('event-queue');
-
 /**
  * The ErrorTrapper as provided in `cmdline.js` is our gateway to RequireJS'
  *  error trapping capabilities.  We don't have/use such capabilities in
@@ -27,16 +23,23 @@ var DummyErrorTrapper = {
   removeListener: function() {},
 };
 
-exports.testIndexedDbGenDb = function(test) {
-  test.waitUntilDone(3 * 1000);
+let $pworker = require('page-worker'), $self = require('self');
 
-  when($td.runTestsFromModule('unit-gendb', DummyErrorTrapper, true),
-    function() {
-      test.pass("hooray");
+function goRunTest(test, testName) {
+  test.waitUntilDone(5 * 1000);
+  var page = $pworker.Page({
+    contentURL: $self.data.url("testing/logdriver.html") + "?" + testName,
+    onMessage: function(msg) {
+      if (msg === "pass")
+        test.pass();
+      else
+        test.fail();
       test.done();
+      page.destroy();
     },
-    function(err) {
-      test.fail(err);
-      test.done();
-    });
+  });
+}
+
+exports.testIndexedDbGenDb = function(test) {
+  goRunTest(test, 'rdctests/unit-gendb');
 };

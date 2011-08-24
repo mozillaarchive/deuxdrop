@@ -67,8 +67,10 @@ const LOGFAB = exports.LOGFAB = $_logdef.LOGFAB;
  *  Accordingly, we also explode if we cannot find our beloved constant.
  */
 
-if (!mozIndexedDB)
+if (!mozIndexedDB) {
+  console.error("No mozIndexedDB!");
   throw new Error("I need mozIndexedDB; load me in a content page universe!");
+}
 
 var IndexedDB = mozIndexedDB;
 
