@@ -73,6 +73,13 @@ var ErrorTrapper = {
     this._trappedErrors = null;
     return errs;
   },
+
+  // 'process' helpers pushed out here for dependency reasons across platforms
+  on: process.on.bind(process),
+  once: process.once.bind(process),
+  removeListener: process.removeListener.bind(process),
+
+  reliableOutput: console.error,
 };
 
 require.onError = function(err) {
@@ -93,6 +100,7 @@ require(
     ],
     paths: {
       rdservers: "servers/lib/rdservers",
+      rdplat: "servers/lib/rdplat",
       rdcommon: "common/lib/rdcommon",
       rdstests: "servers/test",
       rdctests: "common/test",
@@ -221,6 +229,21 @@ parser.command('fake-in-one')
     });
   });
 
+parser.command('echo-server')
+  .help("Run an echo server for jetpack/gecko authconn tests.")
+  .opts({
+    port: {
+      string: "--port",
+      default: 9232,
+      help: "What port should we bind on?",
+    },
+  })
+  .callback(function(options) {
+    applyGlobalOptions(options);
+    require(['rdservers/echotestserver'], function($echotest) {
+      $echotest.echoServe(options.port);
+    });
+  });
 
 parser.command('test')
   .help("Run tests!")
@@ -253,7 +276,7 @@ parser.command('test')
         when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
                                         SUPER_DEBUG),
           function() {
-console.error("  !! performing exit");
+//console.error("  !! performing exit");
             // pass or fail, we want to exit normally; only the death clock
             //  should result in a non-zero exit.
             process.exit(0);

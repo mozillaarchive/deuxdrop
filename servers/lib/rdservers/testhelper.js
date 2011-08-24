@@ -66,7 +66,7 @@ var $log = require('rdcommon/log'),
     $pubring = require('rdcommon/crypto/pubring'),
     $pubident = require('rdcommon/identities/pubident');
 
-var $gendb = require('rdservers/gendb/redis'),
+var $gendb = require('rdplat/gendb'),
     $configurer = require('rdservers/configurer');
 
 var $signup_server = require('rdservers/signup/server'),

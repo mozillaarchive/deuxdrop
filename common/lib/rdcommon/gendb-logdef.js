@@ -76,6 +76,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
 
     events: {
+      connecting: {},
       connected: {},
       closed: {},
 

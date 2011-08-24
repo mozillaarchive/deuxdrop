@@ -41,7 +41,7 @@
 
 define(
   [
-    'util', 'fs', 'child_process',
+    'util', 'fs', 'child_process', 'timers',
     'q',
     './testcontext',
     './extransform',
@@ -49,7 +49,7 @@ define(
     'exports'
   ],
   function(
-    $util, $fs, $subproc,
+    $util, $fs, $subproc, $timers,
     $Q,
     $testcontext,
     $extransform,
@@ -267,7 +267,7 @@ TestDefinerRunner.prototype = {
       // create a deferred so we can generate a timeout.
       var deferred = $Q.defer(), self = this;
       // -- timeout handler
-      var countdownTimer = setTimeout(function() {
+      var countdownTimer = $timers.setTimeout(function() {
         if (!deferred) return;
         // - tell the actors to fail any remaining expectations
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
@@ -423,23 +423,24 @@ TestDefinerRunner.prototype = {
     }
   },
 
-  runAll: function() {
-console.error(" runAll()");
+  runAll: function(errorTrapper) {
+//console.error(" runAll()");
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
     this._markDefinerUnderTest(definer);
     definer._log.run_begin();
     // -- next case
     function runNextTestCase() {
-console.error("  runNextTestCase()");
+//console.error("  runNextTestCase()");
       // - all done
       if (iTestCase >= definer.__testCases.length) {
-        process.removeListener('exit', earlyBailHandler);
-        process.removeListener('uncaughtException', uncaughtExceptionHandler);
+        errorTrapper.removeListener('exit', earlyBailHandler);
+        errorTrapper.removeListener('uncaughtException',
+                                    uncaughtExceptionHandler);
 
         definer._log.run_end();
         self._clearDefinerUnderTest(definer);
-console.error("   resolving!");
+//console.error("   resolving!");
         deferred.resolve(self);
         return;
       }
@@ -456,9 +457,9 @@ console.error("   resolving!");
     function earlyBailHandler() {
       console.error("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
                     "DUMPING LOG.");
-      self.dumpLogResultsToConsole();
+      self.dumpLogResultsToConsole(errorTrapper.reliableOutput);
     }
-    process.once('exit', earlyBailHandler);
+    errorTrapper.once('exit', earlyBailHandler);
 
     /**
      * Log uncaught exceptions to the currently active test step.
@@ -467,7 +468,7 @@ console.error("   resolving!");
       if (self._logBadThingsToLogger)
         self._logBadThingsToLogger.uncaughtException(ex);
     }
-    process.on('uncaughtException', uncaughtExceptionHandler);
+    errorTrapper.on('uncaughtException', uncaughtExceptionHandler);
 
     runNextTestCase();
     return deferred.promise;
@@ -480,7 +481,7 @@ console.error("   resolving!");
    *  As a result, it's really important to make sure stderr gets into the
    *  output file too.  I suggest using &> for redirection.
    */
-  dumpLogResultsToConsole: function() {
+  dumpLogResultsToConsole: function(reliableOutput) {
     var definer = this._testDefiner;
     // - accumulate the schemas of all the (potentially) involved schema dudes.
     var schema = {}, key, rawDef;
@@ -503,13 +504,13 @@ console.error("   resolving!");
     }
 
     // - dump
-    console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
+    reliableOutput("##### LOGGEST-TEST-RUN-BEGIN #####");
     try {
       var dumpObj = {
         schema: schema,
         log: definer._log,
       };
-      console.error(JSON.stringify(dumpObj));
+      reliableOutput(JSON.stringify(dumpObj));
     }
     catch (ex) {
       console.error("JSON problem:", ex.message, ex.stack, ex);
@@ -521,7 +522,7 @@ console.error("   resolving!");
         console.error("exx y", exx);
       }
     }
-    console.error("##### LOGGEST-TEST-RUN-END #####");
+    reliableOutput("##### LOGGEST-TEST-RUN-END #####");
     //console.error("AND FOR THE HUMANS...");
     //console.error(JSON.stringify(dumpObj, false, 2));
   }
@@ -603,8 +604,8 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
   var deferred = $Q.defer();
   var runner;
   function itAllGood() {
-console.error("  itAllGood()");
-    runner.dumpLogResultsToConsole();
+//console.error("  itAllGood()");
+    runner.dumpLogResultsToConsole(ErrorTrapper.reliableOutput);
     deferred.resolve(true);
   };
 
@@ -620,16 +621,16 @@ console.error("  itAllGood()");
   //    just fall-out from modules' evaluating to null.
   var alreadyBailed = false;
   ErrorTrapper.callbackOnError(function explodey(err, moduleName) {
-console.error("ERROR TRAPPAH");
+//console.error("ERROR TRAPPAH");
     if (alreadyBailed)
       return;
     reportTestModuleRequireFailures(testModuleName, moduleName, [err]);
     deferred.resolve(true);
     alreadyBailed = true;
-console.error("ERROR TRAPPAH2");
+//console.error("ERROR TRAPPAH2");
   });
   require([testModuleName], function(tmod) {
-console.error("IN TEST MODULE INVOC");
+//console.error("IN TEST MODULE INVOC");
     // XXX per the above, this bit is moot now and should be removed unless
     //  r.js changes behaviour (from our perspective) again.
     // If there was a problem, tmod will be null (and we will have trapped
@@ -652,7 +653,7 @@ console.error("IN TEST MODULE INVOC");
 
     // now that it is loaded, run it
     runner = new TestDefinerRunner(tmod.TD, superDebug);
-    when(runner.runAll(), itAllGood, itAllGood);
+    when(runner.runAll(ErrorTrapper), itAllGood, itAllGood);
   });
   return deferred.promise;
 };

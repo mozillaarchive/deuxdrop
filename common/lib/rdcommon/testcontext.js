@@ -544,7 +544,7 @@ exports.defineTestsFor = function defineTestsFor(testModule, logfabs,
       }
     }
   }
-
+console.log("defining tests for", testModule.id);
   return new TestDefiner(testModule.id, logfabs, testHelpers, tags);
 };
 

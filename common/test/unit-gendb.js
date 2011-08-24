@@ -39,13 +39,12 @@
  *
  **/
 
-define(
+define('unit-gendb', // Jetpack's AMD loader needs us to say what we are...
   [
     'q',
     'rdcommon/log',
     'rdcommon/testcontext',
-    // XXX HARDCODING THE DATABASE IS OBVIOUSLY DUBIOUS AND LOUD
-    'rdservers/gendb/redis',
+    'rdplat/gendb',
     'module',
     'exports'
   ],
@@ -119,7 +118,7 @@ TD.commonCase('hbase model', function(T) {
   T.action(eLazy, 'define schema', function() {
     eLazy.expect_event('schema defined');
 
-    when(conn.defineSchema, logEvent('schema defined'), badNews);
+    when(conn.defineSchema(dbSchema), logEvent('schema defined'), badNews);
   });
 
   T.group('row/cell basics');
@@ -277,6 +276,214 @@ TD.commonCase('hbase model', function(T) {
     eLazy.expect_namedValue('a', dynA);
     when(conn.getRow(TBL_HUMANS, 'a', null),
          logNamedValue('a'), badNews);
+  });
+
+  T.group('cleanup');
+  T.cleanup(eLazy, 'cleanup', function() {
+    $gendb.cleanupTestDBConnection(conn);
+  });
+});
+
+TD.commonCase('reorderable collection index model', function(T) {
+  // although the database connection has a logger, they're not really useful
+  //  for correctness, just for knowing what's happening, so we create a lazy
+  //  person's logger for the unit test.
+  var eLazy = T.lazyLogger('db'), conn;
+
+  // use a common rejection handler for everything.
+  function badNews(err) {
+    eLazy.error(err);
+  }
+  // helper to create a callback handler
+  function logEvent(what) {
+    return function() {
+      eLazy.event(what);
+    };
+  };
+  // helper to create a callback that logs the value passed to the callback
+  //  using namedValue.  Strictly speaking, we don't need to provide the name
+  //  because the testing framework enforces sequencing, I'm just trying to
+  //  make the logs perhaps a bit more readable.
+  function logNamedValue(name) {
+    return function(val) {
+      eLazy.namedValue(name, val);
+    };
+  };
+
+  T.group('setup');
+  T.action(eLazy, 'create connection', function() {
+    conn = $gendb.makeTestDBConnection('');
+  });
+  T.action(eLazy, 'define schema', function() {
+    eLazy.expect_event('schema defined');
+
+    when(conn.defineSchema(dbSchema), logEvent('schema defined'), badNews);
+  });
+
+
+  // - empties
+  T.group('empty index scan');
+  T.check(eLazy, 'empty numeric index scan returns empty list', function() {
+    eLazy.expect_namedValue('empty index', []);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('empty index'), badNews);
+  });
+  T.check(eLazy, 'empty string index scan returns empty list', function() {
+    eLazy.expect_namedValue('empty index', []);
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+         logNamedValue('empty index'), badNews);
+  });
+
+  // - updates work
+  T.group('update clobbers: number');
+  T.action(eLazy, 'insert A=1', function() {
+    eLazy.expect_event('did put A=1');
+    when(conn.updateIndexValue(TBL_HUMANS, IDX_AGE, '', 'A', 1),
+         logEvent('did put A=1'), badNews);
+  });
+  T.check(eLazy, 'check A=1', function() {
+    eLazy.expect_namedValue('scan post A=1', ['A', 1]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('scan post A=1'), badNews);
+  });
+  T.action(eLazy, 'update A=2', function() {
+    eLazy.expect_event('did put A=2');
+    when(conn.updateIndexValue(TBL_HUMANS, IDX_AGE, '', 'A', 2),
+         logEvent('did put A=2'), badNews);
+  });
+  T.check(eLazy, 'check A=2', function() {
+    eLazy.expect_namedValue('scan post A=2', ['A', 2]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('scan post A=2'), badNews);
+  });
+  T.action(eLazy, 'update A=0', function() {
+    eLazy.expect_event('did put A=0');
+    when(conn.updateIndexValue(TBL_HUMANS, IDX_AGE, '', 'A', 0),
+         logEvent('did put A=0'), badNews);
+  });
+  T.check(eLazy, 'check A=0', function() {
+    eLazy.expect_namedValue('scan post A=0', ['A', 0]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('scan post A=0'), badNews);
+  });
+
+  T.group('update clobbers: string');
+  T.action(eLazy, 'insert A=foo', function() {
+    eLazy.expect_event('did put A=foo');
+    when(conn.updateStringIndexValue(TBL_HUMANS, IDX_NAME, '', 'A', 'foo'),
+         logEvent('did put A=foo'), badNews);
+  });
+  T.check(eLazy, 'check A=foo', function() {
+    eLazy.expect_namedValue('scan post A=foo', ['A', 'foo']);
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+         logNamedValue('scan post A=foo'), badNews);
+  });
+  T.action(eLazy, 'update A=bar', function() {
+    eLazy.expect_event('did put A=bar');
+    when(conn.updateStringIndexValue(TBL_HUMANS, IDX_NAME, '', 'A', 'bar'),
+         logEvent('did put A=bar'), badNews);
+  });
+  T.check(eLazy, 'check A=bar', function() {
+    eLazy.expect_namedValue('scan post A=bar', ['A', 'bar']);
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+         logNamedValue('scan post A=bar'), badNews);
+  });
+
+  // - maximize works
+  T.group('maximize maximizes');
+  T.action(eLazy, 'max A=5', function() {
+    eLazy.expect_event('did max A=5');
+    when(conn.maximizeIndexValue(TBL_HUMANS, IDX_AGE, '', 'A', 5),
+         logEvent('did max A=5'), badNews);
+  });
+  T.check(eLazy, 'check A=5', function() {
+    eLazy.expect_namedValue('scan post A=max~5', ['A', 5]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('scan post A=max~5'), badNews);
+  });
+  T.action(eLazy, 'max A=2', function() {
+    eLazy.expect_event('did max A=2');
+    when(conn.maximizeIndexValue(TBL_HUMANS, IDX_AGE, '', 'A', 2),
+         logEvent('did max A=2'), badNews);
+  });
+  T.check(eLazy, 'check A=5', function() {
+    eLazy.expect_namedValue('scan post A=max~2', ['A', 5]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('scan post A=max~2'), badNews);
+  });
+
+  // - ordering is right...
+  T.group('populated index scan: number');
+  T.action(eLazy, 'update B=3', function() {
+    eLazy.expect_event('did put B=3');
+    when(conn.updateIndexValue(TBL_HUMANS, IDX_AGE, '', 'B', 3),
+         logEvent('did put B=3'), badNews);
+  });
+  T.check(eLazy, 'check A,B ordering', function() {
+    eLazy.expect_namedValue('ordering', ['A', 5, 'B', 3]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('ordering'), badNews);
+  });
+  T.action(eLazy, 'update C=0', function() {
+    eLazy.expect_event('did put C=0');
+    when(conn.updateIndexValue(TBL_HUMANS, IDX_AGE, '', 'C', 0),
+         logEvent('did put C=0'), badNews);
+  });
+  T.check(eLazy, 'check A,B,C ordering', function() {
+    eLazy.expect_namedValue('ordering', ['A', 5, 'B', 3, 'C', 0]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('ordering'), badNews);
+  });
+
+  T.group('populated index scan: string');
+  T.check(eLazy, 'update B=car', function() {
+    eLazy.expect_event('did put B=car');
+    when(conn.updateStringIndexValue(TBL_HUMANS, IDX_NAME, '', 'B', 'car'),
+         logEvent('did put B=car'), badNews);
+  });
+  T.check(eLazy, 'check A,B ordering', function() {
+    eLazy.expect_namedValue('string ordering', ['A', 'bar', 'B', 'car']);
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+         logNamedValue('string ordering'), badNews);
+  });
+
+  // - ordering can change...
+  T.group('index orderings can change: number');
+  T.action(eLazy, 'max C=7', function() {
+    eLazy.expect_event('did max C=7');
+    when(conn.maximizeIndexValue(TBL_HUMANS, IDX_AGE, '', 'C', 7),
+         logEvent('did max C=7'), badNews);
+  });
+  T.check(eLazy, 'check C,A,B ordering', function() {
+    eLazy.expect_namedValue('ordering', ['C', 7, 'A', 5, 'B', 3]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+         logNamedValue('ordering'), badNews);
+  });
+
+
+  T.group('index orderings can change: string');
+  T.check(eLazy, 'update B=aar', function() {
+    eLazy.expect_event('did put B=aar');
+    when(conn.updateStringIndexValue(TBL_HUMANS, IDX_NAME, '', 'B', 'aar'),
+         logEvent('did put B=aar'), badNews);
+  });
+  T.check(eLazy, 'check B,A ordering', function() {
+    eLazy.expect_namedValue('string ordering', ['B', 'aar', 'A', 'bar']);
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+         logNamedValue('string ordering'), badNews);
+  });
+
+  // - namespacing (by thing being empty)
+  T.group('parameters properly namespace');
+  T.check(eLazy, 'empty numeric index scan returns empty list', function() {
+    eLazy.expect_namedValue('empty index', []);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, 'blah'),
+         logNamedValue('empty index'), badNews);
+  });
+  T.check(eLazy, 'empty string index scan returns empty list', function() {
+    eLazy.expect_namedValue('empty index', []);
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, 'blah'),
+         logNamedValue('empty index'), badNews);
   });
 
   T.group('cleanup');
