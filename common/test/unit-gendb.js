@@ -39,7 +39,7 @@
  *
  **/
 
-define(
+define('unit-gendb', // Jetpack's AMD loader needs us to say what we are...
   [
     'q',
     'rdcommon/log',

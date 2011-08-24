@@ -60,7 +60,7 @@ define(
   ) {
 const when = $Q.when;
 
-const LOGFAB = $_logdef.LOGFAB;
+const LOGFAB = exports.LOGFAB = $_logdef.LOGFAB;
 
 var IndexedDB = null, IDBTransaction, IDBKeyRange;
 
@@ -82,6 +82,7 @@ function IndexedDbConn(nsprefix, _logger) {
   var self = this;
 
   $shim.afterLoaded(function(mozIndexedDB, _IDBTransaction, _IDBKeyRange) {
+    self._log.connecting();
     IndexedDB = mozIndexedDB;
     IDBTransaction = _IDBTransaction;
     IDBKeyRange = _IDBKeyRange;
@@ -91,6 +92,7 @@ function IndexedDbConn(nsprefix, _logger) {
       dbDeferred.reject(dbOpenRequest.errorCode);
     };
     dbOpenRequest.onsuccess = function(event) {
+      self._log.connected();
       self._db = dbOpenRequest.result;
       dbDeferred.resolve(self._db);
     };
@@ -539,5 +541,13 @@ IndexedDbConn.prototype.updateStringIndexValue =
   IndexedDbConn.prototype.updateIndexValue;
 IndexedDbConn.prototype.scanStringIndex =
   IndexedDbConn.prototype.scanIndex;
+
+exports.makeTestDBConnection = function(uniqueName, _logger) {
+  return new IndexedDbConn(uniqueName, _logger);
+};
+
+exports.cleanupTestDBConnection = function(conn) {
+  conn.close();
+};
 
 }); // end define

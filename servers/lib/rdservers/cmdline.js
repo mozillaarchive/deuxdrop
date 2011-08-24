@@ -78,6 +78,8 @@ var ErrorTrapper = {
   on: process.on.bind(process),
   once: process.once.bind(process),
   removeListener: process.removeListener.bind(process),
+
+  reliableOutput: console.error,
 };
 
 require.onError = function(err) {

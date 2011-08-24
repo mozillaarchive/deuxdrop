@@ -88,6 +88,12 @@ function uneval(x) {
 function simplifyFilename(filename) {
   if (!filename)
     return filename;
+  // jetpack fighter...
+  if (filename.length > 64) {
+    var lastSlash = filename.lastIndexOf('/');
+    if (lastSlash !== -1)
+      return filename.substring(lastSlash+1);
+  }
   // can we reduce it?
   if (filename.substring(0, baseUrl.length) === baseUrl) {
     // we could take this a step further and do path analysis.
@@ -114,6 +120,7 @@ Error.prepareStackTrace = function(e, frames) {
 
 // XXX not sure if this even works since Error is not supposed to be
 //  configurable... provide a captureStackTrace method
+// nb: and obviously, in independent sandboxes, this does jack...
 if (!Error.captureStackTrace) {
   Error.captureStackTrace = function(who, errType) {
     try {
@@ -125,7 +132,7 @@ if (!Error.captureStackTrace) {
   };
 }
 
-var SM_STACK_FORMAT = /^(.*)@([^:]):\d+$/;
+var SM_STACK_FORMAT = /^(.*)@(.+):(\d+)$/;
 
 // this is biased towards v8/chromium for now
 /**
@@ -133,7 +140,10 @@ var SM_STACK_FORMAT = /^(.*)@([^:]):\d+$/;
  */
 exports.transformException = function transformException(e) {
   // it's conceivable someone
-  if (!(e instanceof Error)) {
+  if (!(e instanceof Error) &&
+      // under jetpack, we are losing hard, probably because of the sandbox
+      //  issue where everybody gets their own fundamentals, so check for stack.
+      (!e || typeof(e) !== "object" || !("stack" in e))) {
     return {
       n: "Object",
       m: "" + e,
@@ -157,18 +167,18 @@ exports.transformException = function transformException(e) {
     m: e.message,
     f: [],
   };
-  var sframes = e.stack.split("\n"), frames = o.f, match;
+  var sframes = stack.split("\n"), frames = o.f, match;
   for (var i = 0; i < sframes.length; i++) {
     if ((match = SM_STACK_FORMAT.exec(sframes[i]))) {
       frames.push({
         filename: simplifyFilename(match[2]),
         lineNo: match[3],
-        funcName: bits[1],
+        funcName: match[1],
       });
     }
   }
 
   return o;
-}
+};
 
 }); // end define

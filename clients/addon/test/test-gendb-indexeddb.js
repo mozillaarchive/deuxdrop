@@ -5,7 +5,8 @@
  */
 
 var $Q = require('q'), when = $Q.when,
-    $td = require('rdcommon/testdriver');
+    $td = require('rdcommon/testdriver'),
+    $equeue = require('event-queue');
 
 /**
  * The ErrorTrapper as provided in `cmdline.js` is our gateway to RequireJS'
@@ -15,7 +16,11 @@ var $Q = require('q'), when = $Q.when,
 var DummyErrorTrapper = {
   callbackOnError: function() {},
   gobbleAndStopTrappingErrors: function() {
-    return [];
+    return $equeue.gimmeExceptions();
+  },
+
+  reliableOutput: function(msg) {
+    dump(msg + "\n");
   },
 
   on: function() {},

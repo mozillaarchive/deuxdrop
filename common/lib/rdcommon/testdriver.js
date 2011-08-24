@@ -424,14 +424,14 @@ TestDefinerRunner.prototype = {
   },
 
   runAll: function(errorTrapper) {
-console.error(" runAll()");
+//console.error(" runAll()");
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
     this._markDefinerUnderTest(definer);
     definer._log.run_begin();
     // -- next case
     function runNextTestCase() {
-console.error("  runNextTestCase()");
+//console.error("  runNextTestCase()");
       // - all done
       if (iTestCase >= definer.__testCases.length) {
         errorTrapper.removeListener('exit', earlyBailHandler);
@@ -440,7 +440,7 @@ console.error("  runNextTestCase()");
 
         definer._log.run_end();
         self._clearDefinerUnderTest(definer);
-console.error("   resolving!");
+//console.error("   resolving!");
         deferred.resolve(self);
         return;
       }
@@ -457,7 +457,7 @@ console.error("   resolving!");
     function earlyBailHandler() {
       console.error("IMMINENT EVENT LOOP TERMINATION IMPLYING BAD TEST, " +
                     "DUMPING LOG.");
-      self.dumpLogResultsToConsole();
+      self.dumpLogResultsToConsole(errorTrapper.reliableOutput);
     }
     errorTrapper.once('exit', earlyBailHandler);
 
@@ -481,7 +481,7 @@ console.error("   resolving!");
    *  As a result, it's really important to make sure stderr gets into the
    *  output file too.  I suggest using &> for redirection.
    */
-  dumpLogResultsToConsole: function() {
+  dumpLogResultsToConsole: function(reliableOutput) {
     var definer = this._testDefiner;
     // - accumulate the schemas of all the (potentially) involved schema dudes.
     var schema = {}, key, rawDef;
@@ -504,13 +504,13 @@ console.error("   resolving!");
     }
 
     // - dump
-    console.error("##### LOGGEST-TEST-RUN-BEGIN #####");
+    reliableOutput("##### LOGGEST-TEST-RUN-BEGIN #####");
     try {
       var dumpObj = {
         schema: schema,
         log: definer._log,
       };
-      console.error(JSON.stringify(dumpObj));
+      reliableOutput(JSON.stringify(dumpObj));
     }
     catch (ex) {
       console.error("JSON problem:", ex.message, ex.stack, ex);
@@ -522,7 +522,7 @@ console.error("   resolving!");
         console.error("exx y", exx);
       }
     }
-    console.error("##### LOGGEST-TEST-RUN-END #####");
+    reliableOutput("##### LOGGEST-TEST-RUN-END #####");
     //console.error("AND FOR THE HUMANS...");
     //console.error(JSON.stringify(dumpObj, false, 2));
   }
@@ -605,7 +605,7 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
   var runner;
   function itAllGood() {
 //console.error("  itAllGood()");
-    runner.dumpLogResultsToConsole();
+    runner.dumpLogResultsToConsole(ErrorTrapper.reliableOutput);
     deferred.resolve(true);
   };
 
