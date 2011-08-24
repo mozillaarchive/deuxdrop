@@ -1,3 +1,5 @@
+See DIRECTORIES.md for a breakdown of the clients directory.
+
 Install node libraries
     npm install socket.io redis paperboy
 
@@ -17,6 +19,6 @@ Run the node chat server
 
     node server.js
 
-Point your browser to the server at 
+Point your browser to the server at
 
     localhost:8888/firefox/
