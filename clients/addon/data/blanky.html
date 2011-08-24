@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head></head>
+<head>
+  <script>
+    function gimmeDB(dbName) {
+      return mozIndexedDB.open(dbName);
+    }
+  </script>
+</head>
 <body>
 </body>
 </html>

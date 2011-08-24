@@ -46,9 +46,19 @@
 
 let $hframe = require('hidden-frame'), $self = require('self');
 
+let {Cc, Ci, Cu} = require('chrome');
+
 var afterLoaded = [];
 
-let mozIndexedDB = null, IDBTransaction = null, IDBKeyRange = null;
+function makeURI(aURL, aOriginCharset, aBaseURI) {
+  var ioService = Cc["@mozilla.org/network/io-service;1"]
+                  .getService(Ci.nsIIOService);
+  return ioService.newURI(aURL, aOriginCharset, aBaseURI);
+}
+
+
+let opener = null, mozIndexedDB = null,
+    IDBTransaction = null, IDBKeyRange = null;
 let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
   onReady: function() {
     // now that we have a frame, point it at a URL so we get a principal...
@@ -58,8 +68,21 @@ let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
     this.element.contentWindow.location = $self.data.url("blanky.html");
     let self = this;
     this.element.addEventListener("DOMContentLoaded", function() {
+      let win = self.element.contentWindow;
+      // forcibly provide the indexedDB permission.
+      let permMgr = Cc["@mozilla.org/permissionmanager;1"]
+                   .getService(Ci.nsIPermissionManager);
+      let uri = makeURI(win.location, null, null);
+      permMgr.add(uri,
+                  "indexedDB",
+                  Ci.nsIPermissionManager.ALLOW_ACTION,
+                  Ci.nsIPermissionManager.EXPIRE_NEVER);
+
+      console.log("PERM FOR", win.location, "is",
+                  permMgr.testPermission(uri, "indexedDB"));
+
       try {
-        var win = self.element.contentWindow;
+        opener = win.wrappedJSObject.gimmeDB;
         mozIndexedDB = win.mozIndexedDB;
         IDBTransaction = win.IDBTransaction;
         IDBKeyRange = win.IDBKeyRange;
@@ -75,7 +98,7 @@ let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
 
 function fireLoaded() {
  for (var i = 0; i < afterLoaded.length; i++) {
-    afterLoaded[i](mozIndexedDB, IDBTransaction, IDBKeyRange);
+    afterLoaded[i](opener, mozIndexedDB, IDBTransaction, IDBKeyRange);
   }
   afterLoaded = null;
 }
