@@ -47,14 +47,12 @@ define(
   [
     'q',
     'rdcommon/gendb-logdef',
-    'indexdbshim',
     'module',
     'exports'
   ],
   function(
     $Q,
     $_logdef,
-    $shim,
     $module,
     exports
   ) {
@@ -62,7 +60,17 @@ const when = $Q.when;
 
 const LOGFAB = exports.LOGFAB = $_logdef.LOGFAB;
 
-var IndexedDB = null, IDBTransaction, IDBKeyRange;
+/*
+ * We are assuming that mozIndexedDB and the various IDB* interfaces are
+ *  available in our global context by virtue of us having been loaded into
+ *  a content page using RequireJS rather than using the Jetpack loader.
+ *  Accordingly, we also explode if we cannot find our beloved constant.
+ */
+
+if (!mozIndexedDB)
+  throw new Error("I need mozIndexedDB; load me in a content page universe!");
+
+var IndexedDB = mozIndexedDB;
 
 /**
  * The version to use for now; not a proper version, as we perform no upgrading,
@@ -81,27 +89,24 @@ function IndexedDbConn(nsprefix, _logger) {
 
   var self = this;
 
-  $shim.afterLoaded(function(mozIndexedDB,
-                             _IDBTransaction, _IDBKeyRange) {
-    self._log.connecting();
-    IndexedDB = mozIndexedDB;
-    IDBTransaction = _IDBTransaction;
-    IDBKeyRange = _IDBKeyRange;
-    // XXX firefox 6 hack so we can perform the open with the context of the
-    //  bloody webpage (::Open checks the implicit security context, but its
-    //  helper uses the window so it lacks our 'chrome' context but gets the
-    //  'chrome' URI)
-    var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
-    dbOpenRequest.onerror = function(event) {
-      self._log.dbErr(dbOpenRequest.errorCode);
-      dbDeferred.reject(dbOpenRequest.errorCode);
-    };
-    dbOpenRequest.onsuccess = function(event) {
-      self._log.connected();
-      self._db = dbOpenRequest.result;
-      dbDeferred.resolve(self._db);
-    };
-  });
+  self._log.connecting();
+  IndexedDB = mozIndexedDB;
+  IDBTransaction = _IDBTransaction;
+  IDBKeyRange = _IDBKeyRange;
+  // XXX firefox 6 hack so we can perform the open with the context of the
+  //  bloody webpage (::Open checks the implicit security context, but its
+  //  helper uses the window so it lacks our 'chrome' context but gets the
+  //  'chrome' URI)
+  var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
+  dbOpenRequest.onerror = function(event) {
+    self._log.dbErr(dbOpenRequest.errorCode);
+    dbDeferred.reject(dbOpenRequest.errorCode);
+  };
+  dbOpenRequest.onsuccess = function(event) {
+    self._log.connected();
+    self._db = dbOpenRequest.result;
+    dbDeferred.resolve(self._db);
+  };
 }
 IndexedDbConn.prototype = {
   toString: function() {

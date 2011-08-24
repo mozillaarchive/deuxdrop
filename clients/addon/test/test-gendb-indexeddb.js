@@ -1,7 +1,6 @@
 /*
  * This file is just a shim that spins up the loggest test driver for the gendb
- *  unit test, which, by dint of platform-specific bindings, will test our
- *  indexeddb implementation.
+ *  unit test in a content page.
  */
 
 var $Q = require('q'), when = $Q.when,
