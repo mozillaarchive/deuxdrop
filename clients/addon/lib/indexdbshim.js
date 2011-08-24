@@ -36,6 +36,9 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
+ * Now that we are requiring Firefox 9-targeted builds, we can directly
+ *  access mozIndexedDB from the hidden window.
+ *
  * Use a hidden-frame and massive trickery to get us access to MozIndexedDB in
  *  Firefox 6.  The 'trickery' is that
  *  https://bugzilla.mozilla.org/show_bug.cgi?id=681024 which was only landed
@@ -44,20 +47,31 @@
  *  principal with a URI.
  **/
 
-let $hframe = require('hidden-frame'), $self = require('self');
+//let $hframe = require('hidden-frame'), $self = require('self');
 
 let {Cc, Ci, Cu} = require('chrome');
 
+let appShellService = Cc["@mozilla.org/appshell/appShellService;1"].
+                        getService(Ci.nsIAppShellService);
+let hiddenWindow = appShellService.hiddenDOMWindow;
+
+
 var afterLoaded = [];
 
+/*
 function makeURI(aURL, aOriginCharset, aBaseURI) {
   var ioService = Cc["@mozilla.org/network/io-service;1"]
                   .getService(Ci.nsIIOService);
   return ioService.newURI(aURL, aOriginCharset, aBaseURI);
 }
+*/
 
+let mozIndexedDB = hiddenWindow.mozIndexedDB,
+    IDBTransaction = hiddenWindow.IDBTransaction,
+    IDBKeyRange = hiddenWindow.IDBKeyRange;
 
-let opener = null, mozIndexedDB = null,
+/*
+let mozIndexedDB = null,
     IDBTransaction = null, IDBKeyRange = null;
 let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
   onReady: function() {
@@ -92,9 +106,10 @@ let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
         console.exception(ex);
       }
       fireLoaded();
-    }, true, /* untrusted allowed to trigger */ true);
+    }, true, true);
   }
 }));
+*/
 
 function fireLoaded() {
  for (var i = 0; i < afterLoaded.length; i++) {

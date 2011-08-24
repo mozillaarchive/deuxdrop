@@ -81,7 +81,7 @@ function IndexedDbConn(nsprefix, _logger) {
 
   var self = this;
 
-  $shim.afterLoaded(function(opener, mozIndexedDB,
+  $shim.afterLoaded(function(mozIndexedDB,
                              _IDBTransaction, _IDBKeyRange) {
     self._log.connecting();
     IndexedDB = mozIndexedDB;
@@ -91,8 +91,7 @@ function IndexedDbConn(nsprefix, _logger) {
     //  bloody webpage (::Open checks the implicit security context, but its
     //  helper uses the window so it lacks our 'chrome' context but gets the
     //  'chrome' URI)
-    var dbOpenRequest = // IndexedDB.open("deuxdrop-" + nsprefix);
-      opener("deuxdrop-" + nsprefix);
+    var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
     dbOpenRequest.onerror = function(event) {
       self._log.dbErr(dbOpenRequest.errorCode);
       dbDeferred.reject(dbOpenRequest.errorCode);
