@@ -56,7 +56,7 @@ define(
   [
     'q',
     'redis',
-    './logdef',
+    'rdcommon/gendb-logdef',
     'module',
     'exports'
   ],

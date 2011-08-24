@@ -46,7 +46,7 @@
 define(
   [
     'q',
-    './logdef',
+    'rdcommon/gendb-logdef',
     'module',
     'exports'
   ],
@@ -508,7 +508,7 @@ IndexedDbConn.prototype = {
   // String-Value Indices
   //
   // Same as the numeric-value indices; these only exist because of our redis
-  //  impl and this 
+  //  impl and this
 
   updateStringIndexValue: null,
   scanStringIndex: null,

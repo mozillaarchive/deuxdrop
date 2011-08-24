@@ -44,7 +44,7 @@ var http = require('http'),
     md5 = require('md5'),
     $Q = require('q');
 
-var $gendb = require('rdservers/gendb/redis'),
+var $gendb = require('rdplat/gendb'),
     $configurer = require('rdservers/configurer');
 
 var clients = {},

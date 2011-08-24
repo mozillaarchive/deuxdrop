@@ -93,6 +93,7 @@ require(
     ],
     paths: {
       rdservers: "servers/lib/rdservers",
+      rdplat: "servers/lib/rdplat",
       rdcommon: "common/lib/rdcommon",
       rdstests: "servers/test",
       rdctests: "common/test",

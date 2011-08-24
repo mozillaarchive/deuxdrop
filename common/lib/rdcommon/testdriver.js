@@ -603,7 +603,7 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
   var deferred = $Q.defer();
   var runner;
   function itAllGood() {
-console.error("  itAllGood()");
+//console.error("  itAllGood()");
     runner.dumpLogResultsToConsole();
     deferred.resolve(true);
   };
@@ -620,16 +620,16 @@ console.error("  itAllGood()");
   //    just fall-out from modules' evaluating to null.
   var alreadyBailed = false;
   ErrorTrapper.callbackOnError(function explodey(err, moduleName) {
-console.error("ERROR TRAPPAH");
+//console.error("ERROR TRAPPAH");
     if (alreadyBailed)
       return;
     reportTestModuleRequireFailures(testModuleName, moduleName, [err]);
     deferred.resolve(true);
     alreadyBailed = true;
-console.error("ERROR TRAPPAH2");
+//console.error("ERROR TRAPPAH2");
   });
   require([testModuleName], function(tmod) {
-console.error("IN TEST MODULE INVOC");
+//console.error("IN TEST MODULE INVOC");
     // XXX per the above, this bit is moot now and should be removed unless
     //  r.js changes behaviour (from our perspective) again.
     // If there was a problem, tmod will be null (and we will have trapped

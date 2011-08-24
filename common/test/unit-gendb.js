@@ -44,8 +44,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/testcontext',
-    // XXX HARDCODING THE DATABASE IS OBVIOUSLY DUBIOUS AND LOUD
-    'rdservers/gendb/redis',
+    'rdplat/gendb',
     'module',
     'exports'
   ],
