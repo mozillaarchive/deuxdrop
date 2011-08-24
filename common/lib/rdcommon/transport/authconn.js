@@ -201,6 +201,39 @@ function incNonce(old) {
   return nonce;
 }
 
+/*
+ * XXX gecko-related hack.  We need to send our binary data in websocket text
+ *  frames because the gecko websockets implementation does not support binary
+ *  frames.  We are experiencing failures when marshaling the data naively,
+ *  suggesting that I need to deep dive on the utf8 conversion, but time is
+ *  short.  I briefly tried an explicit utf8 'expansion' so that our binary
+ *  representations would take on legal forms, but that outright broke, so we're
+ *  roundtripping through base64 for now.
+ */
+var transitHackBinary, unTransitHackBinary;
+if (!$ws.GECKO) {
+  // node.js case
+  transitHackBinary = function(binString) {
+    // interpret the string as binary data when converting to octets
+    var buf = new Buffer(binString, 'binary');
+    return buf.toString('base64');
+  };
+  unTransitHackBinary = function(utf8String) {
+    var buf = new Buffer(utf8String, 'base64');
+    return buf.toString('binary');
+  };
+}
+else {
+  // gecko case
+  transitHackBinary = function(s) {
+    return $ws.helpers.btoa(s);
+  };
+  unTransitHackBinary = function(s) {
+    return $ws.helpers.atob(s);
+  };
+}
+
+
 var MAGIC_CLOSE_MARKER = {};
 
 /**
@@ -266,19 +299,22 @@ var AuthClientCommon = {
    */
   _onMessage: function(wsmsg) {
     var msg;
-    if (wsmsg.type === 'utf8') {
+    // XXX Gecko's websockets can't do binary frames right now
+    if (wsmsg.utf8Data[0] === 'T') { // (wsmsg.type === 'utf8') {
       // app frames and the vouch frame are binary.
       if (this.connState === 'app' && this.connState !== 'authClientVouch') {
         this.log.badProto();
         this.close();
         return;
       }
-      msg = JSON.parse(wsmsg.utf8Data);
+      msg = JSON.parse(wsmsg.utf8Data.substring(1));
     }
     else {
-      var expNonce = this._otherNextNonce;
+      var expNonce = this._otherNextNonce,
+          // XXX gecko issues... was: wsmsg.binaryData
+          data = unTransitHackBinary(wsmsg.utf8Data.substring(1));
       try {
-        msg = $nacl.box_open(wsmsg.binaryData, expNonce,
+        msg = $nacl.box_open(data, expNonce,
                              this._otherPublicKey, this._ephemKeyPair.sk);
       }
       catch(ex) {
@@ -393,7 +429,8 @@ var AuthClientCommon = {
 
   _writeRaw: function(obj) {
     this.log.send(obj.type, obj);
-    this._conn.sendUTF(JSON.stringify(obj));
+    // XXX prefixing because of gecko websocket limitations (no binary frames)
+    this._conn.sendUTF('T' + JSON.stringify(obj));
   },
 
   writeMessage: function(obj) {
@@ -402,9 +439,13 @@ var AuthClientCommon = {
     var nonce = this._myNextNonce;
     var boxedJsonMsg = $nacl.box(jsonMsg, nonce, this._otherPublicKey,
                                  this._ephemKeyPair.sk);
+    // XXX Gecko's websockets only supports DOMStrings right now...
+    /*
     // it wants a buffer...
     var buf = new Buffer(boxedJsonMsg, 'binary');
     this._conn.sendBytes(buf);
+    */
+    this._conn.sendUTF('B' + transitHackBinary(boxedJsonMsg));
 
     this._myNextNonce = incNonce(this._myNextNonce);
   },

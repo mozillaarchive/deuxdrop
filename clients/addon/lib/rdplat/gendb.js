@@ -46,26 +46,23 @@
 define(
   [
     'q',
-    './logdef',
+    'rdcommon/gendb-logdef',
+    'indexdbshim',
     'module',
     'exports'
   ],
   function(
     $Q,
     $_logdef,
+    $shim,
     $module,
     exports
   ) {
 const when = $Q.when;
 
-const LOGFAB = $_logdef.LOGFAB;
+const LOGFAB = exports.LOGFAB = $_logdef.LOGFAB;
 
-var IndexedDB = mozIndexedDB;
-/*
- * We are assuming we get the following magically in our global namespace:
- * - IDBTransaction
- * - IDBKeyRange
- */
+var IndexedDB = null, IDBTransaction, IDBKeyRange;
 
 /**
  * The version to use for now; not a proper version, as we perform no upgrading,
@@ -82,16 +79,29 @@ function IndexedDbConn(nsprefix, _logger) {
 
   this._log = LOGFAB.gendbConn(this, _logger, [nsprefix]);
 
-  var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
   var self = this;
-  dbOpenRequest.onerror = function(event) {
-    self._log.dbErr(dbOpenRequest.errorCode);
-    dbDeferred.reject(dbOpenRequest.errorCode);
-  };
-  dbOpenRequest.onsuccess = function(event) {
-    self._db = dbOpenRequest.result;
-    dbDeferred.resolve(self._db);
-  };
+
+  $shim.afterLoaded(function(mozIndexedDB,
+                             _IDBTransaction, _IDBKeyRange) {
+    self._log.connecting();
+    IndexedDB = mozIndexedDB;
+    IDBTransaction = _IDBTransaction;
+    IDBKeyRange = _IDBKeyRange;
+    // XXX firefox 6 hack so we can perform the open with the context of the
+    //  bloody webpage (::Open checks the implicit security context, but its
+    //  helper uses the window so it lacks our 'chrome' context but gets the
+    //  'chrome' URI)
+    var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
+    dbOpenRequest.onerror = function(event) {
+      self._log.dbErr(dbOpenRequest.errorCode);
+      dbDeferred.reject(dbOpenRequest.errorCode);
+    };
+    dbOpenRequest.onsuccess = function(event) {
+      self._log.connected();
+      self._db = dbOpenRequest.result;
+      dbDeferred.resolve(self._db);
+    };
+  });
 }
 IndexedDbConn.prototype = {
   toString: function() {
@@ -176,7 +186,7 @@ IndexedDbConn.prototype = {
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_ONLY);
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -191,7 +201,7 @@ IndexedDbConn.prototype = {
   boolcheckRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_ONLY);
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -206,7 +216,7 @@ IndexedDbConn.prototype = {
   assertBoolcheckRowCell: function(tableName, rowId, columnName, exClass) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_ONLY);
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -311,7 +321,7 @@ IndexedDbConn.prototype = {
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
     this._log.incrementCell(tableName, rowId, columnName, delta);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -327,7 +337,6 @@ IndexedDbConn.prototype = {
         store.add((newVal = 1), cellName);
       else
         newVal = store.put((newVal = result + 1), cellName);
-      }
       deferred.resolve(newVal);
     };
     return deferred.promise;
@@ -461,7 +470,7 @@ IndexedDbConn.prototype = {
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
     var aggrName = tableName + INDEX_DELIM + indexName;
-    var transaction = this._db.transaction([aggrName]
+    var transaction = this._db.transaction([aggrName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -484,7 +493,7 @@ IndexedDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
-    var transaction = this._db.transaction([tableName]
+    var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
       deferred.resolve();
@@ -500,7 +509,6 @@ IndexedDbConn.prototype = {
         store.add(newValue, cellName);
       else
         newVal = store.put(Math.max(existing, newValue), cellName);
-      }
       deferred.resolve(event.target.result);
     };
     return deferred.promise;
@@ -510,7 +518,7 @@ IndexedDbConn.prototype = {
   // String-Value Indices
   //
   // Same as the numeric-value indices; these only exist because of our redis
-  //  impl and this 
+  //  impl and this
 
   updateStringIndexValue: null,
   scanStringIndex: null,
@@ -536,7 +544,15 @@ IndexedDbConn.prototype = {
 };
 IndexedDbConn.prototype.updateStringIndexValue =
   IndexedDbConn.prototype.updateIndexValue;
-IndexedDBConn.prototype.scanStringIndex =
+IndexedDbConn.prototype.scanStringIndex =
   IndexedDbConn.prototype.scanIndex;
+
+exports.makeTestDBConnection = function(uniqueName, _logger) {
+  return new IndexedDbConn(uniqueName, _logger);
+};
+
+exports.cleanupTestDBConnection = function(conn) {
+  conn.close();
+};
 
 }); // end define

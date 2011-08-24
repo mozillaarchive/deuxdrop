@@ -1205,7 +1205,7 @@ LoggestClassMaker.prototype = {
       var logger, tester;
       // - Testing
       if ((tester = (moduleFab._underTest || loggerDecisionFab._underTest))) {
-console.error("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
+//console.error("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
         if (typeof(parentLogger) === "string")
           throw new Error("A string can't be a logger => not a valid parent");
         logger = new testerCon(ident);
@@ -1214,12 +1214,12 @@ console.error("MODULE IS UNDER TEST FOR: " + testerCon.prototype.__defName);
       }
       // - Logging
       else if (moduleFab._generalLog || testerCon._generalLog) {
-console.error("general logger for: " + testerCon.prototype.__defName);
+//console.error("general logger for: " + testerCon.prototype.__defName);
         logger = new loggerCon(ident);
       }
       // - Statistics Only
       else {
-console.error("statistics only for: " + testerCon.prototype.__defName);
+//console.error("statistics only for: " + testerCon.prototype.__defName);
         return new dummyCon();
       }
 
