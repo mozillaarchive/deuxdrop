@@ -34,31 +34,52 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-/*jslint strict: false, indent: 2 */
-/*global define: false */
+/*jslint strict: false, indent: 2, nomen: false */
+/*global define: false, window: false, postMessage: false */
 
 define(function (require) {
+alert('SELF.postMessage IS: ' + self.postMessage);
 
   var api = require('rdcommon/moda/api'),
       worker = require('rdcommon/moda/worker'),
-      bridge = new api.ModaBridge();
+      bridge = new api.ModaBridge(),
+      targetOrigin = window.location.protocol + '//' + window.location.host,
+
+      modaRequest = 'modaRequest:',
+      modaResponse = 'modaResponse:';
 
   // The hookup, using the custom event hack for jetpack,
   // updating to latest repo of jetpack may allow for going back
   // to postMessage. Right now testing with jetpack 1.1b1
   bridge._sendObjFunc = function (data) {
+    postMessage(modaRequest + JSON.stringify(data), targetOrigin);
+    /*
     var event = document.createEvent("MessageEvent");
     event.initMessageEvent('moda-addon-message', false, false,
                            JSON.stringify(data), '*', null, null, null);
     window.dispatchEvent(event);
+    */
   };
 
   // Listen for messages from jetpack-land
+  window.addEventListener('message', function (evt) {
+    console.log('modality: moda-content-message: ' + JSON.stringify(evt.data));
+    if (evt.origin === targetOrigin && evt.data.indexOf(modaResponse) === 0) {
+      var data = JSON.parse(evt.data.substring(modaResponse.length));
+
+      console.log('dispatching to bridge.receive: ' + JSON.stringify(data));
+
+      bridge._receive(data);
+    }
+  }, false);
+
+/*
   window.addEventListener('moda-content-message', function (evt) {
       //console.log('moda-content-message: ' + JSON.stringify(evt.data));
       var data = JSON.parse(evt.data);
       bridge._receive(data);
     }, false);
+*/
 
   return bridge;
 });

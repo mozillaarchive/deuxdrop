@@ -111,7 +111,7 @@ log('SETTING UP PAGE MOD');
         pageWorker = pageWorkers.Page({
           contentURL: transportUrl,
           contentScriptFile: modaContentUrl,
-          contentScript: 'sendContentMessage({serverHost: "' + serverHost + '"});',
+          //contentScript: 'sendContentMessage({serverHost: "' + serverHost + '"});',
           contentScriptWhen: 'ready',
           onMessage: function (message) {
             if (!pageWorkerReady && message.transportLoaded) {

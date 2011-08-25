@@ -22,13 +22,15 @@
  * */
 
 /*jslint indent: 2, strict: false  */
-/*global self: false, window: false, document: false */
+/*global self: false, window: false, document: false, postMessage: false */
 
 
 /**
  * This is just a proxy to communicate with the addon-space code.
  */
-var targetOrigin = window.location.protocol + '//' + window.location.host;
+var targetOrigin = window.location.protocol + '//' + window.location.host,
+    modaRequest = 'modaRequest:',
+    modaResponse = 'modaResponse:';
 
 // Going with a custom event approach  as mentioned by Irakli instead of
 // postMessage because of this bug:
@@ -42,17 +44,31 @@ var targetOrigin = window.location.protocol + '//' + window.location.host;
 // self is an injected variable done by the add-on SDK
 
 function sendContentMessage(data) {
-  //console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-content-message: ' + JSON.stringify(data));
+  console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-content-message: ' + JSON.stringify(data));
+  postMessage(modaResponse + JSON.stringify(data), targetOrigin);
+  /*
+  console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-content-message: ' + JSON.stringify(data));
   var event = document.createEvent('MessageEvent');
   event.initMessageEvent('moda-content-message', false, false, JSON.stringify(data),
                          '*', null, null, null);
   window.dispatchEvent(event);
+  */
 }
 
+window.addEventListener('message', function (evt) {
+  if (evt.origin === targetOrigin && evt.data.indexOf('modaRequest:') === 0) {
+    console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-addon-message to addon: ' + evt.data);
+    var data = JSON.parse(evt.data.substring(modaRequest.length));
+    self.postMessage(data);
+  }
+}, false);
+
+/*
 window.addEventListener('moda-addon-message', function (event) {
-  //console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-addon-message to addon: ' + event.data);
+  console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-addon-message to addon: ' + event.data);
   self.postMessage(JSON.parse(event.data));
 }, false);
+*/
 
 self.on('message', function (data) {
   sendContentMessage(data);
