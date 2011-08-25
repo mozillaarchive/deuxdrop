@@ -36,42 +36,29 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Wrap the MozWebSocket implementation by stealing it from a hidden iframe and
- *  exposing it to look like the node.js websocket implementation we are using.
+ * Wrap the document-provided websocket implementation into something that
+ *  resembles the node.js websocket implementation we are using.
  *  Our adaption is intended to be limited to pretending to be two-stage like
  *  WebSocketClient is and to convert the node EventEmitter idiom to the DOMy
  *  attribute idiom.
  **/
 
-let $hframe = require('hidden-frame');
-
-var afterLoaded = [];
+define(
+  [
+    'exports'
+  ],
+  function(
+    exports
+  ) {
 
 exports.GECKO = true;
-exports.helpers = {};
-
-let MozWebSocket = null;
-let gHiddenFrame = $hframe.add($hframe.HiddenFrame({
-  onReady: function() {
-    MozWebSocket = this.element.contentWindow.MozWebSocket;
-    exports.helpers.btoa = this.element.contentWindow.btoa;
-    exports.helpers.atob = this.element.contentWindow.atob;
-
-    for (var i = 0; i < afterLoaded.length; i++) {
-      afterLoaded[i]();
-    }
-    afterLoaded = null;
-  }
-}));
-
-exports.afterLoaded = function(callback) {
-  if (MozWebSocket) {
-    callback();
-  }
-  else {
-    afterLoaded.push(callback);
-  }
+exports.helpers = {
+  btoa: btoa,
+  atob: atob,
 };
+
+if (!MozWebSocket)
+  throw new Error("I need to be loaded in a content page!");
 
 function WebSocketClient(opts) {
   this.ws = null;
@@ -80,8 +67,8 @@ function WebSocketClient(opts) {
 exports.WebSocketClient = WebSocketClient;
 WebSocketClient.prototype = {
   connect: function(url, protocols) {
-    let ws = new MozWebSocket(url, protocols);
-    let shim = this.shim = new WebSocketConnShim(ws);
+    var ws = new MozWebSocket(url, protocols);
+    var shim = this.shim = new WebSocketConnShim(ws);
 
     if (this.handlers.hasOwnProperty("error"))
       ws.onerror = this.handlers.error;
@@ -136,3 +123,5 @@ WebSocketConnShim.prototype = {
     remotePort: -1,
   },
 };
+
+}); // end define

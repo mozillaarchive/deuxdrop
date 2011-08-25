@@ -56,14 +56,19 @@ var when = $Q.when;
 
 var moduleName = document.location.search.substring(1);
 
-console.log("THINKING ABOUT RUNNING TEST", moduleName);
 
-when($td.runTestsFromModule(moduleName, MAGIC_ERROR_TRAPPER, true),
-     function() {
-       postMessage("pass");
-     },
-     function() {
-       postMessage("fail");
-     });
+window.GO_RUN_TESTS = function() {
+  console.log("!!!!! TRYING TO RUN TEST", moduleName);
+  when($td.runTestsFromModule(moduleName, MAGIC_ERROR_TRAPPER, true),
+       function() {
+         TESTDONE("pass");
+       },
+       function() {
+         TESTDONE("fail");
+       });
+};
+
+if (window.TESTDONE)
+  window.GO_RUN_TESTS();
 
 }); // end define

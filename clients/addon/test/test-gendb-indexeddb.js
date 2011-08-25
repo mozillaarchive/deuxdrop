@@ -3,29 +3,9 @@
  *  unit test in a content page.
  */
 
-/**
- * The ErrorTrapper as provided in `cmdline.js` is our gateway to RequireJS'
- *  error trapping capabilities.  We don't have/use such capabilities in
- *  jetpack at this time.
- */
-var DummyErrorTrapper = {
-  callbackOnError: function() {},
-  gobbleAndStopTrappingErrors: function() {
-    return $equeue.gimmeExceptions();
-  },
-
-  reliableOutput: function(msg) {
-    dump(msg + "\n");
-  },
-
-  on: function() {},
-  once: function() {},
-  removeListener: function() {},
-};
-
-let $pworker = require('page-worker'), $self = require('self');
-
 let {Cc, Ci, Cu} = require('chrome');
+
+let $runner = require('logdriverdriver');
 
 function makeURI(aURL, aOriginCharset, aBaseURI) {
   var ioService = Cc["@mozilla.org/network/io-service;1"]
@@ -46,24 +26,7 @@ function authIndexedDBForUri(url) {
               Ci.nsIPermissionManager.EXPIRE_NEVER);
 }
 
-let testerUrl = $self.data.url("testing/logdriver.html");
-
-function goRunTest(test, testName) {
-  test.waitUntilDone(6 * 1000);
-  authIndexedDBForUri(testerUrl);
-  var page = $pworker.Page({
-    contentURL: testerUrl + "?" + testName,
-    onMessage: function(msg) {
-      if (msg === "pass")
-        test.pass();
-      else
-        test.fail();
-      test.done();
-      page.destroy();
-    },
-  });
-}
-
 exports.testIndexedDbGenDb = function(test) {
-  goRunTest(test, 'rdctests/unit-gendb');
+  authIndexedDBForUri($runner.testerUrl);
+  $runner.goRunTest(test, 'rdctests/unit-gendb');
 };

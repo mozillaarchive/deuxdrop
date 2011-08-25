@@ -134,7 +134,7 @@
 
 define(
   [
-    'http',
+    'http', // (for server role stuff)
     'q',
     'nacl',
     'websocket',

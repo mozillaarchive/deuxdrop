@@ -69,20 +69,29 @@ dump("about to perform require() call!\n");
         {
           baseUrl: '../web/deps',
           paths: {
+            // dumb/trivial stubs
             'child_process': '../../addon/js/child_process',
-            'event-queue': '../../addon/js/event-queue',
             'fs': '../../addon/js/fs',
             'http': '../../addon/js/http',
             'microtime': '../../addon/js/microtime',
             'path': '../../addon/js/path',
             'timers': '../../addon/js/timers',
-            'util': '../../addon/js/util'
+            'util': '../../addon/js/util',
+            // testing-informed stubs
+            'event-queue': '../../addon/js/event-queue',
+
+            // mozilla shims
+            'nacl': '../../addon/js/nacl',
+            'websocket': '../../addon/js/websocket',
+
+            // testing logic (just for logdriver!)
+            'testing': '../../testing'
           },
           catchError: {
             define: true,
           }
         },
-        ['../../testing/logdriver']
+        ['testing/logdriver']
       );
     </script>
   </head>
