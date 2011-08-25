@@ -41,12 +41,14 @@
 
 define(
   [
+    'rdcommon/log',
     'rdcommon/transport/authconn',
     'rdcommon/crypto/keyring',
     'rdservers/configurer',
     'exports'
   ],
   function(
+    $log,
     $authconn,
     $keyring,
     $configurer,
@@ -165,6 +167,8 @@ exports.echoServe = function(port) {
       },
     },
   };
+
+  $log.DEBUG_dumpEntriesOnDeath($authconn.LOGFAB);
 
   var server = new $authconn.AuthorizingServer();
   server.registerServer(TestServerDef);

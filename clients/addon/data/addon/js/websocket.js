@@ -53,8 +53,8 @@ define(
 
 exports.GECKO = true;
 exports.helpers = {
-  btoa: btoa,
-  atob: atob,
+  btoa: window.btoa.bind(window),
+  atob: window.atob.bind(window),
 };
 
 if (!MozWebSocket)

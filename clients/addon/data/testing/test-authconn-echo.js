@@ -136,11 +136,12 @@ TestClientConnection.prototype = {
   },
 };
 
-var TD = exports.TD = $tc.defineTestsFor($module, null, null,
+var TD = exports.TD = $tc.defineTestsFor($module, $authconn.LOGFAB, null,
                                          ['protocol']);
 
 TD.commonCase('echo loopback', function(T) {
   var eLazy = T.lazyLogger('conn');
+  var eClientConn = T.actor('clientConn', 'C');;
 
   var personKeyring = $keyring.loadDelegatedKeyring(clientPersisted),
       clientKeyring = personKeyring.exposeSimpleBoxingKeyringFor("client",
@@ -149,18 +150,17 @@ TD.commonCase('echo loopback', function(T) {
 
   var testConn;
 
-  T.setup(eLazy, 'setup', function() {
-console.log("@@ creating conn");
+  T.setup(eClientConn, 'setup', function() {
     testConn = new TestClientConnection(eLazy,
                                         clientKeyring,
                                         serverKeyring.boxingPublicKey);
-console.log("@@ created conn");
   });
   T.action(eLazy, 'echo', function() {
     eLazy.expect_namedValue('echo', 'hats-are-fun');
   });
-  T.action(eLazy, 'twiddle', function() {
+  T.action(eLazy, eClientConn, 'twiddle', function() {
     eLazy.expect_namedValue('twiddled', 2);
+    eClientConn.expectOnly__die();
   });
 });
 

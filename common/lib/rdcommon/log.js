@@ -352,6 +352,8 @@ var LogProtoBase = {
   },
   __die: function() {
     this._died = $microtime.now();
+    if (this.__FAB._onDeath)
+      this.__FAB._onDeath(this);
   },
   __updateIdent: function(ident) {
     // NOTE: you need to update useSemanticIdent if you change this.
@@ -668,18 +670,21 @@ function LoggestClassMaker(moduleFab, name) {
     __proto__: DummyLogProtoBase,
     __defName: name,
     __latchedVars: this._latchedVars,
+    __FAB: this.moduleFab,
   };
   // full-logging logger
   this.logProto = {
     __proto__: LogProtoBase,
     __defName: name,
     __latchedVars: this._latchedVars,
+    __FAB: this.moduleFab,
   };
   // testing full-logging logger
   this.testLogProto = {
     __proto__: TestLogProtoBase,
     __defName: name,
     __latchedVars: this._latchedVars,
+    __FAB: this.moduleFab,
   };
   // testing actor for expectations, etc.
   this.testActorProto = {
@@ -1315,10 +1320,22 @@ exports.__augmentFab = augmentFab;
 
 exports.register = function register(mod, defs) {
   var fab = {_generalLog: true, _underTest: false, _actorCons: {},
-             _rawDefs: {}};
+             _rawDefs: {}, _onDeath: null};
   return augmentFab(mod, fab, defs);
 };
 
+/**
+ * Evolutionary stopgap debugging helper to be able to put a module/logfab into
+ *  a mode of operation where it dumps all of its loggers' entries to
+ *  console.log when they die.
+ */
+exports.DEBUG_dumpEntriesOnDeath = function(logfab) {
+  logfab._generalLog = true;
+  logfab._onDeath = function(logger) {
+    console.log("!! DIED:", logger.__defName, logger._ident);
+    console.log(JSON.stringify(logger._entries, null, 2));
+  };
+};
 
 // role information
 exports.CONNECTION = 'connection';
