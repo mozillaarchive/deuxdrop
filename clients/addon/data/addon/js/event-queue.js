@@ -9,6 +9,7 @@ define(function (require) {
           task();
         }
         catch(ex) {
+          console.error("exception in enqueued task: " + ex);
           if (MAGIC_ERROR_TRAPPER)
             MAGIC_ERROR_TRAPPER.yoAnError(ex);
           // and re-throw it in case the platform can pick it up.

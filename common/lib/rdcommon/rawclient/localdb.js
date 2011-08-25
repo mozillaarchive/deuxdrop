@@ -514,7 +514,7 @@ LocalStore.prototype = {
     queryHandle.index = index;
 
     // - generate an index scan, netting us the conversation id's, hand-off
-    return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey,
+    return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey, -1,
                                    null, null, null, null, null, null),
       this._fetchAndReportConversationBlurbsById.bind(this, queryHandle));
   },
@@ -726,11 +726,12 @@ LocalStore.prototype = {
   },
 
   queryAndWatchPeepBlurbs: function(queryHandle) {
-    var idx, scanFunc = 'scanIndex', indexParam;
+    var idx, scanFunc = 'scanIndex', scanDir = -1, indexParam;
     switch (queryHandle.queryDef.by) {
       case 'alphabet':
         idx = $lss.IDX_PEEP_CONTACT_NAME;
         scanFunc = 'scanStringIndex';
+        scanDir = 1;
         queryHandle.cmpFunc = this._cmpfunc_peepContactName;
         break;
       case 'any':
@@ -763,7 +764,7 @@ LocalStore.prototype = {
       default:
         throw new Error("Unsupported filter: " + queryHandle.queryDef.filter);
     }
-    return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, indexParam,
+    return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, indexParam, scanDir,
                                    null, null, null, null, null, null),
       this._fetchAndReportPeepBlurbsById.bind(this, queryHandle, idx));
   },

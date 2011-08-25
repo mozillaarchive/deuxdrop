@@ -25,10 +25,35 @@ var DummyErrorTrapper = {
 
 let $pworker = require('page-worker'), $self = require('self');
 
+let {Cc, Ci, Cu} = require('chrome');
+
+function makeURI(aURL, aOriginCharset, aBaseURI) {
+  var ioService = Cc["@mozilla.org/network/io-service;1"]
+                  .getService(Ci.nsIIOService);
+  return ioService.newURI(aURL, aOriginCharset, aBaseURI);
+}
+
+// we totally need to perform this authorization step, otherwise things just
+//  hang while it tries to display a prompt that no one will ever see.
+function authIndexedDBForUri(url) {
+  // forcibly provide the indexedDB permission.
+  let permMgr = Cc["@mozilla.org/permissionmanager;1"]
+                  .getService(Ci.nsIPermissionManager);
+  let uri = makeURI(url, null, null);
+  permMgr.add(uri,
+              "indexedDB",
+              Ci.nsIPermissionManager.ALLOW_ACTION,
+              Ci.nsIPermissionManager.EXPIRE_NEVER);
+
+  console.log("PERM FOR", url, "is",
+              permMgr.testPermission(uri, "indexedDB"));
+}
+
 let testerUrl = $self.data.url("testing/logdriver.html");
 
 function goRunTest(test, testName) {
   test.waitUntilDone(6 * 1000);
+  authIndexedDBForUri(testerUrl);
   var page = $pworker.Page({
     contentURL: testerUrl + "?" + testName,
     onMessage: function(msg) {

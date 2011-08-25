@@ -139,13 +139,11 @@ IndexedDbConn.prototype = {
         for (var iTable = 0; iTable < schema.tables.length; iTable++) {
           var tableDef = schema.tables[iTable],
               tableName = tableDef.name;
-
           db.createObjectStore(tableName);
 
           for (var iIndex = 0; iIndex < tableDef.indices.length; iIndex++) {
             var indexName = tableDef.indices[iIndex];
             var aggrName = tableName + INDEX_DELIM + indexName;
-
             db.createObjectStore(aggrName);
           }
         }
@@ -155,6 +153,7 @@ IndexedDbConn.prototype = {
 
           db.createObjectStore(queueName);
         }
+        deferred.resolve();
       };
 
       return deferred.promise;
@@ -197,7 +196,10 @@ IndexedDbConn.prototype = {
     };
     var store = transaction.objectStore(tableName);
     store.get(rowId + CELL_DELIM + columnName).onsuccess = function(event) {
-      deferred.resolve(event.target.result);
+      var result = event.target.result;
+      if (result === undefined)
+        result = null;
+      deferred.resolve(result);
     };
     return deferred.promise;
   },
@@ -229,7 +231,7 @@ IndexedDbConn.prototype = {
     store.get(rowId + CELL_DELIM + columnName).onsuccess = function(event) {
       var val = Boolean(event.target.result);
       if (!val)
-        deferred.reject(new (exClass || Error)(columnName + "was falsy"));
+        deferred.reject(new (exClass || Error)(columnName + " was falsy"));
       else
         deferred.resolve(val);
     };
@@ -327,8 +329,9 @@ IndexedDbConn.prototype = {
     this._log.incrementCell(tableName, rowId, columnName, delta);
     var transaction = this._db.transaction([tableName],
                                            IDBTransaction.READ_WRITE);
+    var newVal;
     transaction.oncomplete = function() {
-      deferred.resolve();
+      deferred.resolve(newVal);
     };
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -336,12 +339,11 @@ IndexedDbConn.prototype = {
     var store = transaction.objectStore(tableName);
     var cellName = rowId + CELL_DELIM + columnName;
     store.get(cellName).onsuccess = function(event) {
-      var result = event.target.result, newVal;
+      var result = event.target.result;
       if (result === undefined)
         store.add((newVal = 1), cellName);
       else
-        newVal = store.put((newVal = result + 1), cellName);
-      deferred.resolve(newVal);
+        store.put((newVal = result + 1), cellName);
     };
     return deferred.promise;
   },
@@ -420,47 +422,55 @@ IndexedDbConn.prototype = {
   //  if there are any fundamental issues with impementing it on top of a
   //  log-structured-merge datastore.
 
-  scanIndex: function(tableName, indexName, indexParam,
+  scanIndex: function(tableName, indexName, indexParam, desiredDir,
                       lowValue, lowObjectName, lowInclusive,
                       highValue, highObjectName, highInclusive) {
+    const dir = desiredDir;
     var deferred = $Q.defer();
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
     this._log.scanIndex(tableName, indexName, indexParam, maxValStr, minValStr);
-    var transaction = this._db.transaction([tableName],
+    var aggrName = tableName + INDEX_DELIM + indexName;
+    var transaction = this._db.transaction([aggrName],
                                            IDBTransaction.READ_ONLY);
-    var odict = {};
+    var olist = [];
     transaction.oncomplete = function() {
-      deferred.resolve(odict);
+      deferred.resolve(olist);
     };
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
     };
-    var store = transaction.objectStore(tableName);
+    var store = transaction.objectStore(aggrName);
 
     // we need to open a cursor to spin over all possible cells
-    var cellName =  + objectName;
     var range = IDBKeyRange.bound(
                   indexParam + INDEX_PARAM_DELIM,
                   indexParam + INDEX_PARAM_DELIM + '\ufff0',
                   true, false);
-    const cellNameOffset = rowId.length + CELL_DELIM_LEN;
+    const cellNameOffset = indexParam.length + INDEX_PARAM_DELIM.length;
+    var sortie = [];
     store.openCursor(range).onsuccess = function(event) {
       var cursor = event.target.result;
       if (cursor) {
-        odict[cursor.key.substring(cellNameOffset)] = cursor.value;
+        sortie.push({obj: cursor.key.substring(cellNameOffset),
+                     val: cursor.value});
         cursor.continue();
       }
+      else {
+        sortie.sort(function(a, b) {
+          if (a.val < b.val)
+            return -dir;
+          else if (a.val > b.val)
+            return dir;
+          else
+            return 0;
+        });
+        for (var i = 0; i < sortie.length; i++) {
+          olist.push(sortie[i].obj);
+          olist.push(sortie[i].val);
+        }
+      }
     };
-    return deferred.promise;
-    this._conn.zrevrangebyscore(
-        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-        maxValStr, minValStr, 'WITHSCORES', function(err, results) {
-      if (err)
-        deferred.reject(err);
-      else
-        deferred.resolve(results);
-    });
     return deferred.promise;
   },
 
@@ -497,23 +507,23 @@ IndexedDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
-    var transaction = this._db.transaction([tableName],
+    var aggrName = tableName + INDEX_DELIM + indexName;
+    var transaction = this._db.transaction([aggrName],
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
-      deferred.resolve();
+      deferred.resolve(newValue);
     };
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
     };
-    var store = transaction.objectStore(tableName);
+    var store = transaction.objectStore(aggrName);
     var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
     store.get(cellName).onsuccess = function(event) {
       var existing = event.target.result;
       if (existing === undefined)
         store.add(newValue, cellName);
       else
-        newVal = store.put(Math.max(existing, newValue), cellName);
-      deferred.resolve(event.target.result);
+        store.put((newValue = Math.max(existing, newValue)), cellName);
     };
     return deferred.promise;
   },

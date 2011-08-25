@@ -325,12 +325,12 @@ TD.commonCase('reorderable collection index model', function(T) {
   T.group('empty index scan');
   T.check(eLazy, 'empty numeric index scan returns empty list', function() {
     eLazy.expect_namedValue('empty index', []);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('empty index'), badNews);
   });
   T.check(eLazy, 'empty string index scan returns empty list', function() {
     eLazy.expect_namedValue('empty index', []);
-    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, '', 1),
          logNamedValue('empty index'), badNews);
   });
 
@@ -343,7 +343,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=1', function() {
     eLazy.expect_namedValue('scan post A=1', ['A', 1]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('scan post A=1'), badNews);
   });
   T.action(eLazy, 'update A=2', function() {
@@ -353,7 +353,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=2', function() {
     eLazy.expect_namedValue('scan post A=2', ['A', 2]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', 1),
          logNamedValue('scan post A=2'), badNews);
   });
   T.action(eLazy, 'update A=0', function() {
@@ -363,7 +363,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=0', function() {
     eLazy.expect_namedValue('scan post A=0', ['A', 0]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('scan post A=0'), badNews);
   });
 
@@ -375,7 +375,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=foo', function() {
     eLazy.expect_namedValue('scan post A=foo', ['A', 'foo']);
-    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, '', 1),
          logNamedValue('scan post A=foo'), badNews);
   });
   T.action(eLazy, 'update A=bar', function() {
@@ -385,7 +385,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=bar', function() {
     eLazy.expect_namedValue('scan post A=bar', ['A', 'bar']);
-    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, '', 1),
          logNamedValue('scan post A=bar'), badNews);
   });
 
@@ -398,7 +398,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=5', function() {
     eLazy.expect_namedValue('scan post A=max~5', ['A', 5]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('scan post A=max~5'), badNews);
   });
   T.action(eLazy, 'max A=2', function() {
@@ -408,7 +408,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A=5', function() {
     eLazy.expect_namedValue('scan post A=max~2', ['A', 5]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('scan post A=max~2'), badNews);
   });
 
@@ -421,7 +421,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A,B ordering', function() {
     eLazy.expect_namedValue('ordering', ['A', 5, 'B', 3]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('ordering'), badNews);
   });
   T.action(eLazy, 'update C=0', function() {
@@ -431,7 +431,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A,B,C ordering', function() {
     eLazy.expect_namedValue('ordering', ['A', 5, 'B', 3, 'C', 0]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('ordering'), badNews);
   });
 
@@ -443,7 +443,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check A,B ordering', function() {
     eLazy.expect_namedValue('string ordering', ['A', 'bar', 'B', 'car']);
-    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, '', 1),
          logNamedValue('string ordering'), badNews);
   });
 
@@ -456,7 +456,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check C,A,B ordering', function() {
     eLazy.expect_namedValue('ordering', ['C', 7, 'A', 5, 'B', 3]);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, ''),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('ordering'), badNews);
   });
 
@@ -469,7 +469,7 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check B,A ordering', function() {
     eLazy.expect_namedValue('string ordering', ['B', 'aar', 'A', 'bar']);
-    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, ''),
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, '', 1),
          logNamedValue('string ordering'), badNews);
   });
 
@@ -477,12 +477,12 @@ TD.commonCase('reorderable collection index model', function(T) {
   T.group('parameters properly namespace');
   T.check(eLazy, 'empty numeric index scan returns empty list', function() {
     eLazy.expect_namedValue('empty index', []);
-    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, 'blah'),
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, 'blah', -1),
          logNamedValue('empty index'), badNews);
   });
   T.check(eLazy, 'empty string index scan returns empty list', function() {
     eLazy.expect_namedValue('empty index', []);
-    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, 'blah'),
+    when(conn.scanStringIndex(TBL_HUMANS, IDX_NAME, 'blah', 1),
          logNamedValue('empty index'), badNews);
   });
 

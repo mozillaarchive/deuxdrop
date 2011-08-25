@@ -374,7 +374,7 @@ RedisDbConn.prototype = {
    *  presuming timestamp use for everything.
    *
    */
-  scanIndex: function(tableName, indexName, indexParam,
+  scanIndex: function(tableName, indexName, indexParam, desiredDir,
                       lowValue, lowObjectName, lowInclusive,
                       highValue, highObjectName, highInclusive) {
     // XXX actually use the range support
@@ -382,9 +382,13 @@ RedisDbConn.prototype = {
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
     this._log.scanIndex(tableName, indexName, indexParam, maxValStr, minValStr);
-    this._conn.zrevrangebyscore(
-        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
-        maxValStr, minValStr, 'WITHSCORES', function(err, results) {
+    var keyName =
+      this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam;
+    this._conn[(desiredDir === -1) ? 'zrevrangebyscore' : 'zrangebyscore'](
+        keyName,
+        (desiredDir === -1) ? maxValStr : minValStr,
+        (desiredDir === -1) ? minValStr : maxValStr,
+        'WITHSCORES', function(err, results) {
       if (err) {
         deferred.reject(err);
       }
@@ -469,7 +473,8 @@ RedisDbConn.prototype = {
     return deferred.promise;
   },
 
-  scanStringIndex: function(tableName, indexName, indexParam) {
+  scanStringIndex: function(tableName, indexName, indexParam, desiredDir) {
+    const dir = desiredDir;
     var deferred = $Q.defer();
     this._log.scanIndex(tableName, indexName, indexParam);
     this._conn.hgetall(
@@ -484,7 +489,7 @@ RedisDbConn.prototype = {
           sortie.push({obj: key, val: results[key]});
         }
         sortie.sort(function(a, b) {
-          return a.val.localeCompare(b.val);
+          return dir * a.val.localeCompare(b.val);
         });
         var listyResults = [];
         for (var i = 0; i < sortie.length; i++) {
