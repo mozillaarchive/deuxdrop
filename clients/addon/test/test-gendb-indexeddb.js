@@ -44,9 +44,6 @@ function authIndexedDBForUri(url) {
               "indexedDB",
               Ci.nsIPermissionManager.ALLOW_ACTION,
               Ci.nsIPermissionManager.EXPIRE_NEVER);
-
-  console.log("PERM FOR", url, "is",
-              permMgr.testPermission(uri, "indexedDB"));
 }
 
 let testerUrl = $self.data.url("testing/logdriver.html");
