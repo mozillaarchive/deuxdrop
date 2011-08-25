@@ -12,7 +12,9 @@
           baseUrl: '../web/deps',
           paths: {
             'microtime': '../../addon/js/microtime',
-            'path': '../../addon/js/path'
+            'path': '../../addon/js/path',
+            //'browserId': 'include'
+            'browserId': 'https://browserid.org/include'
           }
         },
         ['../../addon/js/main']
@@ -23,6 +25,26 @@
 
     <div id="cardContainer">
       <div id="cards">
+        <div data-cardid="signIn" title="Sign In" class="card noiscroll">
+          <div class="scroller">
+            <form class="signUpForm">
+              <input type="text" name="name" placeholder="Enter your name">
+              <button>Sign In With BrowserID</button>
+            </form>
+          </div>
+        </div>
+        <div data-cardid="pickServer" title="Pick Server" class="card">
+          <div class="scroller" data-childclass="serverLink">
+          </div>
+        </div>
+        <div data-cardid="enterServer" title="Enter Server" class="card">
+          <div class="scroller">
+            <form class="enterServerForm">
+              <input type="text" name="server" placeholder="Enter server name">
+              <span>Warning, this is advanced voodoo and not very secure.</span>
+            </form>
+          </div>
+        </div>
         <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
           <div class="scroller">
             <a class="item block vbox" href="#peeps"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">People</span></a>
@@ -53,6 +75,12 @@
 
     <!-- Start standard UI elements -->
     <div id="common" class="hidden">
+
+      <a data-classimpl="addServerLink" class="item" href="#enterServer">+ Add Server</a>
+
+      <a data-classimpl="serverLink" class="item" data-nonav="nonav" href="#connectToServer?id=">
+        <span data-bind="id"></span>
+      </a>
 
       <form data-classimpl="compose" class="compose">
         <input type="hidden" name="from" value="">

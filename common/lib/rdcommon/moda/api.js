@@ -448,6 +448,59 @@ ModaBridge.prototype = {
   // Data Queries
 
   /**
+   * Get info on the user. If the user does not exist, the callback will
+   * be given a null answer.
+   * @args[
+   *   @param[listener @dict[
+   *     @key[onComplete Function]{
+   *       Function called when identity is retrieved.
+   *     }
+   *   ]
+   * ]
+   */
+  whoAmI: function(listener) {
+    /*
+    var handle = this._nextHandle++;
+    this._handleMap[handle] = liveset
+    this._sendXXX
+    */
+    // Stub for now
+    setTimeout(function () {
+      listener.onCompleted(null);
+    }, 15);
+  },
+
+  // More stubs.
+  listServers: function(listener) {
+    setTimeout(function () {
+      listener.onCompleted({
+        items: [
+          {
+            id: 'en.raindrop.it',
+            name: 'Sir Deuxdrop'
+          },
+          {
+            id: 'ed.raindrop.it',
+            name: 'Mein Deuxdropen'
+          }
+        ]
+      });
+    }, 15);
+  },
+
+  createIdentity: function (name, assertion, listener) {
+    setTimeout(function () {
+      listener.onCompleted(null);
+    }, 15);
+  },
+
+  useServer: function (id, listener) {
+    setTimeout(function () {
+      listener.onCompleted(null);
+    }, 15);
+  },
+
+  /**
    * Issue a live query on a (sub)set of peeps.  We care about changes to the
    *  peeps in the set after we return it, plus changes to the membership of
    *  the set.

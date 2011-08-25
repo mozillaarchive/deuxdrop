@@ -46,6 +46,10 @@ button {
   display: none;
 }
 
+input.error {
+    border: 1px solid red;
+}
+
 /* Used by card.js to hide inputs on other cards
   so that mobile firefox does not do the up/down arrow
   controls over the screen.

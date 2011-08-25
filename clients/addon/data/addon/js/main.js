@@ -54,20 +54,19 @@ define(function (require) {
       cards = require('cards'),
       moda = require('modality'),
       friendly = require('friendly'),
+      browserId = require('browserId'),
       IScroll = require('iscroll'),
 
       commonNodes = {},
-      states = {
-        // TODO: Hack to just bootstrap into loading real moda.
-        userDetermined: true
-      },
-      users = {},
-      notifications = [],
-      peeps, update, messageCloneNode, notifyDom, nodelessActions,
-      newMessageIScroll, newConversationNodeWidth, init;
+      states = {},
+      peeps, update, notifyDom, nodelessActions,
+      newMessageIScroll, newConversationNodeWidth, init, me;
 
   //iScroll just defines a global, bind to it here
   IScroll = window.iScroll;
+
+  // Browser ID is not actually a module, get a handle on it now.
+  browserId = navigator.id;
 
   function getChildCloneNode(node) {
     // Try on the actual node, and if not there, check the scroller node
@@ -118,7 +117,7 @@ define(function (require) {
   function makeMessageBubble(node, message) {
     var nodeDom = $(node),
         senderNode, senderDom,
-        isMe = moda.me().id === message.from.id;
+        isMe = me.id === message.from.id;
 
     // do declarative text replacements.
     updateDom(nodeDom, message);
@@ -218,9 +217,20 @@ define(function (require) {
     }, 300);
   }
 
+  function listServers() {
+    // Now show list of servers.
+    moda.listServers({
+      'onCompleted': function (liveOrderedSet) {
+        var servers = liveOrderedSet.items;
+        cards.onNav('pickServer', servers);
+      }
+    });
+  }
 
-  function onPeepsComplete() {
-    var frag = document.createDocumentFragment();
+  function onPeepsComplete(dom) {
+    // Get the node to use for each peep.
+    var clonable = getChildCloneNode(dom[0]),
+        frag = document.createDocumentFragment();
 
     // Put in the Add button.
     frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
@@ -246,12 +256,95 @@ define(function (require) {
 
   // Set up card update actions.
   update = {
-    'peeps': function (data, dom) {
-      // Get the node to use for each peep.
-      var clonable = getChildCloneNode(dom[0]);
+    'signIn': function (data, dom) {
 
+      function handleSubmit(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        var nameDom = dom.find('[name="name"]'),
+            name = nameDom.val().trim();
+
+        // Reset error style in case this is a second try.
+        nameDom.removeClass('error');
+
+        if (name) {
+          browserId.getVerifiedEmail(function (assertion) {
+            if (assertion) {
+              moda.createIdentity(name, assertion, {
+                'onCompleted': function (unknown) {
+                  me = unknown;
+                  listServers();
+                }
+              });
+            } else {
+              // Do not do anything. User stays on sign in screen.
+            }
+          });
+        } else {
+          // Inform user that the form needs to be filled in.
+          nameDom.addClass('error');
+        }
+      }
+
+      // Create an explicit click handler to help some iphone devices,
+      // event bubbling does not allow the window to open.
+      dom
+        .find('.signUpForm')
+          .submit(handleSubmit)
+          .end()
+        .find('.browserSignIn')
+          .click(handleSubmit);
+    },
+
+    'pickServer': function (data, dom) {
+
+      var clonable = getChildCloneNode(dom[0]),
+          frag = document.createDocumentFragment();
+
+      // Generate nodes for each person.
+      data.forEach(function (server) {
+        var node = clonable.cloneNode(true);
+
+        updateDom($(node), server);
+
+        node.href += encodeURIComponent(server.id);
+
+        frag.appendChild(node);
+      });
+
+      // Put in the Add button.
+      frag.appendChild(commonNodes.addServerLink.cloneNode(true));
+
+      // Update the card.
+      dom.find('.scroller').append(frag);
+
+      // Refresh card sizes.
+      cards.adjustCardSizes();
+    },
+
+    'connectToServer': function (data) {
+      var serverId = data.id;
+
+      moda.useServer(serverId, {
+        'onCompleted': function () {
+
+          // Remove the sign in/server setup cards
+          $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
+            '[data-cardid="enterServer"]', '#cardContainer').remove();
+
+          // Show the start card
+          cards.onNav('start', {});
+
+          // Go back one to see the start card.
+          history.back();
+        }
+      });
+    },
+
+    'peeps': function (data, dom) {
       if (peeps) {
-        onPeepsComplete();
+        onPeepsComplete(dom);
       } else {
         // QUESTION: can pass a "data" argument as third arg to queryPeeps,
         // set as a property on liveOrderedSet, but not touched by anything,
@@ -268,12 +361,20 @@ define(function (require) {
           onCompleted: function (liveOrderedSet) {
             //Peeps are assumed to be in an array at liveOrderedSet.items;
             peeps = liveOrderedSet;
-            onPeepsComplete();
+            onPeepsComplete(dom);
           }
         });
       }
     }
   };
+
+  // Find out the user.
+  moda.whoAmI({
+    'onCompleted': function (unknown)  {
+      me = unknown;
+      init('userDetermined');
+    }
+  });
 
   // Wait for DOM ready to do some DOM work.
   $(function () {
@@ -303,10 +404,15 @@ define(function (require) {
       return;
     }
 
+    if (!me) {
+      cards.startCardId = 'signIn';
+    }
+
     nodelessActions = {
       'addPeep': true,
       'notify': true,
       'browserIdSignIn': true,
+      'connectToServer': true,
       'signOut': true
     };
 
@@ -341,6 +447,21 @@ define(function (require) {
     };
 
     $('body')
+      // Form submissions for entering a server.
+      .delegate('[data-cardid="enterServer"] .enterServerForm', 'submit',
+        function (evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+
+          var serverId = $(evt.target).find('[name="server"]').val().trim().toLowerCase();
+          if (serverId) {
+            update.connectToServer({
+              id: serverId
+            });
+          }
+        }
+      )
+
       // Handle compose from a peep screen.
       .delegate('[data-cardid="user"] .compose', 'submit', function (evt) {
         evt.preventDefault();
