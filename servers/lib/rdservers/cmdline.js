@@ -161,17 +161,43 @@ function applyGlobalOptions(options) {
 
 var OPT_CONFIG_DIR = {
   position: 1,
+  default: "serverdefs/devserver",
   help: "The directory that holds/should hold server (configuration) data"
 };
 var OPT_SERVER_TYPE = {
   string: "--server-type=TYPE",
   default: "fullpub",
-  help: "One of: fullpub, halfpub, halfpriv"
+  help: "One of: fullpub. (future: halfpub, halfpriv)"
 };
-var OPT_HBASE_PREFIX = {
-  string: "--hbase-prefix=PREFIX",
+var OPT_DB_SERVER = {
+  string: "--db-server=DNS_OR_IP",
+  default: "127.0.0.1",
+  help: "The database server to use, defaults to localhost via 127.0.0.1",
+};
+var OPT_DB_PORT = {
+  string: "--db-port=PORT",
+  default: 6379,
+  help: "The database server's port, defaults to redis default (6379)",
+};
+var OPT_DB_PREFIX = {
+  string: "--db-prefix=PREFIX",
   default: "",
-  help: "Optional namespacing prefix for the hbase table names",
+  help: "Optional namespacing prefix for the database; essential in hbase",
+};
+var OPT_HUMAN_NAME = {
+  string: "--human-name=NAME",
+  default: "A development server",
+  help: "The human readable description of your server.",
+};
+var OPT_DNS_NAME = {
+  string: "--dns-name=DNSNAME",
+  required: true,
+  help: "The DNS name to advertise this server as in its self-ident.",
+};
+var OPT_LISTEN_IP = {
+  string: "--listen-ip=IP",
+  default: "0.0.0.0",
+  help: "The IP address to listen on; 0.0.0.0 for all IPs, 127.0.0.1 for lo.",
 };
 var OPT_LISTEN_PORT = {
   string: "--listen-port=PORT",
@@ -184,12 +210,24 @@ parser.command('define-server')
   .opts({
     configDir: OPT_CONFIG_DIR,
     serverType: OPT_SERVER_TYPE,
-    hbasePrefix: OPT_HBASE_PREFIX,
+    dbServer: OPT_DB_SERVER,
+    dbPort: OPT_DB_PORT,
+    dbPrefix: OPT_DB_PREFIX,
+    dnsName: OPT_DNS_NAME,
+    humanName: OPT_HUMAN_NAME,
+    listenIP: OPT_LISTEN_IP,
     listenPort: OPT_LISTEN_PORT,
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
-      $configurer.cmdCreateConfig(ops.configDir, opts);
+      applyGlobalOptions(options);
+      try {
+        $configurer.cmdCreateConfig(options.configDir, options);
+      }
+      catch (ex) {
+        console.error(ex);
+        process.exit(2);
+      }
     });
   });
 
@@ -200,7 +238,14 @@ parser.command('run-server')
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
-      $configurer.cmdRunConfig(opts.configDir);
+      applyGlobalOptions(options);
+      try {
+        $configurer.cmdRunConfig(options.configDir);
+      }
+      catch (ex) {
+        console.error(ex);
+        process.exit(3);
+      }
     });
   });
 
@@ -208,27 +253,26 @@ parser.command('nuke-server')
   .help("Cleanup a previously defined server (hbase and file-system)")
   .opts({
     configDir: OPT_CONFIG_DIR,
-  })
-  .callback(function(options) {
-    require(['rdservers/configurer'], function($configurer) {
-      $configurer.cmdNukeConfig(opts.configDir);
-    });
-  });
-
-parser.command('fake-in-one')
-  .help("All-in-one fake server with node-hosted crammed-in clients using " +
-        "the fake-server bridge; NEVER USE IN THE REAL WORLD AT ALL.")
-  .opts({
-    webPort: {
-      string: "--web-port",
-      default: 8888,
-      help: "What port should we listen on to be fake on?",
+    superSure: {
+      string: "--yes-i-am-sure-i-want-to-do-this",
+      flag: true,
     },
   })
   .callback(function(options) {
-    applyGlobalOptions(options);
-    require(['rdservers/fakefakeserver'], function($doublefake) {
-      $doublefake.goForthAndBeFake(options.webPort);
+    require(['rdservers/configurer'], function($configurer) {
+      applyGlobalOptions(options);
+      if (!options.superSure) {
+        console.error("You need to pass --yes-i-am-sure-i-want-to-do-this");
+        process.exit(9);
+        return;
+      }
+      try {
+        $configurer.cmdNukeConfig(options.configDir);
+      }
+      catch (ex) {
+        console.error(ex);
+        process.exit(4);
+      }
     });
   });
 

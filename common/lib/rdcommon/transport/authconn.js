@@ -687,7 +687,6 @@ function serve404s(request, response) {
  *  identifier (which is handled by the logging layer).
  */
 function AuthorizingServer(_logger, extraNaming) {
-console.log("instantiating server");
   this._endpoints = {};
 
   this._extraNaming = extraNaming || "server";
@@ -704,7 +703,6 @@ console.log("instantiating server");
   server.on('request', this._onRequest.bind(this));
 
   this.address = null;
-console.log("constructor completed.");
 }
 AuthorizingServer.prototype = {
   toJSON: function() {

@@ -585,6 +585,58 @@ exports.DbConn = RedisDbConn;
 const TEST_DB_OFFSET = 16;
 
 /**
+ * Create a product database connection; we always use redis db #1.  An
+ *  alternative would be to detect if `uniqueName` is an integer and then
+ *  use that to tell us the database number to use instead of requiring a
+ *  namespacing mechanism.
+ */
+exports.makeProductionDBConnection = function(uniqueName, host, port, _logger) {
+  var conn = new RedisDbConn({host: host, port: port}, uniqueName,
+                             _logger);
+  conn._conn.select(1);
+  return conn;
+};
+
+/**
+ * Nuke the contents of the given production database.
+ *
+ * @return[Promise]
+ */
+exports.nukeProductionDatabase = function(conn) {
+  var deferred = $Q.defer();
+  // no prefix we can just flush the database
+  if (conn._prefix.length === 0) {
+    conn._conn.flushdb(function(err) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve();
+    });
+  }
+  // yes prefix, we need to use keys() and follow that up with a del()
+  else {
+    conn._conn.keys(function(err, keys) {
+      if (err) {
+        deferred.reject(err);
+        return;
+      }
+      conn._conn.del.apply(conn._conn, keys, function(err) {
+        if (err)
+          deferred.reject(err);
+        else
+          deferred.resolve();
+      });
+    });
+  }
+
+  return deferred.promise;
+};
+
+exports.closeProductionDBConnection = function(conn) {
+  conn.close();
+};
+
+/**
  * Create a test connection to a test database.
  *
  * XXX theory, not done due to resource fears, just using db 2 for now...

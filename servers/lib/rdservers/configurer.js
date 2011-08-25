@@ -40,14 +40,17 @@
  *  by definition, not doing anything interesting before we load the
  *  configuration.
  *
- * XXX not fully implemented; this is being written piecemeal with the unit tests
- *  to make sure we don't get too unit test specific.
+ * XXX not fully implemented; this is being written piecemeal with the unit
+ *  tests to make sure we don't get too unit test specific.
  **/
 
-define(function(require, exports) {
+define(function(require, exports, $module) {
 
 var $fs = require('fs'), $path = require('path'),
-    $Q = require('q');
+    $Q = require('q'), when = $Q.when;
+
+var $log = require('rdcommon/log'),
+    $gendb = require('rdplat/gendb');
 
 var $keyring = require('rdcommon/crypto/keyring'),
     $pubident = require('rdcommon/identities/pubident'),
@@ -92,6 +95,12 @@ var SERVER_ROLE_MODULES = {
   },
 };
 
+/**
+ * Central configuration and rendezvous mechanism for all server bits.  Besides
+ *  the explicitly documented attributes, all of the SERVER_ROLE_MODULE
+ *  apiModules get annotated on.  So "auth"'s "apiModule" gets instantiated and
+ *  becomes "authApi", "sender"'s "apiModule" becomes "senderApi" and so on.
+ */
 function ServerConfig(keyring, selfIdentBlob, dbConn) {
   this.keyring = keyring;
   this.selfIdentBlob = selfIdentBlob;
@@ -112,9 +121,19 @@ ServerConfig.prototype = {
     };
   },
 
+  /**
+   * Merge a server's db schema into our aggregate schema.  This is required
+   *  because our gendb implementation only wants to define a schema once.
+   */
   mergeInDbSchema: function(dbSchema) {
+    this.aggrDbSchema.tables = this.aggrDbSchema.tables.concat(dbSchema.tables);
+    this.aggrDbSchema.queues = this.aggrDbSchema.queues.concat(dbSchema.queues);
   },
 
+  /**
+   * Register all known server modules with the provided authconn server so that
+   *  their endpoints get registered.
+   */
   __registerServers: function(server) {
     for (var i = 0; i < this._serverModules.length; i++) {
       server.registerServer(
@@ -126,64 +145,7 @@ ServerConfig.prototype = {
 var FULLPUB_ROLES = exports.FULLPUB_ROLES =
   ['auth', 'signup', 'drop', 'sender', 'fanout', 'store'];
 
-function createServerConfigFromScratch(url, dbConn, _logger) {
-  var rootKeyring = $keyring.createNewServerRootKeyring(),
-      keyring = rootKeyring.issueLongtermBoxingKeyring();
-
-  var details = {
-    tag: 'server:fakefake',
-    url: url,
-  };
-  var signedSelfIdent =
-    $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
-
-  // yes, we are throwing away the root ring.
-  return populateTestConfig(keyring, signedSelfIdent, dbConn,
-                            FULLPUB_ROLES, _logger);
-}
-
 const TBL_SERVER_IDENTITY = 'server:identity';
-
-/**
- * Stop-gap serving starting mechanism driven by the fake-in-one server's need
- *  to create a persistent server.
- */
-exports.loadOrCreateAndPersistServerJustMakeItGo = function(dbConn, hostname,
-                                                            port, _logger) {
-  var url = 'ws://' + hostname + ':' + port + '/';
-  return $Q.when(dbConn.getRowCell(TBL_SERVER_IDENTITY, 'me', 'p:me'),
-    function(jsonStr) {
-      var serverConfig;
-      if (!jsonStr) {
-        serverConfig = createServerConfigFromScratch(url, dbConn, _logger);
-        dbConn.putCells(TBL_SERVER_IDENTITY, 'me',
-          {
-            'p:me': {
-              keyring: serverConfig.data,
-              selfIdentBlob: serverConfig.selfIdentBlob,
-            }
-          });
-      }
-      else {
-        var persisted = JSON.parse(jsonStr);
-        serverConfig = populateTestConfig(
-                         $keyring.loadLongtermBoxingKeyring(persisted.keyring),
-                         persisted.selfIdentBlob,
-                         dbConn,
-                         FULLPUB_ROLES,
-                         _logger);
-
-        var server = serverConfig.__server =
-          new $authconn.AuthorizingServer(_logger);
-        server.listen(port);
-      }
-
-      return serverConfig;
-    },
-    function() {
-      console.error("DB problem loading server information.");
-    });
-};
 
 /**
  * Populate a `ServerConfig` for a unit test that has already done most of the
@@ -246,16 +208,25 @@ var populateTestConfig = exports.__populateTestConfig =
 // Directory-Based Persistence
 
 const CONFIG_DIR_MODE = parseInt("700", 8);
+/**
+ * The file that contains the root keyring info and no one really needs for
+ *  anything.  We just persist it because we might need it some day.
+ */
+const ROOTKEY_FILE_NAME = 'rootkeyring.json';
+/**
+ * The configuration file proper that contains the infor required to run the
+ *  server.
+ */
 const CONFIG_FILE_NAME = 'config.json';
 
-function saveConfigToDir(config, configDir) {
+function saveConfigFileToDir(config, filename, configDir) {
   var jsonConfig = JSON.stringify(config, null, 2);
-  var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
+  var configFilePath = $path.join(configDir, filename);
   $fs.writeFileSync(configFilePath, jsonConfig);
 }
 
-function loadConfigFromDir(configDir) {
-  var configFilePath = $path.join(configDir, CONFIG_FILE_NAME);
+function loadConfigFileFromDir(filename, configDir) {
+  var configFilePath = $path.join(configDir, filename);
   if (!$path.existsSync(configFilePath))
     throw new Error("The configuration file '" + configFilePath +
                     "' does not exist!");
@@ -264,42 +235,247 @@ function loadConfigFromDir(configDir) {
   return JSON.parse(jsonConfig);
 }
 
+const SELF_IDENT_FILE = 'deuxdrop-server.selfident';
+
+function saveSelfIdentOff(signedSelfIdent, configDir) {
+  var configFilePath = $path.join(configDir, SELF_IDENT_FILE);
+  $fs.writeFileSync(configFilePath, signedSelfIdent);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Command-Line Commands
 //
-// Speculative commands already speculatively called by the command-line.
+// These are invoked by `rdservers/cmdline.js`; consult that code for details
+//  on the options provided to us.
+
+function makedirTree(path, mode) {
+  var tomake = [path];
+  path = $path.dirname(path);
+  while (!$path.existsSync(path)) {
+    tomake.push(path);
+    path = $path.dirname(path);
+  }
+  while (tomake.length) {
+    $fs.mkdirSync(tomake.pop(), mode);
+  }
+}
+
+/**
+ * Normalize the configuration path to compensate for the fact that while the
+ *  cmdline script lives in 'servers' we run from 'servers/lib' by prefixing
+ *  '../' to relative paths.
+ */
+function normalizeConfigPath(path) {
+  if (path[0] !== '/')
+    return '../' + path;
+  return path;
+}
 
 /**
  * Create a server configuration from scratch.
  */
 exports.cmdCreateConfig = function createConfig(configDir, opts) {
+  configDir = normalizeConfigPath(configDir);
+
   // -- explode if the directory already exists
   if ($path.existsSync(configDir))
     throw new Error("configuration directory '" + configDir +
                     "' already exists!");
+  console.log("creating", configDir);
 
   // - create the directory
-  $fs.mkdirSync(configDir, CONFIG_DIR_MODE);
+  makedirTree(configDir, CONFIG_DIR_MODE);
 
-  // - create the keys / identity
+  // - create the keys, identity
+  var rootKeyring = $keyring.createNewServerRootKeyring();
+  var keyring = rootKeyring.issueLongtermBoxingKeyring();
 
-  saveConfigToDir(config, configDir);
+  // details for the self-ident
+  var details = {
+    tag: 'server:full',
+    meta: {
+      displayName: opts.humanName,
+    },
+    url: 'ws://' + opts.dnsName + ':' + opts.listenPort + '/',
+  };
+
+  var signedSelfIdent =
+    $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
+
+  var serializedConfig = {
+    keyring: keyring.data,
+    signedSelfIdent: signedSelfIdent,
+    dbKind: 'redis',
+    dbServer: opts.dbServer,
+    dbPort: opts.dbPort,
+    dbPrefix: opts.dbPrefix,
+    listenIP: opts.listenIP,
+    listenPort: opts.listenPort,
+  };
+
+  // - persist
+  saveConfigFileToDir(rootKeyring.data, ROOTKEY_FILE_NAME, configDir);
+  saveConfigFileToDir(serializedConfig, CONFIG_FILE_NAME, configDir);
+
+  // save off the self-ident to its own file so that it can be placed in
+  //  a 'well known location' to be served by a different webserver.
+  saveSelfIdentOff(signedSelfIdent, configDir);
 };
 
+var ALIVE_LIST = [];
+
+/**
+ * Run an existing server configuration.
+ */
 exports.cmdRunConfig = function runConfig(configDir) {
-  var config = loadConfigFromDir(configDir);
+  configDir = normalizeConfigPath(configDir);
+  var liveServerInfo = {};
 
-  // -- instantiate the server
+  // - depersist the config
+  var serializedConfig = loadConfigFileFromDir(CONFIG_FILE_NAME, configDir);
 
+  var keyring = $keyring.loadLongtermBoxingKeyring(serializedConfig.keyring);
 
-  // -- bundle up the endpoints for the server def
+  // - logger
+  var logger = LOGFAB.serverConfig(liveServerInfo, null,
+                                   [configDir, keyring.boxingPublicKey]);
+
+  // - db connection
+  var dbConn = $gendb.makeProductionDBConnection(serializedConfig.dbPrefix,
+                                                 serializedConfig.dbServer,
+                                                 serializedConfig.dbPort,
+                                                 logger);
+
+  // - authconn server instance
+  var server = new $authconn.AuthorizingServer(logger,
+                                               keyring.boxingPublicKey);
+
+  // - server config
+  var serverConfig = populateTestConfig(keyring,
+                                        serializedConfig.signedSelfIdent,
+                                        dbConn,
+                                        FULLPUB_ROLES,
+                                        {}, // no clobbering (just for tests)
+                                        logger);
+
+  // - stash info in a global
+  // this is partially so we can find it more easily with a debugger, partially
+  //  GC superstition :)
+  liveServerInfo.server = server;
+  liveServerInfo.serverConfig = serverConfig;
+  ALIVE_LIST.push(liveServerInfo);
+
+  // - start server
+  server.listen(serializedConfig.listenIP, serializedConfig.listenPort);
+  console.log("Server started on",
+              serializedConfig.listenIP, serializedConfig.listenPort);
 };
 
+function nukeFilesInDir(dir, files) {
+  for (var i = 0; i < files.length; i++) {
+    var nukePath = $path.join(dir, files[i]);
+    try {
+      $fs.unlinkSync(nukePath);
+    }
+    catch(ex) {
+      // no one cares if they are already gone
+    }
+  }
+}
+
+/**
+ * Delete an existing configuration, which just means wiping out the database
+ *  and then deleting the configuration directory.
+ *
+ * The caller is responsible for doing the "are you sure you want to do this"
+ *  checking (and it does).
+ */
 exports.cmdNukeConfig = function nukeConfig(configDir) {
-  var config = loadConfigFromDir(configDir);
+  configDir = normalizeConfigPath(configDir);
+  var serializedConfig = loadConfigFileFromDir(CONFIG_FILE_NAME, configDir);
 
-  // -- perform hbase cleanup
+  var keyring = $keyring.loadLongtermBoxingKeyring(serializedConfig.keyring);
+
+  var logger = LOGFAB.serverConfig(null, null,
+                                   [configDir, keyring.boxingPublicKey]);
+
+  // - nuke database
+  var dbConn = $gendb.makeProductionDBConnection(serializedConfig.dbPrefix,
+                                                 serializedConfig.dbServer,
+                                                 serializedConfig.dbPort,
+                                                 logger);
+  function badNews(err) {
+    console.error("PROBLEM:", err);
+    process.exit(11);
+  };
+
+  return when($gendb.nukeProductionDatabase(dbConn), function() {
+    $gendb.closeProductionDBConnection(dbConn);
+
+    // - delete directory
+    nukeFilesInDir(configDir,
+                   [ROOTKEY_FILE_NAME, CONFIG_FILE_NAME, SELF_IDENT_FILE]);
+    $fs.rmdirSync(configDir);
+  }, badNews);
 };
+
+////////////////////////////////////////////////////////////////////////////////
+// Log Def
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  serverConfig: {
+    type: $log.DAEMON,
+    subtype: $log.DAEMON,
+    semanticIdent: {
+      configName: 'configName',
+      serverIdent: 'key',
+    },
+    stateVars: {
+      connState: true,
+      appState: true,
+    },
+    events: {
+      connecting: {fullUrl: false},
+      connected: {},
+      send: {type: true},
+      receive: {type: true},
+      closing: {},
+      closed: {},
+    },
+    TEST_ONLY_events: {
+      send: {msg: $log.JSONABLE},
+      receive: {msg: $log.JSONABLE},
+    },
+    calls: {
+      appConnectHandler: {},
+      handleMsg: {type: true},
+      appCloseHandler: {},
+    },
+    TEST_ONLY_calls: {
+      handleMsg: {msg: $log.JSONABLE},
+    },
+    errors: {
+      connectError: {error: false},
+      connectFailed: {error: false},
+
+      corruptServerEphemeralKey: {},
+
+      badProto: {},
+      corruptBox: {},
+
+      badMessage: {inState: true, type: true},
+      queueBacklogExceeded: {},
+      websocketError: {err: false},
+      handlerFailure: {err: $log.EXCEPTION},
+    },
+    LAYER_MAPPING: {
+      layer: "protocol",
+      transitions: [
+        {after: {connState: "app"}, become: "app"},
+      ],
+    },
+  },
+});
 
 ////////////////////////////////////////////////////////////////////////////////
 
