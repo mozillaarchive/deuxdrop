@@ -19,3 +19,7 @@ cp -r ../../common/lib/rdcommon data/web/deps
 
 # common/test         => web/deps/rdctests
 cp -r ../../common/test/*.js data/web/deps/rdctests
+
+# Run jetpack
+cfx $@
+
