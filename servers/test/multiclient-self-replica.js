@@ -58,7 +58,7 @@ define(
 var TD = exports.TD = $tc.defineTestsFor($module, null,
   [$th_rdservers.TESTHELPER], ['replica']);
 
-TD.commonCase('clone client has state matching the mutator', function(T) {
+TD.DISABLED_commonCase('clone client has state matching the mutator', function(T) {
   T.group("setup");
   // usual client
   var client = T.actor('testClient', 'C');
