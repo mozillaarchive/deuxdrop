@@ -105,6 +105,9 @@ require(
       rdstests: "servers/test",
       rdctests: "common/test",
     },
+    catchError: {
+      define: true,
+    }
   },
   [
     "nomnom",

@@ -25,10 +25,12 @@ var DummyErrorTrapper = {
 
 let $pworker = require('page-worker'), $self = require('self');
 
+let testerUrl = $self.data.url("testing/logdriver.html");
+
 function goRunTest(test, testName) {
-  test.waitUntilDone(5 * 1000);
+  test.waitUntilDone(6 * 1000);
   var page = $pworker.Page({
-    contentURL: $self.data.url("testing/logdriver.html") + "?" + testName,
+    contentURL: testerUrl + "?" + testName,
     onMessage: function(msg) {
       if (msg === "pass")
         test.pass();

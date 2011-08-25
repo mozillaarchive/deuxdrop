@@ -92,9 +92,6 @@ function IndexedDbConn(nsprefix, _logger) {
   var self = this;
 
   self._log.connecting();
-  IndexedDB = mozIndexedDB;
-  IDBTransaction = _IDBTransaction;
-  IDBKeyRange = _IDBKeyRange;
   // XXX firefox 6 hack so we can perform the open with the context of the
   //  bloody webpage (::Open checks the implicit security context, but its
   //  helper uses the window so it lacks our 'chrome' context but gets the
@@ -544,7 +541,8 @@ IndexedDbConn.prototype = {
   // Session Management
 
   close: function() {
-    this._db.close();
+    if (this._db && (this._db instanceof IDBDatabase))
+      this._db.close();
   },
 
   //////////////////////////////////////////////////////////////////////////////
