@@ -102,6 +102,16 @@ function Utf8StrToJSStr(ctypesUtf8Str, offset) {
 }
 
 /**
+ * Convert a JS string that contains a (binary-encoded) utf8-string inside of it
+ *  into the proper JS string representation of that string, effectively just
+ *  performing utf-8 decoding.
+ */
+function JSUtf8StrToJSStr(u8str) {
+  let binStr = JSStrToBinStr(u8str, 0);
+  return Utf8StrToJSStr(binStr, 0);
+}
+
+/**
  * Convert a JS string containing an 8-bit binary string into a ctypes 8-bit
  *  binary string.
  */
@@ -312,9 +322,15 @@ exports.sign_open_utf8 = function(js_sm, pk) {
   return Utf8StrToJSStr(m, 0, m_len.address().contents);
 }
 
-exports.sign_peek = exports.sign_peek_utf8 = function(js_sm) {
+exports.sign_peek = function(js_sm) {
   return js_sm.substring(crypto_sign_BYTES / 2,
                          js_sm.length - crypto_sign_BYTES / 2);
+}
+
+exports.sign_peek_utf8 = function(js_sm) {
+  var binstr = js_sm.substring(crypto_sign_BYTES / 2,
+                               js_sm.length - crypto_sign_BYTES / 2);
+  return JSUtf8StrToJSStr(binstr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

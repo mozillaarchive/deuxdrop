@@ -87,6 +87,24 @@ var BINNONREP = '\u0000\u0001\u0002\u0003\u00004\u0000' +
                 '\u0000\u0025\u0026\u0027\u00028\u0000' +
                 '\u0000\u0029\u002a\u002b\u0002c\u0000'; // 54 bytes
 
+// Have a string that uses byte sequences that are not remotely valid utf8
+//  and so interpretation as utf8 would be fatal.
+var NOT_VALID_UTF8 =
+  '\u00ff\u00fe\u00fd\u00fc\u00fb\u00fa\u00f9\u00f8\u0000' +
+  '\u00f7\u00f6\u00f5\u00f4\u00f3\u00f2\u00f1\u00f0\u0000';
+
+// Have a string that should be legally UTF8 encoded from our invalid UTF8
+var VALID_UTF8_FROM_INVALID_UTF8 = JSON.stringify({s: NOT_VALID_UTF8});
+
+
+// A string of 'high' unicode so that interpretation as 8-bit binary data
+//  would be corrupting.
+var SOME_UTF16 = '\u0100\u0101\u0102\u0103\u0104\u0105\u0106\u0107' +
+                 '\u0108\u0109\u010a\u010b\u010c\u010d\u010e\u010f' +
+                 '\u0110\u0111\u0112\u0113\u0114\u0115\u0116\u0117' +
+                 '\u0118\u0119\u011a\u011b\u011c\u011d\u011e\u011f' +
+                 '\u0120\u0121\u0122\u0123\u0124';
+
 var ALPHA_STEW = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' +
                  'abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -97,7 +115,8 @@ var JSON_STEW = JSON.stringify({
 });
 
 var hexies = ['0', '1', '2', '3', '4', '5', '6', '7',
-              '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+              '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+              '!0', '!1', '!2', '!3', '!4', '!5', '!6', '!7'];
 
 // XXX if we had non-ASCII messages tested, this would screw up as it needs to
 //  know whether to interpret as utf8 in that case...
@@ -157,8 +176,12 @@ exports.testCustomErrors = function(test) {
 };
 
 function checkSignatureOf(message, binaryMode, test) {
-  console.log("===== Planning to sign: '" + message + "' aka " +
-              hexify(message));
+  if (!binaryMode)
+    console.log("\n===== Planning to sign: '" + message +
+                "'\n       aka " + hexify(message));
+  else
+    console.log("\n===== Planning to sign: " + hexify(message));
+
   var signer, opener, peeker;
   if (binaryMode) {
     signer = nacl.sign;
@@ -179,19 +202,22 @@ function checkSignatureOf(message, binaryMode, test) {
               'pk', keys.pk.length, hexify(keys.pk));
 
   // Sign a message with the secret key
-  console.log("SIGN", message.length, message);
+  console.log("SIGN  ", message.length,
+              binaryMode ? hexify(message) : message);
   var signed_message = signer(message, keys.sk);
 
   console.log("SIGNED", signed_message.length, hexify(signed_message));
   test.assertNotEqual(message, signed_message);
 
   var peeked_message = peeker(signed_message);
-  console.log("PEEKED", peeked_message.length, peeked_message);
+  console.log("PEEKED", peeked_message.length,
+              binaryMode ? hexify(peeked_message) : peeked_message);
   test.assertEqual(message, peeked_message);
 
   // Verify the (valid) signed message.
   var checked_message = opener(signed_message, keys.pk);
-  console.log("OPENED", checked_message.length, checked_message);
+  console.log("OPENED", checked_message.length,
+              binaryMode ? hexify(checked_message) : checked_message);
   test.assertEqual(message, checked_message);
 
   // The minimum message size is 64 bytes because of the hash and the signature,
@@ -237,9 +263,12 @@ exports.testSigning = function(test) {
   checkSignatureOf('Hello World!', false, test);
   checkSignatureOf(ALPHA_STEW, false, test);
   checkSignatureOf(JSON_STEW, false, test);
+  checkSignatureOf(VALID_UTF8_FROM_INVALID_UTF8, false, test);
+  checkSignatureOf(SOME_UTF16, false, test);
 
   checkSignatureOf(ZEROES_64, true, test);
   checkSignatureOf(BINNONREP, true, test);
+  checkSignatureOf(NOT_VALID_UTF8, true, test);
 
   test.done();
 };
@@ -255,8 +284,11 @@ function checkBoxRoundTripOf(message, binaryMode, test) {
     unboxer = nacl.box_open_utf8;
   }
 
-  console.log("===== Planning to encrypt: '" + message + "' aka " +
-              hexify(message));
+  if (!binaryMode)
+    console.log("\n===== Planning to encrypt: '" + message +
+                "'\n       aka " + hexify(message));
+  else
+    console.log("\n===== Planning to encrypt: " + hexify(message));
   var sender_keys = nacl.box_keypair(),
       recip_keys = nacl.box_keypair();
   console.log('B SENDER sk', sender_keys.sk.length, hexify(sender_keys.sk));
@@ -270,7 +302,8 @@ function checkBoxRoundTripOf(message, binaryMode, test) {
   var nonce = nacl.box_random_nonce();
   console.log('NONCE', hexify(nonce));
 
-  console.log('BOX', message.length, message);
+  console.log('BOX  ', message.length,
+              binaryMode ? hexify(message) : message);
   var boxed_message = boxer(message, nonce,
                             recip_keys.pk, sender_keys.sk);
   console.log('BOXED', boxed_message.length, hexify(boxed_message));
@@ -278,7 +311,8 @@ function checkBoxRoundTripOf(message, binaryMode, test) {
 
   var unboxed_message = unboxer(boxed_message, nonce,
                                 sender_keys.pk, recip_keys.sk);
-  console.log('UNBOX', unboxed_message.length, unboxed_message);
+  console.log('UNBOX', unboxed_message.length,
+              binaryMode ? hexify(unboxed_message) : unboxed_message);
   test.assertEqual(message, unboxed_message);
 
   // -- verify we throw the right type of errors on exception.
@@ -301,10 +335,13 @@ exports.testBoxing = function(test) {
   checkBoxRoundTripOf('Hello World!', false, test);
   checkBoxRoundTripOf(ALPHA_STEW, false, test);
   checkBoxRoundTripOf(JSON_STEW, false, test);
+  checkBoxRoundTripOf(VALID_UTF8_FROM_INVALID_UTF8, false, test);
+  checkBoxRoundTripOf(SOME_UTF16, false, test);
 
   // Check that we don't break on true binary strings...
   checkBoxRoundTripOf(ZEROES_64, true, test);
   checkBoxRoundTripOf(BINNONREP, true, test);
+  checkBoxRoundTripOf(NOT_VALID_UTF8, true, test);
 
   // The gibberish / wrong keys thing does not make a lot of sense in the
   //  encryption case, so we don't bother.
@@ -323,22 +360,27 @@ function checkSecretBoxRoundTripOf(message, binaryMode, test) {
     unboxer = nacl.secretbox_open_utf8;
   }
 
-  console.log("===== Planning to encrypt: '" + message + "' aka " +
-              hexify(message));
+  if (!binaryMode)
+    console.log("\n===== Planning to sbox: '" + message +
+                "'\n       aka " + hexify(message));
+  else
+    console.log("\n===== Planning to sbox: " + hexify(message));
 
   var key = nacl.secretbox_random_key();
   console.log('KEY', hexify(key));
   var nonce = nacl.secretbox_random_nonce();
   console.log('NONCE', hexify(nonce));
 
-  console.log('SBOX', message.length, message);
+  console.log('SBOX  ', message.length,
+              binaryMode ? hexify(message) : message);
   var boxed_message = boxer(message, nonce, key);
 
   console.log('SBOXED', boxed_message.length, hexify(boxed_message));
   test.assertNotEqual(message, boxed_message);
 
   var unboxed_message = unboxer(boxed_message, nonce, key);
-  console.log('SUNBOX', unboxed_message.length, unboxed_message);
+  console.log('SUNBOX', unboxed_message.length,
+              binaryMode ? hexify(unboxed_message) : unboxed_message);
   test.assertEqual(message, unboxed_message);
 
   // -- verify we throw the right type of errors on exception.
@@ -356,9 +398,12 @@ exports.testSecretBoxing = function(test) {
   checkSecretBoxRoundTripOf('Hello World!', false, test);
   checkSecretBoxRoundTripOf(ALPHA_STEW, false, test);
   checkSecretBoxRoundTripOf(JSON_STEW, false, test);
+  checkSecretBoxRoundTripOf(VALID_UTF8_FROM_INVALID_UTF8, false, test);
+  checkSecretBoxRoundTripOf(SOME_UTF16, false, test);
 
   checkSecretBoxRoundTripOf(ZEROES_64, true, test);
   checkSecretBoxRoundTripOf(BINNONREP, true, test);
+  checkSecretBoxRoundTripOf(NOT_VALID_UTF8, true, test);
 
   test.done();
 };
@@ -374,13 +419,17 @@ function checkAuthenticatorFor(message, binaryMode, test) {
     verifier = nacl.auth_verify_utf8;
   }
 
-  console.log("===== Planning to authenticate: '" + message + "' aka " +
-              hexify(message));
+  if (!binaryMode)
+    console.log("\n===== Planning to authenticate: '" + message +
+                "'\n       aka " + hexify(message));
+  else
+    console.log("\n===== Planning to authenticate: " + hexify(message));
 
   var key = nacl.auth_random_key();
   console.log('KEY', hexify(key));
 
-  console.log('AUTH', message.length, message);
+  console.log('AUTH  ', message.length,
+              binaryMode ? hexify(message) : message);
   var authenticator = auther(message, key);
 
   console.log('AUTHED', authenticator.length, hexify(authenticator));
@@ -412,9 +461,12 @@ exports.testAuthenticators = function(test) {
   checkAuthenticatorFor('Hello World!', false, test);
   checkAuthenticatorFor(ALPHA_STEW, false, test);
   checkAuthenticatorFor(JSON_STEW, false, test);
+  checkAuthenticatorFor(VALID_UTF8_FROM_INVALID_UTF8, false, test);
+  checkAuthenticatorFor(SOME_UTF16, false, test);
 
   checkAuthenticatorFor(ZEROES_64, true, test);
   checkAuthenticatorFor(BINNONREP, true, test);
+  checkAuthenticatorFor(NOT_VALID_UTF8, true, test);
 
   test.done();
 };
