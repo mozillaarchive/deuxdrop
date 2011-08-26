@@ -80,7 +80,7 @@ exports.loadAccount = function() {
     AccountChangeListener.accountChanged(gRawClient);
   }
 
-  gRawClient.registerForAccountChanges(AccountChangeListener);
+  gRawClient.registerForAccountChangeNotifications(AccountChangeListener);
   return gRawClient;
 };
 
