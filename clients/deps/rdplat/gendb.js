@@ -562,6 +562,16 @@ IndexedDbConn.prototype.updateStringIndexValue =
 IndexedDbConn.prototype.scanStringIndex =
   IndexedDbConn.prototype.scanIndex;
 
+exports.makeProductionDBConnection = function(uniqueName, host, port, _logger) {
+  return new IndexedDbConn(uniqueName, _logger);
+};
+exports.nukeProductionDatabase = function(conn) {
+  throw new Error("not implemented!");
+};
+exports.closeProductionDBConnection = function(conn) {
+  conn.close();
+};
+
 exports.makeTestDBConnection = function(uniqueName, _logger) {
   return new IndexedDbConn(uniqueName, _logger);
 };

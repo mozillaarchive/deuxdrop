@@ -68,6 +68,16 @@ const NS_PEEPS = 'peeps';
 /**
  * The other side of a ModaBridge instance/connection.  This is intended to be
  *  a reasonably lightweight layer on top
+ *
+ * @args[
+ *   @param[rawClient RawClientAPI]
+ *   @param[name String]{
+ *     A unique string amongst all other ModaBackside instances trying to
+ *     talk to the same `RawClientAPI`/`NotificationKing` instance.  Normally
+ *     the rendezvous logic would allocate these id's.
+ *   }
+ *   @param[_logger Logger]
+ * ]
  */
 function ModaBackside(rawClient, name, _logger) {
   this.name = name;
@@ -93,7 +103,8 @@ ModaBackside.prototype = {
   },
 
   /**
-   * Hack to establish a *fake* *magic* link between us and a bridge.
+   * Hack to establish a *fake* *magic* link between us and a bridge.  ONLY
+   *  FOR USE BY UNIT TESTS.
    */
   XXXcreateBridgeChannel: function(name, bridgeHandlerFunc) {
     this._bridgeName = name;
@@ -103,6 +114,17 @@ ModaBackside.prototype = {
 
     var self = this;
     return this._received.bind(this);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Lifecycle
+
+  /**
+   * Indicate that the other side is dead and we should kill off any live
+   *  queries, etc.
+   * XXX does not actually do anything.
+   */
+  dead: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////

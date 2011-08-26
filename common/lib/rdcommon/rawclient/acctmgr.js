@@ -19,6 +19,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
+ *   Andrew Sutherland <asutherland@asutherland.org>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -34,31 +35,53 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-/*jslint strict: false, indent: 2 */
-/*global define: false */
+/**
+ * Handles the persistence of the user's identity, currently using localStorage.
+ **/
 
-define(function (require) {
+define(
+  [
+    './api',
+    'rdplat/gendb',
+    'exports'
+  ],
+  function(
+    $api,
+    $gendb,
+    exports
+  ) {
 
-  var api = require('rdcommon/moda/api'),
-      worker = require('rdcommon/moda/worker'),
-      bridge = new api.ModaBridge();
+var ACCT_KEYNAME = 'deuxdrop-identity';
 
-  // The hookup, using the custom event hack for jetpack,
-  // updating to latest repo of jetpack may allow for going back
-  // to postMessage. Right now testing with jetpack 1.1b1
-  bridge._sendObjFunc = function (data) {
-    var event = document.createEvent("MessageEvent");
-    event.initMessageEvent('moda-ui-to-daemon', false, false,
-                           JSON.stringify(data), '*', null, null, null);
-    window.dispatchEvent(event);
-  };
+var gRawClient = null;
 
-  // Listen for messages from the client daemon
-  window.addEventListener('moda-daemon-to-ui', function (evt) {
-      //console.log('moda-content-message: ' + JSON.stringify(evt.data));
-      var data = JSON.parse(evt.data);
-      bridge._receive(data);
-    }, false);
+var AccountChangeListener = {
+  accountChanged: function(rawClient) {
+    localStorage[ACCT_KEYNAME] = JSON.stringify(rawClient.__persist());
+  },
+};
 
-  return bridge;
-});
+exports.loadAccount = function() {
+  if (gRawClient)
+    return gRawClient;
+
+  var dbConn = $gendb.makeProductionDBConnection('', null, null, null);
+
+  var persistedBlob = localStorage[ACCT_KEYNAME];
+  if (persistedBlob) {
+    gRawClient = $api.getClientForExistingIdentity(JSON.parse(persistedBlob),
+                                                   dbConn, null);
+  }
+  else {
+    var gibberishPoco = {
+      displayName: null,
+    };
+    gRawClient = $api.makeClientForNewIdentity(gibberishPoco, dbConn, null);
+    AccountChangeListener.accountChanged(gRawClient);
+  }
+
+  gRawClient.registerForAccountChanges(AccountChangeListener);
+  return gRawClient;
+};
+
+}); // end define

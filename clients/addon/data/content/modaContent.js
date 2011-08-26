@@ -28,7 +28,7 @@
 /**
  * This is just a proxy to communicate with the addon-space code.
  */
-var targetOrigin = window.location.protocol + '//' + window.location.host;
+//var targetOrigin = window.location.protocol + '//' + window.location.host;
 
 // Going with a custom event approach  as mentioned by Irakli instead of
 // postMessage because of this bug:
@@ -44,12 +44,13 @@ var targetOrigin = window.location.protocol + '//' + window.location.host;
 function sendContentMessage(data) {
   //console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-content-message: ' + JSON.stringify(data));
   var event = document.createEvent('MessageEvent');
-  event.initMessageEvent('moda-content-message', false, false, JSON.stringify(data),
+  event.initMessageEvent('moda-daemon-to-ui', false, false,
+                         JSON.stringify(data),
                          '*', null, null, null);
   window.dispatchEvent(event);
 }
 
-window.addEventListener('moda-addon-message', function (event) {
+window.addEventListener('moda-ui-to-daemon', function (event) {
   //console.log('modaContent.js: ' + unsafeWindow.location.href + ', sending moda-addon-message to addon: ' + event.data);
   self.postMessage(JSON.parse(event.data));
 }, false);

@@ -39,143 +39,205 @@
 /*jslint indent: 2, strict: false  */
 /*global define: false */
 
-define([ 'exports', 'self', 'page-mod', 'page-worker', 'chrome',
+/**
+ * Starts the client daemon immediately and registers URLs so that as user
+ *  interface tabs are opened we are able to establish a communications
+ *  channel between the tabs and the daemon.
+ *
+ * The execution model is that the client daemon is expected to operate in the
+ *  main chrome process (in a hidden frame), and the UI pages can operate in
+ *  electrolysis content processes.  In theory the client daemon could also
+ *  operate in a content process too if there is a way for us to get our djb
+ *  nacl bindings exposed into it.
+ **/
+
+define([ 'exports', 'self', 'page-mod', 'hidden-frame', 'chrome', 'nacl', 'q',
          './jetpack-protocol/index'],
-function (exports,   self,   pageMod,    pageWorkers,   chrome,
+function (exports,   self,   pageMod,    hiddenFrame,    chrome,   nacl,   Q,
           protocol) {
 
-  var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
-      jsm = {},
-      data = self.data,
+var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
+    jsm = {}, when = Q.when,
+    data = self.data,
 
-      // Set to the correct server host.
-      serverHost = 'http://127.0.0.1:8888',
+    // - about:dd => Application URL redirector magic
+    aboutUrl = data.url('content/about.html'),
+    redirectorUrl = data.url('content/redirector.js'),
 
-      url = data.url('addon/index.html'),
-      aboutUrl = data.url('content/about.html'),
-      transportUrl = data.url('web/firefox/transport.html'),
-      redirectorUrl = data.url('content/redirector.js'),
-      modaContentUrl = data.url('content/modaContent.js'),
-      handler, Services, XPCOMUtils;
+    // - Application UI
+    // URL to what to actually present
+    userInterfaceUrl = data.url('addon/index.html'),
+    // URL for script overlay that provides message sending to the backside
+    modaContentUrl = data.url('content/modaContent.js'),
+
+    // - Client Worker (Backside) Logic
+    // URL for the webpage that is the actual client/backside, servicing the UI
+    clientDaemonUrl = data.url('web/firefox/clientdaemon.html'),
+
+    handler, Services, XPCOMUtils;
 
 
-  function makeURI(aURL, aOriginCharset, aBaseURI) {
-    var ioService = Cc["@mozilla.org/network/io-service;1"]
-                    .getService(Ci.nsIIOService);
-    return ioService.newURI(aURL, aOriginCharset, aBaseURI);
+////////////////////////////////////////////////////////////////////////////////
+// Privilege Granting
+
+function makeURI(aURL, aOriginCharset, aBaseURI) {
+  var ioService = Cc["@mozilla.org/network/io-service;1"]
+                  .getService(Ci.nsIIOService);
+  return ioService.newURI(aURL, aOriginCharset, aBaseURI);
+}
+
+// we totally need to perform this authorization step, otherwise things just
+//  hang while it tries to display a prompt that no one will ever see.
+function authIndexedDBForUri(url) {
+  // forcibly provide the indexedDB permission.
+  let permMgr = Cc["@mozilla.org/permissionmanager;1"]
+                  .getService(Ci.nsIPermissionManager);
+  let uri = makeURI(url, null, null);
+  permMgr.add(uri,
+              "indexedDB",
+              Ci.nsIPermissionManager.ALLOW_ACTION,
+              Ci.nsIPermissionManager.EXPIRE_NEVER);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Bookmarking
+
+// Load Services for dealing with bookmarking.
+Cu['import']("resource://gre/modules/Services.jsm", jsm);
+Cu['import']("resource://gre/modules/XPCOMUtils.jsm", jsm);
+Services = jsm.Services;
+XPCOMUtils = jsm.XPCOMUtils;
+
+// Extend Services object
+XPCOMUtils.defineLazyServiceGetter(
+  Services, "bookmarks",
+  "@mozilla.org/browser/nav-bookmarks-service;1",
+  "nsINavBookmarksService"
+);
+
+////////////////////////////////////////////////////////////////////////////////
+
+function log(msg) {
+  dump(msg + '\n');
+}
+
+//Uses Irakli's jetpack-protocol to register about:deuxdrop, but
+//concerned the url will not update correctly for state info with
+//about: URLs
+handler = protocol.about('dd', {
+  onRequest: function (request, response) {
+    response.uri = aboutUrl;
   }
+});
+handler.register();
 
-  // we totally need to perform this authorization step, otherwise things just
-  //  hang while it tries to display a prompt that no one will ever see.
-  function authIndexedDBForUri(url) {
-    // forcibly provide the indexedDB permission.
-    let permMgr = Cc["@mozilla.org/permissionmanager;1"]
-                    .getService(Ci.nsIPermissionManager);
-    let uri = makeURI(url, null, null);
-    permMgr.add(uri,
-                "indexedDB",
-                Ci.nsIPermissionManager.ALLOW_ACTION,
-                Ci.nsIPermissionManager.EXPIRE_NEVER);
-  }
+var clientRegistry = {};
+var gClientDaemonStarted = false, gClientHiddenFrame = null, gWinJS;
 
-  // Load Services for dealing with bookmarking.
-  Cu['import']("resource://gre/modules/Services.jsm", jsm);
-  Cu['import']("resource://gre/modules/XPCOMUtils.jsm", jsm);
-  Services = jsm.Services;
-  XPCOMUtils = jsm.XPCOMUtils;
+function notifyDaemonOfNewClient(senderUnique, uiWorker) {
+  clientRegistry[senderUnique] = uiWorker;
+  gWinJS.NEWCLIENT(senderUnique);
+}
 
-  // Extend Services object
-  XPCOMUtils.defineLazyServiceGetter(
-    Services, "bookmarks",
-    "@mozilla.org/browser/nav-bookmarks-service;1",
-    "nsINavBookmarksService"
-  );
+function sendDaemonMessage(senderUnique, data) {
+  gWinJS.CLIENTMSG(senderUnique, data);
+}
 
-  function log(msg) {
-    dump(msg + '\n');
-  }
+function notifyDaemonOfDeadClient(senderUnique) {
+  gWinJS.DEADCLIENT(senderUnique);
+}
 
-  //Uses Irakli's jetpack-protocol to register about:deuxdrop, but
-  //concerned the url will not update correctly for state info with
-  //about: URLs
-  handler = protocol.about('dd', {
-    onRequest: function (request, response) {
-      response.uri = aboutUrl;
+function daemonSendClientMessage(clientUnique, data) {
+  clientRegistry[clientUnique].postMessage(data);
+}
+
+function startClientDaemon() {
+  // we need to authorize the worker page to use indexedDB:
+  authIndexedDBForUri(clientDaemonUrl);
+
+  gClientHiddenFrame = hiddenFrame.add(hiddenFrame.HiddenFrame({
+    onReady: function() {
+      // load our client daemon page into the frame
+      this.element.contentWindow.location = clientDaemonUrl;
+
+      var self = this;
+      this.element.addEventListener("DOMContentLoaded", function() {
+        // Now that it's loaded, provide it with any bindings it needs and
+        //  start it up.
+        var win = self.element.contentWindow,
+            winjs = gWinJS = win.wrappedJSObject;
+
+        // expose the crypto bindings
+        winjs.$NACL = nacl;
+        // expose the message transmission mechanism
+        // (messaging also possible)
+        winjs.daemonSendClientMessage = daemonSendClientMessage;
+
+        // - trigger the load process
+        // (we could alternately just use messaging if we weren't already
+        //  poking and prodding.)
+        winjs.BOOTSTRAP();
+      }, true, true);
     }
-  });
-  handler.register();
+  }));
+}
+startClientDaemon();
 
-  exports.main = function () {
+var nextQuerySourceUniqueNum = 1;
+
+exports.main = function () {
 /*
-    // Set up a bookmark to deuxdrop. Another option is a custom
-    // protocol handler, but that does not seem to get the URL structures
-    // we want. But needs more exploration.
-    var nsiuri = Services.io.newURI(url, null, null);
-    if (!Services.bookmarks.isBookmarked(nsiuri)) {
-      Services.bookmarks.insertBookmark(
-        Services.bookmarks.unfiledBookmarksFolder,
-        nsiuri,
-        Services.bookmarks.DEFAULT_INDEX, 'Deuxdrop'
-      );
-    }
+  // Set up a bookmark to deuxdrop. Another option is a custom
+  // protocol handler, but that does not seem to get the URL structures
+  // we want. But needs more exploration.
+  var nsiuri = Services.io.newURI(url, null, null);
+  if (!Services.bookmarks.isBookmarked(nsiuri)) {
+    Services.bookmarks.insertBookmark(
+      Services.bookmarks.unfiledBookmarksFolder,
+      nsiuri,
+      Services.bookmarks.DEFAULT_INDEX, 'Deuxdrop'
+    );
+  }
 */
 
-    pageMod.PageMod({
-      include: ['about:dd'],
-      contentScriptWhen: 'start',
-      contentScriptFile: redirectorUrl,
-      onAttach: function onAttach(worker) {
-        worker.on('message', function (message) {
-          worker.postMessage(url);
-        });
-      }
-    });
+  // - create the about:dd => application UI URL bouncer
+  pageMod.PageMod({
+    include: ['about:dd'],
+    contentScriptWhen: 'start',
+    contentScriptFile: redirectorUrl,
+    onAttach: function onAttach(worker) {
+      worker.on('message', function (message) {
+        worker.postMessage(userInterfaceUrl);
+      });
+    }
+  });
 
-  // we need to authorize the worker page to use indexedDB:
-  authIndexedDBForUri(transportUrl);
-    
-log('SETTING UP PAGE MOD');
-    pageMod.PageMod({
-      include: [url],
-      contentScriptWhen: 'start',
-      contentScriptFile: modaContentUrl,
-      onAttach: function onAttach(worker) {
-        // start up the transport via a page mod.
-        var pageWorkerReady = false,
-            waiting = [],
-            pageWorker;
+  // - use a pageMod to be able to bind to pages showing our app UI
+  log('SETTING UP PAGE MOD');
+  pageMod.PageMod({
+    include: [userInterfaceUrl],
+    contentScriptWhen: 'start',
+    contentScriptFile: modaContentUrl,
+    onAttach: function onAttach(uiWorker) {
+      // (uiWorker is a jetpack abstraction that lets us send messages to the
+      //  content page)
 
-        pageWorker = pageWorkers.Page({
-          contentURL: transportUrl,
-          contentScriptFile: modaContentUrl,
-          contentScript: 'sendContentMessage({serverHost: "' + serverHost + '"});',
-          contentScriptWhen: 'ready',
-          onMessage: function (message) {
-            if (!pageWorkerReady && message.transportLoaded) {
-              pageWorkerReady = true;
-              if (waiting.length) {
-                waiting.forEach(function (message) {
-                  pageWorker.postMessage(message);
-                });
-              }
-              waiting = [];
-            } else {
-              worker.postMessage(message);
-            }
-          }
-        });
+      // unique identifier to name the query source and provide the pairing
+      //  for the moda API bridge.
+      var uniqueNum = nextQuerySourceUniqueNum++;
 
-        // Listen to messages in the UI and send them to the transport via
-        // the pageWorker.
-        worker.on('message', function (message) {
-log('RECEIVED UI MESSAGE: ' + JSON.stringify(message));
-          if (pageWorkerReady) {
-            pageWorker.postMessage(message);
-          } else {
-            waiting.push(message);
-          }
-        });
-      }
-    });
-  };
+      notifyDaemonOfNewClient(uniqueNum, uiWorker);
+
+      // Listen to messages from the UI and send them to the client daemon
+      uiWorker.on('message', function (message) {
+        log('RECEIVED UI MESSAGE: ' + JSON.stringify(message));
+        sendDaemonMessage(uniqueNum, message);
+      });
+
+      uiWorker.on('detach', function() {
+        notifyDaemonOfDeadClient(uniqueNum);
+      });
+    },
+  });
+};
 });

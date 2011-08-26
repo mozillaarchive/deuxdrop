@@ -277,7 +277,7 @@ let crypto_sign_open = NACL.declare("crypto_sign" + SIGN_IMPL + "_open",
 
 exports.sign_open = function(js_sm, pk) {
   if (pk.length !== crypto_sign_PUBLICKEYBYTES)
-    throw new BadSignatureError("incorrect public-key length");
+    throw new BadSignatureError("incorrect public-key length: " + pk.length);
   if (js_sm.length < crypto_sign_BYTES)
     throw new BadSignatureError(
       "message is smaller than the minimum signed message size");
@@ -295,7 +295,7 @@ exports.sign_open = function(js_sm, pk) {
 
 exports.sign_open_utf8 = function(js_sm, pk) {
   if (pk.length !== crypto_sign_PUBLICKEYBYTES)
-    throw new BadSignatureError("incorrect public-key length");
+    throw new BadSignatureError("incorrect public-key length: " + pk.length);
   if (js_sm.length < crypto_sign_BYTES)
     throw new BadSignatureError(
       "message is smaller than the minimum signed message size");

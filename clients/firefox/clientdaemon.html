@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop Transport</title>
+    <script src="../deps/require.js"></script>
+    <script>
+// The built-in console is not useful to us here in a page-worker!
+var log = function() {
+  dump(Array.prototype.join.call(arguments, ' ') + "\n");
+};
+var console = {
+  log: log,
+  info: log,
+  warn: log,
+  error: log,
+  debug: log,
+};
+
+// this is taken from rdservers/cmdline.js
+var SUPER_DEBUG = 1;
+var MAGIC_ERROR_TRAPPER = {
+  _trappedErrors: null,
+  _handlerCallback: null,
+  /**
+   * Express interest in errors.
+   */
+  trapErrors: function() {
+    this._trappedErrors = [];
+  },
+  callbackOnError: function(handler) {
+    this._handlerCallback = handler;
+    this._trappedErrors = [];
+  },
+  yoAnError: function(err, moduleName) {
+    if (this._trappedErrors == null || SUPER_DEBUG) {
+      console.error("==== REQUIREJS ERR ====", moduleName);
+      console.error(err.message);
+      console.error(err.stack);
+    }
+    if (this._handlerCallback)
+      this._handlerCallback(err, moduleName);
+    else if (this._trappedErrors)
+      this._trappedErrors.push(err);
+  },
+  gobbleAndStopTrappingErrors: function() {
+    this._handlerCallback = null;
+    var errs = this._trappedErrors;
+    this._trappedErrors = null;
+    return errs;
+  },
+
+  // 'process' helpers pushed out here for dependency reasons across platforms
+  on: function() {},
+  once: function() {},
+  removeListener: function() {},
+
+  reliableOutput: log,
+};
+
+require.onError = function(err) {
+  var useErr = err;
+  if (err.originalError)
+    useErr = err.originalError;
+  MAGIC_ERROR_TRAPPER.yoAnError(useErr, err.moduleName);
+};
+
+function sendAddOnMessage(data) {
+  var event = document.createEvent("MessageEvent");
+  event.initMessageEvent('moda-addon-message', false, false,
+                         JSON.stringify(data), '*', null,
+                         null, null);
+  window.dispatchEvent(event);
+}
+
+var RAW_CLIENT = null, $backside;
+function BOOTSTRAP(callbackWhenLoaded) {
+  require(
+    {
+      baseUrl: '../deps',
+      paths: {
+        // dumb/trivial stubs
+        'child_process': '../../addon/js/child_process',
+        'fs': '../../addon/js/fs',
+        'http': '../../addon/js/http',
+        'microtime': '../../addon/js/microtime',
+        'path': '../../addon/js/path',
+        'timers': '../../addon/js/timers',
+        'util': '../../addon/js/util',
+        // testing-informed stubs
+        'event-queue': '../../addon/js/event-queue',
+
+        // mozilla shims
+        'nacl': '../../addon/js/nacl',
+        'websocket': '../../addon/js/websocket',
+      },
+      catchError: {
+        define: true,
+      }
+    },
+    ['event-queue', 'rdcommon/rawclient/acctmgr', 'rdcommon/moda/worker'],
+    function(_blahq, $acctmgr, _backside) {
+      console.log(":) :) :) client daemon bootstrapped!");
+      RAW_CLIENT = $acctmgr.loadAccount();
+      $backside = _backside;
+      if (callbackWhenLoaded)
+        callbackWhenLoaded();
+    }
+  );
+}
+
+var backsides = {};
+function NEWCLIENT(name) {
+  var backside = backsides[name] =
+    new $backside.ModaBackside(RAW_CLIENT, name, null);
+  backside._sendObjFunc = function(data) {
+    daemonSendClientMessage(name, data);
+  }
+}
+
+function CLIENTMSG(name, data) {
+  backsides[name]._received(data);
+}
+
+function DEADCLIENT(name) {
+  backsides[name].dead();
+  delete backsides[name];
+}
+
+window.onerror = function (err) {
+  sendAddOnMessage({'ERROR': err.toString()});
+};
+
+function listenForServerHost(evt) {
+  var data = JSON.parse(evt.data);
+  if (data.serverHost) {
+    bootstrap(data.serverHost);
+    window.removeEventListener('moda-content-message', listenForServerHost, false);
+  }
+}
+
+window.addEventListener('moda-content-message', listenForServerHost, false);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

@@ -315,6 +315,8 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
    *  webmail-style non-persistent data queries.
    */
   this._actionQueue = [];
+
+  this._accountListener = null;
 }
 RawClientAPI.prototype = {
   toString: function() {
@@ -444,6 +446,39 @@ RawClientAPI.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Account Persistence Support
+  //
+  // Allows account persistence logic to know when we have changed our
+  //  self-ident or the like.
+
+  registerForAccountChangeNotifications: function(listener) {
+    this._accountListener = listener;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Identity Changing
+
+  _regenerateSelfIdent: function(doNotNotify) {
+    this._selfIdentBlob = $pubident.generatePersonSelfIdent(
+                            this._longtermKeyring, this._keyring,
+                            this._poco, serverSelfIdentBlob);
+    // and our dubious self other-ident...
+    this._selfOthIdentBlob = $pubident.generateOtherPersonIdent(
+                               this._longtermKeyring, this._selfIdentBlob,
+                               {});
+    this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                      this._selfIdentBlob);
+
+    if (!doNotNotify && this._accountListener)
+      this._accountListener.accountChanged(this);
+  },
+
+  updatePoco: function(newPoco) {
+    this._poco = newPoco;
+    this._regenerateSelfIdent();
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Server Signup
 
   /**
@@ -490,15 +525,7 @@ RawClientAPI.prototype = {
       $pubident.assertGetServerSelfIdent(serverSelfIdentBlob);
 
     // - regenerate our selfIdentBlob using the server as the transit server
-    this._selfIdentBlob = $pubident.generatePersonSelfIdent(
-                            this._longtermKeyring, this._keyring,
-                            this._poco, serverSelfIdentBlob);
-    // and our dubious self other-ident...
-    this._selfOthIdentBlob = $pubident.generateOtherPersonIdent(
-                               this._longtermKeyring, this._selfIdentBlob,
-                               {});
-    this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-                      this._selfIdentBlob);
+    this._regenerateSelfIdent(true); // we will explicitly notify on success
 
     // - signup!
     this._log.signup_begin();
@@ -529,6 +556,9 @@ RawClientAPI.prototype = {
 
       self._signupConn = false;
       self._log.signup_end();
+
+      if (self._accountListener)
+        self._accountListener.accountChanged(self);
     });
   },
 
@@ -946,8 +976,6 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
                                  longtermKeyring, personSelfIdentBlob,
                                  {});
 
-  var clientAuthBlob = keyring.getPublicAuthFor('client');
-
   var persistedBlob = {
     selfIdent: personSelfIdentBlob,
     selfOthIdent: personSelfOthIdentBlob,
@@ -956,7 +984,6 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
       longterm: longtermKeyring.data,
       general: keyring.data,
     },
-    clientAuth: clientAuthBlob,
     otherClientAuths: [],
   };
 
