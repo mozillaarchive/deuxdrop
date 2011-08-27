@@ -27,7 +27,7 @@
       <div id="cards">
         <div data-cardid="signIn" title="Sign In" class="card noiscroll">
           <div class="scroller">
-            <form class="signUpForm">
+            <form class="signUpForm standardForm">
               <input type="text" name="name" placeholder="Enter your name">
               <button>Sign In With BrowserID</button>
             </form>
@@ -39,19 +39,34 @@
         </div>
         <div data-cardid="enterServer" title="Enter Server" class="card">
           <div class="scroller">
-            <form class="enterServerForm">
+            <form class="enterServerForm standardForm">
               <input type="text" name="server" placeholder="Enter server name">
-              <span>Warning, this is advanced voodoo and not very secure.</span>
+              <button>Connect</button>
+              <div>Warning, this is advanced voodoo and not very secure.</div>
             </form>
           </div>
         </div>
         <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
           <div class="scroller">
-            <a class="item block vbox" href="#peeps"><div class="boxFlex"><img class="tileImage" src="i/face2.png"></div><span class="tileName">People</span></a>
+            <a class="homeNav" href="#peeps">Private</a>
+            <a class="homeNav" href="#groups">Group</a>
+            <a class="homeNav" href="#notifications">Notifications</a>
+            <a class="homeNav" href="#add">+</a>
+            <div class="newConversationNotifications" data-childclass="newConversation">
+              <div class="newConversationScroller">
+              </div>
+            </div>
           </div>
         </div>
-        <div data-cardid="peeps" title="People" class="card">
-          <div class="scroller" data-childclass="personLink">
+        <div data-cardid="peeps" title="Private" class="card conversations">
+          <div class="subHeader hbox">
+            <div class="boxFlex">
+              <input id="search" type="text" placeholder="search people">
+            </div>
+            <button class="search">search</button>
+            <button class="button" data-href="#listUsersForAddPeep">add contact</button>
+          </div>
+          <div class="scroller" data-childclass="peepSummary">
           </div>
         </div>
         <div data-cardid="user" class="card">
@@ -94,6 +109,27 @@
         <span class="newConversationPeep" data-bind="from.name"></span>
         <span class="newConversationTime"></span>
         <span class="newConversationText" data-bind="text"></span>
+      </a>
+
+      <a class="private unread hbox" data-classimpl="peepSummary" href="#user">
+          <div>
+              <div class="avatar">
+                  <img src="i/face2.png" data-bind="pic" data-attr="src">
+              </div>
+          </div>
+          <div class="msgPreview boxFlex">
+              <div class="msgPreviewHeader hbox">
+                  <span class="author boxFlex overflow" data-bind="name"></span>
+                  <span class="new">(5)</span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="time">5 min</span>
+              </div>
+              <div class="hbox">
+                  <span class="snippet boxFlex overflow">
+                      This is a snippet of text from the latest msg
+                  </span>
+              </div>
+          </div>
       </a>
 
       <a data-classimpl="personLink" class="item" href="#user">

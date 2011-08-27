@@ -77,14 +77,14 @@ function ($,        url,         array,         headerTemplate) {
     var result = {},
         fragId, data, cardId;
 
-    while (node && !node.href) {
+    while (node && !node.href && !node.getAttribute('data-href')) {
       node = node.parentNode;
     }
     if (!node) {
       return result;
     }
 
-    result.href = node.href;
+    result.href = node.href || node.getAttribute('data-href');
     fragId = result.href.split('#')[1];
 
     if (fragId) {
@@ -132,7 +132,7 @@ function ($,        url,         array,         headerTemplate) {
       headerText = $('#headerText');
 
       back = $('#back');
-      back.css('display', 'none');
+      back.css('visibility', 'hidden');
       back.click(function (evt) {
         history.back();
       });
@@ -170,7 +170,7 @@ function ($,        url,         array,         headerTemplate) {
       // pushState API does not trigger hashchange events.
       // Only listen for clicks that are on a tags and for # URLs, whose
       // format matches #cardId?name=value&name=value
-      $('body').delegate('a', 'click', onNavClick);
+      $('body').delegate('a, button[data-href]', 'click', onNavClick);
 
       // Listen for popstate to do the back navigation.
       window.addEventListener('popstate', function (evt) {
@@ -327,7 +327,7 @@ function ($,        url,         array,         headerTemplate) {
     });
 
     //Hide/Show back button as appropriate
-    back.css('display', !cardPosition ? 'none' : '');
+    back.css('visibility', !cardPosition ? 'hidden' : '');
   };
 
   cards.currentCard = function () {
