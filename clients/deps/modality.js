@@ -40,7 +40,6 @@
 define(function (require) {
 
   var api = require('rdcommon/moda/api'),
-      worker = require('rdcommon/moda/worker'),
       bridge = new api.ModaBridge();
 
   // The hookup, using the custom event hack for jetpack,

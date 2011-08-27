@@ -98,7 +98,7 @@ function BOOTSTRAP(callbackWhenLoaded) {
         define: true,
       }
     },
-    ['event-queue', 'rdcommon/rawclient/acctmgr', 'rdcommon/moda/worker'],
+    ['event-queue', 'rdcommon/rawclient/acctmgr', 'rdcommon/moda/backside],
     function(_blahq, $acctmgr, _backside) {
       console.log(":) :) :) client daemon bootstrapped!");
       RAW_CLIENT = $acctmgr.loadAccount();

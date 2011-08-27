@@ -87,7 +87,7 @@ var $testdata = require('rdcommon/testdatafab');
 var $log = require('rdcommon/log');
 
 var $moda_api = require('rdcommon/moda/api'),
-    $moda_worker = require('rdcommon/moda/worker'),
+    $moda_backside = require('rdcommon/moda/backside'),
     $ls_tasks = require('rdcommon/rawclient/lstasks');
 
 /**
@@ -207,9 +207,8 @@ var TestModaActorMixins = {
 
       self._notif = self._testClient._rawClient.store._notif;
 
-      // - create the moda worker daemon
-      //self._eWorker = self.T.actor();
-      self._backside = new $moda_worker.ModaBackside(
+      // - create the moda backside
+      self._backside = new $moda_backside.ModaBackside(
                              self._testClient._rawClient, self.__name,
                              self._logger);
 
@@ -218,7 +217,7 @@ var TestModaActorMixins = {
       //   logged by us on our logger.)
       self._bridge = new $moda_api.ModaBridge();
 
-      // - link worker and bridge (hackily)
+      // - link backside and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
                                     self.__name,
                                     self._bridge._receive.bind(self._bridge));
@@ -458,7 +457,7 @@ exports.TESTHELPER = {
   // we leave it to the testClient TESTHELPER to handle most stuff, leaving us
   //  to just worry about moda.
   LOGFAB_DEPS: [LOGFAB,
-    $moda_worker.LOGFAB, $ls_tasks.LOGFAB,
+    $moda_backside.LOGFAB, $ls_tasks.LOGFAB,
   ],
 
   actorMixins: {
