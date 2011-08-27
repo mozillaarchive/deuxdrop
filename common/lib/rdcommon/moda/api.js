@@ -91,6 +91,17 @@ PeepBlurb.prototype = {
   },
 };
 
+/**
+ * A message indicating that the `invitee` who was invited by the `inviter` has
+ *  joined the conversation.
+ *
+ * @args[
+ *   @param[_owner @oneof[ConversationBlurb ConversationInFull]]
+ *   @param[inviter PeepBlurb]
+ *   @param[invitee PeepBlurb]
+ *   @param[receivedAt Date]
+ * ]
+ */
 function JoinMessage(_owner, inviter, invitee, receivedAt) {
   this._ownerConv = _owner;
   this.inviter = inviter;
@@ -104,6 +115,17 @@ JoinMessage.prototype = {
 /**
  * Message representation; this is only ever provided in a single
  *  representation.
+ *
+ * @args[
+ *   @param[_owner @oneof[ConversationBlurb ConversationInFull]]
+ *   @param[author PeepBlurb]
+ *   @param[composedAt Date]
+ *   @param[receivedAt Date]
+ *   @param[text String]{
+ *     The (unformatted unless sent by a jerk) message text.  NEVER put this
+ *     in an innerHtml field unless sanitized, and preferably not even then.
+ *   }
+ * ]
  */
 function HumanMessage(_owner, author, composedAt, receivedAt, text) {
   this._ownerConv = _owner;
@@ -168,7 +190,8 @@ ConversationInFull.prototype = {
 /**
  * An ordered set (aka list).
  */
-function LiveOrderedSet(handle, ns, query, listener, data) {
+function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
+  this._bridge = _bridge;
   this._handle = handle;
   this._ns = ns;
   this._dataByNS = {
@@ -210,6 +233,57 @@ LiveOrderedSet.prototype = {
     if (this._listener)
       this._listener.onCompleted(this);
   },
+
+  /**
+   * Closes the query so that we no longer receive updates about the query.
+   *  Once this is invoked, the reference to the set and all of its contents
+   *  should be dropped as they will no longer be valid or kept up-to-date.
+   */
+  close: function() {
+    this._bridge.killQuery(this);
+  },
+};
+
+/**
+ * Provides information about a server.
+ *
+ * For pragmatic/laziness reasons, this representation unusually has the full
+ *  crypto self-ident present, but it should never be exposed/to used by the
+ *  user interface directly.
+ */
+function ServerInfo(_selfIdentBlob, url, displayName) {
+  this._selfIdentBlob = _selfIdentBlob;
+  this.url = url;
+  this.displayName = displayName;
+}
+ServerInfo.prototype = {
+};
+
+/**
+ * Represents the account information for the human being using this messaging
+ *  system.  Provides the current portable contacts schema identifying the user
+ *  to others and a means to change it.  Provides information on the account
+ *  server being used, if any, and a way to perform initial signup.  There is
+ *  no way to change the server used right now because we don't have migration
+ *  implemented.
+ */
+function OurUserAccount(_bridge, poco) {
+  this._bridge = bridge;
+  this.poco = poco;
+}
+OurUserAccount.prototype = {
+  get havePersonalInfo() {
+    return !!this.poco.displayName;
+  },
+
+  get haveServerAccount() {
+  },
+
+  /**
+   * Replace the current
+   */
+  updatePersonalInfo: function(newPoco) {
+  },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -239,6 +313,8 @@ function ModaBridge() {
 
   this._handleMap = {};
   this._sets = [];
+
+  this._ourUser = null;
 }
 exports.ModaBridge = ModaBridge;
 ModaBridge.prototype = {
@@ -267,6 +343,21 @@ ModaBridge.prototype = {
   },
 
   /**
+   * Receive a message from the other side.  These are distinguished
+   */
+  _receive: function(msg) {
+    switch (msg.type) {
+      case 'whoAmI':
+        return this._receiveWhoAmI(msg);
+      case 'query':
+        return this._receiveQueryUpdate(msg);
+    }
+  },
+
+  _receiveWhoAmI: function(msg) {
+  },
+
+  /**
    * @args[
    *   @param[msg @dict[
    *     @key[handle]
@@ -277,7 +368,7 @@ ModaBridge.prototype = {
    *   ]]
    * ]
    */
-  _receive: function(msg) {
+  _receiveQueryUpdate: function(msg) {
     if (!this._handleMap.hasOwnProperty(msg.handle))
       throw new Error("Received notification about unknown handle: " +
                       msg.handle);
@@ -468,6 +559,8 @@ ModaBridge.prototype = {
     setTimeout(function () {
       listener.onCompleted(null);
     }, 15);
+
+
   },
 
   // More stubs.
@@ -486,6 +579,15 @@ ModaBridge.prototype = {
         ]
       });
     }, 15);
+  },
+
+  queryServers: function(listener, data) {
+    var handle = this._nextHandle++;
+    var liveset = new LiveOrderedSet(this, handle, NS_SERVERS, query, listener,
+                                     data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryServers', handle, query);
   },
 
   createIdentity: function (name, assertion, listener) {
@@ -514,7 +616,8 @@ ModaBridge.prototype = {
    */
   queryPeeps: function(query, listener, data) {
     var handle = this._nextHandle++;
-    var liveset = new LiveOrderedSet(handle, NS_PEEPS, query, listener, data);
+    var liveset = new LiveOrderedSet(this, handle, NS_PEEPS, query, listener,
+                                     data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryPeeps', handle, query);
@@ -523,7 +626,7 @@ ModaBridge.prototype = {
 
   queryPeepConversations: function(peep, query, listener, data) {
     var handle = this._nextHandle++;
-    var liveset = new LiveOrderedSet(handle, NS_CONVBLURBS, query,
+    var liveset = new LiveOrderedSet(this, handle, NS_CONVBLURBS, query,
                                      listener, data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
@@ -538,6 +641,7 @@ ModaBridge.prototype = {
   },
 
   killQuery: function(liveSet) {
+    this._send('killQuery', liveSet._handle, null);
   },
 
   //////////////////////////////////////////////////////////////////////////////

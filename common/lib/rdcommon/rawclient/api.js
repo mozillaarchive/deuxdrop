@@ -284,11 +284,15 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
   this._otherClientAuths = persistedBlob.otherClientAuths;
 
   // XXX we are assuming a fullpub server config here...
-  if (selfIdentPayload.transitServerIdent)
+  if (selfIdentPayload.transitServerIdent) {
+    this._transitServerBlob = selfIdentPayload.transitServerIdent;
     this._transitServer = $pubident.assertGetServerSelfIdent(
-                            selfIdentPayload.transitServerIdent);
-  else
+                            this._transitServerBlob);
+  }
+  else {
+    this._transitServerBlob = null;
     this._transitServer = null;
+  }
   this._poco = selfIdentPayload.poco;
 
   // -- create store
@@ -461,7 +465,7 @@ RawClientAPI.prototype = {
   _regenerateSelfIdent: function(doNotNotify) {
     this._selfIdentBlob = $pubident.generatePersonSelfIdent(
                             this._longtermKeyring, this._keyring,
-                            this._poco, serverSelfIdentBlob);
+                            this._poco, this._transitServerBlob);
     // and our dubious self other-ident...
     this._selfOthIdentBlob = $pubident.generateOtherPersonIdent(
                                this._longtermKeyring, this._selfIdentBlob,
@@ -480,6 +484,14 @@ RawClientAPI.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Server Signup
+
+  /**
+   * Retrieve a server's self-ident using via its domain name in a completely
+   *  insecure fashion.  See `signupDangerouslyUsingDomainName` for the broad
+   *  strokes on why this is a horrible idea.
+   */
+  insecurelyGetServerSelfIdentUsingDomainName: function() {
+  },
 
   /**
    * Connect to the server and ask it for its self-ident, then go from there.
@@ -521,6 +533,7 @@ RawClientAPI.prototype = {
     if (this._signupConn)
       throw new Error("Still have a pending signup connection!");
 
+    this._transitServerBlob = serverSelfIdentBlob;
     var serverSelfIdent = this._transitServer =
       $pubident.assertGetServerSelfIdent(serverSelfIdentBlob);
 
@@ -566,13 +579,12 @@ RawClientAPI.prototype = {
    * Assume we are already signed up with a server via other means.
    */
   useServerAssumeAlreadySignedUp: function(serverSelfIdentBlob) {
+    this._transitServerBlob = serverSelfIdentBlob;
     var serverSelfIdent = this._transitServer =
       $pubident.assertGetServerSelfIdent(serverSelfIdentBlob);
 
     // - regenerate our selfIdentBlob using the server as the transit server
-    this._selfIdentBlob = $pubident.generatePersonSelfIdent(
-                            this._longtermKeyring, this._keyring,
-                            this._poco, serverSelfIdentBlob);
+    this._regenerateSelfIdent();
   },
 
   //////////////////////////////////////////////////////////////////////////////

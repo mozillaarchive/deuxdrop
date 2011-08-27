@@ -235,12 +235,21 @@ function loadConfigFileFromDir(filename, configDir) {
   return JSON.parse(jsonConfig);
 }
 
-const SELF_IDENT_FILE = 'deuxdrop-server.selfident';
+const SELF_IDENT_FILE = 'deuxdrop-server.selfident',
+      SELF_IDENT_JSON_FILE = 'deuxdrop-server.selfident.json';
 
 function saveSelfIdentOff(signedSelfIdent, configDir) {
-  var configFilePath = $path.join(configDir, SELF_IDENT_FILE);
-  $fs.writeFileSync(configFilePath, signedSelfIdent);
+  var path = $path.join(configDir, SELF_IDENT_FILE);
+  $fs.writeFileSync(path, signedSelfIdent);
+  path = $path.join(configDir, SELF_IDENT_JSON_FILE);
+  $fs.writeFileSync(path, JSON.stringify({selfIdent: signedSelfIdent}));
 }
+
+const ALL_CONFIG_FILES = [
+  ROOTKEY_FILE_NAME,
+  CONFIG_FILE_NAME,
+  SELF_IDENT_FILE, SELF_IDENT_JSON_FILE,
+];
 
 ////////////////////////////////////////////////////////////////////////////////
 // Command-Line Commands
@@ -413,8 +422,7 @@ exports.cmdNukeConfig = function nukeConfig(configDir) {
     $gendb.closeProductionDBConnection(dbConn);
 
     // - delete directory
-    nukeFilesInDir(configDir,
-                   [ROOTKEY_FILE_NAME, CONFIG_FILE_NAME, SELF_IDENT_FILE]);
+    nukeFilesInDir(configDir, ALL_CONFIG_FILES);
     $fs.rmdirSync(configDir);
   }, badNews);
 };

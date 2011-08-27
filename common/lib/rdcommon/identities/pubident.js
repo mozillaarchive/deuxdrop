@@ -45,6 +45,12 @@
  * @typedef[ServerSelfIdentPayload @dict[
  *   @key[tag]
  *   @key[url]
+ *   @key[meta @dict[
+ *     @key[displayName String]{
+ *       A snappy description of the server.  For example "Mozilla's demo
+ *       server that pretents to live in Germany but really is in the US."
+ *     }
+ *   ]]
  *   @key[publicKey]{
  *     The boxing public key for the server.
  *   }
@@ -189,6 +195,7 @@ exports.generateServerSelfIdent = function(rootKeyring, longtermKeyring,
   var payloadObj = {
     tag: detailsObj.tag,
     url: detailsObj.url,
+    meta: detailsObj.meta,
     publicKey: longtermKeyring.boxingPublicKey,
     rootPublicKey: rootKeyring.rootPublicKey,
   };

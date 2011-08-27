@@ -223,6 +223,7 @@
  *   NS_PEEPS
  *   NS_CONVBLURBS
  *   NS_CONVALL
+ *   NS_SERVERS
  * ]]
  * @typedef[QueryHandlesByNS @dictof[
  *   @key[namespace QueryNamespace]
@@ -244,7 +245,8 @@ define(
 
 const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
-      NS_CONVALL = exports.NS_CONVALL = 'convall';
+      NS_CONVALL = exports.NS_CONVALL = 'convall',
+      NS_SERVERS = exports.NS_SERVERS = 'servers';
 
 /**
  * There is no pending message that must be sent regarding this query.
@@ -265,6 +267,7 @@ function makeEmptyListsByNS() {
     peeps: [],
     convblurbs: [],
     convall: [],
+    servers: [],
   };
 };
 
@@ -273,6 +276,7 @@ function makeEmptyMapsByNS() {
     peeps: {},
     convblurbs: {},
     convall: {},
+    servers: {},
   };
 };
 
@@ -475,6 +479,7 @@ NotificationKing.prototype = {
   sendQueryResults: function(queryHandle) {
     var isInitial = (queryHandle.pending === PENDING_INITIAL);
     var msg = {
+      type: 'query',
       handle: queryHandle.uniqueId,
       op: isInitial ? 'initial' : 'update',
       splices: queryHandle.splices,

@@ -52,18 +52,22 @@ define(
   [
     'q',
     'rdcommon/log',
+    'rdcommon/serverlist',
     'module',
     'exports'
   ],
   function(
     $Q,
     $log,
+    $serverlist,
     $module,
     exports
   ) {
 const when = $Q.when;
 
-const NS_PEEPS = 'peeps';
+const NS_PEEPS = 'peeps',
+      NS_CONVBLURBS = 'convblurbs', NS_CONVALL = 'convall',
+      NS_SERVERS = 'servers';
 
 /**
  * The other side of a ModaBridge instance/connection.  This is intended to be
@@ -108,7 +112,10 @@ ModaBackside.prototype = {
    */
   XXXcreateBridgeChannel: function(name, bridgeHandlerFunc) {
     this._bridgeName = name;
-    this._sendObjFunc = bridgeHandlerFunc;
+    this._sendObjFunc = function(msg) {
+      var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
+      bridgeHandlerFunc(jsonRoundtripped);
+    };
 
     this._querySource = this._notif.registerNewQuerySource(name, this);
 
@@ -131,9 +138,8 @@ ModaBackside.prototype = {
   // Send to the ModaBridge from the NotificationKing
 
   send: function(msg) {
-    var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
-    this._log.send(jsonRoundtripped);
-    this._sendObjFunc(jsonRoundtripped);
+    this._log.send(msg);
+    this._sendObjFunc(msg);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -159,7 +165,7 @@ ModaBackside.prototype = {
     this._notif.forgetTrackedQuery(queryHandle);
     this.send({
       handle: queryHandle.uniqueId,
-      op: 'nuke',
+      op: 'dead',
     });
   },
 
@@ -171,7 +177,7 @@ ModaBackside.prototype = {
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
 
-  _cmd_queryPeepConversations: function(bridgeHandle, payload) {
+  _cmd_queryPeepConversations: function(bridgeQueryName, payload) {
     var queryHandle = this._notif.newTrackedQuery(
                         this._querySource, bridgeQueryName,
                         NS_CONVBLURBS, payload.query);
@@ -184,6 +190,22 @@ ModaBackside.prototype = {
                                                          payload.query),
          null,
          this._needsbind_queryProblem.bind(this, queryHandle));
+  },
+
+  _cmd_queryServers: function(bridgeQueryName, payload) {
+  },
+
+  _cmd_killQuery: function(bridgeQueryName, ignored) {
+    this._notif.forgetTrackedQuery(bridgeQueryName);
+  },
+
+  _cmd_whoAmI: function() {
+  },
+
+  _cmd_signupDangerouslyUsingDomainName: function() {
+  },
+
+  _cmd_signupUsingServerSelfIdent: function() {
   },
 
   //////////////////////////////////////////////////////////////////////////////
