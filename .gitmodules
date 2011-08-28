@@ -13,3 +13,6 @@
 [submodule "clients/deps/jstut"]
 	path = clients/deps/jstut
 	url = git://github.com/asutherland/jstut.git
+[submodule "clients/deps/arbpl"]
+	path = clients/deps/arbpl
+	url = git://github.com/asutherland/arbitrarypushlog.git
