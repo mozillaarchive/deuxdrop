@@ -522,6 +522,7 @@ NotificationKing.prototype = {
    *   @param[namespace]
    *   @param[fullId]
    * ]
+   * @return[LocallyNamedClientData]
    */
   reuseIfAlreadyKnown: function(writeQueryHandle, namespace, fullId) {
     // fast-path if the given query already knows the answer

@@ -197,9 +197,6 @@ ModaBackside.prototype = {
    * Transform a server ident blob for transport to a `ModaBridge`.
    */
   _transformServerIdent: function(serverIdentBlob, serverIdent) {
-    if (!serverIdent)
-      serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
-
     return {
       url: serverIdent.url,
       displayName: serverIdent.meta.displayName,
@@ -208,6 +205,38 @@ ModaBackside.prototype = {
   },
 
   _cmd_queryServers: function(bridgeQueryName, payload) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_SERVERS, payload.query);
+
+    var viewItems = [], clientDataItems = null;
+    queryHandle.items = clientDataItems = [];
+    queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+
+    var serverIdentBlobs = $serverlist.serverIdentBlobselfIdents;
+    for (var iServer = 0; iServer < serverIdentBlobs.length; iServer++) {
+      var serverIdentBlob = serverIdentBlobs[iServer];
+      var serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
+
+      var clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_SERVERS,
+                                                       serverIdent.rootPublicKey);
+      if (!clientData) {
+        var localName = "" + (this._querySource.nextUniqueIdAlloc++);
+        clientData = {
+          localName: localName,
+          fullName: serverIdent.rootPublicKey,
+          count: 1,
+          data: this._transformServerIdent(serverIdentBlob, serverIdent),
+          indexValues: null,
+          deps: null,
+        };
+        queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
+        queryHandle.membersByFull[NS_PEEPS][serverIdent.rootPublicKey] =
+          clientData;
+      }
+      viewItems.push(clientData.localName);
+    }
+    this._notif.sendQueryResults(queryHandle);
   },
 
   _cmd_killQuery: function(bridgeQueryName, ignored) {

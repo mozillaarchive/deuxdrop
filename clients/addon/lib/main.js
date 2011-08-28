@@ -158,6 +158,7 @@ function notifyDaemonOfDeadClient(senderUnique) {
 }
 
 function daemonSendClientMessage(clientUnique, data) {
+  log('RECEIVED DAEMON MESSAGE: ' + JSON.stringify(data));
   clientRegistry[clientUnique].postMessage(data);
 }
 

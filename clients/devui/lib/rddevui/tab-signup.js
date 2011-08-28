@@ -59,6 +59,27 @@ var ty = exports.ty =
 var wy = exports.wy =
   new $wmsy.WmsyDomain({id: "tab-signup", domain: "moda"});
 
+/**
+ * Make a ViewSlice that hooks up to a LiveSet.
+ */
+function LiveSetListenerViewSliceAdapter(liveSet) {
+  this._listener = null;
+  this.data = null;
+  this.liveSet = liveSet;
+  liveSet._listener = this;
+}
+LiveSetListenerViewSliceAdapter.prototype = {
+  seek: function() {
+    if (this.liveSet.items.length)
+      this._listener.didSplice(0, this.liveSet.items.length, this.liveSet.items,
+                               true, false);
+  },
+
+  onSplice: function(index, howMany, addedItems, liveSet) {
+    this._listener.didSplice(index, howMany, addedItem, true, false, this);
+  },
+};
+
 ty.defineWidget({
   name: 'signup-tab',
   constraint: {
@@ -67,14 +88,57 @@ ty.defineWidget({
   },
   structure: {
     userInfoBlock: {
-      uiLabel: "Your name goes here.",
+      userPoco: wy.widget({type: 'poco-edit'},
+                          ['userAccount', 'poco']),
     },
     emailInfoBlock: {
       eiLabel: "browserid goes here.",
     },
     serverListBlock: {
-      siLabel: "list of servers goes here.",
+      siLabel: "Pick a server to use:",
+      servers: wy.vertList({type: 'server'}),
     },
+    buttonBar: {
+      btnSignup: wy.button("Signup"),
+    },
+  },
+  impl: {
+    postInit: function() {
+      var moda = this.__context.moda;
+
+      var serverSet = moda.queryServers(vs);
+      var vs = new LiveSetListenerViewSliceAdapter(serverSet);
+      this.servers_set(vs);
+    },
+  }
+});
+
+wy.defineWidget({
+  name: 'poco-editor',
+  constraint: {
+    type: 'poco-edit',
+  },
+  structure: {
+    dnLabel: { // want a wy.label for this.
+      ldn0: "I want to be known to the world as ",
+      displayName: wy.text('displayName'),
+      ldn1: "."
+    },
+  },
+});
+
+wy.defineWidget({
+  name: 'server-info',
+  constraint: {
+    type: 'server',
+  },
+  structure: {
+    urlBlock: [
+      'Server URL: ', wy.bind('url'),
+    ],
+    dnBlock: [
+      'Server Description: ', wy.bind('displayName'),
+    ],
   },
 });
 

@@ -1,2 +1,10 @@
 /* tab signup! */
 
+#signup-tab {
+  #userInfoBlock, #emailInfoBlock, #serverListBlock {
+    border: 1px solid black;
+    margin: 1em;
+    padding: 1em;
+    border-radius: 4px;
+  }
+}

@@ -102,29 +102,34 @@ wy.defineWidget({
   },
 });
 
-function makeRootObj() {
-  var moda = $modality;
-  var rootObj = {
-    moda: moda,
-    state: "connected",
-    tabState: {
-      index: 0,
-      vertical: true,
-      tabs: [
-        { kind: "signup", name: "Signup" },
-        {kind: "about", name: "About"},
-      ],
-    }
-  };
-  return rootObj;
-}
-exports.makeRootObj = makeRootObj;
-
 exports.main = function(doc) {
-  var rootObj = makeRootObj();
+  var moda = $modality;
+  var me = moda.whoAmI({
+    onCompleted: function() {
+      var rootObj = {
+        moda: moda,
+        userAccount: me,
+        state: "connected",
+        tabState: {
+          index: 0,
+          vertical: true,
+          tabs: [
+          ],
+        }
+      };
+      var tabs = rootObj.tabState.tabs;
+      // create a 'signup' tab if not signed up already
+      if (!me.havePersonalInfo || !me.haveServerAccount) {
+        tabs.push({ kind: "signup", name: "Signup", userAccount: me });
+      }
+      // everybody always wants an 'about' tab!
+      tabs.push({ kind: "about", name: "About" });
 
-  var binder = wy.wrapElement(doc.getElementById("body"));
-  binder.bind({type: "root", obj: rootObj});
+      // bind the UI into existence.
+      var binder = wy.wrapElement(doc.getElementById("body"));
+      binder.bind({type: "root", obj: rootObj});
+    }
+  });
 };
 
 }); // end define

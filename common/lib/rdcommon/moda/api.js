@@ -54,7 +54,8 @@ define(
 
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
-      NS_CONVALL = 'convall';
+      NS_CONVALL = 'convall',
+      NS_SERVERS = 'servers';
 
 
 /**
@@ -268,7 +269,7 @@ ServerInfo.prototype = {
  *  implemented.
  */
 function OurUserAccount(_bridge, poco, usingServer) {
-  this._bridge = bridge;
+  this._bridge = _bridge;
   this.poco = poco;
   this.usingServer = usingServer;
 
@@ -419,6 +420,19 @@ ModaBridge.prototype = {
     }
 
     // -- perform transformation / cache unification
+    if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
+      values = msg.dataMap[NS_SERVERS];
+      dataMap = liveset._dataByNS[NS_SERVERS];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(NS_SERVERS, key);
+        else
+          dataMap[key] = this._transformServerInfo(key, val, liveset);
+      }
+    }
+
     // We perform these in the order: peep, conv blurb, conv full because
     //  the dependency situation is such that peeps can't mention anything
     //  else (directly), and conversations can reference peeps.
@@ -615,11 +629,13 @@ ModaBridge.prototype = {
 
   queryServers: function(listener, data) {
     var handle = this._nextHandle++;
+    var query = {};
     var liveset = new LiveOrderedSet(this, handle, NS_SERVERS, query, listener,
                                      data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryServers', handle, query);
+    return liveset;
   },
 
   createIdentity: function (name, assertion, listener) {
