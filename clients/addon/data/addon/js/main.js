@@ -219,7 +219,7 @@ define(function (require) {
 
   function listServers() {
     // Now show list of servers.
-    moda.listServers({
+    moda.queryServers({
       'onCompleted': function (liveOrderedSet) {
         var servers = liveOrderedSet.items;
         cards.onNav('pickServer', servers);
@@ -271,12 +271,12 @@ define(function (require) {
         if (name) {
           browserId.getVerifiedEmail(function (assertion) {
             if (assertion) {
-              moda.createIdentity(name, assertion, {
-                'onCompleted': function (unknown) {
-                  me = unknown;
-                  listServers();
-                }
+              // Provide our poco
+              me.updatePersonalInfo({
+                displayName: name,
               });
+              me.provideProofOfIdentity('email', 'browserid', assertion);
+              listServers();
             } else {
               // Do not do anything. User stays on sign in screen.
             }
@@ -326,7 +326,7 @@ define(function (require) {
     'connectToServer': function (data) {
       var serverId = data.id;
 
-      moda.useServer(serverId, {
+      md.signupWithServer(serverId, {
         'onCompleted': function () {
 
           // Remove the sign in/server setup cards
@@ -404,7 +404,7 @@ define(function (require) {
       return;
     }
 
-    if (!me) {
+    if (!me || !me.havePersonalInfo || !me.haveServerAccount) {
       cards.startCardId = 'signIn';
     }
 

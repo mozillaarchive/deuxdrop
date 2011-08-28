@@ -267,22 +267,41 @@ ServerInfo.prototype = {
  *  no way to change the server used right now because we don't have migration
  *  implemented.
  */
-function OurUserAccount(_bridge, poco) {
+function OurUserAccount(_bridge, poco, usingServer) {
   this._bridge = bridge;
   this.poco = poco;
+  this.usingServer = usingServer;
+
+  /**
+   * Callers who have invoked `whoAmI` but not gotten an onCompleted callback
+   *  yet.
+   */
+  this._pendingListeners = [];
 }
 OurUserAccount.prototype = {
   get havePersonalInfo() {
-    return !!this.poco.displayName;
+    return !this.poco || !!this.poco.displayName;
   },
 
   get haveServerAccount() {
+    return !!this.usingServer;
   },
 
   /**
-   * Replace the current
+   * Replace the current poco with a new set of detail.  Success is assumed.
    */
   updatePersonalInfo: function(newPoco) {
+    this._bridge._send('updatePoco', null, newPoco);
+  },
+
+  provideProofOfIdentity: function(identityType, proofOrigin, proof) {
+  },
+
+  signupWithServer: function(serverInfo) {
+    if (this.usingServer)
+      throw new Error("Already signed up with a server!");
+
+    this._bridge._send('signup', null, serverInfo._selfIdentBlob);
   },
 };
 
@@ -352,9 +371,26 @@ ModaBridge.prototype = {
       case 'query':
         return this._receiveQueryUpdate(msg);
     }
+    throw new Error("Received unknown message type: " + msg.type);
+  },
+
+  _transformServerInfo: function(serialized) {
+    if (!serialized)
+      return null;
+    return new ServerInfo(serialized.blob,
+                          serialized.url, serialized.displayName);
   },
 
   _receiveWhoAmI: function(msg) {
+    // update the representation
+    this._ourUser.poco = msg.poco;
+    this._ourUser.usingServer = this._transformServerInfo(msg.server);
+
+    // notify listeners
+    for (var i = 0; i < this._ourUser._pendingListeners.length; i++) {
+      this._ourUser._pendingListeners[i].onCompleted(this._ourUser);
+    }
+    this._ourUser._pendingListeners = [];
   },
 
   /**
@@ -550,17 +586,13 @@ ModaBridge.prototype = {
    * ]
    */
   whoAmI: function(listener) {
-    /*
-    var handle = this._nextHandle++;
-    this._handleMap[handle] = liveset
-    this._sendXXX
-    */
-    // Stub for now
-    setTimeout(function () {
-      listener.onCompleted(null);
-    }, 15);
-
-
+    if (!this._ourUser) {
+      this._ourUser = new OurUserAccount(this, null);
+    }
+    if (listener)
+      this._ourUser._pendingListeners.push(listener);
+    this._send('whoAmI', null, null);
+    return this._ourUser;
   },
 
   // More stubs.
@@ -641,7 +673,15 @@ ModaBridge.prototype = {
   },
 
   killQuery: function(liveSet) {
-    this._send('killQuery', liveSet._handle, null);
+    // only send the notification once
+    if (liveSet._handle) {
+      var idxSet = this._sets.indexOf(liveSet);
+      this._sets.splice(idxSet, 1);
+      delete this._handleMap[liveSet._handle];
+
+      this._send('killQuery', liveSet._handle, null);
+      liveSet._handle = null;
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////

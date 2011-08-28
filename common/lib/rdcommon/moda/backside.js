@@ -129,9 +129,9 @@ ModaBackside.prototype = {
   /**
    * Indicate that the other side is dead and we should kill off any live
    *  queries, etc.
-   * XXX does not actually do anything.
    */
   dead: function() {
+    this._notif.unregisterQuerySource(this.name);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -164,6 +164,7 @@ ModaBackside.prototype = {
     this._log.queryProblem(err);
     this._notif.forgetTrackedQuery(queryHandle);
     this.send({
+      type: 'query',
       handle: queryHandle.uniqueId,
       op: 'dead',
     });
@@ -192,6 +193,20 @@ ModaBackside.prototype = {
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
 
+  /**
+   * Transform a server ident blob for transport to a `ModaBridge`.
+   */
+  _transformServerIdent: function(serverIdentBlob, serverIdent) {
+    if (!serverIdent)
+      serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
+
+    return {
+      url: serverIdent.url,
+      displayName: serverIdent.meta.displayName,
+      blob: serverIdentBlob,
+    };
+  },
+
   _cmd_queryServers: function(bridgeQueryName, payload) {
   },
 
@@ -200,6 +215,20 @@ ModaBackside.prototype = {
   },
 
   _cmd_whoAmI: function() {
+    var serverInfo = null;
+    if (this._rawClient._transitServerBlob)
+      serverInfo = this._transformServerIdent(
+                     this._rawClient._transitServerBlob,
+                     this._rawClient._transitServer);
+    this.send({
+      type: 'whoAmI',
+      poco: this._rawClient.getPoco(),
+      server: serverInfo,
+    });
+  },
+
+  _cmd_updatePoco: function(_ignored, newPoco) {
+    this._rawClient.updatePoco(newPoco);
   },
 
   _cmd_signupDangerouslyUsingDomainName: function() {

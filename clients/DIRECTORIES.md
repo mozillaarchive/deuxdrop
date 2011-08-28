@@ -7,3 +7,4 @@
 a better name fit, but was being used for old code.
 * **firefox**: the UI used for the "fake server" UI prototype for
 * **server.js**: the fake server used for the content in **firefox**.
+* **devui**: The wmsy-based development UI.

@@ -405,10 +405,11 @@ NotificationKing.prototype = {
         String.fromCharCode(97 + (Math.floor(prefixNum / (26 * 26)) % 26)) +
         String.fromCharCode(97 + (Math.floor(prefixNum / 26) % 26)) +
         String.fromCharCode(97 + (prefixNum % 26));
-      if (!this._activeQuerySources.hasOwnProperty(prefixId))
+      // eh, collisions don't matter since this doesn't matter
+      //if (!this._activeQuerySources.hasOwnProperty(prefixId))
         break;
     }
-    var querySource = this._activeQuerySources[prefixId] = {
+    var querySource = this._activeQuerySources[verboseUniqueName] = {
       name: verboseUniqueName,
       listener: listener,
       prefix: prefixId,
@@ -425,6 +426,13 @@ NotificationKing.prototype = {
    */
   unregisterQuerySource: function(verboseUniqueName) {
     // XXX implement (with tests tracking dead and ensuring no notifications)
+    // Note: it is possible there will still be async operations in flight.  We,
+    //  fingers-crossed, believe those async operations should still have
+    //  references to the queryHandles so the removal of this entry should
+    //  not result in exceptions getting thrown everywhere.  Having said that,
+    //  it would be nice to aggressively kill or encourage seppuku of all
+    //  outstanding queries.
+    delete this._activeQuerySources[verboseUniqueName];
   },
 
   /**

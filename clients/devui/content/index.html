@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop Dev UI</title>
+    <script type="text/javascript">
+      function dump(aMsgWithNewline) {
+        console.log(aMsgWithNewline.replace("\n", "", "g"));
+      }
+    </script>
+    <style type="text/css">
+      html {
+        font-family: "Lucida Grande", Verdana, sans-serif;
+        font-size: 9pt;
+      }
+      :focus { outline: none; }
+      a[href] { text-decoration: none }
+    </style>
+<link rel="shortcut icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IArs4c6QAAATJQTFRFAAAABgYGGhoaR0+DTlFgWUphZnz/aH35bDeFbW1tbYL/b37ccIT/cYX/cob/fI//fZD/f5H/hJb/hZb/iJn/iZr/kaH/kqL/lqX/l6b/mJiZmZiZoK7/oa7/qbX/qbb/sFLcuML/vsj/v0L5v8j/wcr/wj7/xM3/xUj/xc3/xkr/xkz/xk3/xs7/x03/x8//yND/ydD/ytH/y1r/y1v/zF3/zmT/zmX/z2n/0Gr/03X/03b/09PT1Nr/1Xv/1Xz/1dv/2Yj/3JL/3OH/3ZP/4qX/46b/5a7/5rL/5ubm5un/57X/5+r/6Lb/6Lf/6Lj/6Ln/6br/6bz/7e//7sn/7sr/8dP/8/T/9PX/9d//9eD/+On/+fn5+fn/+u//+vH//Pf//f3//vz//v3//v7/////+A+KjAAAAQFJREFUOMtjSCUAGKisIMbTxsYzBk2BGgjomdu7BCal2nAyMXHapCYayEkI8bGBAEwBGJgESTMxMDBJGfKzwQFYAdCghMgQd1M1NQVGBgZGbjY2QRUHn1igMEIBCCT7aalxMDIys/HoJkKFUBWkpgaoKbOysLPpwwXQFaRaq7kqsoml4lbgq+Yoy6aOR0GYmoUomzMeBfFq2nxs4XgUxKnp8LJF4LXCUgSvFd5qjjJsmngUWKm5KbKJ41bgr6YRHcyFM6BAQe2RmqqKNagTokJBkWUFEhUDRpaSrRdSZMGAcWAySEGKkQBadAOBjpmdEzDBQEGiobykMDzB0DlVD1sFAIpfSjJWu+R9AAAAAElFTkSuQmCC" />
+<script type="text/javascript" src="../../deps/require.js"></script>
+  <script>
+    require({
+      baseUrl: "../../deps",
+      packages: [
+        { name: "rddevui", location: "../devui/lib/rddevui" },
+
+        // jstut family
+        { name: "jstut", location: "jtstut/lib/jstut" },
+        { name: "narscribblus", location: "jstut/lib/narscribblus" },
+        { name: "narscribblus-plat",
+          location: "jstut/lib-requirejs/narscribblus-plat" },
+        { name: "wmsy", location: "wmsy/lib/wmsy" },
+      ],
+      ready: function() {
+        require(["rddevui/app"],
+          function(mainModule) {
+            mainModule.main(document);
+        });
+      },
+    });
+  </script>
+  </head>
+<body id="body" style="border: 0; padding: 0; margin: 0;">
+</body>
+</html>

@@ -70,11 +70,14 @@ var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
     // URL for script overlay that provides message sending to the backside
     modaContentUrl = data.url('content/modaContent.js'),
 
+    // - Development UI
+    devInterfaceUrl = data.url('web/devui/content/index.html'),
+
     // - Client Worker (Backside) Logic
     // URL for the webpage that is the actual client/backside, servicing the UI
     clientDaemonUrl = data.url('web/firefox/clientdaemon.html'),
 
-    handler, Services, XPCOMUtils;
+    uiRedirectorHandler, devUiRedirectorHandler, Services, XPCOMUtils;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -124,12 +127,19 @@ function log(msg) {
 //Uses Irakli's jetpack-protocol to register about:deuxdrop, but
 //concerned the url will not update correctly for state info with
 //about: URLs
-handler = protocol.about('dd', {
+uiRedirectorHandler = protocol.about('dd', {
   onRequest: function (request, response) {
     response.uri = aboutUrl;
   }
 });
-handler.register();
+uiRedirectorHandler.register();
+
+devUiRedirectorHandler = protocol.about('dddev', {
+  onRequest: function (request, response) {
+    response.uri = aboutUrl;
+  }
+});
+devUiRedirectorHandler.register();
 
 var clientRegistry = {};
 var gClientDaemonStarted = false, gClientHiddenFrame = null, gWinJS;
@@ -212,10 +222,22 @@ exports.main = function () {
     }
   });
 
+  // - create the about::dddev => dev UI URL bouncer
+  pageMod.PageMod({
+    include: ['about:dddev'],
+    contentScriptWhen: 'start',
+    contentScriptFile: redirectorUrl,
+    onAttach: function onAttach(worker) {
+      worker.on('message', function (message) {
+        worker.postMessage(devInterfaceUrl);
+      });
+    }
+  });
+
   // - use a pageMod to be able to bind to pages showing our app UI
   log('SETTING UP PAGE MOD');
   pageMod.PageMod({
-    include: [userInterfaceUrl],
+    include: [userInterfaceUrl, devInterfaceUrl],
     contentScriptWhen: 'start',
     contentScriptFile: modaContentUrl,
     onAttach: function onAttach(uiWorker) {

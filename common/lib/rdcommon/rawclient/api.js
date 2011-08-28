@@ -477,6 +477,10 @@ RawClientAPI.prototype = {
       this._accountListener.accountChanged(this);
   },
 
+  getPoco: function() {
+    return this._poco;
+  },
+
   updatePoco: function(newPoco) {
     this._poco = newPoco;
     this._regenerateSelfIdent();
