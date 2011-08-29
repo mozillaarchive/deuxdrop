@@ -65,9 +65,19 @@ var AccountChangeListener = {
   },
 };
 
-exports.loadAccount = function() {
+exports.loadAccount = function(testingModeLogTestData) {
   if (gRawClient)
     return gRawClient;
+
+  // Put everything in testing mode
+  if (testingModeLogTestData) {
+    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.log("! DEVELOPMENT MODE ACTIVE!                !");
+    console.log("! LOGGING SUBSYSTEM ENTRAINING USER DATA! !");
+    console.log("! (the data does not leave the browser.)  !");
+    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    $log.DEBUG_markAllFabsUnderTest();
+  }
 
   var rootLogger = LOGFAB.account(null, null, []);
 

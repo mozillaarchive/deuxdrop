@@ -102,7 +102,8 @@ function BOOTSTRAP(callbackWhenLoaded) {
      'rdcommon/logreaper'],
     function(_blahq, $acctmgr, _backside, $logreaper) {
       console.log(":) :) :) client daemon bootstrapped!");
-      var bundle = $acctmgr.loadAccount();
+      var DEVELOPMENT_MODE = true;
+      var bundle = $acctmgr.loadAccount(DEVELOPMENT_MODE);
       RAW_CLIENT = bundle.rawClient;
       $backside = _backside;
 

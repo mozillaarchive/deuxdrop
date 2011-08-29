@@ -1345,6 +1345,31 @@ exports.provideSchemaForAllKnownFabs = function schemaForAllKnownFabs() {
   return schema;
 };
 
+var BogusTester = {
+  reportNewLogger: function(logger, parentLogger) {
+    // No one cares, this is just a way to get the tester constructors
+    //  triggered.
+    return parentLogger;
+  },
+};
+
+/**
+ * Mark all logfabs under test so we get full log data; DO NOT USE THIS UNDER
+ *  NON-DEVELOPMENT PURPOSES BECAUSE USER DATA CAN BE ENTRAINED AND THAT IS VERY
+ *  BAD.
+ *
+ * Note: No effort is made to avoid marking any logfabs as under test.  This
+ *  would be a problem if used while the testing subsystem is active, but you
+ *  shouldn't do that.
+ */
+exports.DEBUG_markAllFabsUnderTest = function() {
+  for (var i = 0; i < ALL_KNOWN_FABS.length; i++) {
+    var logfab = ALL_KNOWN_FABS[i];
+
+    logfab._underTest = BogusTester;
+  }
+};
+
 /**
  * Evolutionary stopgap debugging helper to be able to put a module/logfab into
  *  a mode of operation where it dumps all of its loggers' entries to

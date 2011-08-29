@@ -52,6 +52,8 @@ define(
   [
     'wmsy/wmsy',
     'wmsy/viewslice-array',
+    'wmsy/wlib/objdict',
+    'wmsy/wlib/popup',
     'arbcommon/chew-loggest',
     'arbclient/ui-loggest',
     'text!./app.css',
@@ -60,14 +62,17 @@ define(
   function(
     $wmsy,
     $vs_array,
+    $_wlib_objdict, // dependency for side effect
+    $_wlib_popup, // dep for side effect
     $chew_loggest,
     $ui_loggest,
     $_css,
     exports
   ) {
 
+// for simplicity vis-a-vis the popup, we need to be in the loggest domain
 var wy = exports.wy =
-  new $wmsy.WmsyDomain({id: "app", domain: "rdlogui", css: $_css});
+  new $wmsy.WmsyDomain({id: "app", domain: "loggest", css: $_css});
 
 wy.defineWidget({
   name: "root",
@@ -75,8 +80,49 @@ wy.defineWidget({
   constraint: {
     type: "root",
   },
+  popups: {
+    details: {
+      constraint: {
+        type: "popup-obj-detail"
+      },
+      clickAway: true,
+      popupWidget: wy.libWidget({type: "popup"}),
+      position: {
+        above: "root",
+      },
+      size: {
+        maxWidth: 0.9,
+        maxHeight: 0.9,
+      }
+    }
+  },
   structure: {
     perms: wy.vertList({type: 'fake-perm'}, 'vsPerms'),
+  },
+  impl: {
+    /**
+     * Rather than have every log atom be able to trigger a popup or require
+     *  them to emit something on click, we just provide our own click handler
+     *  that checks if the bindings want to have their data shown in a pop-up
+     *  (which is generically parameterized anyways).
+     */
+    maybeShowDetailForBinding: function(binding) {
+      if ("SHOW_DETAIL" in binding && binding.SHOW_DETAIL) {
+        var detailAttr = binding.SHOW_DETAIL;
+        var obj = binding.obj;
+        // extremely simple traversal
+        if (detailAttr !== true)
+          obj = obj[detailAttr];
+        this.popup_details(obj, binding);
+      }
+    },
+  },
+  events: {
+    root: {
+      click: function(binding) {
+        this.maybeShowDetailForBinding(binding);
+      }
+    },
   },
 });
 
