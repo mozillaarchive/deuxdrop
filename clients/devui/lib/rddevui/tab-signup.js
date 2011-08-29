@@ -76,7 +76,11 @@ LiveSetListenerViewSliceAdapter.prototype = {
   },
 
   onSplice: function(index, howMany, addedItems, liveSet) {
-    this._listener.didSplice(index, howMany, addedItem, true, false, this);
+    this._listener.didSplice(index, howMany, addedItems, true, false, this);
+  },
+
+  onCompleted: function() {
+    // no need to do anything, the splice logic covers everything
   },
 };
 
@@ -86,6 +90,7 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'signup' },
   },
+  focus: wy.focus.container.vertical('userPoco', 'servers', 'btnSignup'),
   structure: {
     userInfoBlock: {
       userPoco: wy.widget({type: 'poco-edit'},
@@ -118,6 +123,7 @@ wy.defineWidget({
   constraint: {
     type: 'poco-edit',
   },
+  focus: wy.focus.container.vertical('displayName'),
   structure: {
     dnLabel: { // want a wy.label for this.
       ldn0: "I want to be known to the world as ",
@@ -132,6 +138,7 @@ wy.defineWidget({
   constraint: {
     type: 'server',
   },
+  focus: wy.focus.item,
   structure: {
     urlBlock: [
       'Server URL: ', wy.bind('url'),

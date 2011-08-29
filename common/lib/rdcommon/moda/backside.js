@@ -53,6 +53,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/serverlist',
+    'rdcommon/identities/pubident',
     'module',
     'exports'
   ],
@@ -60,6 +61,7 @@ define(
     $Q,
     $log,
     $serverlist,
+    $pubident,
     $module,
     exports
   ) {
@@ -93,7 +95,7 @@ function ModaBackside(rawClient, name, _logger) {
   this._bridgeName = null;
   this._sendObjFunc = null;
 
-  this._querySource = null;
+  this._querySource = this._notif.registerNewQuerySource(name, this);
 
   var self = this;
 }
@@ -110,14 +112,12 @@ ModaBackside.prototype = {
    * Hack to establish a *fake* *magic* link between us and a bridge.  ONLY
    *  FOR USE BY UNIT TESTS.
    */
-  XXXcreateBridgeChannel: function(name, bridgeHandlerFunc) {
-    this._bridgeName = name;
+  XXXcreateBridgeChannel: function(bridgeHandlerFunc) {
+    this._bridgeName = this.name;
     this._sendObjFunc = function(msg) {
       var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
       bridgeHandlerFunc(jsonRoundtripped);
     };
-
-    this._querySource = this._notif.registerNewQuerySource(name, this);
 
     var self = this;
     return this._received.bind(this);
@@ -196,11 +196,10 @@ ModaBackside.prototype = {
   /**
    * Transform a server ident blob for transport to a `ModaBridge`.
    */
-  _transformServerIdent: function(serverIdentBlob, serverIdent) {
+  _transformServerIdent: function(serverIdent) {
     return {
       url: serverIdent.url,
       displayName: serverIdent.meta.displayName,
-      blob: serverIdentBlob,
     };
   },
 
@@ -213,9 +212,9 @@ ModaBackside.prototype = {
     queryHandle.items = clientDataItems = [];
     queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
 
-    var serverIdentBlobs = $serverlist.serverIdentBlobselfIdents;
+    var serverIdentBlobs = $serverlist.serverSelfIdents;
     for (var iServer = 0; iServer < serverIdentBlobs.length; iServer++) {
-      var serverIdentBlob = serverIdentBlobs[iServer];
+      var serverIdentBlob = serverIdentBlobs[iServer].selfIdent;
       var serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
 
       var clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_SERVERS,
@@ -226,13 +225,15 @@ ModaBackside.prototype = {
           localName: localName,
           fullName: serverIdent.rootPublicKey,
           count: 1,
-          data: this._transformServerIdent(serverIdentBlob, serverIdent),
+          data: serverIdentBlob,
           indexValues: null,
           deps: null,
         };
         queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
         queryHandle.membersByFull[NS_PEEPS][serverIdent.rootPublicKey] =
           clientData;
+        queryHandle.dataMap[NS_SERVERS][localName] =
+          this._transformServerIdent(serverIdent);
       }
       viewItems.push(clientData.localName);
     }
@@ -245,9 +246,10 @@ ModaBackside.prototype = {
 
   _cmd_whoAmI: function() {
     var serverInfo = null;
+    // XXX our use of serverInfo needs to integrate with the caching scheme
+    //  for consistency here!
     if (this._rawClient._transitServerBlob)
       serverInfo = this._transformServerIdent(
-                     this._rawClient._transitServerBlob,
                      this._rawClient._transitServer);
     this.send({
       type: 'whoAmI',

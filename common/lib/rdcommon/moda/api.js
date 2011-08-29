@@ -199,6 +199,7 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
     peeps: {},
     convblurbs: {},
     convall: {},
+    servers: {},
   };
   this.query = query;
   this.items = [];
@@ -252,8 +253,8 @@ LiveOrderedSet.prototype = {
  *  crypto self-ident present, but it should never be exposed/to used by the
  *  user interface directly.
  */
-function ServerInfo(_selfIdentBlob, url, displayName) {
-  this._selfIdentBlob = _selfIdentBlob;
+function ServerInfo(_localName, url, displayName) {
+  this._localName = _localName;
   this.url = url;
   this.displayName = displayName;
 }
@@ -375,11 +376,10 @@ ModaBridge.prototype = {
     throw new Error("Received unknown message type: " + msg.type);
   },
 
-  _transformServerInfo: function(serialized) {
+  _transformServerInfo: function(_localName, serialized) {
     if (!serialized)
       return null;
-    return new ServerInfo(serialized.blob,
-                          serialized.url, serialized.displayName);
+    return new ServerInfo(_localName, serialized.url, serialized.displayName);
   },
 
   _receiveWhoAmI: function(msg) {
@@ -429,7 +429,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(NS_SERVERS, key);
         else
-          dataMap[key] = this._transformServerInfo(key, val, liveset);
+          dataMap[key] = this._transformServerInfo(key, val);
       }
     }
 

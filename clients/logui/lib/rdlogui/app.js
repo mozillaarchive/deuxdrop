@@ -82,7 +82,7 @@ wy.defineWidget({
 
 wy.defineWidget({
   name: "fake-perm",
-  focus: wy.focus.domain.vertical("steps"),
+  focus: wy.focus.container.vertical("steps"),
   constraint: {
     type: "fake-perm",
   },

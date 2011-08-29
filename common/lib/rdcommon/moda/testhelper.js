@@ -219,7 +219,6 @@ var TestModaActorMixins = {
 
       // - link backside and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
-                                    self.__name,
                                     self._bridge._receive.bind(self._bridge));
     });
   },
