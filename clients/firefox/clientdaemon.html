@@ -73,7 +73,7 @@ function sendAddOnMessage(data) {
   window.dispatchEvent(event);
 }
 
-var RAW_CLIENT = null, $backside;
+var RAW_CLIENT = null, $backside, LOG_REAPER, LOG_SCHEMA;
 function BOOTSTRAP(callbackWhenLoaded) {
   require(
     {
@@ -98,19 +98,28 @@ function BOOTSTRAP(callbackWhenLoaded) {
         define: true,
       }
     },
-    ['event-queue', 'rdcommon/rawclient/acctmgr', 'rdcommon/moda/backside'],
-    function(_blahq, $acctmgr, _backside) {
+    ['event-queue', 'rdcommon/rawclient/acctmgr', 'rdcommon/moda/backside',
+     'rdcommon/logreaper'],
+    function(_blahq, $acctmgr, _backside, $logreaper) {
       console.log(":) :) :) client daemon bootstrapped!");
-      RAW_CLIENT = $acctmgr.loadAccount();
+      var bundle = $acctmgr.loadAccount();
+      RAW_CLIENT = bundle.rawClient;
       $backside = _backside;
+
+      LOG_REAPER = new $logreaper.LogReaper(bundle.rootLogger);
+      LOG_SCHEMA = bundle.schema;
+
       if (callbackWhenLoaded)
         callbackWhenLoaded();
     }
   );
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Moda Hookup
+
 var backsides = {};
-function NEWCLIENT(name) {
+function NEW_MODA_CLIENT(name) {
   console.log("new client", name, "reported alive");
   var backside = backsides[name] =
     new $backside.ModaBackside(RAW_CLIENT, name, null);
@@ -119,11 +128,11 @@ function NEWCLIENT(name) {
   }
 }
 
-function CLIENTMSG(name, data) {
+function MODA_CLIENT_MSG(name, data) {
   backsides[name]._received(data);
 }
 
-function DEADCLIENT(name) {
+function DEAD_MODA_CLIENT(name) {
   console.log("client", name, "reported dead");
   if (backsides.hasOwnProperty(name)) {
     backsides[name].dead();
@@ -131,19 +140,58 @@ function DEADCLIENT(name) {
   }
 }
 
-window.onerror = function (err) {
-  sendAddOnMessage({'ERROR': err.toString()});
-};
+////////////////////////////////////////////////////////////////////////////////
+// Logger Hookup
 
-function listenForServerHost(evt) {
-  var data = JSON.parse(evt.data);
-  if (data.serverHost) {
-    bootstrap(data.serverHost);
-    window.removeEventListener('moda-content-message', listenForServerHost, false);
+/**
+ * Maintain a backlog of log messages that we can send to new subscribers so
+ *  they don't miss out on anything exciting.
+ */
+var logbacklog = [], MAX_LOG_BACKLOG = 60;
+var loggerClients = [];
+
+// once a second, potentially generate a log 
+setInterval(function() {
+  var logTimeSlice = LOG_REAPER.reapHierLogTimeSlice();
+  // if nothing interesting happened, this could be empty, yos.
+  if (logTimeSlice.logFrag) {
+    logbacklog.push(logTimeSlice);
+    // throw something away if we've got too much stuff already
+    if (logbacklog.length > MAX_LOG_BACKLOG)
+      logbacklog.shift();
+    for (var i = 0; i < loggerClients.length; i++) {
+      daemonSendLoggerClientMessage(loggerClients[i],
+                                    {type: 'logslice', slice: logTimeSlice});
+    }
+  }
+}, 1000);
+
+function NEW_LOG_CLIENT(name) {
+  // wait for the client to tell us about itself since loading can take a while
+}
+
+function LOG_CLIENT_MSG(name, msg) {
+  if (msg.type === 'subscribe') {
+    loggerClients.push(name);
+    daemonSendLoggerClientMessage(name, {
+      type: 'backlog',
+      backlog: logbacklog,
+      schema: LOG_SCHEMA
+    });
   }
 }
 
-window.addEventListener('moda-content-message', listenForServerHost, false);
+function DEAD_LOG_CLIENT(name) {
+  var idx = loggerClients.indexOf(name);
+  if (idx !== -1)
+    loggerClients.splice(idx, 1);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+window.onerror = function (err) {
+  sendAddOnMessage({'ERROR': err.toString()});
+};
     </script>
   </head>
   <body>

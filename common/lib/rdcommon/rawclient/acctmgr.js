@@ -41,13 +41,17 @@
 
 define(
   [
+    'rdcommon/log',
     './api',
     'rdplat/gendb',
+    'module',
     'exports'
   ],
   function(
+    $log,
     $api,
     $gendb,
+    $module,
     exports
   ) {
 
@@ -65,23 +69,50 @@ exports.loadAccount = function() {
   if (gRawClient)
     return gRawClient;
 
-  var dbConn = $gendb.makeProductionDBConnection('', null, null, null);
+  var rootLogger = LOGFAB.account(null, null, []);
+
+  var dbConn = $gendb.makeProductionDBConnection('', null, null, rootLogger);
 
   var persistedBlob = localStorage[ACCT_KEYNAME];
   if (persistedBlob) {
     gRawClient = $api.getClientForExistingIdentity(JSON.parse(persistedBlob),
-                                                   dbConn, null);
+                                                   dbConn, rootLogger);
   }
   else {
     var gibberishPoco = {
       displayName: null,
     };
-    gRawClient = $api.makeClientForNewIdentity(gibberishPoco, dbConn, null);
+    gRawClient = $api.makeClientForNewIdentity(gibberishPoco, dbConn,
+                                               rootLogger);
     AccountChangeListener.accountChanged(gRawClient);
   }
 
+  // now that we have the identity, we can update the root logger.
+  rootLogger.__updateIdent(['account: ', gRawClient.rootPublicKey]);
+
   gRawClient.registerForAccountChangeNotifications(AccountChangeListener);
-  return gRawClient;
+  return {
+    rootLogger: rootLogger,
+    rawClient: gRawClient,
+    schema: $log.provideSchemaForAllKnownFabs(),
+  };
 };
 
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  /**
+   * Root logger for the client; we create this mainly so we'll have something
+   *  that can be parent to the database connection (which is created before
+   *  the `RawClient`) and the `RawClient`.  In theory, the RawClient itself
+   *  would be a better top-level, but it doesn't super matter.
+   */
+  account: {
+    type: $log.DAEMON,
+    subtype: $log.CLIENT,
+    topBilling: true,
+    semanticIdent: {
+      _l0: null,
+      userIdent: 'key:root:user',
+    },
+  }
+});
 }); // end define

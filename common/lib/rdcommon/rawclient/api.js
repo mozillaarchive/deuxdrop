@@ -1016,25 +1016,6 @@ exports.getClientForExistingIdentity = function(persistedBlob, dbConn,
   return new RawClientAPI(persistedBlob, dbConn, _logger);
 };
 
-/**
- * Create client instance using its persisted state from storage on the given
- *  connection.  If there is no persisted state, returns null in which case
- *  you want to use `makeClientForNewIdentity`.
- * This returns a promise since database access is always async.
- *
- * XXX not currently implemented but desired
- */
-exports.getClientForExistingIdentityFromStorage = function(dbConn, _logger) {
-  return $Q.when(dbConn.getRowCell(TBL_IDENTITY_STORAGE, 'me', 'p:me'),
-    function(jsonStr) {
-      if (!jsonStr)
-        return null;
-      return new RawClientAPI(JSON.parse(jsonStr, dbConn, _logger));
-    }
-    // rejection pass-through is fine
-  );
-};
-
 var LOGFAB = exports.LOGFAB = $log.register($module, {
   rawClient: {
     // we are a client/server client, even if we are smart for one

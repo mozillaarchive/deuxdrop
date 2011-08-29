@@ -19,6 +19,8 @@ cp -r ../../common/lib/rdcommon data/web/deps
 
 # clients/devui       => web/devui
 cp -r ../devui data/web
+# clients/logui       => web/logui
+cp -r ../logui data/web
 
 # common/test         => web/deps/rdctests
 cp -r ../../common/test/*.js data/web/deps/rdctests

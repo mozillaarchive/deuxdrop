@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop Loggest UI</title>
+    <script type="text/javascript">
+      /*
+      function dump(aMsgWithNewline) {
+        console.log(aMsgWithNewline.replace("\n", "", "g"));
+      }
+      */
+    </script>
+    <style type="text/css">
+      html {
+        font-family: "Lucida Grande", Verdana, sans-serif;
+        font-size: 9pt;
+      }
+      :focus { outline: none; }
+      a[href] { text-decoration: none }
+    </style>
+<link rel="shortcut icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IArs4c6QAAAR1QTFRFZDQAZEIdZTUBZTUCZUMdaTkFaToIaUUfb0AMb0khckIPckshdUobdUsce1ImfE0afFIlfFMnfl8/f1Qlf2BAhVgniVooiVopilspjGlDjm9Oj2c8k2c5lmw/lm1AmnRMmnpZmoNrm3RJnX5dnndOoHtSoIJioIJjoXtTo4ZopoptppJ8p4xvqIxvqJR/qJWBqY5yqY9yqZaCq5F2sZFwsZJysZZ6sZd7spNyspNzspRztqCIu6CDvKKGxLGexrCYxrShx7CZ0cOz1ce44djP597V5+DY5+DZ6OHZ6OHa6eDX6eHY6uLZ6uPb7OXd7Obf7urn7+rk7+vn8Ovm8Ovn8ezo8u7p8+/q9PDs9vTx9/Ty+ff0+ff1+/n4////+g7dgwAAAYJJREFUOMuNk2dbgzAQgANS2oICWinnHrj33gOrdbQqbq2W/P+f4V1Ct33wPiSQe3Mzx3hDwsC3mG75Qdh0yGofUaCzuuhB1A4UWJsUWoDIZx3iRw2gYsWHKcO2jVT8Y1VqQCT1qpEHIXlDlUQUA9J+hnSu47i0Z6QXCYj4VBvAczQFRXM8AFuNI2U8EjDqc6RNp2nNISGOIwQC3DnaN/GuiXc9E+2YsZcAAaoPF/ezEEtW2CAnOmchE4DXpBeEBwZpQhZIwFE00hwWq6Vd3LWp25/SJEcfjHJMcdDILUy8b/ZtfM4CDL+sjZ++IuAzKpLBXbIJ+eN9DG77HOBiS3FhHwFsL+XIHSWNBuzraVz7HwAeBxUHRhDQuwEDdaCLi3V0sSdctAb5ttq78rGAQT4tj508iyBlmlIAjorV8oFI865aXvqmNEWhjD8LNX9FhRKlVjtKfTkzOnezSKUWzWIdzdq5/zob6hHNSmx34oNJfnLJjzbx2ScPTvLo/WN4u47/LxuDiEBTsvEdAAAAAElFTkSuQmCC" />
+<script type="text/javascript" src="../../deps/require.js"></script>
+  <script>
+    require({
+      baseUrl: "../../deps",
+      paths: {
+        // XXX yuck, wmsy has its own d3 right now that is older.
+        d3: "arbpl/client/deps/d3.min",
+      },
+      packages: [
+        { name: "rdlogui", location: "../logui/lib/rdlogui" },
+
+        { name: "arbclient", location: "arbpl/client/lib/arbclient" },
+        { name: "arbcommon", location: "arbpl/client/lib/arbcommon" },
+
+        // jstut family
+        { name: "jstut", location: "jtstut/lib/jstut" },
+        { name: "narscribblus", location: "jstut/lib/narscribblus" },
+        { name: "narscribblus-plat",
+          location: "jstut/lib-requirejs/narscribblus-plat" },
+        { name: "wmsy", location: "wmsy/lib/wmsy" },
+      ],
+      ready: function() {
+        require(["rdlogui/app"],
+          function(mainModule) {
+            mainModule.main(document);
+        });
+      },
+    });
+  </script>
+  </head>
+<body id="body" style="border: 0; padding: 0; margin: 0;">
+</body>
+</html>

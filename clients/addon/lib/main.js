@@ -49,6 +49,8 @@
  *  electrolysis content processes.  In theory the client daemon could also
  *  operate in a content process too if there is a way for us to get our djb
  *  nacl bindings exposed into it.
+ *
+ * We additionally provide a user interface to expose the logging data
  **/
 
 define([ 'exports', 'self', 'page-mod', 'hidden-frame', 'chrome', 'nacl', 'q',
@@ -73,11 +75,16 @@ var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
     // - Development UI
     devInterfaceUrl = data.url('web/devui/content/index.html'),
 
-    // - Client Worker (Backside) Logic
+    // - Log Viewing UI
+    // View logs from the client daemon in-browser.
+    logInterfaceUrl = data.url('web/logui/content/index.html'),
+
+    // - Client Daemon (Backside) Logic
     // URL for the webpage that is the actual client/backside, servicing the UI
     clientDaemonUrl = data.url('web/firefox/clientdaemon.html'),
 
-    uiRedirectorHandler, devUiRedirectorHandler, Services, XPCOMUtils;
+    uiRedirectorHandler, devUiRedirectorHandler, logUiRedirectorHandler,
+    Services, XPCOMUtils;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -141,26 +148,63 @@ devUiRedirectorHandler = protocol.about('dddev', {
 });
 devUiRedirectorHandler.register();
 
+logUiRedirectorHandler = protocol.about('loggest', {
+  onRequest: function (request, response) {
+    response.uri = aboutUrl;
+  }
+});
+logUiRedirectorHandler.register();
+
+////////////////////////////////////////////////////////////////////////////////
+// Client Daemon Moda Communication
+
 var clientRegistry = {};
 var gClientDaemonStarted = false, gClientHiddenFrame = null, gWinJS;
 
 function notifyDaemonOfNewClient(senderUnique, uiWorker) {
   clientRegistry[senderUnique] = uiWorker;
-  gWinJS.NEWCLIENT(senderUnique);
+  gWinJS.NEW_MODA_CLIENT(senderUnique);
 }
 
 function sendDaemonMessage(senderUnique, data) {
-  gWinJS.CLIENTMSG(senderUnique, data);
+  gWinJS.MODA_CLIENT_MSG(senderUnique, data);
 }
 
 function notifyDaemonOfDeadClient(senderUnique) {
-  gWinJS.DEADCLIENT(senderUnique);
+  gWinJS.DEAD_MODA_CLIENT(senderUnique);
 }
 
 function daemonSendClientMessage(clientUnique, data) {
   log('RECEIVED DAEMON MESSAGE: ' + JSON.stringify(data));
   clientRegistry[clientUnique].postMessage(data);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Client Daemon Logging Communication
+
+var loggerClientRegistry = {};
+
+function notifyDaemonOfNewLoggerClient(senderUnique, uiWorker) {
+  loggerClientRegistry[senderUnique] = uiWorker;
+  gWinJS.NEW_LOG_CLIENT(senderUnique);
+}
+
+function sendDaemonLoggerMessage(senderUnique, data) {
+  gWinJS.LOG_CLIENT_MSG(senderUnique, data);
+}
+
+function notifyDaemonOfDeadLoggerClient(senderUnique) {
+  gWinJS.DEAD_LOG_CLIENT(senderUnique);
+}
+
+function daemonSendLoggerClientMessage(clientUnique, data) {
+  log('RECEIVED DAEMON LOGGER MESSAGE: ' + JSON.stringify(data));
+  loggerClientRegistry[clientUnique].postMessage(data);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Client Daemon Setup
 
 function startClientDaemon() {
   // we need to authorize the worker page to use indexedDB:
@@ -184,6 +228,8 @@ function startClientDaemon() {
         // (messaging also possible)
         winjs.daemonSendClientMessage = daemonSendClientMessage;
 
+        winjs.daemonSendLoggerClientMessage = daemonSendLoggerClientMessage;
+
         // - trigger the load process
         // (we could alternately just use messaging if we weren't already
         //  poking and prodding.)
@@ -193,6 +239,8 @@ function startClientDaemon() {
   }));
 }
 startClientDaemon();
+
+////////////////////////////////////////////////////////////////////////////////
 
 var nextQuerySourceUniqueNum = 1;
 
@@ -235,6 +283,17 @@ exports.main = function () {
     }
   });
 
+  pageMod.PageMod({
+    include: ['about:loggest'],
+    contentScriptWhen: 'start',
+    contentScriptFile: redirectorUrl,
+    onAttach: function onAttach(worker) {
+      worker.on('message', function (message) {
+        worker.postMessage(logInterfaceUrl);
+      });
+    }
+  });
+
   // - use a pageMod to be able to bind to pages showing our app UI
   log('SETTING UP PAGE MOD');
   pageMod.PageMod({
@@ -259,6 +318,34 @@ exports.main = function () {
 
       uiWorker.on('detach', function() {
         notifyDaemonOfDeadClient(uniqueNum);
+      });
+    },
+  });
+
+  // - use a pageMod to connect the logging UI
+  // this uses a distinct bridge as exposed to the client daemon
+  pageMod.PageMod({
+    include: [logInterfaceUrl],
+    contentScriptWhen: 'start',
+    contentScriptFile: modaContentUrl,
+    onAttach: function onAttach(uiWorker) {
+      // (uiWorker is a jetpack abstraction that lets us send messages to the
+      //  content page)
+
+      // unique identifier to name the query source and provide the pairing
+      //  for the moda API bridge.
+      var uniqueNum = nextQuerySourceUniqueNum++;
+
+      notifyDaemonOfNewLoggerClient(uniqueNum, uiWorker);
+
+      // Listen to messages from the UI and send them to the client daemon
+      uiWorker.on('message', function (message) {
+        log('RECEIVED LOG UI MESSAGE: ' + JSON.stringify(message));
+        sendDaemonLoggerMessage(uniqueNum, message);
+      });
+
+      uiWorker.on('detach', function() {
+        notifyDaemonOfDeadLoggerClient(uniqueNum);
       });
     },
   });

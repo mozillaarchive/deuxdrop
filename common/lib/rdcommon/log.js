@@ -243,6 +243,10 @@ define(
  */
 var gSeq = 0;
 
+exports.getCurrentSeq = function() {
+  return gSeq;
+};
+
 /**
  * Per-thread/process next unique actor/logger name to allocate.
  */
@@ -1318,10 +1322,27 @@ function augmentFab(mod, fab, defs) {
 };
 exports.__augmentFab = augmentFab;
 
+var ALL_KNOWN_FABS = [];
+
 exports.register = function register(mod, defs) {
   var fab = {_generalLog: true, _underTest: false, _actorCons: {},
              _rawDefs: {}, _onDeath: null};
+  ALL_KNOWN_FABS.push(fab);
   return augmentFab(mod, fab, defs);
+};
+
+/**
+ * Provide schemas for every logger that has been registered.
+ */
+exports.provideSchemaForAllKnownFabs = function schemaForAllKnownFabs() {
+  var schema = {};
+  for (var i = 0; i < ALL_KNOWN_FABS.length; i++) {
+    var rawDefs = ALL_KNOWN_FABS[i]._rawDefs;
+    for (var key in rawDefs) {
+      schema[key] = rawDefs[key];
+    }
+  }
+  return schema;
 };
 
 /**
