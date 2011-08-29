@@ -1,3 +1,13 @@
+# What?
+
+Jetpack add-in.  Adds the following about URL's:
+
+- *about:dd*: Mobile deuxdrop UI.
+- *about:dddev*: Deuxdrop development UI.
+- *about:loggest*: Log viewer that shows what the client daemon gets up to.
+
+# Maybe Mobile
+
 An add-on that runs in Mobile Firefox for deuxdrop. The addon hosts the UI
 from within the extension, and uses a separate worker for the data pipe to
 the server.
