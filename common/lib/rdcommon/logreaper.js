@@ -59,6 +59,8 @@ define(
     exports
   ) {
 
+var EMPTY = [];
+
 function LogReaper(rootLogger) {
   this._rootLogger = rootLogger;
   this._lastTimestamp = null;
@@ -104,8 +106,9 @@ LogReaper.prototype = {
       outrep.kids = null;
 
       // - check born/death
-      if (logger._born >= startTimestamp)
-        empty = false;
+      // actually, being born doesn't generate an event, so ignore.
+      //if (logger._born >= startTimestamp)
+      //  empty = false;
       if (logger._died !== null)
         empty = false;
 
@@ -128,6 +131,12 @@ LogReaper.prototype = {
         // (we keep/use outrep.entries, and zero the logger's entries)
         logger._entries = [];
       }
+      else {
+        // Avoid subsequent mutation of the list mutating our representation
+        //  and without creating gratuitous garbage by using a shared empty
+        //  list for such cases.
+        outrep.entries = EMPTY;
+      }
 
       // - check and reap children
       if (logger._kids && logger._kids.length) {
@@ -141,7 +150,7 @@ LogReaper.prototype = {
             empty = false;
           }
           // reap (and adjust iteration)
-          if (kidLogger._dead !== null)
+          if (kidLogger._died !== null)
             logger._kids.splice(iKid--, 1);
         }
       }

@@ -134,8 +134,7 @@ LogUIApp.prototype = {
 
     // we are only putting one step in...
     var rows = fakePerm._perStepPerLoggerEntries,
-        // offsetting by one out of laziness since it can't hurt
-        timeSpans = [[logslice.begin - 1, logslice.end + 1]];
+        timeSpans = [[logslice.begin, logslice.end]];
     rows.push([]);
     rows.push([]);
 
