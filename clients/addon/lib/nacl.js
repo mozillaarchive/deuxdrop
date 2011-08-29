@@ -60,7 +60,7 @@ let $ctypes_ns = {};
 Cu.import("resource://gre/modules/ctypes.jsm", $ctypes_ns);
 let $ctypes = $ctypes_ns.ctypes;
 
-let numbits = $ctypes['int'].size * 4;
+let numbits = $ctypes['int'].ptr.size * 4;
 let platCode = numbits === 32 ? 'i686' : 'x86_64';
 
 let runtime = Cc["@mozilla.org/xre/app-info;1"]
