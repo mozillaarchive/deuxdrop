@@ -53,12 +53,39 @@
  *  wrapping at least ignores the results.
  **/
 
-let $unload = require("unload");
+let $unload = require("unload"), $url = require("url");
 
-let {Cu} = require("chrome");
+let {Cc, Cu, Ci} = require("chrome");
 let $ctypes_ns = {};
 Cu.import("resource://gre/modules/ctypes.jsm", $ctypes_ns);
 let $ctypes = $ctypes_ns.ctypes;
+
+let numbits = $ctypes['int'].size * 4;
+let platCode = numbits === 32 ? 'i686' : 'x86_64';
+
+let runtime = Cc["@mozilla.org/xre/app-info;1"]
+                .getService(Ci.nsIXULRuntime);
+let platLibName;
+switch (runtime.OS) {
+  case 'WINNT':
+    if (numbits !== 32)
+      throw new Error('64-bit windows not supported right now.');
+    platLibName = 'nacl-i686.dll';
+    break;
+  case 'Linux':
+    platLibName = 'libnacl-' + platCode + '.so';
+    break;
+  case 'Darwin':
+    if (numbits !== 64)
+      throw new Error('32-bit OS X not supported right now.');
+    platLibName = 'libnacl-x86_64.dylib';
+    break;
+  default:
+    throw new Error('No native library for platform: ' + runtime.OS);
+}
+// we get this trick from jetpackintray, a nicely short way to map.
+let path = $url.toFilename($url.URL("nacl-native-libs/" + platLibName,
+                                    __url__).toString());
 
 let NACL = $ctypes.open('/tmp/libnacl.so');
 

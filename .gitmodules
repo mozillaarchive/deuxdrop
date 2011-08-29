@@ -16,3 +16,6 @@
 [submodule "clients/deps/arbpl"]
 	path = clients/deps/arbpl
 	url = git://github.com/asutherland/arbitrarypushlog.git
+[submodule "clients/addon/lib/nacl-native-libs"]
+	path = clients/addon/lib/nacl-native-libs
+	url = git://github.com/asutherland/djb-nacl-binlibs.git
