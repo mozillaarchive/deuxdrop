@@ -53,13 +53,13 @@
  * We additionally provide a user interface to expose the logging data
  **/
 
-define([ 'exports', 'self', 'page-mod', 'hidden-frame', 'chrome', 'nacl', 'q',
+define([ 'exports', 'self', 'page-mod', 'hidden-frame', 'chrome', 'nacl',
          './jetpack-protocol/index'],
-function (exports,   self,   pageMod,    hiddenFrame,    chrome,   nacl,   Q,
+function (exports,   self,   pageMod,    hiddenFrame,    chrome,   nacl,
           protocol) {
 
 var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
-    jsm = {}, when = Q.when,
+    jsm = {},
     data = self.data,
 
     // - about:dd => Application URL redirector magic
