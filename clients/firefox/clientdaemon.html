@@ -73,7 +73,7 @@ function sendAddOnMessage(data) {
   window.dispatchEvent(event);
 }
 
-var RAW_CLIENT = null, $backside, LOG_REAPER, LOG_SCHEMA;
+var RAW_CLIENT = null, $backside, LOG_REAPER, LOG_SCHEMA, ROOT_LOGGER;
 function BOOTSTRAP(callbackWhenLoaded) {
   require(
     {
@@ -106,6 +106,7 @@ function BOOTSTRAP(callbackWhenLoaded) {
       RAW_CLIENT = bundle.rawClient;
       $backside = _backside;
 
+      ROOT_LOGGER = bundle.rootLogger;
       LOG_REAPER = new $logreaper.LogReaper(bundle.rootLogger);
       LOG_SCHEMA = bundle.schema;
 
@@ -122,7 +123,7 @@ var backsides = {};
 function NEW_MODA_CLIENT(name) {
   console.log("new client", name, "reported alive");
   var backside = backsides[name] =
-    new $backside.ModaBackside(RAW_CLIENT, name, null);
+    new $backside.ModaBackside(RAW_CLIENT, name, ROOT_LOGGER);
   backside._sendObjFunc = function(data) {
     daemonSendClientMessage(name, data);
   }

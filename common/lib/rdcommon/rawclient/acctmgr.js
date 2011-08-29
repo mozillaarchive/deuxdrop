@@ -102,8 +102,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
   /**
    * Root logger for the client; we create this mainly so we'll have something
    *  that can be parent to the database connection (which is created before
-   *  the `RawClient`) and the `RawClient`.  In theory, the RawClient itself
-   *  would be a better top-level, but it doesn't super matter.
+   *  the `RawClient`), the `RawClient`, and all the `ModaBackside` instances.
    */
   account: {
     type: $log.DAEMON,
