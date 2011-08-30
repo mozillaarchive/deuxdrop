@@ -9,7 +9,7 @@
 	url = git://github.com/asutherland/WebSocket-Node.git
 [submodule "clients/deps/wmsy"]
 	path = clients/deps/wmsy
-	url = https://github.com/asutherland/wmsy.git
+	url = git://github.com/asutherland/wmsy.git
 [submodule "clients/deps/jstut"]
 	path = clients/deps/jstut
 	url = git://github.com/asutherland/jstut.git
