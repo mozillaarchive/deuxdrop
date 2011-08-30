@@ -87,7 +87,7 @@ switch (runtime.OS) {
 let path = $url.toFilename($url.URL("nacl-native-libs/" + platLibName,
                                     __url__).toString());
 
-let NACL = $ctypes.open('/tmp/libnacl.so');
+let NACL = $ctypes.open(path);
 
 $unload.when(function() {
   NACL.close();
