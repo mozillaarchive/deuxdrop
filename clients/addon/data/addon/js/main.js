@@ -59,6 +59,7 @@ define(function (require) {
 
       commonNodes = {},
       states = {},
+      servers,
       peeps, update, notifyDom, nodelessActions,
       newMessageIScroll, newConversationNodeWidth, init, me;
 
@@ -217,16 +218,6 @@ define(function (require) {
     }, 300);
   }
 
-  function listServers() {
-    // Now show list of servers.
-    moda.queryServers({
-      'onCompleted': function (liveOrderedSet) {
-        var servers = liveOrderedSet.items;
-        cards.onNav('pickServer', servers);
-      }
-    });
-  }
-
   function onPeepsComplete(dom) {
     // Get the node to use for each peep.
     var clonable = getChildCloneNode(dom[0]),
@@ -273,10 +264,10 @@ define(function (require) {
             if (assertion) {
               // Provide our poco
               me.updatePersonalInfo({
-                displayName: name,
+                displayName: name
               });
               me.provideProofOfIdentity('email', 'browserid', assertion);
-              listServers();
+              cards.onNav('pickServer', {});
             } else {
               // Do not do anything. User stays on sign in screen.
             }
@@ -297,49 +288,65 @@ define(function (require) {
           .click(handleSubmit);
     },
 
+    'needServer': function (data, dom) {
+      cards.adjustCardSizes();
+    },
+
     'pickServer': function (data, dom) {
 
       var clonable = getChildCloneNode(dom[0]),
           frag = document.createDocumentFragment();
 
       // Generate nodes for each person.
-      data.forEach(function (server) {
-        var node = clonable.cloneNode(true);
 
-        updateDom($(node), server);
+      // Now show list of servers.
+      moda.queryServers({
+        'onCompleted': function (liveOrderedSet) {
+          servers = liveOrderedSet;
 
-        node.href += encodeURIComponent(server.id);
+          Object.keys(servers.items).forEach(function (key) {
+            var node = clonable.cloneNode(true),
+                server = servers.items[key];
 
-        frag.appendChild(node);
+            updateDom($(node), server);
+
+            node.href += encodeURIComponent(key);
+
+            frag.appendChild(node);
+          });
+
+          // Put in the Add button.
+          frag.appendChild(commonNodes.addServerLink.cloneNode(true));
+
+          // Update the card.
+          dom.find('.scroller').append(frag);
+
+          // Refresh card sizes.
+          cards.adjustCardSizes();
+        }
       });
-
-      // Put in the Add button.
-      frag.appendChild(commonNodes.addServerLink.cloneNode(true));
-
-      // Update the card.
-      dom.find('.scroller').append(frag);
-
-      // Refresh card sizes.
-      cards.adjustCardSizes();
     },
 
     'connectToServer': function (data) {
-      var serverId = data.id;
+      var serverInfo = data.id ? servers.items[data.id] : {
+        url: data.url
+      };
 
-      md.signupWithServer(serverId, {
-        'onCompleted': function () {
+      //TODO: this call does not return anything/no callbacks?
+      me.signupWithServer(serverInfo);
 
-          // Remove the sign in/server setup cards
-          $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
-            '[data-cardid="enterServer"]', '#cardContainer').remove();
+      //For now, assume it works?
 
-          // Show the start card
-          cards.onNav('start', {});
+      // Remove the sign in/server setup cards
+      $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
+        '[data-cardid="enterServer"], [data-cardid="needServer"]',
+        '#cardContainer').remove();
 
-          // Go back one to see the start card.
-          history.back();
-        }
-      });
+      // Show the start card
+      cards.onNav('start', {});
+
+      // Go back one to see the start card.
+      history.back();
     },
 
     'peeps': function (data, dom) {
@@ -404,8 +411,10 @@ define(function (require) {
       return;
     }
 
-    if (!me || !me.havePersonalInfo || !me.haveServerAccount) {
+    if (!me || !me.havePersonalInfo) {
       cards.startCardId = 'signIn';
+    } else if (me && !me.haveServerAccount) {
+      cards.startCardId = 'needServer';
     }
 
     nodelessActions = {
@@ -414,6 +423,12 @@ define(function (require) {
       'browserIdSignIn': true,
       'connectToServer': true,
       'signOut': true
+    };
+
+    var startCardIds = {
+      'start': true,
+      'signIn': true,
+      'needServer': true
     };
 
     // Listen for nav items.
@@ -435,7 +450,7 @@ define(function (require) {
 
         cards.add(cardDom);
 
-        if (templateId !== 'start' && templateId !== 'signIn') {
+        if (!startCardIds[templateId]) {
           cards.forward();
         }
       }
@@ -453,10 +468,10 @@ define(function (require) {
           evt.preventDefault();
           evt.stopPropagation();
 
-          var serverId = $(evt.target).find('[name="server"]').val().trim().toLowerCase();
-          if (serverId) {
+          var url = $(evt.target).find('[name="server"]').val().trim().toLowerCase();
+          if (url) {
             update.connectToServer({
-              id: serverId
+              url: url
             });
           }
         }

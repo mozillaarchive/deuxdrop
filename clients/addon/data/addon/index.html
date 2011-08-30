@@ -33,6 +33,11 @@
             </form>
           </div>
         </div>
+        <div data-cardid="needServer" title="Missing Server" class="card noiscroll">
+          <div class="scroller">
+            <a class="item" href="#pickServer">Pick a server</a>
+          </div>
+        </div>
         <div data-cardid="pickServer" title="Pick Server" class="card">
           <div class="scroller" data-childclass="serverLink">
           </div>
@@ -94,7 +99,7 @@
       <a data-classimpl="addServerLink" class="item" href="#enterServer">+ Add Server</a>
 
       <a data-classimpl="serverLink" class="item" data-nonav="nonav" href="#connectToServer?id=">
-        <span data-bind="id"></span>
+        <span data-bind="displayName"></span> (<span data-bind="url"></span>)
       </a>
 
       <form data-classimpl="compose" class="compose">
