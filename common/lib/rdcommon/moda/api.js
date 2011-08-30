@@ -222,7 +222,7 @@ LiveOrderedSet.prototype = {
    *  available.
    */
   _notifySplice: function(index, howMany, addedItems) {
-    if (this._listener)
+    if (this._listener && this._listener.onSplice)
       this._listener.onSplice(index, howMany, addedItems, this);
     this.items.splice.apply(this.items, [index, howMany].concat(addedItems));
   },
@@ -232,7 +232,7 @@ LiveOrderedSet.prototype = {
    */
   _notifyCompleted: function() {
     this.completed = true;
-    if (this._listener)
+    if (this._listener && this._listener.onCompleted)
       this._listener.onCompleted(this);
   },
 
@@ -421,6 +421,7 @@ ModaBridge.prototype = {
 
     // -- perform transformation / cache unification
     if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
+console.log('API: dataMap has servers')
       values = msg.dataMap[NS_SERVERS];
       dataMap = liveset._dataByNS[NS_SERVERS];
       for (key in values) {
@@ -607,24 +608,6 @@ ModaBridge.prototype = {
       this._ourUser._pendingListeners.push(listener);
     this._send('whoAmI', null, null);
     return this._ourUser;
-  },
-
-  // More stubs.
-  listServers: function(listener) {
-    setTimeout(function () {
-      listener.onCompleted({
-        items: [
-          {
-            id: 'en.raindrop.it',
-            name: 'Sir Deuxdrop'
-          },
-          {
-            id: 'ed.raindrop.it',
-            name: 'Mein Deuxdropen'
-          }
-        ]
-      });
-    }, 15);
   },
 
   queryServers: function(listener, data) {
