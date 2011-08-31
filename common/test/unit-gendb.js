@@ -486,6 +486,25 @@ TD.commonCase('reorderable collection index model', function(T) {
          logNamedValue('empty index'), badNews);
   });
 
+  // - batch updates (numeric)
+  T.group('batch update: number');
+  T.action(eLazy, 'B=11, A=10, C=9', function() {
+    eLazy.expect_event('did batch update');
+    var updates = [
+      [IDX_AGE, '', 'B', 11],
+      [IDX_AGE, '', 'A', 10],
+      [IDX_AGE, '', 'C', 9],
+    ];
+    when(conn.updateMultipleIndexValues(TBL_HUMANS, updates),
+         logEvent('did batch update'), badNews);
+  });
+  T.check(eLazy, 'check B,A,C ordering', function() {
+    eLazy.expect_namedValue('ordering', ['B', 11, 'A', 10, 'C', 9]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
+         logNamedValue('ordering'), badNews);
+  });
+
+  // - cleanup
   T.group('cleanup');
   T.cleanup(eLazy, 'cleanup', function() {
     $gendb.cleanupTestDBConnection(conn);

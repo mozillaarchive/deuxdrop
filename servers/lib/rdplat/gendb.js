@@ -423,6 +423,43 @@ RedisDbConn.prototype = {
   },
 
   /**
+   * Update multiple indices in a single batch.
+   *
+   * @args[
+   *   @param[tableName]{
+   *     The name of the associated table we are performing updates on.
+   *   }
+   *   @param[updates @listof[@list[
+   *     @param[indexName]
+   *     @param[indexParam]
+   *     @param[objectName]
+   *     @param[newValue]
+   *   ]]
+   * ]
+   */
+  updateMultipleIndexValues: function(tableName, updates) {
+    var deferred = $Q.defer(),
+        multi = this._conn.multi();
+    for (var iUpdate = 0; iUpdate < updates.length; iUpdate++) {
+      var update = updates[iUpdate],
+          indexName = update[0], indexParam = update[1],
+          objectName = update[2], newValue = update[3];
+      this._log.updateIndexValue(tableName, indexName, indexParam,
+                                 objectName, newValue);
+      multi.zadd(
+        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+        newValue, objectName);
+    }
+    multi.exec(function(err, replies) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve();
+    });
+    return deferred.promise;
+  },
+
+  /**
    * Set the numeric value associated with an objectName for the given index to
    *  the maximum of its current value and the value we are providing.
    */

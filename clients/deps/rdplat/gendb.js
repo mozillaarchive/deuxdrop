@@ -499,6 +499,59 @@ IndexedDbConn.prototype = {
   },
 
   /**
+   * Update multiple indices in a single batch.
+   * 
+   * @args[
+   *   @param[tableName]{
+   *     The name of the associated table we are performing updates on.
+   *   }
+   *   @param[updates @listof[@list[
+   *     @param[indexName]
+   *     @param[indexParam]
+   *     @param[objectName]
+   *     @param[newValue]
+   *   ]]
+   * ]
+   */
+  updateMultipleIndexValues: function(tableName, updates) {
+    var deferred = $Q.defer();
+
+    var aggrNames = [], iUpdate, update;
+
+    for (iUpdate = 0; iUpdate < updates.length; iUpdate++) {
+      update = updates[iUpdate];
+
+      var aggrName = tableName + INDEX_DELIM + update[0];
+      if (aggrNames.indexOf(aggrName) === -1)
+        aggrNames.push(aggrName);
+
+    }
+    var transaction = this._db.transaction(aggrNames,
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve();
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+
+    for (iUpdate = 0; iUpdate < updates.length; iUpdate++) {
+      update = updates[iUpdate];
+      var indexName = update[0], indexParam = update[1],
+          objectName = update[2], newValue = update[3];
+      this._log.updateIndexValue(tableName, indexName, indexParam,
+                                 objectName, newValue);
+
+      var aggrName = tableName + INDEX_DELIM + indexName;
+      var store = transaction.objectStore(aggrName);
+      var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
+      store.put(newValue, cellName);
+    }
+
+    return deferred.promise;
+  },
+
+  /**
    * Set the numeric value associated with an objectName for the given index to
    *  the maximum of its current value and the value we are providing.
    */
