@@ -207,7 +207,10 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
 /**
  * Process a conversation invitation by validating its attestation and
  *  creating the appropriate database row.  The conversation will not become
- *  visible to the user until at least one message has been processed.
+ *  visible to the user until the first message in the conversation is seen.
+ *  (The choice of the first message is made so that we never have a
+ *  conversation blurb that claims to have zero messages, which would violate
+ *  many apparent invariants.
  */
 var ConvInviteTask = exports.ConvInviteTask = taskMaster.defineTask({
   name: 'convInvite',
@@ -319,14 +322,16 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
       writeCells["d:p" + this.fanoutEnv.invitee] = inviteeRootKey;
       // - add the join entry in the message sequence
       var msgNum = writeCells["d:m"] = parseInt(this.cells["d:m"]) + 1;
-      writeCells["d:m" + msgNum] = {
+      var msgRec = writeCells["d:m" + msgNum] = {
         type: 'join',
         by: inviterRootKey,
         id: inviteeRootKey,
         receivedAt: this.fanoutEnv.receivedAt,
       };
 
-      // XXX update in-memory reps
+      // - message notification
+      this.store._notif.trackNewishMessage(convMeta.id, msgNum, msgRec);
+
       var timestamp = this.fanoutEnv.receivedAt;
 
       var self = this;
@@ -354,9 +359,7 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
 });
 
 /**
- * Add a message (human or machine) to a conversation.
- *
- * If this is a join notification, we will name-check the added person.
+ * Add a human message to a conversation.
  */
 var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
   name: 'convMessage',
@@ -420,9 +423,6 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
 
       var promises = [
         this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id, writeCells),
-        // -- conversation indices
-        // - all conversation index
-        // - per-peep conversation indices
       ];
 
       // - all recipients stuff
@@ -435,8 +435,10 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
         recipRootKeys.push(cells[key]);
       }
 
-      this.store._updateConvIndices(convMeta.id, /* pinned */ false,
-                                    authorRootKey, recipRootKeys, timestamp);
+      // - conversation (all and per-peep) index updating
+      promises.push(
+        this.store._updateConvIndices(convMeta.id, /* pinned */ false,
+                                      authorRootKey, recipRootKeys, timestamp));
 
       // - author is not us
       if (!authorIsOurUser) {
@@ -452,7 +454,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
 
       // XXX notifications
       var self = this;
-      return $Q.join(
+      return when($Q.all(promises),
         function() {
           self.store._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
         }

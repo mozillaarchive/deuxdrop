@@ -151,8 +151,16 @@ ModaBackside.prototype = {
    */
   _received: function(boxedObj) {
     var cmdFunc = this['_cmd_' + boxedObj.cmd];
-    this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
-                     boxedObj.payload);
+    var rval = this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
+                                boxedObj.payload);
+    // if an exception gets thrown, it's a safe bet the query is doomed.
+    if (rval instanceof Error) {
+      // XXX ask the notification king to turn boxedObj.name into a handle
+      //  so we can send a 'dead' notification across.
+      // (it's okay to punt on this right now as the error will get logged
+      //  and unit tests will see it and logging will detect the exception,
+      //  etc.)
+    }
   },
 
   /**
@@ -189,6 +197,22 @@ ModaBackside.prototype = {
     when(this._store.queryAndWatchPeepConversationBlurbs(queryHandle,
                                                          peepRootKey,
                                                          payload.query),
+         null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
+  },
+
+  _cmd_queryConvMsgs: function(bridgeQueryName, payload) {
+    // map the provided conv blurb local name to the true name
+    var convId = this._notif.mapLocalNameToFullName(this._querySource,
+                                                    NS_CONVBLURBS,
+                                                    payload.localName);
+    var queryDef = {
+      convId: convId,
+    };
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_CONVMSGS, queryDef);
+    when(this._store.queryConversationMessages(queryHandle, convId),
          null,
          this._needsbind_queryProblem.bind(this, queryHandle));
   },

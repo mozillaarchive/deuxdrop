@@ -72,7 +72,7 @@ const PINNED = 'pinned';
 
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
-      NS_CONVALL = 'convall';
+      NS_CONVMSGS = 'convmsgs';
 
 /**
  * An optimization we are capable of performing is that we do not have to store
@@ -391,11 +391,78 @@ LocalStore.prototype = {
   _notifyNewMessage: function(messageType) {
   },
 
+  queryConversationMessages: function(queryHandle, convId) {
+    // - Loop the blurb in for GC purposes
+    // (Specifically, we want to be able to have the messages reference the
+    //  blurb, so we want to include the blurb as part of our dependent data.
+    //  Because we only allow this query to be created from an existing blurb,
+    //  we can rely on the blurb already being known to the bridge and explode
+    //  if it somehow is no longer known.)
+    var blurbClientData = this._notifking.reuseIfAlreadyKnown(
+                            queryHandle, NS_CONVBLURBS, convId);
+    if (!blurbClientData) {
+      throw this._notifking.badQuery(queryHandle, "Conv blurb does not exist!");
+    }
+
+    // - does the bridge already know the answer to the question?
+    var msgsClientData = this._notifking.reuseIfAlreadyKnown(
+                           queryHandle, NS_CONVMSGS, convId);
+    if (msgsClientData) {
+      this._fillOutQueryDepsAndSend(queryHandle);
+      return;
+    }
+
+    // - need to fetch the data
+    this._fetchConversationMessages(queryHandle, convId);
+  },
+
   /**
-   * Retrieve full conversation data.  Only invoked on cache miss, so creates a
-   *  new clientData data structure that is immediately linked into our rep.
+   * Convert message records (as pulled from or pushed to hbase) into wire
+   *  representations to send to the moda bridge.
    */
-  _fetchConversationInFull: function(queryHandle, convId) {
+  _convertConversationMessages: function(queryHandle, msgRecs, deps) {
+    var messages = [];
+    for (var i = 0; i < msgRecs.length; i++) {
+      var msg = msgRecs[i];
+      if (msg.type === 'message') {
+        messages.push({
+          type: 'message',
+          author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
+                                                  deps),
+          composedAt: msg.composedAt,
+          receivedAt: msg.receivedAt,
+          text: msg.text,
+        });
+        break;
+      }
+      else if (msg.type === 'join') {
+        messages.push({
+          type: 'join',
+          inviter: this._deferringPeepQueryResolve(queryHandle, msg.by, deps),
+          invitee: this._deferringPeepQueryResolve(queryHandle, msg.id, deps),
+          receivedAt: msg.receivedAt,
+          text: msg.text,
+        });
+      }
+      else {
+        throw new Error("Unknown message type '" + msg.type + "'");
+      }
+    }
+    return messages;
+  },
+
+  /**
+   * Retrieve conversation messages and data that impacts the messages, such
+   *  as high-water marks and metadata about the messages.  We do not need
+   *  to retrieve the information that's already known to the blurb, or we can
+   *  ignore it at least.
+   *
+   * Only invoked on cache miss, so creates a new clientData data structure that
+   *  is immediately linked into our rep.
+   *
+   * Issues query send on completion.
+   */
+  _fetchConversationMessages: function(queryHandle, convId) {
     var querySource = queryHandle.owner;
     var localName = "" + (querySource.nextUniqueIdAlloc++);
     var deps = [];
@@ -403,85 +470,34 @@ LocalStore.prototype = {
       localName: localName,
       fullName: convId,
       count: 1,
+      // we don't need to maintain any data about the messages; only the blurb
+      //  needs it because the blurb is what gets acted upon
       data: null,
+      // we don't need any indices because the messages are inherently ordered
+      //  and cannot be reordered.
       indexValues: null,
       deps: deps,
     };
-    queryHandle.membersByLocal[NS_CONVALL][localName] = clientData;
-    queryHandle.membersByFull[NS_CONVALL][convId] = clientData;
+    queryHandle.membersByLocal[NS_CONVMSGS][localName] = clientData;
+    queryHandle.membersByFull[NS_CONVMSGS][convId] = clientData;
 
+    var self = this;
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
-      // we need the meta on our side...
-      clientData.data = cells['d:meta'];
       // -- build the client rep
       var numMessages = cells['m'];
-      var participants = [];
-      for (var key in cells) {
-        // - participants
-        if (/^d:p/.test(key)) {
-          participants.push(self._deferringPeepQueryResolve(queryHandle,
-                                                            cells[key],
-                                                            deps));
-        }
-      }
+
       // - all messages
-      var msg, iMsg, messages = [];
-      for (iMsg = 0; iMsg < numMessages; iMsg++) {
-        msg = cells['d:m' + iMsg];
-        if (msg.type === 'message') {
-          messages.push({
-            type: 'message',
-            author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
-                                                    deps),
-            composedAt: msg.composedAt,
-            receivedAt: msg.receivedAt,
-            text: msg.text,
-          });
-          break;
-        }
-        else if (msg.type === 'join') {
-          messages.push({
-            type: 'join',
-            inviter: self._deferringPeepQueryResolve(queryHandle, msg.by, deps),
-            invitee: self._deferringPeepQueryResolve(queryHandle, msg.id, deps),
-            receivedAt: msg.receivedAt,
-            text: msg.text,
-          });
-        }
-        else {
-          throw new Error("Unknown message type '" + msg.type + "'");
-        }
+      var msgRecs = [];
+      for (var iMsg = 0; iMsg < numMessages; iMsg++) {
+        msgRecs.push(cells['d:m' + iMsg]);
       }
 
-      // - number of unread
-      // XXX unread status not yet dealt with. pragmatism!
-      var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
-      for (; iMsg < numMessages; iMsg++) {
-        msg = cells['d:m' + iMsg];
-        if (msg.type === 'message') {
-          numUnreadTextMessages++;
-          // - first unread (non-join) message...
-          if (!firstUnreadMsgRep) {
-            firstUnreadMsgRep = {
-              type: 'message',
-              author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
-                                                      deps),
-              composedAt: msg.composedAt,
-              receivedAt: msg.receivedAt,
-              text: msg.text,
-            };
-          }
-        }
-      }
-
-      queryHandle.dataMap[NS_CONVBLURBS][localName] = {
-        participants: participants,
-        messages: messages,
-        pinned: false,
+      queryHandle.dataMap[NS_CONVMSGS][localName] = {
+        messages: self._convertConversationMessages(queryHandle, msgRecs, deps),
       };
 
-      return clientData;
+      self._fillOutQueryDepsAndSend(queryHandle);
     });
   },
 
@@ -490,9 +506,9 @@ LocalStore.prototype = {
    *
    * @args[
    *   @param[peep]
-   *   @parma[query @dict[
+   *   @param[query @dict[
    *     @key[involvement @oneof['any' 'recip' 'write']]
-   *   ]
+   *   ]]
    * ]
    */
   queryAndWatchPeepConversationBlurbs: function(queryHandle, peepRootKey) {
@@ -551,6 +567,7 @@ LocalStore.prototype = {
     promises.push(this._db.updateIndexValue(
       $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
       convId, timestamp));
+
     // - per-peep (maybe recip)/any involvement for the recipients
     for (var iRecip = 0; iRecip < recipRootKeys.length; iRecip++) {
       var rootKey = recipRootKeys[iRecip];
@@ -563,25 +580,7 @@ LocalStore.prototype = {
         promises.push(this._db.updateIndexValue(
           $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
           rootKey, convId, timestamp));
-
     }
-
-
-
-    return $Q.all(promises);
-  },
-
-  /**
-   * Update the peep indices; this covers write/recip/any and pinned
-   *  permutations.  The caller does not need to worry about knowing whether
-   *  people are pinned; we keep that information around and cached.
-   */
-  _updatePeepIndices: function(authorRootKey, recipRootKeys, timestamp) {
-    var promises = [];
-    // write/any involvement for the author
-    // (maybe) pinned variants
-    // (maybe recip)/any involvement for the recipients
-    // (maybe) pinned variants
 
     return $Q.all(promises);
   },
@@ -920,6 +919,7 @@ LocalStore.prototype = {
     if (fullMap.hasOwnProperty(peepRootKey)) {
       clientData = fullMap[peepRootKey];
       clientData.count++;
+      addToDeps.push(clientData);
       return clientData.localName;
     }
 

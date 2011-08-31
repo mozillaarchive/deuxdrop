@@ -54,7 +54,7 @@ define(
 
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
-      NS_CONVALL = 'convall',
+      NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers';
 
 
@@ -97,7 +97,7 @@ PeepBlurb.prototype = {
  *  joined the conversation.
  *
  * @args[
- *   @param[_owner @oneof[ConversationBlurb ConversationInFull]]
+ *   @param[_owner ConversationBlurb]
  *   @param[inviter PeepBlurb]
  *   @param[invitee PeepBlurb]
  *   @param[receivedAt Date]
@@ -118,7 +118,7 @@ JoinMessage.prototype = {
  *  representation.
  *
  * @args[
- *   @param[_owner @oneof[ConversationBlurb ConversationInFull]]
+ *   @param[_owner ConversationBlurb]
  *   @param[author PeepBlurb]
  *   @param[composedAt Date]
  *   @param[receivedAt Date]
@@ -147,6 +147,9 @@ HumanMessage.prototype = {
 /**
  * Provides summary information about a conversation: its participants, initial
  *  message text, most recent activity, # of unread messages.
+ *
+ * Conversation blurbs are always held by `LiveOrderedSets` which provide their
+ *  notifications about changes in their attributes.
  */
 function ConversationBlurb(_bridge, _localName, participants,
                            pinned, numUnread) {
@@ -169,26 +172,6 @@ ConversationBlurb.prototype = {
 };
 
 /**
- * All of the data about a conversation, including its messages.
- */
-function ConversationInFull(_bridge, _localName, participants, messages,
-                            pinned) {
-  this._bridge = bridge;
-  this._localName = _localName;
-  this.participants = participants;
-  this.messages = messages;
-  this._pinned = pinned;
-}
-ConversationInFull.prototype = {
-  get pinned() {
-    return this._pinned;
-  },
-
-  writeMessage: function(text) {
-  },
-};
-
-/**
  * An ordered set (aka list).
  */
 function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
@@ -198,7 +181,7 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this._dataByNS = {
     peeps: {},
     convblurbs: {},
-    convall: {},
+    convmsgs: {},
     servers: {},
   };
   this.query = query;
@@ -221,7 +204,7 @@ LiveOrderedSet.prototype = {
    *  occurs *prior* to the splice since that is when the most information is
    *  available.
    */
-  _notifySplice: function(index, howMany, addedItems) {
+  _notifyAndSplice: function(index, howMany, addedItems) {
     if (this._listener && this._listener.onSplice)
       this._listener.onSplice(index, howMany, addedItems, this);
     this.items.splice.apply(this.items, [index, howMany].concat(addedItems));
@@ -330,11 +313,14 @@ ContactRequestNotification.prototype = {
 function ModaBridge() {
   this._sendObjFunc = null;
 
+  /** next query handle name to issue (always allocated by us) */
   this._nextHandle = 0;
-
+  /** @dictof["query handle name" LiveOrderedSet] */
   this._handleMap = {};
+  /** @listof[LiveOrderedSet] */
   this._sets = [];
 
+  /** `OurUserAccount` */
   this._ourUser = null;
 }
 exports.ModaBridge = ModaBridge;
@@ -358,9 +344,14 @@ ModaBridge.prototype = {
   },
 
   /**
-   * Normalize a list of peeps to their id's for transit to the back-end.
+   * Normalize a list of _localName'd objects to their local names.
    */
-  _normalizePeepsToIds: function(peeps) {
+  _normalizeObjsToLocalNames: function(objs) {
+    var localNames = [];
+    for (var i = 0; i < objs.length; i++) {
+      localNames.push(objs[i]._localName);
+    }
+    return localNames;
   },
 
   /**
@@ -419,9 +410,19 @@ ModaBridge.prototype = {
       return;
     }
 
-    // -- perform transformation / cache unification
+    // --- Data transformation / Cache unification
+    // We perform these in the order: server, peep, conv blurb because
+    //  the dependency situation is such that peeps can't mention anything
+    //  else (directly), and conversations can reference peeps.
+    // An intentional effect of this is that it is okay for subsequent steps to
+    //  use _dataByNS to peek into the liveset for their dependencies rather
+    //  than needing to use _cacheLookupOrExplode themselves.
+    // Messages aren't treated separately because they are immutable and small
+    //  so we don't care about tracking them independently.
+    var i, key, values, val, dataMap;
+
+    // -- Servers
     if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
-console.log('API: dataMap has servers')
       values = msg.dataMap[NS_SERVERS];
       dataMap = liveset._dataByNS[NS_SERVERS];
       for (key in values) {
@@ -434,15 +435,7 @@ console.log('API: dataMap has servers')
       }
     }
 
-    // We perform these in the order: peep, conv blurb, conv full because
-    //  the dependency situation is such that peeps can't mention anything
-    //  else (directly), and conversations can reference peeps.
-    // An intentional effect of this is that it is okay for subsequent steps to
-    //  use _dataByNS to peek into the liveset for their dependencies rather
-    //  than needing to use _cacheLookupOrExplode themselves.
-    // Messages aren't treated separately because they are immutable and small
-    //  so we don't care about tracking them independently.
-    var i, key, values, val, dataMap;
+    // -- Peeps
     if (msg.dataMap.hasOwnProperty(NS_PEEPS)) {
       values = msg.dataMap[NS_PEEPS];
       dataMap = liveset._dataByNS[NS_PEEPS];
@@ -456,7 +449,10 @@ console.log('API: dataMap has servers')
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
+      // XXX process pinned changes, number of associated convs, etc.
     }
+
+    // -- Conv Blurbs
     if (msg.dataMap.hasOwnProperty(NS_CONVBLURBS)) {
       values = msg.dataMap[NS_CONVBLURBS];
       dataMap = liveset._dataByNS[NS_CONVBLURBS];
@@ -470,31 +466,70 @@ console.log('API: dataMap has servers')
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
-    }
-    if (msg.dataMap.hasOwnProperty(NS_CONVALL)) {
-      values = msg.dataMap[NS_CONVALL];
-      dataMap = liveset._dataByNS[NS_CONVALL];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(NS_CONVALL, key);
-        else
-          dataMap[key] = this._transformConvFull(key, val, liveset);
-      }
-    }
-    if (msg.dataDelta.hasOwnProperty(NS_CONVALL)) {
+      // XXX process pinned changes, unread count changes, etc.
     }
 
-    // -- populate / apply the splices.
-    for (i = 0; i < msg.splices.length; i++) {
-      dataMap = liveset._dataByNS[liveset._ns];
-      var spliceInfo = msg.splices[i];
-      var objItems = [];
-      for (var iName = 0; iName < spliceInfo.items.length; iName++) {
-        objItems.push(dataMap[spliceInfo.items[iName]]);
+    // --- Populate The Set = Apply Splices or Special Case.
+
+    // -- Special Case: Conv Messages
+    // Note: this is a less straightforward mapping because our query is
+    //  on a single conversation, but the ordered set contains the
+    //  messages that are part of that conversation, so we need to 'explode'
+    //  them out, as it were.
+    if (liveset._ns === NS_CONVMSGS) {
+      if (msg.dataMap.hasOwnProperty(NS_CONVMSGS)) {
+        values = msg.dataMap[NS_CONVMSGS];
+        dataMap = liveset._dataByNS[NS_CONVMSGS];
+
+        // so there will only be one of these...
+        for (key in values) {
+          val = values[key];
+          // null (in the non-delta case) means pull it from cache
+          if (val === null)
+            dataMap[key] = this._cacheLookupOrExplode(NS_CONVMSGS, key);
+          else
+            dataMap[key] = this._transformConvMessages(liveset.blurb,
+                                                       key, val, liveset);
+
+          // now, splice the messages in.
+          liveset._notifyAndSplice(0, 0, dataMap[key].messages);
+        }
       }
-      liveset._notifySplice(spliceInfo.index, spliceInfo.howMany, objItems);
+      // our deltas encode additional messages being added to a conv
+      if (msg.dataDelta.hasOwnProperty(NS_CONVMSGS)) {
+        values = msg.dataDelta[NS_CONVMSGS];
+        for (key in values) {
+          val = values[key];
+
+          // - process new messages
+          // build the representations
+          var newMessages = this._transformConvMessages(liveset.blurb,
+                                                        key, val, liveset)
+                                  .messages;
+          var curData = liveset._dataByNS[NS_CONVMSGS][key];
+          // notify the liveset and its consumers
+          liveset._notifyAndSplice(curData.messages.length, 0, newMessages);
+          // update our liveset references so that if a redundant query is
+          //  issued the cache gets the right/up-to-date data.
+          curData.messages.splice(curData.messages.length, 0, newMessages);
+
+          // - process watermark changes
+          // XXX yes, process watermarks.
+        }
+      }
+    }
+    // -- Common Case: Apply Splices
+    else {
+      for (i = 0; i < msg.splices.length; i++) {
+        dataMap = liveset._dataByNS[liveset._ns];
+        var spliceInfo = msg.splices[i];
+        var objItems = [];
+        for (var iName = 0; iName < spliceInfo.items.length; iName++) {
+          objItems.push(dataMap[spliceInfo.items[iName]]);
+        }
+        liveset._notifyAndSplice(spliceInfo.index, spliceInfo.howMany,
+                                 objItems);
+      }
     }
     liveset._notifyCompleted();
   },
@@ -568,20 +603,15 @@ console.log('API: dataMap has servers')
   /**
    * Create a `ConversationInFull` representation from the wire rep.
    */
-  _transformConvFull: function(localName, data, liveset) {
-    var participants = [];
-    for (var i = 0; i < wireConv.participants.length; i++) {
-      participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
-    }
+  _transformConvMessages: function(blurb, localName, wireConv, liveset) {
     var messages = [];
-    var conv = new ConversationInFull(
-      this, localName, participants, messages, wireConv.pinned
-    );
     for (var iMsg = 0; iMsg < wireConv.messages.length; iMsg++) {
       messages.push(
-        this._transformConvFull(wireConv.messages[iMsg], conv, liveset));
+        this._transformMessage(wireConv.messages[iMsg], blurb, liveset));
     }
-    return conv;
+    return {
+      messages: messages,
+    };
   },
 
 
@@ -665,7 +695,25 @@ console.log('API: dataMap has servers')
     return liveset;
   },
 
-  queryFullConversation: function(convBlurb, listener) {
+  /**
+   * Issue a query for the messages in a conversation already know by its blurb.
+   */
+  queryConversationMessages: function(convBlurb, listener) {
+    var handle = this._nextHandle++;
+    // passing null for the query def because there is nothing useful we can
+    //  track on this side.
+    var liveset = new LiveOrderedSet(this, handle, NS_CONVMSGS, null, listener,
+                                     data);
+    // Save off the blurb for convenience and for direct access by message
+    //  processing.  The other side will make sure to loop the blurb into the
+    //  query's dependencies for GC et al.
+    liveset.blurb = convBlurb;
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryConvMsgs', handle, {
+      localName: convBlurb._localName,
+    });
+    return liveset;
   },
 
   queryAllConversations: function(query, listener) {
@@ -709,6 +757,14 @@ console.log('API: dataMap has servers')
   },
 
   /**
+   * Create a new conversation.
+   * XXX eventually we want to be able to return a blurb directly, but that
+   *  needs to wait until we have the rest of the conversation queries dealt
+   *  with.  We will need to locally (on this side) allocate a name, and then
+   *  depend on the other side to create the full name, allocate us a local
+   *  name to correspond it, and send the local name back to us.  Rawclient
+   *  may also need to grow an immediate representation.
+   *
    * @args[
    *   @param[args @dict[
    *     @key[peeps]
@@ -719,11 +775,10 @@ console.log('API: dataMap has servers')
    */
   createConversation: function(args) {
     var outArgs = {
-      peeps: this._normalizePeepsToIds(args.peeps),
+      peeps: this._normalizeObjsToLocalNames(args.peeps),
       messageText: args.text,
     };
     this._send('createConversation', null, outArgs);
-    // XXX ideally we would want to return a blurb...
   },
 
   //////////////////////////////////////////////////////////////////////////////

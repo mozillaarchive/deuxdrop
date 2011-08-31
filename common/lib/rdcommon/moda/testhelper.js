@@ -379,14 +379,16 @@ var TestModaActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Queries
+  // Queries: Issue
+  //
+  // Instantiate a new live query.  We check the results of the query (once
+  //  concluded) to ensure that the results match the expected testing state.
+  //  Additionally, all future test-induced state changes we hear about will
+  //  have expectations generated for them.  Use `do_killQuery` when you are
+  //  done with the query.
 
   /**
-   * Instantiate a new live query.  We check the results of the query (once
-   *  concluded) to ensure that the results match the expected testing state.
-   *  Additionally, all future test-induced state changes we hear about will
-   *  have expectations generated for them.  Use `do_killQuery` when you are
-   *  done with the query.
+   * Issue and name a moda peeps query.
    */
   do_queryPeeps: function(thingName, query) {
     var lqt = this.T.thing('livequery', thingName), self = this;
@@ -407,11 +409,27 @@ var TestModaActorMixins = {
     return lqt;
   },
 
-  do_queryPeepConversations: function(modaPeep, query) {
+  /**
+   * Issue and name a moda conversations query on conversations involving a
+   *  given peep.  To make things realistic, you need to provide us with a query
+   *  that contains the peep in question so we can get the right reference.
+   */
+  do_queryPeepConversations: function(thingName, usingQuery, peepClient,
+                                      query)  {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    this.T.action(this, 'create', lqt, function() {
+    });
+
+    return lqt;
   },
 
   do_queryConversations: function(query) {
+
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Queries: Kill
 
   /**
    * Unsubscribe a live query and forget about it.  We structure our listeners
@@ -430,7 +448,10 @@ var TestModaActorMixins = {
    *  moda representation updates once the conversation creation process
    *  makes it back to us.
    */
-  do_createConversation: function(args) {
+  do_createConversation: function(tConv, tMsg, usingQuery, recipients) {
+  },
+
+  do_replyToConversationWith: function(tConv, tNewMsg) {
   },
 
   //////////////////////////////////////////////////////////////////////////////

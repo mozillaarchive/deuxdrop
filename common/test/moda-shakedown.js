@@ -140,6 +140,26 @@ TD.commonCase('moda basics', function(T) {
 
   // --- conversations
   T.group("A live-updating conversation query");
+  // - issue B and C live queries, both initially empty
+  var lqBconvBlurbs = moda_a.do_queryPeepConversations(
+                        'BconvBlurbs', lqAllPeeps, client_b, {by: 'any'});
+  var lqCconvBlurbs = moda_a.do_queryPeepConversations(
+                        'CconvBlurbs', lqAllPeeps, client_c, {by: 'any'});
+
+  // - create a conversation between A and B
+  var conv1 = moda_a.do_createConversation('conv1')
+
+  // the B query should now contain the conversation...
+
+  // - have B reply to the conversation
+  // the conversation blurb object unread count should have been increased
+
+  // - invite C to the conversation
+  // the conversation blurb should now know that C is involved in the conv
+  // the C query should now contain the conversation...
+
+  // - create a conversation between A,B,C
+  // both queries should now contain the conversation..
 
   T.group("cleanup");
 });

@@ -222,7 +222,7 @@
  * @typedef[QueryNamespace @oneof[
  *   NS_PEEPS
  *   NS_CONVBLURBS
- *   NS_CONVALL
+ *   NS_CONVMSGS
  *   NS_SERVERS
  * ]]
  * @typedef[QueryHandlesByNS @dictof[
@@ -245,7 +245,7 @@ define(
 
 const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
-      NS_CONVALL = exports.NS_CONVALL = 'convall',
+      NS_CONVMSGS = exports.NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = exports.NS_SERVERS = 'servers';
 
 /**
@@ -266,7 +266,7 @@ function makeEmptyListsByNS() {
   return {
     peeps: [],
     convblurbs: [],
-    convall: [],
+    convmsgs: [],
     servers: [],
   };
 };
@@ -275,7 +275,7 @@ function makeEmptyMapsByNS() {
   return {
     peeps: {},
     convblurbs: {},
-    convall: {},
+    convmsgs: {},
     servers: {},
   };
 };
@@ -372,6 +372,8 @@ function NotificationKing(store, _logger) {
   this._store = store;
 
   this._highPrefixNum = 0;
+
+  this._newishMessagesByConvId = {};
 
   // sources and their queries
   this._activeQuerySources = {};
@@ -484,6 +486,7 @@ NotificationKing.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Transmission to the bridge
+
   sendQueryResults: function(queryHandle) {
     var isInitial = (queryHandle.pending === PENDING_INITIAL);
     var msg = {
@@ -506,6 +509,19 @@ NotificationKing.prototype = {
 
     this._log.sendQueryResults(queryHandle.uniqueId, msg);
     queryHandle.owner.listener.send(msg);
+  },
+
+  /**
+   * Report that something bad happened vis-a-vis the query and it will never
+   *  be completed.  This function does its job then formulates an exception
+   *  and returns it so the caller can throw our result.
+   *
+   * Right now, we don't do any query communication about this, because the
+   *  exception should be converted into an exception and
+   */
+  badQuery: function(queryHandle, msg) {
+    this._log.badQuery(queryHandle.uniqueId, msg);
+    return new Error("Bad Query: " + msg);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -572,20 +588,72 @@ NotificationKing.prototype = {
   //  of messages into conversations is unique within our system.
 
   /**
-   * XXX speculative, probably should be nuked or moved
-   *
-   * Track a message that appears to be new but we won't know for sure until we
-   *  are done with our update phase (because it might be marked read by a later
+   * Notification of a message that is new to us for the purposes of
+   *  1) notifying existing queries and 2) tracking the new message for
+   *  user notification purposes.  For #2, we won't know for sure until we are
+   *  done with our update phase (because it might be marked read by a later
    *  replica block).
+   *
+   * We also need to deal with conversations becoming relevant to conversation
+   *  blurb queries.  This can be the case if:
+   * - We have a query over all conversations and this is a new conversation.
+   * - We have a query on conversations involving a specific peep and that peep
+   *    is joining a conversation.
+   * - We have either type of query but constrained to a subset and new
+   *    message(s) are changing the effective position of the conversation
+   *    in the global scheme of things so it falls in the range.
+   * Likewise, a conversation can become irrelevant to a blurb query if:
+   * - Position changes cause it to no longer be 'in view'.
+   *
+   * The conversation blurb cases are simplified by the fact that multiple
+   *  messages may be received in a batch and only the final position/state
+   *  really matters.  To that end, we do not figure conversation blurb
+   *  updates until the update phase has completed.
    */
-  trackNewishMessage: function(convId, msgIndex, msgData) {
-    return;
+  trackNewishMessage: function(convId, msgIndex, msgRec) {
     var newishForConv;
+    // - newness tracking
     if (!this._newishMessagesByConvId.hasOwnProperty(convId))
       newishForConv = this._newishMessagesByConvId[convId] = [];
     else
       newishForConv = this._newishMessagesByConvId[convId];
-    newishForConv.push({index: msgIndex, data: msgData});
+    newishForConv.push({index: msgIndex, rec: msgRec});
+
+    // - update NS_CONVMSGS queries
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      var queryHandles = querySource.queryHandlesByNS[NS_CONVMSGS];
+
+      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+        var queryHandle = queryHandles[iQuery];
+        if (queryHandle.queryDef.convId !== convId)
+          continue;
+
+        var outMessages;
+        switch (queryHandle.pending) {
+          case PENDING_INITIAL:
+            outMessages = queryHandle.dataMap[NS_CONVMSGS][convId].messages;
+            break;
+          case PENDING_NOTIF:
+            outMessages = queryHandle.dataDelta[NS_CONVMSGS][convId].messages;
+            break;
+          case PENDING_NONE:
+            queryHandle.dataDelta[NS_CONVMSGS][convId] = {
+              messages: (outMessages = []),
+            };
+            queryHandle.pending = PENDING_NOTIF;
+            querySource.pending.push(queryHandle);
+            break;
+        }
+
+        var clientData = queryHandle.membersbyFull[NS_CONVMSGS][convId];
+        // this is a synchronous operation that may introduce new peeps
+        //  dependencies that will be resolved by _fillOutQueryDepsAndSend.
+        var converted = this._store._convertConversationMessages(
+                          queryHandle, messages, clientData.deps);
+        outMessages.splice(outMessages.length, 0, converted);
+      }
+    }
   },
 
   /**
@@ -657,12 +725,13 @@ NotificationKing.prototype = {
    * - When we first connect to the server until we work through our backlog.
    */
   updatePhaseDoneReleaseNotifications: function() {
+    // - release pending queries
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
 
       while (querySource.pending.length) {
         var queryHandle = querySource.pending.pop();
-        this.sendQueryResults(queryHandle);
+        this._store._fillOutQueryDepsAndSend(queryHandle);
       }
     }
   },
@@ -796,6 +865,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       nsItemAdded: {clientDataCount: false, spliceIndex: false,
                     prePending: false},
       sendQueryResults: {msg: false},
+    },
+    errors: {
+      badQuery: {uniqueId: true, msg: false},
     },
     asyncJobs: {
       queryFill: {namespace: true, uniqueId: true},
