@@ -678,24 +678,41 @@ var TestClientActorMixins = {
     this.T.action(this._eRawClient, 'writes', tNewMsg, 'to', tConv,
                   ', sends it to their mailstore on', this._usingServer,
                   function() {
-      self._eRawClient.expect_allActionsProcessed();
-      self._usingServer.holdAllMailSenderMessages();
-      self._usingServer.expectPSMessageToServerFrom(tConv.sdata.fanoutServer,
-                                                    self);
+      self._expect_replyToConversation_replyPrep(tConv, tNewMsg);
 
       var messageText = fakeDataMaker.makeSubject();
       var msgInfo = self._rawClient.replyToConversation(tConv.data.convMeta,
                                                         messageText);
-      tNewMsg.data = {
-        type: 'message',
-        seq: self.RT.testDomainSeq++,
-        author: self,
-        text: messageText
-      };
-      tNewMsg.digitalName = msgInfo.msgNonce;
-      tConv.data.backlog.push(tNewMsg);
+
+      self._expect_replyToConversation_rawclient_to_server(
+        tConv, tNewMsg, msgInfo, messageText);
     });
 
+    this._expdo_replyToConversation_fanout_onwards(tConv, tNewMsg);
+  },
+  // helper for do_replyToConversationWith and the moda variant
+  _expect_replyToConversation_replyPrep: function(tConv, tNewMsg) {
+    this._eRawClient.expect_allActionsProcessed();
+    this._usingServer.holdAllMailSenderMessages();
+    this._usingServer.expectPSMessageToServerFrom(tConv.sdata.fanoutServer,
+                                                  this);
+  },
+  // helper for do_replyToConversationWith and the moda variant
+  _expect_replyToConversation_rawclient_to_server: function(tConv, tNewMsg,
+                                                            msgInfo,
+                                                            messageText) {
+    tNewMsg.data = {
+      type: 'message',
+      seq: this.RT.testDomainSeq++,
+      author: this,
+      text: messageText
+    };
+    tNewMsg.digitalName = msgInfo.msgNonce;
+    tConv.data.backlog.push(tNewMsg);
+  },
+  // helper for do_replyToConversationWith and the moda variant
+  _expdo_replyToConversation_fanout_onwards: function(tConv, tNewMsg) {
+    var self = this;
     // -- sender releases to fanout maildrop, gated for all recipients
     this.T.action('conversation hosting server', tConv.sdata.fanoutServer,
                   'receives the message and processes it', function() {
@@ -729,10 +746,7 @@ var TestClientActorMixins = {
     // -- author composes invite, mailstore receives, gated at author sender
     this.T.action(this._eRawClient, 'invites', invitedTestClient, 'to', tConv,
                   function() {
-      self._eRawClient.expect_allActionsProcessed();
-      self._usingServer.holdAllMailSenderMessages();
-      self._usingServer.expectPSMessageToServerFrom(
-        invitedTestClient._usingServer, self);
+      self._expect_inviteToConversation_invitePrep(invitedTestClient);
 
       var peepOIdent = self._peepsByName[invitedTestClient.__name];
       var peepPubring = $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(
@@ -740,17 +754,38 @@ var TestClientActorMixins = {
       var msgInfo = self._rawClient.inviteToConversation(tConv.data.convMeta,
                                            peepOIdent, peepPubring);
 
-      tJoin.data = {
-        type: 'join',
-        seq: self.RT.testDomainSeq++,
-        inviter: self,
-        who: invitedTestClient
-      };
-      tJoin.digitalName = msgInfo.msgNonce;
-      // note: we do not add this to the backlog until after the welcome message
-      //  is generated because that's how the server does it.
+      self._expect_inviteToConversation_rawclient_to_server(
+        invitedTestClient, tConv, tJoin, msgInfo);
     });
 
+    this._expdo_inviteToConversation_sender_onwards(
+      invitedTestClient, tConv, tJoin);
+  },
+  // helper for do_inviteToConversation and the moda variant
+  _expect_inviteToConversation_invitePrep: function(invitedTestClient) {
+    this._eRawClient.expect_allActionsProcessed();
+    this._usingServer.holdAllMailSenderMessages();
+    this._usingServer.expectPSMessageToServerFrom(
+      invitedTestClient._usingServer, this);
+  },
+  // helper for do_inviteToConversation and the moda variant
+  _expect_inviteToConversation_rawclient_to_server: function(invitedTestClient,
+                                                             tConv, tJoin,
+                                                             msgInfo) {
+    tJoin.data = {
+      type: 'join',
+      seq: this.RT.testDomainSeq++,
+      inviter: this,
+      who: invitedTestClient
+    };
+    tJoin.digitalName = msgInfo.msgNonce;
+    // note: we do not add this to the backlog until after the welcome message
+    //  is generated because that's how the server does it.
+  },
+  // helper for do_inviteToConversation and the moda variant
+  _expdo_inviteToConversation_sender_onwards: function(invitedTestClient,
+                                                       tConv, tJoin) {
+    var self = this;
     // -- author sender releases to invitee, fan-in processes, gated for resend
     this.T.action(this._usingServer, 'delivers join request to',
                   invitedTestClient._usingServer, function() {
@@ -779,7 +814,7 @@ var TestClientActorMixins = {
     });
 
     // -- convadd released to fan-out, processes, welcome and joins gated.
-    this.T.action(self._usingServer, 'delivers convadd request to',
+    this.T.action(this._usingServer, 'delivers convadd request to',
                   tConv.sdata.fanoutServer,
                   'resulting in a welcome and several join messages',
                   function() {

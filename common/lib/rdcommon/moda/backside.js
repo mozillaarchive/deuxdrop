@@ -189,7 +189,8 @@ ModaBackside.prototype = {
   _cmd_replyToConv: function(convLocalName, msgData) {
     var convMeta = this._notif.mapLocalNameToClientData(
                      this._querySource, NS_CONVBLURBS, convLocalName).data;
-    this._rawClient.replyToConversation(convMeta, msgData.messageText);
+    // returned for testing purposes (see createConversation)
+    return this._rawClient.replyToConversation(convMeta, msgData.messageText);
   },
 
   _cmd_inviteToConv: function(convLocalName, invData) {
@@ -202,7 +203,8 @@ ModaBackside.prototype = {
     peepOIdents.push(peepOurData.oident);
     peepPubrings.push();
 
-    this._rawClient.inviteToConversation(
+    // returned for testing purposes (see createConversation)
+    return this._rawClient.inviteToConversation(
       convMeta,
       peepOurData.oident,
       $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(

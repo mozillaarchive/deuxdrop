@@ -516,12 +516,72 @@ var TestModaActorMixins = {
 
     // - fanout server onwards
     this._testClient._expdo_createConversation_fanout_onwards(tConv);
+
+    // XXX do something to make sure we get the conversation blurb somehow,
+    //  or maybe leave it up to the reply guy if he provides us with a thing
   },
 
   do_replyToConversationWith: function(tConv, tNewMsg) {
+    var messageText;
+
+    var self = this;
+    // - moda api transmission to bridge
+    this.T.action('moda sends replyToConv to', this._eBridge, function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('replyToConv');
+
+      messageText = fakeDataMaker.makeSubject();
+      // XXX GET convBlurb
+      convBlurb.replyToConversation({
+        text: messageText,
+      });
+    });
+    // - bridge processes it
+    this.T.action(this._eBridge, 'processes createConversation, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._testClient._expect_replyToConversation_replyPrep(tConv, tNewMsg);
+
+      var msgInfo = self.releaseAndPeekAtModaCommand('replyToConv');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+
+      self._testClient._expect_replyToConversation_rawclient_to_server(
+        tConv, tNewMsg, msgInfo, messageText);
+    });
+
+    // - fanout server onwards
+    this._testClient._expdo_replyToConversation_fanout_onwards(tConv, tNewMsg);
   },
 
   do_inviteToConversation: function(usingPeepQuery, invitedTestClient, tConv) {
+    tConv.sdata.participants.push(invitedTestClient);
+    var tJoin = self.T.thing('message', 'join ' + invitedTestClient.__name);
+
+    // - moda api transmission to bridge
+    this.T.action('moda sends inviteToConv to', this._eBridge, function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('inviteToConv');
+
+      // XXX GET convBlurb
+      convBlurb.inviteToConversation({
+        peep: self._grabPeepFromQueryUsingClient(usingPeepQuery,
+                                                 invitedTestClient),
+      });
+    });
+    // - bridge processes it
+    this.T.action(this._eBridge, 'processes createConversation, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._testClient._expect_inviteToConversation_invitePrep(
+        invitedTestClient);
+
+      var msgInfo = self.releaseAndPeekAtModaCommand('inviteToConv');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+
+      self._testClient._expect_inviteToConversation_rawclient_to_server(
+        invitedTestClient, tConv, tJoin, msgInfo);
+    });
+
+    this._testClient._expdo_inviteToConversation_sender_onwards(
+      invitedTestClient, tConv, tJoin);
   },
 
   //////////////////////////////////////////////////////////////////////////////
