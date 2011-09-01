@@ -90,6 +90,11 @@ var $moda_api = require('rdcommon/moda/api'),
     $moda_backside = require('rdcommon/moda/backside'),
     $ls_tasks = require('rdcommon/rawclient/lstasks');
 
+var $testwrap_backside = require('rdcommon/moda/testwrapper');
+
+var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
+
+
 /**
  * Traverse `list`, using the "id" values of the items in the list as keys in
  *  the dictionary `obj` whose values are set to `value`.
@@ -440,6 +445,27 @@ var TestModaActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Query Lookup Helpers
+
+  _grabPeepFromQueryUsingClient: function(lqt, testClient) {
+    var items = lqt._liveset.items;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].selfPoco.displayName === testClient.__name)
+        return items[i];
+    }
+    throw new Error("Unable to map testClient '" + testClient.__name +
+                    + "' back to a PeepBlurb instsance.");
+  },
+
+  _mapPeepsFromQueryUsingClients: function(lqt, testClients) {
+    var peeps = [];
+    for (var i = 0; i < testClients.length; i++) {
+      this._grabPeepFromQueryUsingClient(lqt, testClients[i]);
+    }
+    return peeps;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Actions
 
   /**
@@ -447,15 +473,80 @@ var TestModaActorMixins = {
    *  conversation creation set of steps is run, plus we wait for the
    *  moda representation updates once the conversation creation process
    *  makes it back to us.
+   *
+   * Right now the moda conversation creation API returns nothing useful
+   *  to us about the conversation it created, and we won't hear about resulting
+   *  blurbs etc. until after the conversation has hit the servers and come
+   *  back to us.  We hackily address this
    */
-  do_createConversation: function(tConv, tMsg, usingQuery, recipients) {
+  do_createConversation: function(tConv, tMsg, usingPeepQuery, recipients) {
+    var youAndMeBoth = [this._testClient].concat(recipients);
+    tConv.sdata = {
+      participants: youAndMeBoth.concat(),
+      fanoutServer: this._testClient._usingServer,
+    };
+    tConv.data = null;
+
+    var messageText;
+
+    var self = this;
+    // - moda api transmission to bridge
+    this.T.action('moda sends createConveration to', this._eBridge, function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('createConversation');
+
+      messageText = fakeDataMaker.makeSubject();
+      self._bridge.createConversation({
+        peeps: self._mapPeepsFromQueryUsingClients(usingPeepQuery, recipients),
+        text: messageText,
+      });
+    });
+    // - bridge processes it
+    this.T.action(this._eBridge, 'processes createConversation, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._testClient._expect_createConversation_createPrep();
+
+      var convCreationInfo = self.releaseAndPeekAtModaCommand(
+                               'createConversation');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+
+      self._testClient._expect_createConversation_rawclient_to_server(
+        convCreationInfo, messageText, youAndMeBoth, tConv, tMsg);
+    });
+
+    // - fanout server onwards
+    this._testClient._expdo_createConversation_fanout_onwards(tConv);
   },
 
   do_replyToConversationWith: function(tConv, tNewMsg) {
   },
 
+  do_inviteToConversation: function(usingPeepQuery, invitedTestClient, tConv) {
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Notification Queries
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Holding: Backside Communications
+
+  holdAllModaCommands: function() {
+    if (!("__hold_all" in this._backside))
+      $testwrap_backside.modaBacksideWrap(this._backside);
+    this._backside.__hold_all(true);
+  },
+
+  expectModaCommand: function(cmd) {
+    this.expect_backsideReceived(cmd);
+  },
+
+  releaseAndPeekAtModaCommand: function(cmd) {
+    return this._backside.__release_and_peek__received(cmd);
+  },
+
+  stopHoldingAndAssertNoHeldModaCommands: function() {
+    this._backside.__hold_all(false);
+  },
 
   //////////////////////////////////////////////////////////////////////////////
 };
@@ -469,6 +560,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
     events: {
       queryCompleted: {name: true, keys: true},
+
+      // - wrapper holds for the backside
+      backsideReceived: {cmd: true},
     },
   },
 });

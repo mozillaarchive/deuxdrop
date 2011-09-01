@@ -147,18 +147,30 @@ TD.commonCase('moda basics', function(T) {
                         'CconvBlurbs', lqAllPeeps, client_c, {by: 'any'});
 
   // - create a conversation between A and B
-  var conv1 = moda_a.do_createConversation('conv1')
+  var tConv1 = T.thing('conversation', 'conv1'),
+      tConv1_msg1 = T.thing('message', 'c1:1:a');
+  moda_a.do_createConversation(tConv1, tConv1_msg1, lqAllPeeps, [client_b]);
 
   // the B query should now contain the conversation...
 
-  // - have B reply to the conversation
+  // - have B reply to the conversation (not using moda)
+  var tConv1_msg2 = T.thing('message', 'c1:2:b');
+  client_b.do_replyToConversationWith(tConv1, tConv1_msg2);
+
   // the conversation blurb object unread count should have been increased
 
-  // - invite C to the conversation
+  // - A invites C to the conversation (using moda)
+  moda_a.do_inviteToConversation(lqAllPeeps, client_c, tConv1);
+
   // the conversation blurb should now know that C is involved in the conv
   // the C query should now contain the conversation...
 
   // - create a conversation between A,B,C
+  var tConv2 = T.thing('conversation', 'conv2'),
+      tConv2_msg1 = T.thing('message', 'c2:1:a');
+  moda_a.do_createConversation(tConv2, tConv2_msg1, lqAppPeeps,
+                               [client_b, client_c]);
+
   // both queries should now contain the conversation..
 
   T.group("cleanup");

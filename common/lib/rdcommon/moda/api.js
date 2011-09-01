@@ -169,6 +169,44 @@ ConversationBlurb.prototype = {
   get numUnreadMessages() {
     return this._numUnread;
   },
+
+  /**
+   * Reply to this conversation with a new (text) message.
+   *
+   * @args[
+   *   @param[args @dict[
+   *     @param[text String]
+   *   ]]
+   * ]
+   */
+  replyToConversation: function(args) {
+    var msgData = {
+      messageText: args.text,
+    };
+    this._bridge.send('replyToConv', this._localName, msgData);
+  },
+
+  /**
+   * Invite a contact to join the conversation.  You cannot invite people to
+   *  join conversations who the user has not established a mutual contact
+   *  relationship with.
+   *
+   * @args[
+   *   @param[peep PeepBlurb]{
+   *     A `PeepBlurb` for which `PeepBlurb.isContact` is true.
+   *   }
+   * ]
+   */
+  inviteToConversation: function(peep) {
+    if (!peep || !(peep instanceof PeepBlurb))
+      throw new Error("You need to invite a PeepBlurb!");
+    if (!peep.isContact)
+      throw new Error("You can only invite contactss!");
+    var invData = {
+      peepName: peep._localName,
+    };
+    this._bridge.send('inviteToConv', this._localName, invData);
+  },
 };
 
 /**

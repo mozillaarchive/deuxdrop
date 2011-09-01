@@ -127,6 +127,18 @@ WrapMaker.prototype = {
 
       return holdQueue.length;
     };
+    // this is the same as the above but we don't return the queue length
+    this.protish["__release_and_peek_" + wrapName] = function() {
+      var holdKey = releaseKeyMaker.apply(this, arguments);
+      var holdPool = this[holdPoolAttr];
+      if (!holdPool.hasOwnProperty(holdKey))
+        throw new Error("No such pool queue");
+      var holdQueue = holdPool[holdKey];
+
+      var invocTup = holdQueue.shift();
+      // !!this is the bit that differs!!
+      return invocTup[0].apply(invocTup[1], invocTup[2]);
+    };
   },
 
   processWrapDef: function() {
@@ -187,8 +199,7 @@ WrapMaker.prototype = {
  * JS proxies would be another good way to accomplish this.
  *
  * @args[
- *   @param[wrapLogger]
- *   @param[args]
+ *   @param[wrapDef]
  * ]
  */
 exports.wrapClassGimmeFactory = function wrapConstructor(wrapDef) {
@@ -196,6 +207,14 @@ exports.wrapClassGimmeFactory = function wrapConstructor(wrapDef) {
   return maker.makeWrapFactory();
 };
 
+/**
+ * Make a function that will wrap an existing instance of `implConstructor`
+ *  so that it has our wrapper semantics.
+ *
+ * Our wrapping operates mix-in style; we set a bunch of attributes on the
+ *  instance variable without doing any clever prototype interposition or
+ *  the like.
+ */
 exports.makeInstanceWrapper = function makeInstanceWrapper(wrapDef) {
   var maker = new WrapMaker(wrapDef);
   return maker.makeInstanceWrapFunc();

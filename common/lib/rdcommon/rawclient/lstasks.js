@@ -330,7 +330,7 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
       };
 
       // - message notification
-      this.store._notif.trackNewishMessage(convMeta.id, msgNum, msgRec);
+      this.store._notif.trackNewishMessage(this.convMeta.id, msgNum, msgRec);
 
       var timestamp = this.fanoutEnv.receivedAt;
 

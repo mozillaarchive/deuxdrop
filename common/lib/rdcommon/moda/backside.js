@@ -53,7 +53,7 @@ define(
     'q',
     'rdcommon/log',
     'rdcommon/serverlist',
-    'rdcommon/identities/pubident',
+    'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
     'module',
     'exports'
   ],
@@ -61,7 +61,7 @@ define(
     $Q,
     $log,
     $serverlist,
-    $pubident,
+    $pubident, $pubring,
     $module,
     exports
   ) {
@@ -161,6 +161,52 @@ ModaBackside.prototype = {
       //  and unit tests will see it and logging will detect the exception,
       //  etc.)
     }
+
+    return rval;
+  },
+
+  _cmd_createConversation: function(_ignored, convData) {
+    var peepOIdents = [], peepPubrings = [];
+    for (var iPeep = 0; iPeep < convData.peeps.length; iPeep++) {
+      var peepOurData = this._notif.mapLocalNameToClientData(
+                             this._querySource, NS_PEEPS,
+                             convData.peeps[iPeep]).data;
+      if (!peepOurData.oident)
+        throw new Error("Impossible to invite a non-contact peep to a conv");
+      peepOIdents.push(peepOurData.oident);
+      peepPubrings.push($pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                          peepOurData.oident));
+    }
+    var convCreationInfo = this._rawClient.createConversation(
+                             peepOIdents, peepPubrings, convData.messageText);
+
+    // nb: we are returning this for testing purposes; we return this so that
+    //  _received can in turn return it, allowing a testwrapper-interposed
+    //  wrapper to get the return value of the release.
+    return convCreationInfo;
+  },
+
+  _cmd_replyToConv: function(convLocalName, msgData) {
+    var convMeta = this._notif.mapLocalNameToClientData(
+                     this._querySource, NS_CONVBLURBS, convLocalName).data;
+    this._rawClient.replyToConversation(convMeta, msgData.messageText);
+  },
+
+  _cmd_inviteToConv: function(convLocalName, invData) {
+    var convMeta = this._notif.mapLocalNameToClientData(
+                     this._querySource, NS_CONVBLURBS, convLocalName).data;
+    var peepOurData = this._notif.mapLocalNameToClientData(
+                           this._querySource, NS_PEEPS, invData.peepName).data;
+    if (!peepOurData.oident)
+      throw new Error("Impossible to invite a non-contact peep to a conv");
+    peepOIdents.push(peepOurData.oident);
+    peepPubrings.push();
+
+    this._rawClient.inviteToConversation(
+      convMeta,
+      peepOurData.oident,
+      $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+        peepOurData.oident));
   },
 
   /**

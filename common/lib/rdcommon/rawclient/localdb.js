@@ -550,39 +550,33 @@ LocalStore.prototype = {
    */
   _updateConvIndices: function(convId, convPinned, authorRootKey, recipRootKeys,
                                timestamp) {
-    var promises = [],
+    var updates = [],
         authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
     // - global conversation list
-    promises.push(this._db.updateIndexValue(
-      $lss.TBL_CONV_DATA, $lss.IDX_ALL_CONVS, '', convId, timestamp));
+    updates.push([$lss.IDX_ALL_CONVS, '', convId, timestamp]);
     // - global pinned conversation list
     if (convPinned)
-      promises.push(this._db.updateIndexValue(
-        $lss.TBL_CONV_DATA, $lss.IDX_ALL_CONVS, PINNED, convId, timestamp));
+      updates.push([$lss.IDX_ALL_CONVS, PINNED, convId, timestamp]);
 
     // - per-peep write/any involvement for the author
-    promises.push(this._db.updateIndexValue(
-      $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
-      convId, timestamp));
-    promises.push(this._db.updateIndexValue(
-      $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
-      convId, timestamp));
+    updates.push([$lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
+                  convId, timestamp]);
+    updates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
+                  convId, timestamp]);
 
     // - per-peep (maybe recip)/any involvement for the recipients
     for (var iRecip = 0; iRecip < recipRootKeys.length; iRecip++) {
       var rootKey = recipRootKeys[iRecip];
       // - boost any involvement
-      promises.push(this._db.updateIndexValue(
-        $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT,
-        rootKey, convId, timestamp));
+      updates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, rootKey,
+                    convId, timestamp]);
       // - boost recip involvement
       if (authorIsOurUser)
-        promises.push(this._db.updateIndexValue(
-          $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
-          rootKey, convId, timestamp));
+        updates.push([$lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT, rootKey,
+                      convId, timestamp]);
     }
 
-    return $Q.all(promises);
+    return this._db.updateMultipleIndexValues($lss.TBL_CONV_DATA, updates);
   },
 
   //////////////////////////////////////////////////////////////////////////////

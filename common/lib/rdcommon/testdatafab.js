@@ -180,4 +180,15 @@ DataFabricator.prototype = {
   },
 };
 
+var gFakeDataMaker = null;
+/**
+ * Return a single fake data maker so that different test helpers can allocate
+ *  fake data without producing duplicate strings, thereby confusing people.
+ */
+exports.gimmeSingletonFakeDataMaker = function() {
+  if (!gFakeDataMaker)
+    gFakeDataMaker = new DataFabricator();
+  return gFakeDataMaker;
+};
+
 }); // end define

@@ -61,6 +61,13 @@
  *   }
  * ]]
  *
+ * @typedef[IndexValues @listof[@list[
+ *   @param[indexName]
+ *   @param[indexParam]
+ *   @param[objectName]
+ *   @param[newValue]
+ * ]]]
+ *
  * @typedef[LocallyNamedClientData @dict[
  *   @key[localName String]{
  *     The name of the object as known by the moda bridge instance.
@@ -80,10 +87,7 @@
  *     - Peeps: Other-person ident, if available; self ident.
  *     - Conversation: Conversation meta structure.
  *   }
- *   @key[indexValues #:optional @dictof[
- *     @key[indexName]
- *     @value[indexValue]
- *   ]]{
+ *   @key[indexValues #:optional IndexValues]{
  *     Present only when there is a query on an index for this namespace
  *     (there may not be for lookups explicitly by full name).  Only contains
  *     entries for actively queried indices.
@@ -581,6 +585,19 @@ NotificationKing.prototype = {
     throw new Error("No such local name '" + localName + "'");
   },
 
+  mapLocalNameToClientData: function(querySource, namespace, localName) {
+    var queryHandles = querySource.queryHandlesByNS[namespace];
+    for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+      var queryHandle = queryHandles[iQuery];
+      var nsMembers = queryHandle.membersByLocal[namespace];
+      if (nsMembers.hasOwnProperty(localName)) {
+        return nsMembers[localName];
+      }
+    }
+    throw new Error("No such local name '" + localName + "'");
+  },
+
+
   //////////////////////////////////////////////////////////////////////////////
   // Message Notifications from LocalStore
   //
@@ -740,7 +757,8 @@ NotificationKing.prototype = {
    * A completely new-to-us peep/whatever has come into existence.  The new
    *  thing needs to be checked for eligible sets and update any live queries.
    *
-   * XXX make sure deps get entangled
+   * XXX make sure deps get entangled.  (This is not a problem yet since we are
+   *  peeps only and they lack deps.)
    *
    * @args[
    *   @param[namespace]
@@ -837,7 +855,8 @@ NotificationKing.prototype = {
    */
   namespaceItemModified: function(namespace, name,
                                   baseCells, mutatedCells,
-                                  indexValuesModified) {
+                                  indexValuesUpdated,
+                                  indexValuesMaximized) {
 
   },
   /**

@@ -89,7 +89,7 @@ var gClobberNamespace = {
   senderApi: $testwrap_sender,
 };
 
-var fakeDataMaker = new $testdata.DataFabricator();
+var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 
 function expectAuthconnFromTo(source, target, endpoint) {
   // nothing to do in self case.
@@ -569,7 +569,9 @@ var TestClientActorMixins = {
     this.T.action(this._eRawClient,
         'creates conversation, sends it to their mailstore on', eServer,
         function() {
-      var backlog = [], recipTestClient, iRecip;
+      self._expect_createConversation_createPrep();
+
+      var recipTestClient, iRecip;
       for (iRecip = 0; iRecip < recipients.length; iRecip++) {
         recipTestClient = recipients[iRecip];
         var othIdent = self._peepsByName[recipTestClient.__name];
@@ -579,10 +581,6 @@ var TestClientActorMixins = {
         peepPubrings.push(othPubring);
       }
 
-      self._eRawClient.expect_allActionsProcessed();
-      eServer.holdAllMailSenderMessages();
-      eServer.expectPSMessageToUsFrom(self);
-
       var messageText = fakeDataMaker.makeSubject();
 
       // (we have to do this before the expectations because we don't know what
@@ -590,42 +588,67 @@ var TestClientActorMixins = {
       var convCreationInfo = self._rawClient.createConversation(
                    peepOIdents, peepPubrings, messageText);
 
-      for (iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
-        recipTestClient = youAndMeBoth[iRecip];
-
-        var tJoin = self.T.thing('message', 'join ' + recipTestClient.__name);
-        tJoin.data = {
-          type: 'join',
-          seq: self.RT.testDomainSeq++,
-          inviter: self,
-          who: recipTestClient
-        };
-        tJoin.digitalName = convCreationInfo.joinNonces[iRecip];
-        backlog.push(tJoin);
-      }
-
-      tMsg.data = {
-        type: 'message',
-        seq: self.RT.testDomainSeq++,
-        author: self,
-        text: messageText
-      };
-      backlog.push(tMsg);
-
-      tConv.data = {
-        id: convCreationInfo.convId,
-        seq: self.RT.testDomainSeq++,
-        backlog: backlog,
-        // XXX this is identical across all participants, but this is pretty
-        //  sketchy for us to be extracting and storing.
-        convMeta: convCreationInfo.convMeta,
-        participants: youAndMeBoth.concat(),
-      };
-
-      tConv.digitalName = convCreationInfo.convId;
-      tMsg.digitalName = convCreationInfo.msgNonce;
+      self._expect_createConversation_rawclient_to_server(
+        convCreationInfo, messageText, youAndMeBoth, tConv, tMsg);
     });
+    this._expdo_createConversation_fanout_onwards(tConv);
+  },
+
+  // helper for do_startConversation and the moda variant
+  _expect_createConversation_createPrep: function() {
+    var eServer = this._usingServer;
+    this._eRawClient.expect_allActionsProcessed();
+    eServer.holdAllMailSenderMessages();
+    eServer.expectPSMessageToUsFrom(this);
+  },
+
+  // helper for do_startConversation and the moda variant
+  _expect_createConversation_rawclient_to_server: function(convCreationInfo,
+                                                           messageText,
+                                                           youAndMeBoth,
+                                                           tConv, tMsg) {
+    var backlog = [];
+    for (var iRecip = 0; iRecip < youAndMeBoth.length; iRecip++) {
+      var recipTestClient = youAndMeBoth[iRecip];
+
+      var tJoin = this.T.thing('message', 'join ' + recipTestClient.__name);
+      tJoin.data = {
+        type: 'join',
+        seq: this.RT.testDomainSeq++,
+        inviter: this,
+        who: recipTestClient
+      };
+      tJoin.digitalName = convCreationInfo.joinNonces[iRecip];
+      backlog.push(tJoin);
+    }
+
+    tMsg.data = {
+      type: 'message',
+      seq: this.RT.testDomainSeq++,
+      author: this,
+      text: messageText
+    };
+    backlog.push(tMsg);
+
+    tConv.data = {
+      id: convCreationInfo.convId,
+      seq: this.RT.testDomainSeq++,
+      backlog: backlog,
+      // XXX this is identical across all participants, but this is pretty
+      //  sketchy for us to be extracting and storing.
+      convMeta: convCreationInfo.convMeta,
+      participants: youAndMeBoth.concat(),
+    };
+
+    tConv.digitalName = convCreationInfo.convId;
+    tMsg.digitalName = convCreationInfo.msgNonce;
+  },
+
+  // helper for do_startConversation and the moda variant
+  _expdo_createConversation_fanout_onwards: function(tConv) {
+    var eServer = this._usingServer;
     // - the maildrop processes it
+    var self = this;
     this.T.action(this._usingServer,
         'maildrop processes the new conversation, generating welcome messages',
         function() {
