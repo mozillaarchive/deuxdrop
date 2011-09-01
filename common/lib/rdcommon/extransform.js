@@ -88,8 +88,9 @@ function uneval(x) {
 function simplifyFilename(filename) {
   if (!filename)
     return filename;
-  // jetpack fighter...
-  if (filename.length > 64) {
+  // simple hack to eliminate jetpack ridiculousness where we have
+  //  "LONGPATH -> LONGPATH -> LONGPATH -> actualThing.js"
+  if (filename.length > 96) {
     var lastSlash = filename.lastIndexOf('/');
     if (lastSlash !== -1)
       return filename.substring(lastSlash+1);

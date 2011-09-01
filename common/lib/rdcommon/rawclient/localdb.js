@@ -782,8 +782,10 @@ LocalStore.prototype = {
     var blurbRep = {
       ourPoco: ourPoco,
       selfPoco: selfPoco,
-      numUnread: mutatedCells['d:nunread'] || cells['d:nunread'],
-      numConvs: mutatedCells['d:nconvs'] || cells['d:nconvs'],
+      numUnread: (mutatedCells.hasOwnProperty('d:nunread') ?
+                    mutatedCells['d:nunread'] : cells['d:nunread']),
+      numConvs: (mutatedCells.hasOwnProperty('d:nconvs') ?
+                   mutatedCells['d:nconvs'] : cells['d:nconvs']),
     };
 
     // XXX either we should not be fully populating or item added should
@@ -821,7 +823,7 @@ LocalStore.prototype = {
         // (_deferringPeepQueryResolve creates speculative entries and we are
         //  the logic that actually fulfills them.)
         if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle,
-                                                          NS_CONVBLURBS,
+                                                          NS_PEEPS,
                                                           peepRootKey))) {
           if (clientData.data) {
             if (usingIndex) {

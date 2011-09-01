@@ -150,6 +150,12 @@ ModaBackside.prototype = {
    *  named like "_cmd_COMMANDNAME".
    */
   _received: function(boxedObj) {
+    // XXX this is indirection for unit testing purposes because _received gets
+    //  wrapped directly.  I feel bad about this, I swear.
+    return this._handle(boxedObj);
+  },
+
+  _handle: function(boxedObj) {
     var cmdFunc = this['_cmd_' + boxedObj.cmd];
     var rval = this._log.handle(boxedObj.cmd, this, cmdFunc, boxedObj.name,
                                 boxedObj.payload);

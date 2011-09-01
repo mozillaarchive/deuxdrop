@@ -565,8 +565,11 @@ NotificationKing.prototype = {
         clientData = nsMembers[fullId];
         clientData.count++;
         writeQueryHandle.membersByLocal[namespace][clientData.localName] =
-          writeQueryHandle.membersbyFull[namespace][clientData.fullName] =
+          writeQueryHandle.membersByFull[namespace][clientData.fullName] =
             clientData;
+        // put a null in the data-map so the client knows to grab the value
+        //  from its cache.
+        writeQueryHandle.dataMap[namespace][clientData.localName] = null;
         return clientData;
       }
     }
@@ -663,7 +666,7 @@ NotificationKing.prototype = {
             break;
         }
 
-        var clientData = queryHandle.membersbyFull[NS_CONVMSGS][convId];
+        var clientData = queryHandle.membersByFull[NS_CONVMSGS][convId];
         // this is a synchronous operation that may introduce new peeps
         //  dependencies that will be resolved by _fillOutQueryDepsAndSend.
         var converted = this._store._convertConversationMessages(

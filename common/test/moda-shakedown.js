@@ -168,7 +168,7 @@ TD.commonCase('moda basics', function(T) {
   // - create a conversation between A,B,C
   var tConv2 = T.thing('conversation', 'conv2'),
       tConv2_msg1 = T.thing('message', 'c2:1:a');
-  moda_a.do_createConversation(tConv2, tConv2_msg1, lqAppPeeps,
+  moda_a.do_createConversation(tConv2, tConv2_msg1, lqAllPeeps,
                                [client_b, client_c]);
 
   // both queries should now contain the conversation..

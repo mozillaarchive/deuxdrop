@@ -112,8 +112,9 @@ exports.TimestampNotInRangeAuthorizationError =
  * - Malicious implementation probing us for weaknesses.
  * - Malicious implementation trying to waste our resources.
  */
-var MalformedPayloadError = exports.MalformedPayloadError = function() {
+var MalformedPayloadError = exports.MalformedPayloadError = function(msg) {
   Error.captureStackTrace(this, MalformedPayloadError);
+  this.message = msg;
 };
 MalformedPayloadError.prototype = {
   __proto__: Error.prototype,
@@ -121,8 +122,9 @@ MalformedPayloadError.prototype = {
 };
 
 var MalformedOrReplayPayloadError = exports.MalformedOrReplayPayloadError =
-      function() {
+      function(msg) {
   Error.captureStackTrace(this, MalformedOrReplayPayloadError);
+  this.message = msg;
 };
 MalformedOrReplayPayloadError.prototype = {
   __proto__: Error.prototype,
@@ -137,8 +139,9 @@ MalformedOrReplayPayloadError.prototype = {
  *  is advisable to make a note of the failure so system flaws/failures can
  *  be addressed that might be causing redundant operations to be attempted.
  */
-var AlreadyHappenedError = exports.AlreadyHappenedError = function(mesage) {
+var AlreadyHappenedError = exports.AlreadyHappenedError = function(msg) {
   Error.captureStackTrace(this, AlreadyHappenedError);
+  this.message = msg;
 };
 AlreadyHappenedError.prototype = {
   __proto__: Error.prototype,
@@ -181,8 +184,9 @@ MissingPrereqFatalError.prototype = {
  *  global state of the system and be able to figure out when they should
  *  entirely give up on a task.
  */
-var MaybeLaterError = exports.MaybeLaterError = function() {
+var MaybeLaterError = exports.MaybeLaterError = function(message) {
   Error.captureStackTrace(this, MaybeLaterError);
+  this.message = message;
 };
 MaybeLaterError.prototype = {
   __proto__: Error.prototype,
@@ -199,8 +203,9 @@ MaybeLaterError.prototype = {
  *  no outages and this is just an erroneous failure.
  */
 var ApparentOutageMaybeLaterError = exports.ApparentOutageMaybeLaterError =
-  function() {
+  function(message) {
   Error.captureStackTrace(this, ApparentOutageMaybeLaterError);
+  this.message = message;
 };
 ApparentOutageMaybeLaterError.prototype = {
   __proto__: MaybeLaterError.prototype,
@@ -216,8 +221,9 @@ ApparentOutageMaybeLaterError.prototype = {
  *  that our pre-requisite is dead and in a partial state.
  */
 var ApparentRaceMaybeLaterError = exports.ApparentRaceMaybeLaterError =
-  function() {
+  function(message) {
   Error.captureStackTrace(this, ApparentRaceMaybeLaterError);
+  this.message = message;
 };
 ApparentRaceMaybeLaterError.prototype = {
   __proto__: MaybeLaterError.prototype,
@@ -229,8 +235,9 @@ ApparentRaceMaybeLaterError.prototype = {
  *  trying to do it.
  */
 var UnauthorizedUserError = exports.UnauthorizedUserError =
-  function() {
+  function(message) {
   Error.captureStackTrace(this, UnauthorizedUserError);
+  this.message = message;
 };
 UnauthorizedUserError.prototype = {
   __proto__: Error.prototype,
@@ -258,8 +265,9 @@ UnauthorizedUserError.prototype = {
  *    expect a whole slew of other errors of some other category.
  */
 var UnauthorizedUserDataLeakError = exports.UnauthorizedUserDataLeakError =
-  function() {
+  function(message) {
   Error.captureStackTrace(this, UnauthorizedUserDataLeakError);
+  this.message = message;
 };
 UnauthorizedUserDataLeakError.prototype = {
   __proto__: UnauthorizedUserError.prototype,
@@ -273,8 +281,9 @@ UnauthorizedUserDataLeakError.prototype = {
  *  don't want them to be able to survey information out of us.
  */
 var BadNameError = exports.BadNameError =
-  function() {
+  function(message) {
   Error.captureStackTrace(this, BadNameError);
+  this.message = message;
 };
 BadNameError.prototype = {
   __proto__: Error.prototype,

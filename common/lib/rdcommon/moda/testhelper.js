@@ -90,7 +90,7 @@ var $moda_api = require('rdcommon/moda/api'),
     $moda_backside = require('rdcommon/moda/backside'),
     $ls_tasks = require('rdcommon/rawclient/lstasks');
 
-var $testwrap_backside = require('rdcommon/moda/testwrapper');
+var $testwrap_backside = require('rdcommon/moda/testwrappers');
 
 var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 
@@ -200,15 +200,14 @@ var TestModaActorMixins = {
 
     self._dynamicPeepQueries = [];
 
-    self.T.convenienceSetup(self, 'initialize', function() {
+    self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
+
+    self.T.convenienceSetup(self, 'initialize', self._eBackside, function() {
       self._testClient._modaActors.push(self);
 
       // - create our self-corresponding logger, it will automatically hookup
       self._logger = LOGFAB.testModa(self, self._testClient._logger,
                                      self.__name);
-
-      self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
-      self.RT.reportActiveActorThisStep(self._eBackside);
 
       self._notif = self._testClient._rawClient.store._notif;
 
@@ -460,7 +459,7 @@ var TestModaActorMixins = {
   _mapPeepsFromQueryUsingClients: function(lqt, testClients) {
     var peeps = [];
     for (var i = 0; i < testClients.length; i++) {
-      this._grabPeepFromQueryUsingClient(lqt, testClients[i]);
+      peeps.push(this._grabPeepFromQueryUsingClient(lqt, testClients[i]));
     }
     return peeps;
   },
@@ -491,7 +490,8 @@ var TestModaActorMixins = {
 
     var self = this;
     // - moda api transmission to bridge
-    this.T.action('moda sends createConveration to', this._eBridge, function() {
+    this.T.action('moda sends createConversation to', this._eBackside,
+                  function() {
       self.holdAllModaCommands();
       self.expectModaCommand('createConversation');
 
@@ -502,7 +502,7 @@ var TestModaActorMixins = {
       });
     });
     // - bridge processes it
-    this.T.action(this._eBridge, 'processes createConversation, invokes on',
+    this.T.action(this._eBackside, 'processes createConversation, invokes on',
                   this._testClient._eRawClient, function() {
       self._testClient._expect_createConversation_createPrep();
 
@@ -526,7 +526,7 @@ var TestModaActorMixins = {
 
     var self = this;
     // - moda api transmission to bridge
-    this.T.action('moda sends replyToConv to', this._eBridge, function() {
+    this.T.action('moda sends replyToConv to', this._eBackside, function() {
       self.holdAllModaCommands();
       self.expectModaCommand('replyToConv');
 
@@ -537,7 +537,7 @@ var TestModaActorMixins = {
       });
     });
     // - bridge processes it
-    this.T.action(this._eBridge, 'processes createConversation, invokes on',
+    this.T.action(this._eBackside, 'processes createConversation, invokes on',
                   this._testClient._eRawClient, function() {
       self._testClient._expect_replyToConversation_replyPrep(tConv, tNewMsg);
 
@@ -554,10 +554,10 @@ var TestModaActorMixins = {
 
   do_inviteToConversation: function(usingPeepQuery, invitedTestClient, tConv) {
     tConv.sdata.participants.push(invitedTestClient);
-    var tJoin = self.T.thing('message', 'join ' + invitedTestClient.__name);
+    var tJoin = this.T.thing('message', 'join ' + invitedTestClient.__name);
 
     // - moda api transmission to bridge
-    this.T.action('moda sends inviteToConv to', this._eBridge, function() {
+    this.T.action('moda sends inviteToConv to', this._eBackside, function() {
       self.holdAllModaCommands();
       self.expectModaCommand('inviteToConv');
 
@@ -568,7 +568,7 @@ var TestModaActorMixins = {
       });
     });
     // - bridge processes it
-    this.T.action(this._eBridge, 'processes createConversation, invokes on',
+    this.T.action(this._eBackside, 'processes createConversation, invokes on',
                   this._testClient._eRawClient, function() {
       self._testClient._expect_inviteToConversation_invitePrep(
         invitedTestClient);
@@ -592,16 +592,17 @@ var TestModaActorMixins = {
 
   holdAllModaCommands: function() {
     if (!("__hold_all" in this._backside))
-      $testwrap_backside.modaBacksideWrap(this._backside);
+      $testwrap_backside.modaBacksideWrap(this._backside, this._logger);
     this._backside.__hold_all(true);
   },
 
   expectModaCommand: function(cmd) {
+    this.RT.reportActiveActorThisStep(this);
     this.expect_backsideReceived(cmd);
   },
 
   releaseAndPeekAtModaCommand: function(cmd) {
-    return this._backside.__release_and_peek__received(cmd);
+    return this._backside.__release_and_peek__handle(cmd);
   },
 
   stopHoldingAndAssertNoHeldModaCommands: function() {

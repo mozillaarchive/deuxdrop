@@ -61,13 +61,13 @@ define(
 exports.modaBacksideWrap = $testwrapmaker.makeInstanceWrapper({
   implConstructor: $moda_backside.ModaBackside,
   holders: {
-    _received: function(boxedObj) {
+    _handle: function(boxedObj) {
       this.__wraplog.backsideReceived(boxedObj.cmd);
       return boxedObj.cmd;
     },
   },
   releasers: {
-    _received: function(cmd) {
+    _handle: function(cmd) {
       return cmd;
     }
   },
