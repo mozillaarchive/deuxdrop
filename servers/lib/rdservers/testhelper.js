@@ -909,6 +909,7 @@ var TestClientActorMixins = {
       paramClient._eRawClient.expect_replicaCaughtUp();
 
       paramClient._dynamicNotifyModaActors('receiveConvWelcome', tConv);
+      paramClient._dynamicNotifyModaActors('updatePhaseComplete');
 
       self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
@@ -957,6 +958,7 @@ var TestClientActorMixins = {
       paramClient._eRawClient.expect_replicaCaughtUp();
 
       paramClient._dynamicNotifyModaActors('receiveConvMessage', tConv, tMsg);
+      paramClient._dynamicNotifyModaActors('updatePhaseComplete');
 
       self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });

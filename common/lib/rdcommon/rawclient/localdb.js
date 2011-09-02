@@ -514,7 +514,7 @@ LocalStore.prototype = {
   queryAndWatchPeepConversationBlurbs: function(queryHandle, peepRootKey) {
     // - pick the index to use
     var index;
-    switch (queryHandle.queryDef.involvement) {
+    switch (queryHandle.queryDef.by) {
       case 'any':
         index = $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT;
         break;
@@ -525,7 +525,8 @@ LocalStore.prototype = {
         index = $lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT;
         break;
       default:
-        throw new Error("bad involvement type: '" + query.involvement + "'");
+        throw new Error("bad ordering ('by'): '" +
+                        queryHandle.queryDef.by + "'");
     }
     queryHandle.index = index;
 

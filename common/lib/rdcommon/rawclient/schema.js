@@ -92,8 +92,9 @@ exports.IDX_PEEP_CONTACT_NAME = 'idxPeepName';
  */
 exports.IDX_PEEP_WRITE_INVOLVEMENT = "idxPeepWrite";
 /**
- * Peeps by recency of messages the user have written to conversations they are
- *  in.
+ * Peeps by recency of messages our user has written to conversations they are
+ *  in.  If someone who is not our user writes a message to a conversation,
+ *  it only affects 'any', but does not affect 'recip'.
  *
  * Insertion happens similarly to `IDX_PEEP_WRITE_INVOLVEMENT`, but not on
  *  contact addition.

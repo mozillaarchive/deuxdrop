@@ -181,7 +181,7 @@ ModaBackside.prototype = {
         throw new Error("Impossible to invite a non-contact peep to a conv");
       peepOIdents.push(peepOurData.oident);
       peepPubrings.push($pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-                          peepOurData.oident));
+                          peepOurData.sident));
     }
     var convCreationInfo = this._rawClient.createConversation(
                              peepOIdents, peepPubrings, convData.messageText);
@@ -214,7 +214,7 @@ ModaBackside.prototype = {
       convMeta,
       peepOurData.oident,
       $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-        peepOurData.oident));
+        peepOurData.sident));
   },
 
   /**

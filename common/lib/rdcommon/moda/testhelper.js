@@ -75,6 +75,53 @@
  *  non-UI logic thread with gated notifications to the UI thread, then
  *  introduce an additional step where we release the notifications to the UI
  *  thread.
+ *
+ * @typedef[DynamicContactInfo @dict[
+ *   @key[rootKey]
+ *   @key[name String]{
+ *     The contact's name which is the testClient's name. (So, usually 'A', 'B',
+ *     'C', etc.)
+ *   }
+ *   @key[involvedConvs @listof[DynamicConvInfo]]
+ *
+ *   @group["Peep Indices"
+ *     @key[any TestDomainSeq]
+ *     @key[write TestDomainSeq]
+ *     @key[recip TestDomainSeq]
+ *   ]
+ * ]]{
+ *   Stores all our information about the contact from the perspective of the
+ *   owning moda instance.
+ * }
+ *
+ * @typedef[DynamicConvInfo @dict[
+ *   @key[tConv ThingProto]{
+ *     The 'thing' encapsulating the conversation.  Keep in mind the thing has
+ *     a 'global' perspective (as opposed to our moda client instance
+ *     perspective.)
+ *   }
+ *   @key[highestMsgSeen Number]{
+ *     The index of the last message in `tConv`'s backlog that we have seen.
+ *     This allows us to reuse backlog to get at the message representations
+ *     without assuming we have seen all the messages in the backlog.
+ *   }
+ *   @key[highestMsgReported Number]{
+ *     The highest message number that has been reported to convmsgs queries.
+ *   }
+ *   @key[peepSeqsByName @dictof[
+ *     @key["peep name"]
+ *     @value[@dict[
+ *       @key[any TestDomainSeq]
+ *       @key[write TestDomainSeq]
+ *       @key[recip TestDomainSeq]
+ *     ]]
+ *   ]]
+ *   @key[participantInfos @listof[DynamicContactInfo]]
+ * ]]{
+ *   Information about conversations, created as the moda testhelper hears about
+ *   them via __receiveConvWelcome.  They become associated with contacts as
+ *   we hear the join messages.
+ * }
  **/
 
 define(function(require, exports, $module) {
@@ -137,6 +184,9 @@ var DeltaHelper = exports.DeltaHelper = {
     },
   },
 
+  _PEEPCONV_QUERY_KEYFUNC: function(x) { return x.tConv.digitalName; },
+  _THINGMSG_KEYFUNC: function(x) { return x.digitalName; },
+
   /**
    * Generate the delta rep for the initial result set of a peep query.
    */
@@ -179,6 +229,109 @@ var DeltaHelper = exports.DeltaHelper = {
 
     return delta;
   },
+
+  /**
+   * Check whether a new message has affected the ordering of a peep query and
+   *  generate a delta if so.
+   */
+  peepExpMaybeDelta_newmsg: function(lqt, modifiedCinfo) {
+    var cinfos = lqt._cinfos;
+    var preIndex = cinfos.indexOf(modifiedCinfo);
+    cinfos.sort(lqt._sorter);
+    // no change in position, no delta.
+    if (cinfos.indexOf(modifiedCinfo) === preIndex)
+      return null;
+
+    var delta = this.makeEmptyDelta();
+    // mark the moving guy in the pre
+    delta.preAnno[modifiedCinfo.rootKey] = 0;
+    // fill in the new order
+    var rootKeys = cinfos.map(this._PEEP_QUERY_KEYFUNC);
+    markListIntoObj(rootKeys, delta.state, null);
+    // mark the moving guy in the post too
+    delta.postAnno[modifiedCinfo.rootKey] = 0;
+
+    return delta;
+  },
+
+  /**
+   * Generate the delta rep for the inital result set of a conversations-by-peep
+   *  query.
+   */
+  peepConvsExpDelta_base: function(lqt, cinfo, allConvs, queryBy) {
+    var delta = this.makeEmptyDelta();
+
+    // filter conversations to ones actually involving the given cinfo
+    lqt._convs = allConvs.filter(function(convInfo) {
+      return convInfo.participantInfos.indexOf(cinfo) !== -1;
+    });
+    lqt._sorter = function(a, b) {
+      var va = a.peepSeqsByName[cinfo.name][queryBy],
+          vb = b.peepSeqsByName[cinfo.name][queryBy];
+      return va - cb;
+    };
+    lqt._convs.sort(lqt._sorter);
+
+    var convIds = lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC);
+    markListIntoObj(convIds, delta.state, null);
+    markListIntoObj(convIds, delta.postAnno, 1);
+
+    return delta;
+  },
+
+  /**
+   * Generate the delta rep for a peep being added to a conversation for a
+   *  conversations-by-peep query.
+   */
+  peepConvsExpDelta_joined: function(lqt, convInfo) {
+    var delta = this.makeEmptyDelta();
+
+    lqt._convs.push(convInfo);
+    lqt._convs.sort(lqt._sorter);
+
+    markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
+                    delta.state, null);
+
+    delta.postAnno[this._PEEPCONV_QUERY_KEYFUNC(convInfo)] = 1;
+
+    return delta;
+  },
+
+  /**
+   * Check whether a rep delta occurs for a conversations-by-peep query and
+   *  generate a delta if so.  A delta may occur because of a new message added
+   *  to the conversation that necessarily affects some timestamps, but it may
+   *  also not occur if it isn't a relevant timestamp or it does not change
+   *  the ordering of the conversation relative to other conversations.
+   */
+  peepConvsExpMaybeDelta_newmsg: function(lqt, convInfo) {
+    var preIndex = lqt._convs.indexOf(convInfo);
+    lqt._convs.sort(lqt._sorter);
+    if (lqt._convs.indexOf(convInfo) === preIndex)
+      return null;
+
+    var delta = this.makeEmptyDelta();
+    markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
+                    delta.state, null);
+    var convId = this._PEEPCONV_QUERY_KEYFUNC(convInfo);
+    delta.preAnno[convId] = 0;
+    delta.postAnno[convId] = 0;
+    return delta;
+  },
+
+  convMsgsDelta_base: function(lqt, seenMsgs) {
+    var delta = this.makeEmptyDelta();
+    markListInfoObj(seenMsgs.map(this._THINGMSG_KEYFUNC), delta.state, null);
+    markListInfoObj(seenMsgs.map(this._THINGMSG_KEYFUNC), delta.postAnno, 1);
+    return delta;
+  },
+
+  convMsgsDelta_added: function(lqt, seenMsgs, addedMsgs) {
+    var delta = this.makeEmptyDelta();
+    markListInfoObj(seenMsgs.map(this._THINGMSG_KEYFUNC), delta.state, null);
+    markListInfoObj(addedMsgs.map(this._THINGMSG_KEYFUNC), delta.postAnno, 1);
+    return delta;
+  },
 };
 
 /**
@@ -193,12 +346,27 @@ var TestModaActorMixins = {
     self._testClient = opts.client;
     self._testClient._staticModaActors.push(self);
 
-    /** Dynamically updated list of contacts (by owning client). */
+    /** @listof[TestClient] */
     self._dynamicContacts = [];
+    /** @listof[DynamicContactInfo] */
     self._dynamicContactInfos = [];
+    /** @dictof["client name" DynamicContactInfo] */
     self._contactMetaInfoByName = {};
 
+    /** @listof[DynamicConvInfo] */
+    self._dynamicConvInfos = [];
+    /** @dictof["conv thing human name" DynamicConvInfo] */
+    self._convInfoByName = {};
+
     self._dynamicPeepQueries = [];
+    self._dynamicPeepConvQueries = [];
+    // XXX need an all-conv-queries thing
+    self._dynamicConvMsgsQueries = [];
+
+    self._dynPendingQueries = [];
+    // convinfos queries awaiting a __updatePhaseComplete notification to occur
+    //  before generating their added messages expectations
+    self._dynPendingConvMsgs = [];
 
     self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
 
@@ -244,6 +412,91 @@ var TestModaActorMixins = {
 
 
   //////////////////////////////////////////////////////////////////////////////
+  // Query Update Helpers
+
+  /**
+   * We have heard about a newly added contact, generate expectations for all
+   *  the queries over peeps that match.
+   * XXX pinned handling
+   */
+  _notifyPeepAdded: function(newCinfo) {
+    var queries = this._dynamicPeepQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      // in the case of an addition we expect a positioned splice followed
+      //  by a completion notification
+      var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCinfo);
+
+      this.RT.reportActiveActorThisStep(this);
+      this.expect_queryCompleted(lqt.__name, deltaRep);
+    }
+  },
+
+  /**
+   * Conversation activity has (possibly) affected a peep's indices,
+   *  generate expectations for the relevant queries if we believe ordering
+   *  is affected.
+   */
+  _notifyPeepTimestampsChanged: function(cinfo) {
+    var queries = this._dynamicPeepQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo);
+      if (deltaRep) {
+        this.RT.reportActiveActorThisStep(this);
+        this.expect_queryCompleted(lqt.__name, deltaRep);
+      }
+    }
+  },
+
+  _notifyPeepJoinedConv: function(cinfo, convInfo) {
+    var queries = this._dynamicPeepConvQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      var deltaRep = DeltaHelper.peepConvsExpDelta_joined(lqt, convInfo);
+      this.RT.reportActiveActorThisStep(this);
+      this.expect_queryCompleted(lqt.__name, deltaRep);
+    }
+  },
+
+  /**
+   * Conversation activity has affected a conversation blurb's indices,
+   *  generate expectations for the relevant queries if this has affected
+   *  blurb ordering.
+   */
+  _notifyPeepConvTimestampsChanged: function(cinfo, convIndices, convInfo) {
+    var queries = this._dynamicPeepConvQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      var deltaRep = DeltaHelper.peepConvsExpMaybeDelta_newmsg(lqt, convInfo);
+      if (deltaRep) {
+        this.RT.reportActiveActorThisStep(this);
+        this.expect_queryCompleted(lqt.__name, deltaRep);
+      }
+    }
+  },
+
+  _notifyConvGainedMessages: function(convInfo) {
+    var queries = this._dynamicConvMsgsQueries,
+        backlog = convInfo.tConv.data.backlog,
+        seenMsgs = backlog.slice(0, convInfo.highestMsgSeen + 1),
+        addedMsgs = backlog.slice(convInfo.highestMsgReported + 1,
+                                  convInfo.highestMsgSeen + 1);
+    convInfo.highestMsgReported = convInfo.highestMsgSeen;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
+      this.RT.reportActiveActorThisStep(this);
+      this.expect_queryCompleted(lqt.__name, deltaRep);
+    }
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Notifications from testClient
 
   /**
@@ -259,6 +512,7 @@ var TestModaActorMixins = {
       rootKey: other._rawClient.rootPublicKey,
       // in our test we always use the testing name as the displayName
       name: other.__name,
+      involvedConvs: [],
       any: nowSeq,
       write: nowSeq,
       recip: nowSeq,
@@ -266,43 +520,124 @@ var TestModaActorMixins = {
     this._dynamicContactInfos.push(newCinfo);
 
     // -- generate expectations about peep query deltas
-    var queries = this._dynamicPeepQueries;
-    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
-      var lqt = queries[iQuery];
-
-      // in the case of an addition we expect a positioned splice followed
-      //  by a completion notification
-      var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCinfo);
-
-      this.RT.reportActiveActorThisStep(this);
-      this.expect_queryCompleted(lqt.__name, deltaRep);
-    }
+    this._notifyPeepAdded(newCinfo);
   },
 
   __receiveConvWelcome: function(tConv) {
     // nb: tConv's backlog is a dynamic state correlated with the global
     //  conversation state as opposed to a snapshot at the time a welcome was
     //  issued.
+    var convInfo = {
+      tConv: tConv,
+      highestMsgSeen: 0,
+      highestMsgReported: 0,
+      peepSeqsByName: {},
+    };
+    this._dynamicConvInfos.push(convInfo);
+    this._convInfoByName[tConv.__name] = convInfo;
+
     var backlog = tConv.data.backlog;
     for (var iMsg = 0; iMsg < backlog.length; iMsg++) {
       this.__receiveConvMessage(tConv, backlog[iMsg]);
     }
+    convInfo.highestMsgReported = backlog.length - 1;
+
+    // Note!  There is never a possibility for a notification to be generated
+    //  in the NS_CONVMSGS namespace on this event because it's impossible to
+    //  query about a conversation before we hear about it, and we are just
+    //  hearing about this guy.
   },
 
   __receiveConvMessage: function(tConv, tMsg) {
-    if (tMsg.type === 'message') {
-      var ainfo = this._lookupContactInfo(tMsg.data.author);
-      ainfo.write = Math.max(ainfo.write, tMsg.seq);
-      ainfo.any = Math.max(ainfo.any, tMsg.seq);
+    var convInfo = this._convInfoByName[tConv.__name];
+    if (this._dynPendingConvMsgs.indexOf(convInfo) === -1)
+      this._dynPendingConvMsgs.push(convInfo);
 
-      for (var iPart = 0; iPart < tConv.participants.length; iPart++) {
-        var participant = tConv.participants[iPart];
-        if (participant === this || participant === tMsg.data.author)
+    if (tMsg.data.type === 'message') {
+      // update the author peep if it's not us.
+      if (tMsg.data.author !== this._testClient) {
+        var ainfo = this._lookupContactInfo(tMsg.data.author),
+            convAuthIndices = convInfo.peepSeqsByName[tMsg.data.author.__name];
+
+        ainfo.write = Math.max(ainfo.write, tMsg.data.seq);
+        ainfo.any = Math.max(ainfo.any, tMsg.data.seq);
+        this._notifyPeepTimestampsChanged(ainfo);
+
+        convAuthIndices.write = tMsg.data.seq;
+        convAuthIndices.any = tMsg.data.seq;
+        this._notifyPeepConvTimestampsChanged(ainfo, convAuthIndices, convInfo);
+      }
+
+      var participants = tConv.data.participants;
+      for (var iPart = 0; iPart < participants.length; iPart++) {
+        var participant = participants[iPart];
+        // do not process 'me', do not process the author again
+        if (participant === this._testClient ||
+            participant === tMsg.data.author)
           continue;
-        var pinfo = this._lookupContactInfo(participant);
-        pinfo.recip = Math.max(pinfo.recip, tMsg.seq);
+        var pinfo = this._lookupContactInfo(participant),
+            convPartIndices = convInfo.peepSeqsByName[participant.__name];
+
+        // recip is only updated for messages authored by our user.
+        if (tMsg.data.author === this._testClient)
+          pinfo.recip = Math.max(pinfo.recip, tMsg.data.seq);
+        pinfo.any = Math.max(pinfo.any, tMsg.data.seq);
+        this._notifyPeepTimestampsChanged(pinfo);
+
+        if (tMsg.data.author === this._testClient)
+          convPartIndices.recip = tMsg.data.seq;
+        convPartIndices.any = tMsg.data.seq;
+        this._notifyPeepConvTimestampsChanged(pinfo, convPartIndices,
+                                              convInfo);
       }
     }
+    else if (tMsg.data.type === 'join') {
+      var joineeName = tMsg.data.who.__name, jinfo = null;
+      if (this._contactMetaInfoByName.hasOwnProperty(joineeName))
+        jinfo = this._contactMetaInfoByName[joineeName];
+      var joineePartIndices = convInfo.peepSeqsByName[joineeName] = {};
+
+      // even if the joinee is not yet a contact, we want to maintain the index
+      //  information in case they later become a contact.
+      joineePartIndices.any = tMsg.data.seq;
+      // XXX the implementation itself is a bit confused by these right now;
+      //  there's no obvious right value.
+      joineePartIndices.write = null;
+      joineePartIndices.recip = null;
+
+      if (jinfo)
+        this._notifyPeepJoinedConv(jinfo, convInfo);
+    }
+  },
+
+  /**
+   * Notification that a 'replicaCaughtUp' expectation is part of the current
+   *  test step after all other moda notifications are generated.  This is
+   *  generated because replicaCaughtUp gets passed through to
+   *  `NotificationKing` which then uses it to decide to release any batched
+   *  up convmsgs updates in a single batch.
+   *
+   * Ordering consistency in the event of a batch of multiple conversations
+   *  (that is, avoiding non-determinism due to inconsistent traversal orders
+   *  of hash tables) is avoided by the use of a pending query list that gets
+   *  appended to in event order.
+   *
+   * XXX We will likely need to update the other notification mechanisms to
+   *  use the pending list and defer actual generation until this marker, as
+   *  moda does consistently use that mechanism.  However, it's not an
+   *  immediate problem because apart from backlog joins, our unit test steps
+   *  are so granular (and always online right now) that nothing complicated
+   *  can occur in a single test step.
+   */
+  __updatePhaseComplete: function() {
+    // -- flush out pending message addition NS_CONVMSGS queries
+    var pendingConvInfos = this._dynPendingConvMsgs;
+    for (var iConv = 0; iConv < pendingConvInfos.length; iConv++) {
+      var convInfo = pendingConvInfos[iConv];
+      this._notifyConvGainedMessages(convInfo);
+    }
+    this._dynPendingConvMsgs.splice(
+      0, this._dynPendingConvMsgs.length);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -423,13 +758,44 @@ var TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     this.T.action(this, 'create', lqt, function() {
+      var peep = self._grabPeepFromQueryUsingClient(usingQuery, peepClient),
+          cinfo = self._lookupContactInfo(peepClient);
+
+      var delta = DeltaHelper.peepConvsExpDelta_base(
+        lqt, cinfo, self._dynamicConvInfos, query.by);
+      self.expect_queryCompleted(lqt.__name, delta);
+
+      lqt._liveset = self._bridge.queryPeepConversations(peep, query,
+                                                         self, lqt);
+      self._dynamicPeepConvQueries.push(lqt);
     });
 
     return lqt;
   },
 
   do_queryConversations: function(query) {
+    throw new Error("XXX no all-conversations query testing support yet");
+  },
 
+  do_queryConversationMessages: function(usingQuery, tConv) {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    this.T.action(this, 'create', lqt, function() {
+      var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(
+                        usingQuery, tConv),
+          convInfo = self._convInfoByName[tConv.__name],
+          seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen + 1);
+
+      var delta = DeltaHelper.convMsgsDelta_base(lqt, seenMsgs);
+      self.expect_queryCompleted(lqt.__name, delta);
+
+      lqt._liveset = self._bridge.queryConversationMessages(convBlurb,
+                                                            self, lqt);
+
+      self._dynamicConvMsgsQueries.push(lqt);
+    });
+
+    return lqt;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -462,6 +828,32 @@ var TestModaActorMixins = {
       peeps.push(this._grabPeepFromQueryUsingClient(lqt, testClients[i]));
     }
     return peeps;
+  },
+
+  /**
+   * Retrieve the appropriate `ConversationBlurb` from a live query (thing
+   *  wrapper) or throw if it can't be found.  We match based on the text
+   *  of the message that started the conversation.  Another alternative would
+   *  be to look into the notification king's queryHandle structure and map
+   *  the full name to the correct local name.  We're not doing the latter
+   *  because it wouldn't translate to a more realistic testing scenario
+   *  as well.
+   */
+  _grabConvBlurbFromQueryUsingConvThing: function(lqt, tConv) {
+    var backlog = tConv.data.backlog, blurbs = lqt._liveset.items,
+        firstMessageText;
+    for (var iMsg = 0; iMsg < backlog.length; iMsg++) {
+      if (backlog[iMsg].data.type === 'message') {
+        firstMessageText = backlog[iMsg].data.text;
+        break;
+      }
+    }
+    for (var iBlurb = 0; iBlurb < blurbs.length; iBlurb++) {
+      if (blurbs[iBlurb].firstMessage.text === firstMessageText)
+        return blurbs[iBlurb];
+    }
+    throw new Error("Unable to find conversation blurb with first message " +
+                    "text: '" + firstMessageText + "'");
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -521,7 +913,7 @@ var TestModaActorMixins = {
     //  or maybe leave it up to the reply guy if he provides us with a thing
   },
 
-  do_replyToConversationWith: function(tConv, tNewMsg) {
+  do_replyToConversationWith: function(tConv, tNewMsg, usingConvQuery) {
     var messageText;
 
     var self = this;
@@ -531,7 +923,8 @@ var TestModaActorMixins = {
       self.expectModaCommand('replyToConv');
 
       messageText = fakeDataMaker.makeSubject();
-      // XXX GET convBlurb
+      var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(usingConvQuery,
+                                                                 tConv);
       convBlurb.replyToConversation({
         text: messageText,
       });
@@ -556,12 +949,14 @@ var TestModaActorMixins = {
     tConv.sdata.participants.push(invitedTestClient);
     var tJoin = this.T.thing('message', 'join ' + invitedTestClient.__name);
 
+    var self = this;
     // - moda api transmission to bridge
     this.T.action('moda sends inviteToConv to', this._eBackside, function() {
       self.holdAllModaCommands();
       self.expectModaCommand('inviteToConv');
 
-      // XXX GET convBlurb
+      var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(usingConvQuery,
+                                                                 tConv);
       convBlurb.inviteToConversation({
         peep: self._grabPeepFromQueryUsingClient(usingPeepQuery,
                                                  invitedTestClient),

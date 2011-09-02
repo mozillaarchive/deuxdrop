@@ -729,14 +729,15 @@ ModaBridge.prototype = {
                                      listener, data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
-    this._send('queryPeeps', handle, {peep: peep._id, query: query});
+    this._send('queryPeepConversations', handle,
+               { peep: peep._localName, query: query });
     return liveset;
   },
 
   /**
    * Issue a query for the messages in a conversation already know by its blurb.
    */
-  queryConversationMessages: function(convBlurb, listener) {
+  queryConversationMessages: function(convBlurb, listener, data) {
     var handle = this._nextHandle++;
     // passing null for the query def because there is nothing useful we can
     //  track on this side.
