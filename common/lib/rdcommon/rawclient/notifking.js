@@ -125,6 +125,9 @@
  *   @param[index]{
  *     The view index that provides the ordering
  *   }
+ *   @param[indexParam]{
+ *     The index parameter value in use.
+ *   }
  *
  *   @param[sliceRange]{
  *     Eventually used to allow only viewing a subset of an ordered set because
@@ -301,7 +304,7 @@ function funcThatJustReturnsZero() {
  *   range [0, arr.length].
  * }
  */
-var bsearchForInsert = exports._bsearchForInsert =
+const bsearchForInsert = exports._bsearchForInsert =
     function bsearchForInsert(list, seekVal, cmpfunc) {
   if (!list.length)
     return 0;
@@ -323,6 +326,110 @@ var bsearchForInsert = exports._bsearchForInsert =
     return mid + 1;
   else
     return mid;
+};
+
+const setIndexValue = exports.setIndexValue =
+    function setIndexValue(indexValues, indexName, indexParam, val) {
+  for (var i = 0; i < indexValues.length; i++) {
+    var ival = indexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      ival[3] = val;
+      return;
+    }
+  }
+  // The object name does not matter for the in-memory representation.
+  //  (We just have that spot for consistency with the database writes.)
+  indexValues.push([indexName, indexParam, null, val]);
+};
+
+const setReuseIndexValue = exports.setReuseIndexValue =
+    function setReuseIndexValue(indexValues, setVal) {
+  var indexName = setVal[0], indexParam = setVal[1];
+  for (var i = 0; i < indexValues.length; i++) {
+    var ival = indexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      ival[3] = val;
+      return;
+    }
+  }
+  // did not exist yet, append the existing rep
+  indexValues.push(setVal);
+};
+
+const transferIndexValue = exports.transferIndexValue =
+    function transferIndexValue(srcIndexValues, targIndexValues,
+                                      indexName, indexParam) {
+  var i, ival, setVal = null;
+  for (i = 0; i < srcIndexValues.length; i++) {
+    ival = srcIndexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      setVal = ival;
+      break;
+    }
+  }
+  if (setVal === null)
+    return false;
+
+  for (i = 0; i < targIndexValues.length; i++) {
+    ival = targIndexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      // if the values are already the same, no transfer technically takes place
+      if (ival[3] === setVal[3])
+        return false;
+      ival[3] = setVal[3];
+      return true;
+    }
+  }
+  targIndexValues.push(setVal);
+  return true;
+};
+
+const assertTransferIndexValue = exports.assertTransferIndexValue =
+    function assertTransferIndexValue(srcIndexValues, targIndexValues,
+                                      indexName, indexParam) {
+  var i, ival, setVal = null;
+  for (i = 0; i < srcIndexValues.length; i++) {
+    ival = srcIndexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      setVal = ival;
+      break;
+    }
+  }
+  if (setVal === null)
+    throw new Error("No source index value matching [" + indexName + ", " +
+                    indexParam + ", ...]!");
+
+  for (i = 0; i < targIndexValues.length; i++) {
+    ival = targIndexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      ival[3] = setVal[3];
+      return;
+    }
+  }
+  targIndexValues.push(setVal);
+};
+
+const getIndexValue = exports.getIndexValue =
+    function getIndexValue(indexValues, indexName, indexParam) {
+  for (var i = 0; i < indexValues.length; i++) {
+    var ival = indexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      return ival[3];
+    }
+  }
+  return null;
+};
+
+const assertGetIndexValue = exports.assertGetIndexValue =
+    function assertGetIndexValue(indexValues, indexName, indexParam) {
+  for (var i = 0; i < indexValues.length; i++) {
+    var ival = indexValues[i];
+    if (ival[0] === indexName && ival[1] === indexParam) {
+      return ival[3];
+    }
+  }
+  throw new Error("No index value matching [" + indexName + ", " + indexParam +
+                  ", ...]!");
 };
 
 /**
@@ -458,6 +565,7 @@ NotificationKing.prototype = {
       //
       queryDef: queryDef,
       index: null,
+      indexParam: null,
       // currently we don't subset view slices, so there is always no bound.
       sliceRange: {
         low: null,
@@ -632,14 +740,22 @@ NotificationKing.prototype = {
    */
   trackNewishMessage: function(convId, msgIndex, msgRec) {
     var newishForConv;
-    // - newness tracking
+    // -- newness tracking
     if (!this._newishMessagesByConvId.hasOwnProperty(convId))
       newishForConv = this._newishMessagesByConvId[convId] = [];
     else
       newishForConv = this._newishMessagesByConvId[convId];
     newishForConv.push({index: msgIndex, rec: msgRec});
 
-    // - update NS_CONVMSGS queries
+    // -- NS_CONVBLURBS queries
+    // - 'new' conversation! woo!
+    // XXX may want to relocate this to around where we do the index updates
+    if (msgIndex === 0) {
+    }
+    else {
+    }
+
+    // -- update NS_CONVMSGS queries
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[NS_CONVMSGS];
@@ -738,8 +854,9 @@ NotificationKing.prototype = {
 
   /**
    * We are now up-to-speed and should generate any notifications we were
-   *  holding off on because we were concerned a subsequent update would have
-   *  mooted the notification.
+   *  holding off on because of either a) we wanted to aggregate a potentially
+   *  large number of changes, or b) we figured some things might get mooted
+   *  like "new" message notifications.
    *
    * Update phases are defined as:
    * - When we first connect to the server until we work through our backlog.
@@ -773,14 +890,7 @@ NotificationKing.prototype = {
    *     The new set of cells being written, with null values conveying a
    *     cell deletion.
    *   }
-   *   @param[indexValues @dictof[
-   *     @key[indexName]
-   *     @value[indexValue]
-   *   ]]{
-   *     The set of index values being used for the item.  Index values are
-   *     only used if there is a query against the index.  Once used, we
-   *     track the
-   *   }
+   *   @param[indexValues IndexValues]
    *   @param[frontData]{
    *     The client-side representation of the data.
    *   }
@@ -811,11 +921,12 @@ NotificationKing.prototype = {
             fullName: fullName,
             count: 1,
             data: backData,
-            indexValues: indexValues,
+            // starts out empty; we push indices in that are actually used
+            indexValues: [],
             // XXX dep propagation (we should either pass in the names or
             //  have the caller explicitly speak to us about a specific
             //  querysource so we can just consume existing clientdata
-            //  refeerences)
+            //  references)
             deps: null,
           };
         }
@@ -826,6 +937,10 @@ NotificationKing.prototype = {
         queryHandle.membersByFull[namespace][fullName] = clientData;
 
         queryHandle.dataMap[namespace][localName] = frontData;
+
+        // - put the used index value in to track it.
+        assertTransferIndexValue(indexValues, queryHandle.indexValues,
+                                 queryHandle.index, queryHandle.indexParam);
 
         // - find the splice point
         var insertIdx = bsearchForInsert(queryHandle.items, clientData,
@@ -856,22 +971,76 @@ NotificationKing.prototype = {
    * - If the indexed value used by any queries has changed.
    * - If a query's test result changes to merit addition/removal.
    */
-  namespaceItemModified: function(namespace, name,
-                                  baseCells, mutatedCells,
-                                  indexValuesUpdated,
-                                  indexValuesMaximized) {
+  namespaceItemModified: function(namespace, fullName,
+                                  frontDataDelta,
+                                  indexValuesUpdated) {
 
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      var queryHandles = querySource.queryHandlesByNS[namespace];
+
+      var clientData = null;
+
+      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+        var queryHandle = queryHandles[iQuery];
+
+        var prePresent =
+          queryHandle.membersByFull[namespace].hasOwnProperty(fullName);
+        // XXX for the time being, assume that items only get added to queries
+        //  on addition, never modification.  This will become incorrect once
+        //  we implement 'pinned' status and range slices.
+        if (!prePresent)
+          continue;
+
+        if (!clientData)
+          clientData = queryHandle.membersByFull[namespace][fullName];
+
+        var anyChanges = false;
+        if (frontDataDelta) {
+          queryHandle.dataDelta[namespace][localName] = frontDataDelta;
+          anyChanges = true;
+        }
+        if (indexValuesUpdated && indexValuesUpdated.length) {
+          if (transferIndexValue(indexValuesUpdated, clientData.indexValues,
+                                 queryHandle.index, queryHandle.indexParam)) {
+            // - check for and possibly generate splices to perform a move.
+            // find the current index, remove it.
+            var preIdx = queryHandle.items.indexOf(clientData);
+            queryHandle.items.splice(preIdx, 1);
+
+            // find the insertion point using our updated index value, insert
+            var insertIdx = bsearchForInsert(queryHandle.items, clientData,
+                                             queryHandle.cmpFunc);
+            queryHandle.items.splice(insertIdx, 0, clientData);
+
+            // generate two splices if there was a move and flag a change
+            if (preIdx !== insertIdx) {
+              queryHandle.splices.push(
+                { index: preIdx, howMany: 1, items: null });
+              queryHandle.splices.push(
+                { index: insertIdx, howMany: 0, items: [clientData.localName]});
+              anyChanges = true;
+            }
+          }
+        }
+
+        if (anyChanges) {
+          this._log.nsItemModified(queryHandle.uniqueId, fullName);
+
+          if (queryHandle.pending === PENDING_NONE) {
+            queryHandle.pending = PENDING_NOTIF;
+            querySource.pending.push(queryHandle);
+          }
+        }
+      }
+    }
   },
+
   /**
    * Something known to us has been deleted from the system or otherwise should
    *  now be treated as completely unknown to us.
    */
   namespaceItemDeleted: function(namespace, name, item) {
-  },
-
-  registerNamespaceQuery: function(namespace, name, query) {
-  },
-  discardNamespaceQuery: function(namespace, name) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -881,6 +1050,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
   notificationKing: {
     events: {
       nsItemAdded: {queryId: true, fullName: true},
+      nsItemModified: {queryId: true, fullName: true},
       sendQueryResults: {queryId: true},
     },
     TEST_ONLY_events: {

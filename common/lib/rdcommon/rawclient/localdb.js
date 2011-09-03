@@ -74,6 +74,13 @@ const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs';
 
+const setIndexValue = $notifking.setIndexValue,
+      setReuseIndexValue = $notifking.setReuseIndexValue,
+      transferIndexValue = $notifking.transferIndexValue,
+      assertTransferIndexValue = $notifking.assertTransferIndexValue,
+      getIndexValue = $notifking.getIndexValue,
+      assertGetIndexValue = $notifking.assertGetIndexValue;
+
 /**
  * An optimization we are capable of performing is that we do not have to store
  *  things in a particularly encrypted form.  This allows us to potentially
@@ -242,7 +249,8 @@ LocalStore.prototype = {
     if (queryHandle.dataNeeded[NS_PEEPS].length) {
       var peepRootKeys = queryHandle.dataNeeded[NS_PEEPS].splice(0,
                            queryHandle.dataNeeded[NS_PEEPS].length);
-      return this._fetchAndReportPeepBlurbsById(queryHandle, peepRootKeys);
+      return this._fetchAndReportPeepBlurbsById(queryHandle, null, null,
+                                                peepRootKeys);
     }
     return this._notif.sendQueryResults(queryHandle);
   },
@@ -301,7 +309,7 @@ LocalStore.prototype = {
       fullName: convId,
       count: 1,
       data: null,
-      indexValues: null,
+      indexValues: [],
       deps: deps,
     };
     queryHandle.membersByLocal[NS_CONVBLURBS][localName] = clientData;
@@ -529,6 +537,7 @@ LocalStore.prototype = {
                         queryHandle.queryDef.by + "'");
     }
     queryHandle.index = index;
+    queryHandle.indexParam = peepRootKey;
 
     // - generate an index scan, netting us the conversation id's, hand-off
     return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey, -1,
@@ -699,26 +708,6 @@ LocalStore.prototype = {
     return false;
   },
 
-  _cmpfunc_peepContactName: function(a, b) {
-    return a.indexValues[$lss.IDX_PEEP_CONTACT_NAME].localeCompare(
-             b.indexValues[$lss.IDX_PEEP_CONTACT_NAME]);
-  },
-
-  _cmpfunc_peepAnyInvolvement: function(a, b) {
-    return a.indexValues[$lss.IDX_PEEP_ANY_INVOLVEMENT] -
-             b.indexValues[$lss.IDX_PEEP_ANY_INVOLVEMENT];
-  },
-
-  _cmpfunc_peepRecipInvolvement: function(a, b) {
-    return a.indexValues[$lss.IDX_PEEP_RECIP_INVOLVEMENT] -
-             b.indexValues[$lss.IDX_PEEP_RECIP_INVOLVEMENT];
-  },
-
-  _cmpfunc_peepWriteInvolvement: function(a, b) {
-    return a.indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT] -
-             b.indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT];
-  },
-
   queryAndWatchPeepBlurbs: function(queryHandle) {
     var idx, scanFunc = 'scanIndex', scanDir = -1, indexParam;
     switch (queryHandle.queryDef.by) {
@@ -758,9 +747,27 @@ LocalStore.prototype = {
       default:
         throw new Error("Unsupported filter: " + queryHandle.queryDef.filter);
     }
+    queryHandle.indexParam = indexParam;
+
+    if (idx === 'alphabet') {
+      queryHandle.cmpFunc = function(aClientData, bClientData) {
+        var aVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam),
+            bVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam);
+        return aVal.localCompare(bVal);
+      };
+    }
+    else {
+      queryHandle.cmpFunc = function(aClientData, bClientData) {
+        var aVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam),
+            bVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam);
+        return aVal - bVal;
+      };
+    }
+
     return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, indexParam, scanDir,
                                    null, null, null, null, null, null),
-      this._fetchAndReportPeepBlurbsById.bind(this, queryHandle, idx));
+      this._fetchAndReportPeepBlurbsById.bind(this, queryHandle,
+                                              idx, indexParam));
   },
 
   _notifyNewContact: function(peepRootKey, cells, mutatedCells) {
@@ -789,15 +796,21 @@ LocalStore.prototype = {
                    mutatedCells['d:nconvs'] : cells['d:nconvs']),
     };
 
-    // XXX either we should not be fully populating or item added should
-    //  eliminate the un-needed index values.
-    var indexValues = {};
-    indexValues[$lss.IDX_PEEP_CONTACT_NAME] = ourPoco.displayName;
+    // XXX this construction is sorta synthetic and redundant; the only actual
+    //  update is the string one and it happens in `PeepNameTrackTask`.
+    var indexValues = [];
+    indexValues.push([$lss.IDX_PEEP_CONTACT_NAME, '',
+                      peepRootKey, ourPoco.displayName]);
     // XXX we probably need to perform a lookup to populate these, since
-    //  the values should already exist, etc.
-    indexValues[$lss.IDX_PEEP_ANY_INVOLVEMENT] = 0;
-    indexValues[$lss.IDX_PEEP_RECIP_INVOLVEMENT] = 0;
-    indexValues[$lss.IDX_PEEP_WRITE_INVOLVEMENT] = 0;
+    //  the values should already exist, etc.  Using 'now' as a stop-gap
+    //  ordering value that is vaguely reasonable but still not right.
+    var now = Date.now();
+    indexValues.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '',
+                      peepRootKey, now]);
+    indexValues.push([$lss.IDX_PEEP_RECIP_INVOLVEMENT, '',
+                      peepRootKey, now]);
+    indexValues.push([$lss.IDX_PEEP_WRITE_INVOLVEMENT, '',
+                      peepRootKey, now]);
 
     // -- generate the notification
     this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
@@ -805,7 +818,7 @@ LocalStore.prototype = {
                                    blurbRep, ourRep);
   },
 
-  _fetchAndReportPeepBlurbsById: function(queryHandle, usingIndex,
+  _fetchAndReportPeepBlurbsById: function(queryHandle, usingIndex, indexParam,
                                           peepRootKeys) {
     this._log.fetchPeepBlurbs(queryHandle.uniqueId, peepRootKeys);
     var deferred = $Q.defer();
@@ -828,9 +841,8 @@ LocalStore.prototype = {
                                                           peepRootKey))) {
           if (clientData.data) {
             if (usingIndex) {
-              if (!clientData.indexValues)
-                clientData.indexValues = {};
-              clientData.indexValues[usingIndex] = peepRootKeys[iPeep + 1];
+              setIndexValue(clientData.indexValues, usingIndex, indexParam,
+                            peepRootKeys[iPeep + 1]);
             }
             viewItems.push(clientData.localName);
             if (clientDataItems)
@@ -844,9 +856,8 @@ LocalStore.prototype = {
                                          clientData),
                     function(resultClientData) {
           if (usingIndex) {
-            if (!resultClientData.indexValues)
-              resultClientData.indexValues = {};
-            resultClientData.indexValues[usingIndex] = peepRootKeys[iPeep + 1];
+            setIndexValue(clientData.indexValues, usingIndex, indexParam,
+                          peepRootKeys[iPeep + 1]);
           }
           viewItems.push(resultClientData.localName);
           if (clientDataItems)
@@ -872,7 +883,7 @@ LocalStore.prototype = {
         fullName: peepRootKey,
         count: 1,
         data: null,
-        indexValues: null,
+        indexValues: [],
         deps: null,
       };
       queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
@@ -927,7 +938,7 @@ LocalStore.prototype = {
       fullName: peepRootKey,
       count: 1,
       data: null,
-      indexValues: null,
+      indexValues: [],
       deps: null, // peeps have no additional deps
     };
     queryHandle.membersByLocal[localName] = clientData;

@@ -329,6 +329,19 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
         receivedAt: this.fanoutEnv.receivedAt,
       };
 
+      // - peep change notification
+      // (timestamps are affected and so is the number of conversations)
+      var peepConvIndexUpdates = [
+        [$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
+         this.convMeta.id, timestamp],
+      ];
+
+      var peepIndexMaxes = [
+        [$lss.IDX_PEEP_ANY_INVOLVEMENT, '', inviteeRootKey, timestamp],
+      ];
+      this.store._notif.namespaceItemModified(
+        NS_PEEPS, inviteeRootKey, { numConvs: 1 }, peepIndexUpdates);
+
       // - message notification
       this.store._notif.trackNewishMessage(this.convMeta.id, msgNum, msgRec);
 
@@ -354,6 +367,9 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
                                               self.fanoutEnv.nonce);
         }
       );
+    },
+    // this has to happen after we perform the db maxification
+    generate_notifications: function() {
     },
   },
 });
