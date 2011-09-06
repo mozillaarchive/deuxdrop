@@ -429,12 +429,7 @@ RedisDbConn.prototype = {
    *   @param[tableName]{
    *     The name of the associated table we are performing updates on.
    *   }
-   *   @param[updates @listof[@list[
-   *     @param[indexName]
-   *     @param[indexParam]
-   *     @param[objectName]
-   *     @param[newValue]
-   *   ]]
+   *   @param[updates IndexValues]
    * ]
    */
   updateMultipleIndexValues: function(tableName, updates) {
@@ -484,6 +479,62 @@ RedisDbConn.prototype = {
           else
             deferred.resolve(result);
         });
+    });
+    return deferred.promise;
+  },
+
+  /**
+   * Maximize multiple indices in a single batch.  Consumes `IndexValue`
+   *  representations like `updateMultipleIndexValues` with the notable
+   *  side-effect of updating the representation to be consistent with the
+   *  database representation.  Specifically, if the value in the database
+   *  is larger than the provided value, it is updated.
+   */
+  maximizeMultipleIndexValues: function(tableName, maxdates) {
+    var deferred = $Q.defer(),
+        multiGet = this._conn.multi(), multiSet = this._conn.multi(),
+        keyNames = [];
+    for (var iMaxdate = 0; iMaxdate < maxdates.length; iMaxdate++) {
+      var maxdate = maxdates[iMaxdate],
+          indexName = maxdate[0], indexParam = maxdate[1],
+          objectName = maxdate[2], newValue = maxdate[3];
+      this._log.maximizeIndexValue(tableName, indexName, indexParam,
+                                   objectName, newValue);
+      var keyName =
+        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam;
+      keyNames.push(keyName);
+      multiGet.zscore(keyName, objectName);
+    }
+    multiGet.exec(function(err, replies) {
+      if (err) {
+        deferred.reject(err);
+        return;
+      }
+      var updatesRequired = 0;
+      for (var iMaxdate = 0; iMaxdate < maxdates.length; iMaxdate++) {
+        var rawResult = replies[iMaxdate], maxdate = maxdates[iMaxdate], curVal;
+        // we need to update the database if our new value is bigger/new
+        if (rawResult == null ||
+            (curVal = parseInt(rawResult)) < maxdate[3]) {
+          updatesRequired++;
+          multiSet.zadd(keyNames[iMaxdate], maxdate[3], maxdate[2]);
+        }
+        // we need to update the memory rep if the db is bigger
+        else {
+          maxdate[3] = curVal;
+        }
+      }
+      if (updatesRequired) {
+        multiSet.exec(function(setErr, setReplies) {
+          if (setErr)
+            deferred.reject(setErr);
+          else
+            deferred.resolve(maxdates);
+        });
+      }
+      else {
+        deferred.resolve(maxdates);
+      }
     });
     return deferred.promise;
   },

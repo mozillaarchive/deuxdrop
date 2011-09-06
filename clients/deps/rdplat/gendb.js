@@ -505,12 +505,7 @@ IndexedDbConn.prototype = {
    *   @param[tableName]{
    *     The name of the associated table we are performing updates on.
    *   }
-   *   @param[updates @listof[@list[
-   *     @param[indexName]
-   *     @param[indexParam]
-   *     @param[objectName]
-   *     @param[newValue]
-   *   ]]
+   *   @param[updates IndexValues]
    * ]
    */
   updateMultipleIndexValues: function(tableName, updates) {
@@ -524,7 +519,6 @@ IndexedDbConn.prototype = {
       var aggrName = tableName + INDEX_DELIM + update[0];
       if (aggrNames.indexOf(aggrName) === -1)
         aggrNames.push(aggrName);
-
     }
     var transaction = this._db.transaction(aggrNames,
                                            IDBTransaction.READ_WRITE);
@@ -573,11 +567,85 @@ IndexedDbConn.prototype = {
     var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
     store.get(cellName).onsuccess = function(event) {
       var existing = event.target.result;
-      if (existing === undefined)
+      if (existing === undefined) {
         store.add(newValue, cellName);
-      else
-        store.put((newValue = Math.max(existing, newValue)), cellName);
+      }
+      else {
+        if (existing < newValue)
+          store.put(newValue, cellName);
+      }
     };
+    return deferred.promise;
+  },
+
+  /**
+   * Maximize multiple indices in a single batch.  Consumes `IndexValue`
+   *  representations like `updateMultipleIndexValues` with the notable
+   *  side-effect of updating the representation to be consistent with the
+   *  database representation.  Specifically, if the value in the database
+   *  is larger than the provided value, it is updated.
+   */
+  maximizeMultipleIndexValues: function(tableName, maxdates) {
+    var deferred = $Q.defer();
+
+    var aggrNames = [], iMaxdate, maxdate;
+
+    for (iMaxdate = 0; iMaxdate < maxdates.length; iMaxdate++) {
+      maxdate = maxdates[iMaxdate];
+
+      // - build list of all the index aggregate tables we will touch
+      var aggrName = tableName + INDEX_DELIM + maxdate[0];
+      if (aggrNames.indexOf(aggrName) === -1)
+        aggrNames.push(aggrName);
+    }
+    var transaction = this._db.transaction(aggrNames,
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve(maxdates);
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+
+    // Because we expect our index values to both be scattered around a bit,
+    //  rather than engage a cursor, we just spin up a number of parallel get
+    //  requests and issue separate add/put requests if the need arises.
+    // It's possible the cursor might be a better idea given that the likelihood
+    //  of the value actually increasing is better than 50%.  We are assuming
+    //  the cursor implementation has non-trivial setup cost/overhead and that
+    //  the impact of the separate write will be trivial in a LevelDB impl
+    //  because of the LSM rep anyways.  SQLite should be okay because the
+    //  page will be cached and its update op is completely orthogonal.
+    var logger = this._log;
+    function maxify(maxdate) { // need to latch vars; can't require "let"
+      var indexName = maxdate[0], indexParam = maxdate[1],
+          objectName = maxdate[2], newValue = maxdate[3];
+      logger.maximizeIndexValue(tableName, indexName, indexParam,
+                                objectName, newValue);
+
+      var aggrName = tableName + INDEX_DELIM + indexName;
+      var store = transaction.objectStore(aggrName);
+      var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
+      store.get(cellName).onsuccess = function(event) {
+        var existing = event.target.result;
+        if (existing === undefined) {
+          store.add(newValue, cellName);
+        }
+        else {
+          // update db if our new value is bigger
+          if (existing < newValue)
+            store.put(newValue, cellName);
+          // update memory rep if existing value is bugger
+          else
+            maxdate[3] = existing;
+        }
+      };
+    }
+
+    for (iMaxdate = 0; iMaxdate < maxdates.length; iMaxdate++) {
+      maxify(maxdates[iMaxdate]);
+    }
+
     return deferred.promise;
   },
 

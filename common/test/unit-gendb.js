@@ -411,6 +411,7 @@ TD.commonCase('reorderable collection index model', function(T) {
     when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('scan post A=max~2'), badNews);
   });
+  // XXX should perform a maximize that creates a non-existent index value...
 
   // - ordering is right...
   T.group('populated index scan: number');
@@ -500,6 +501,31 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
   T.check(eLazy, 'check B,A,C ordering', function() {
     eLazy.expect_namedValue('ordering', ['B', 11, 'A', 10, 'C', 9]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
+         logNamedValue('ordering'), badNews);
+  });
+
+  // - batch maximizations (numeric)
+  T.group('batch update: number');
+  T.action(eLazy, 'B=max(1,?), A=max(12,?), C=max(10,?)', function() {
+    var updates = [
+      [IDX_AGE, '', 'B', 1],
+      [IDX_AGE, '', 'A', 12],
+      [IDX_AGE, '', 'C', 10],
+      [IDX_AGE, '', 'X', 1], // this is a creation here!
+    ];
+    var expectedMaxes = [
+      [IDX_AGE, '', 'B', 11], // this one needs to get updated
+      [IDX_AGE, '', 'A', 12],
+      [IDX_AGE, '', 'C', 10],
+      [IDX_AGE, '', 'X', 1],
+    ];
+    eLazy.expect_namedValue('batch maximized', expectedMaxes);
+    when(conn.maximizeMultipleIndexValues(TBL_HUMANS, updates),
+         logNamedValue('batch maximized'), badNews);
+  });
+  T.check(eLazy, 'check A,B,C,X ordering', function() {
+    eLazy.expect_namedValue('ordering', ['A', 12, 'B', 11, 'C', 10, 'X', 1]);
     when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
          logNamedValue('ordering'), badNews);
   });
