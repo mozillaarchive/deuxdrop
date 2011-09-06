@@ -470,7 +470,7 @@ define(function (require) {
           if (domain) {
 
             //Fetch the server info
-            moda.insecurelyGetServerSelfIdentUsingDomainName(domain,
+            me.insecurelyGetServerSelfIdentUsingDomainName(domain,
               function (serverInfo) {
 
               if (!serverInfo) {
