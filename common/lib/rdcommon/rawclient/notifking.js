@@ -241,15 +241,18 @@
 
 define(
   [
+    'q',
     'rdcommon/log',
     'module',
     'exports'
   ],
   function(
+    $Q,
     $log,
     $module,
     exports
   ) {
+const when = $Q.when;
 
 const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
@@ -592,7 +595,7 @@ NotificationKing.prototype = {
         low: null,
         high: null,
       },
-      items: null,
+      items: [],
       testFunc: funcThatJustReturnsFalse,
       cmpFunc: funcThatJustReturnsZero,
       membersByFull: makeEmptyMapsByNS(),
@@ -677,7 +680,7 @@ NotificationKing.prototype = {
     // fast-path if the given query already knows the answer
     var clientData;
     if (writeQueryHandle.membersByFull[namespace].hasOwnProperty(fullId)) {
-      clientData = writeQueryHandle.membersByFull[namespace];
+      clientData = writeQueryHandle.membersByFull[namespace][fullId];
       clientData.count++;
       return clientData;
     }
@@ -920,8 +923,12 @@ NotificationKing.prototype = {
           //  thing gets sent.  (We are doing this mainly for unit tests, but
           //  it's conceivable this could be very beneficial for moda bridge
           //  consumers that are not carefully written.)
+          var self = this;
           return when(sendResult,
-                      this.updatePhaseDoneReleaseNotifications.bind(this));
+                      this.updatePhaseDoneReleaseNotifications.bind(this),
+                      function(err) {
+                        self._log.errorDuringReleaseNotifications(err);
+                      });
         }
       }
     }
@@ -1044,29 +1051,74 @@ NotificationKing.prototype = {
    * XXX we need to provide a rep generation callback like `namespaceItemAdded`
    *  has for the cases where a transition in object state can change its
    *  query visibility.
+   *
+   * @args[
+   *   @param[namespace]
+   *   @param[fullName]
+   *   @param[baseCells]
+   *   @param[mutatedCells]
+   *   @param[indexValuesUpdate]
+   *   @param[clientDataPopulater Function]{
+   *     The same as in `namespaceItemAdded`, a callback that mutates the
+   *     passed-in clientData instance to have a backside representation and
+   *     returns the frontside representation.
+   *   }
+   *   @param[deltaPopulater Function]{
+   *     Similar to the full client data populater, this function is responsible
+   *     for idempotently mutating any existing clientData backside
+   *     representation, but instead returns a frontside delta representation
+   *     instead of a full frontside representation.
+   *   }
+   *   @param[indexPopulater Function]{
+   *     XXX Speculative at this point function to help regenerate indices that
+   *     the query wants but were not provided in the modification.  For
+   *     example, if you 'pin' a contact so that it now applies to a query on
+   *     the set of pinned peeps, there is no actual delta on the index values
+   *     for the peep as a result of this.  Unfortunately, in that case, the
+   *     data on the peep is currently insufficient to regenerate the indices
+   *     without a database query, so it remains to be seen as to whether we
+   *     should handle this.  (This is getting left it because I mistakenly
+   *     added it for another case where it was relevant.)
+   *   }
+   * ]
    */
   namespaceItemModified: function(namespace, fullName,
                                   baseCells, mutatedCells, indexValuesUpdated,
-                                  clientDataPopulater
+                                  clientDataPopulater, deltaPopulater,
+                                  indexPopulater
                                   ) {
 
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
-      var clientData = null, frontData = null, localName = null;
+      var clientData = null, frontData = null, localName = null,
+          frontDataDelta = undefined, updatedIndices = false;
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-        var queryHandle = queryHandles[iQuery];
+        var queryHandle = queryHandles[iQuery],
+            anyChanges = false;
 
         var prePresent =
           queryHandle.membersByFull[namespace].hasOwnProperty(fullName);
         // -- newly matching query
         if (!prePresent) {
+          // bail out if we lack the cells to perform a test, or if the query
+          //  doesn't match.
+          if (!baseCells ||
+              !queryHandle.testFunc(baseCells, mutatedCells, fullName))
+            continue;
+          // we need to regenerate the indices if possible, since our update
+          //  with the delta here may not contain the required indices for
+          //  this new query
+          if (!updatedIndices && indexPopulater) {
+            indexValuesUpdated = indexValuesUpdated.concat(indexPopulater());
+            updatedIndices = true;
+          }
           // try and reuse an existing clientData rep if possible
           if (!clientData)
             clientData = this.reuseIfAlreadyKnown(queryHandle, namespace,
-                                                  fullId);
+                                                  fullName);
           if (!clientData) {
             localName = "" + (querySource.nextUniqueIdAlloc++);
             clientData = {
@@ -1079,30 +1131,53 @@ NotificationKing.prototype = {
               indexValues: [],
               deps: [],
             };
-            frontData = clientDataPopulater(clientData, queryHandle);
+            frontData = clientDataPopulater(clientData, queryHandle, fullName);
+
+            queryHandle.membersByLocal[namespace][localName] = clientData;
+            queryHandle.membersByFull[namespace][fullName] = clientData;
           }
           else {
             localName = clientData.localName;
-            if (!frontData)
-              frontData = clientDataPopulater(clientData, queryHandle);
+            if (!frontData) {
+              frontData = clientDataPopulater(clientData, queryHandle,
+                                              fullName);
+            }
+          }
+
+          queryHandle.dataMap[namespace][localName] = frontData;
+        }
+        else {
+          if (!clientData)
+            clientData = queryHandle.membersByFull[namespace][fullName];
+
+          // generate the delta rep if required.
+          if (deltaPopulater) {
+            if (frontDataDelta === undefined) {
+              // try and grab an existing delta (possibly from a previous round)
+              //  so we don't clobber previous but yet unsent deltas.
+              if (queryHandle.dataDelta[namespace].hasOwnProperty(localName))
+                frontDataDelta = queryHandle.dataDelta[namespace][localName];
+              else
+                frontDataDelta = {};
+              deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
+            }
+
+            if (frontDataDelta !== null) {
+              queryHandle.dataDelta[namespace][clientData.localName] =
+                frontDataDelta;
+              anyChanges = true;
+            }
           }
         }
-        else if (!clientData)
-          clientData = queryHandle.membersByFull[namespace][fullName];
 
-        var anyChanges = false;
-        if (frontDataDelta) {
-          queryHandle.dataDelta[namespace][clientData.localName] =
-            frontDataDelta;
-          anyChanges = true;
-        }
         if (indexValuesUpdated && indexValuesUpdated.length) {
           if (transferIndexValue(indexValuesUpdated, clientData.indexValues,
                                  queryHandle.index, queryHandle.indexParam)) {
             // - check for and possibly generate splices to perform a move.
             // find the current index, remove it.
             var preIdx = queryHandle.items.indexOf(clientData);
-            queryHandle.items.splice(preIdx, 1);
+            if (preIdx !== -1)
+              queryHandle.items.splice(preIdx, 1);
 
             // find the insertion point using our updated index value, insert
             var insertIdx = bsearchForInsert(queryHandle.items, clientData,
@@ -1111,8 +1186,9 @@ NotificationKing.prototype = {
 
             // generate two splices if there was a move and flag a change
             if (preIdx !== insertIdx) {
-              queryHandle.splices.push(
-                { index: preIdx, howMany: 1, items: null });
+              if (preIdx !== -1)
+                queryHandle.splices.push(
+                  { index: preIdx, howMany: 1, items: null });
               queryHandle.splices.push(
                 { index: insertIdx, howMany: 0, items: [clientData.localName]});
               anyChanges = true;
@@ -1156,6 +1232,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     errors: {
       badQuery: {uniqueId: true, msg: false},
+      errorDuringReleaseNotifications: {err: $log.EXCEPTION},
     },
     asyncJobs: {
       queryFill: {namespace: true, uniqueId: true},

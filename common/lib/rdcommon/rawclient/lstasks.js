@@ -194,7 +194,8 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
       //  actually process messages for the conversations.
       if (this.isContactAdd)
         return this.store._notifyNewContact(this.peepPubring.rootPublicKey,
-                                            this.cells, this.writeCells);
+                                            this.cells, this.writeCells,
+                                            this.peepOident.localPoco);
       else if (this.isContact)
         return this.store._notif.namespaceItemModified(NS_PEEPS,
                                                 this.peepPubring.rootPublicKey,
@@ -351,33 +352,44 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
          this.convMeta.id, timestamp],
       ];
 
-      var peepIndexMaxes = this.peepIndexMaxes = [
-        // peep activity index entry
-        [$lss.IDX_PEEP_ANY_INVOLVEMENT, '', inviteeRootKey, timestamp],
-      ];
+      // (we are not traversing writeCells, so we need to put the invitee in)
+      var recipRootKeys = this.recipRootKeys = [inviteeRootKey],
+          inviterCellName = "d:p" + this.fanoutEnv.sentBy, cells = this.cells;
+      for (var key in cells) {
+        if (!/^d:p/.test(key) || key === inviterCellName)
+          continue;
+        // this must be the cell for one of the other recipients
+        recipRootKeys.push(cells[key]);
+      }
+
+      var convIndexUpdates = this.convIndexUpdates = [],
+          peepIndexMaxes = this.peepIndexMaxes = [];
+      const convPinned = false;
+      this.store._makeConvIndexUpdates(
+        this.convMeta.id, convPinned, convIndexUpdates, peepIndexMaxes,
+        inviterRootKey, recipRootKeys, timestamp);
+
 
       var self = this;
-      return $Q.join(
+      return $Q.wait(
         this.store._db.putCells($lss.TBL_CONV_DATA, this.convMeta.id,
                                 writeCells),
         this.store._db.updateMultipleIndexValues(
-          $lss.TBL_CONV_DATA, peepConvIndexUpdates),
+          $lss.TBL_CONV_DATA, convIndexUpdates),
         this.store._db.maximizeMultipleIndexValues(
           $lss.TBL_PEEP_DATA, peepIndexMaxes),
-        // boost their involved conversation count
+        // boost the invitee's involved conversation count
         this.store._db.incrementCell($lss.TBL_PEEP_DATA, inviteeRootKey,
-                                     'd:nconvs', 1),
-        function() {
-          self.store._log.conversationMessage(self.convMeta.id,
-                                              self.fanoutEnv.nonce);
-        }
+                                     'd:nconvs', 1)
       );
     },
     // this has to happen after we perform the db maxification
     generate_notifications: function() {
-      // - peep modification
-      this.store._notif.namespaceItemModified(
-        NS_PEEPS, this.inviteeRootKey, { numConvs: 1 }, this.peepIndexMaxes);
+      // - peep notifications
+      this.store._notifyPeepConvDeltas(
+        this.inviterPubring.rootPublicKey, this.recipRootKeys,
+        this.peepIndexMaxes,
+        this.inviteeRootKey, { numConvs: 1});
 
       // - conversation blurb notification
       if (this.msgNum === 1)
@@ -385,15 +397,16 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
           this.convMeta.id, this.cells, this.mutatedCells,
           this.peepConvIndexUpdates);
       else
-        this.store_notifyModifiedConversation(
+        this.store._notifyModifiedConversation(
           this.convMeta.id, this.cells, this.mutatedCells,
-          // participants needs the new guy added
           this.peepConvIndexUpdates);
 
       // - "new" notifications, conv messages notifications
       this.store._notif.trackNewishMessage(this.convMeta.id, this.msgNum,
                                            this.msgRec,
                                            this.cells, this.writeCells);
+      this.store._log.conversationMessage(this.convMeta.id,
+                                          this.fanoutEnv.nonce);
     },
   },
 });
@@ -432,7 +445,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
                           authorSelfIdentOrPubring);
         authorIsOurUser = false;
       }
-      var authorRootKey = authorPubring.rootPublicKey;
+      var authorRootKey = this.authorRootKey = authorPubring.rootPublicKey;
 
       // - decrypt conversation envelope
       var convEnv = $msg_gen.assertGetConversationHumanMessageEnvelope(
@@ -464,7 +477,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
       ];
 
       // - all recipients stuff
-      var recipRootKeys = [];
+      var recipRootKeys = this.recipRootKeys = [];
       var authorCellName = "d:p" + fanoutEnv.sentBy;
       for (var key in cells) {
         if (!/^d:p/.test(key) || key === authorCellName)
@@ -476,7 +489,8 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
       const convPinned = false;
 
       // - conversation (all and per-peep) index updating
-      var convIndexUpdates = [], peepIndexMaxes = [];
+      var convIndexUpdates = this.convIndexUpdates = [],
+          peepIndexMaxes = this.peepIndexMaxes = [];
       this.store._makeConvIndexUpdates(
         convMeta.id, convPinned, convIndexUpdates, peepIndexMaxes,
         authorRootKey, recipRootKeys, timestamp);
@@ -501,8 +515,13 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
     },
     generate_notifications: function(resolvedPromises) {
       // - peep notifications
+      this.store._notifyPeepConvDeltas(
+        this.authorRootKey, this.recipRootKeys, this.peepIndexMaxes);
 
       // - conversation notifications
+      this.store._notifyModifiedConversation(
+        this.convMeta.id, this.cells, this.writeCells,
+        this.convIndexUpdates);
 
       // - "new" notification / convmsgs notification
       this.store._notif.trackNewishMessage(

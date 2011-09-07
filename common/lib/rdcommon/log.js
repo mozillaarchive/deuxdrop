@@ -519,22 +519,24 @@ var TestActorProtoBase = {
       //  expectations.
       if (expy[0] !== entry[0]) {
         this._logger.__unexpectedEntry(this._iEntry - 1, entry);
+        // (fallout, triggers error)
       }
       else if(!this['_verify_' + expy[0]](expy, entry)) {
-        this._expectationsMetSoFar = false;
         this._logger.__mismatchEntry(this._iEntry - 1, expy, entry);
         // things did line up correctly though, so boost the expecation number
         //  so we don't convert subsequent expecations into unexpected ones.
         this._iExpectation++;
+        // (fallout, triggers error)
       }
       else {
         this._iExpectation++;
         continue;
       }
       // (only bad cases fall out without hitting a continue)
-      if (this._expectationsMetSoFar && this._deferred) {
+      if (this._expectationsMetSoFar) {
         this._expectationsMetSoFar = false;
-        this._deferred.reject([this.__defName, expy, entry]);
+        if (this._deferred)
+          this._deferred.reject([this.__defName, expy, entry]);
       }
       return;
     }

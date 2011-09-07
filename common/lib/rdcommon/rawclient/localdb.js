@@ -241,14 +241,18 @@ LocalStore.prototype = {
    *  and re-run, otherwise send the query results.
    */
   _fillOutQueryDepsAndSend: function(queryHandle) {
+    // fetch blurbs before peeps because blurbs can generate peep deps
     if (queryHandle.dataNeeded[NS_CONVBLURBS].length) {
       var convIds = queryHandle.dataNeeded[NS_CONVBLURBS].splice(0,
                       queryHandle.dataNeeded[NS_CONVBLURBS].length);
       return this._fetchAndReportConversationBlurbsById(query, convIds);
     }
+    // fetch peep deps last-ish because they can't generate deps
     if (queryHandle.dataNeeded[NS_PEEPS].length) {
       var peepRootKeys = queryHandle.dataNeeded[NS_PEEPS].splice(0,
                            queryHandle.dataNeeded[NS_PEEPS].length);
+      // we never pass index/indexparam because a query on peeps would always
+      //  get its data directly, not by our dependency loading logic.
       return this._fetchAndReportPeepBlurbsById(queryHandle, null, null,
                                                 peepRootKeys);
     }
@@ -343,7 +347,7 @@ LocalStore.prototype = {
       }
     }
     // - first (non-join) message...
-    var msg, iMsg, firstMsgRep;
+    var msg, iMsg, firstMsgRep = null;
     for (iMsg = 0; iMsg < numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
       if (msg.type === 'message') {
@@ -389,6 +393,39 @@ LocalStore.prototype = {
     };
   },
 
+  _convertConversationBlurbDelta: function(queryHandle, clientData, outDeltaRep,
+                                           cells, mutatedCells) {
+    for (var key in mutatedCells) {
+      // - participants
+      if (/^d:p/.test(key)) {
+        if (!outDeltaRep.hasOwnProperty("participants"))
+          outDeltaRep.participants = [];
+        outDeltaRep.participants.push(
+          this._deferringPeepQueryResolve(queryHandle, mutatedCells[key],
+                                          clientData.deps));
+      }
+    }
+    // - If this is our first human message, populate.
+    var msgNum = mutatedCells['d:m'], msgRec = mutatedCells['d:m' + msgNum];
+    // XXX skimping on checking if this is the first; let's just always send
+    //  the message for now and have the bridge ignore it if it's alreayd got
+    //  one.
+    if (msgRec.type === 'message') {
+      outDeltaRep.firstMessage = {
+        type: 'message',
+        author: this._deferringPeepQueryResolve(queryHandle, msgRec.authorId,
+                                                clientData.deps),
+        composedAt: msgRec.composedAt,
+        receivedAt: msgRec.receivedAt,
+        text: msgRec.text,
+      };
+    }
+
+    // - If we have no unread messages, and this is unread...
+    // XXX unread logic; will get complicated in the 'takeback' if we get a meta
+    //  in the same update phase that says we've actually read that message.
+  },
+
   /**
    * Derive the current set of index values for the peep index parameter
    *  for a conversation.  This is used when a peep joins a conversation and we
@@ -428,45 +465,44 @@ LocalStore.prototype = {
    */
   _notifyNewConversation: function(convId, cells, mutatedCells,
                                    indexValues) {
-    var mergedCells = null;
+    var mergedCells = null, self = this;
     this._notif.namespaceItemAdded(
       NS_CONVBLURBS, convId, cells, mutatedCells, indexValues,
       function buildReps(clientData, queryHandle) {
         if (!mergedCells) // merge only the first time needed
-          mergedCells = mergeCells(baseCells, mutatedCells);
+          mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
         // back data
         clientData.data = mergedCells['d:meta'];
-        return this._store._convertConversationBlurb(
+        return self._convertConversationBlurb(
           queryHandle, mergedCells, clientData.deps
         );
       });
   },
 
   /**
-   * Notification about a newly added participant in a conversation for the
-   *  purposes of generating blurb notifications.
+   * Notification about a modified conversation.
    */
-  _notifyConvParticipantAdded: function(convId, cells, mutatedCells,
-                                        frontDataDelta, updatedIndexValues) {
-    var mergedCells = nul;
+  _notifyModifiedConversation: function(convId, cells, mutatedCells,
+                                        updatedIndexValues) {
+    var mergedCells = null, self = this;
     this._notif.namespaceItemModified(
       NS_CONVBLURBS, convId, cells, mutatedCells, updatedIndexValues,
-      function (clientData, queryHandle) {
+      function genFullReps(clientData, queryHandle) {
         if (!mergedCells) // merge only the first time needed
-          mergedCells = mergeCells(baseCells, mutatedCells);
+          mergedCells = $notifking.mergeCells(cells, mutatedCells);
         // back data
         clientData.data = mergedCells['d:meta'];
-        return this._store._convertConversationBlurb(
+        return self._convertConversationBlurb(
           queryHandle, mergedCells, clientData.deps
         );
+      },
+      function genDeltaReps(clientData, queryHandle, outDeltaRep) {
+        // no change to the backside rep is required beause we don't need the
+        //  set of participants under our current shared-key-per-conversation
+        //  crypto key setup.  If the crypto changes, this may change.
+        return self._convertConversationBlurbDelta(
+          queryHandle, clientData, outDeltaRep, cells, mutatedCells);
       });
-  },
-
-  /**
-   * Notification about a message being added to a conversation for the
-   *  purposes of generating a blurb notification.
-   */
-  _notifyConvMessageAdded: function(convId, cells, mutatedCells) {
   },
 
 
@@ -580,7 +616,7 @@ LocalStore.prototype = {
         messages: self._convertConversationMessages(queryHandle, msgRecs, deps),
       };
 
-      self._fillOutQueryDepsAndSend(queryHandle);
+      return self._fillOutQueryDepsAndSend(queryHandle);
     });
   },
 
@@ -635,8 +671,8 @@ LocalStore.prototype = {
         if (/^d:p/.test(key) && mutatedCells[key] === peepRootKey)
           return true;
       }
-      for (key in cells) {
-        if (/^d:p/.test(key) && cells[key] === peepRootKey)
+      for (key in baseCells) {
+        if (/^d:p/.test(key) && baseCells[key] === peepRootKey)
           return true;
       }
       return false;
@@ -657,11 +693,11 @@ LocalStore.prototype = {
 
   /**
    * Update peep (write/recip/any) and conversation indices (global and
-   *  per-peep, including pinned variants).
+   *  per-peep, including pinned variants).  We do this for both join
+   *  and 'human message' messages.
    */
-  _makeConvIndexUpdates: function(convId, convUpdates, peepMaxes,
-                                  convPinned, authorRootKey,
-                                  recipRootKeys, timestamp) {
+  _makeConvIndexUpdates: function(convId, convPinned, convUpdates, peepMaxes,
+                                  authorRootKey, recipRootKeys, timestamp) {
     var authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
     // - global conversation list
     convUpdates.push([$lss.IDX_ALL_CONVS, '', convId, timestamp]);
@@ -670,10 +706,12 @@ LocalStore.prototype = {
       convUpdates.push([$lss.IDX_ALL_CONVS, PINNED, convId, timestamp]);
 
     // - per-peep write/any involvement for the author
-    peepMaxes.push([$lss.IDX_PEEP_WRITE_INVOLVEMENT, '',
-                    authorRootKey, timestamp]);
-    peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '',
-                    authorRootKey, timestamp]);
+    if (!authorIsOurUser) {
+      peepMaxes.push([$lss.IDX_PEEP_WRITE_INVOLVEMENT, '',
+                      authorRootKey, timestamp]);
+      peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '',
+                      authorRootKey, timestamp]);
+    }
     // XXX pinned peep; need to know they are pinned. ughs.
 
     convUpdates.push([$lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
@@ -698,8 +736,6 @@ LocalStore.prototype = {
                       convId, timestamp]);
       }
     }
-
-    return this._db.updateMultipleIndexValues($lss.TBL_CONV_DATA, updates);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -894,6 +930,7 @@ LocalStore.prototype = {
     clientData.data = {
       oident: signedOident,
       sident: cells['d:sident'],
+      numConvs: cells['d:nconvs'],
     };
 
     // -- client data
@@ -911,7 +948,7 @@ LocalStore.prototype = {
     };
   },
 
-  _notifyNewContact: function(peepRootKey, cells, mutatedCells) {
+  _notifyNewContact: function(peepRootKey, cells, mutatedCells, ourPoco) {
     // XXX this construction is sorta synthetic and redundant; the only actual
     //  update is the string one and it happens in `PeepNameTrackTask`.
     var indexValues = [];
@@ -932,6 +969,38 @@ LocalStore.prototype = {
     this._notif.namespaceItemAdded(
       NS_PEEPS, peepRootKey, cells, mutatedCells, indexValues,
       this._convertPeepToBothReps.bind(this, cells, mutatedCells));
+  },
+
+  _notifyPeepConvDeltas: function(authorRootKey, recipRootKeys,
+                                  peepIndexValues,
+                                  inviteeRootKey, inviteeDeltaRep) {
+    // - notify for the author
+    this._notif.namespaceItemModified(
+      NS_PEEPS, authorRootKey, null, null, peepIndexValues);
+    // - notify for the invitee with a delta if we have
+    if (inviteeRootKey) {
+      this._notif.namespaceItemModified(
+        NS_PEEPS, inviteeRootKey, null, null, peepIndexValues, null,
+        function deltaGen(clientData, queryHandle, outDeltaRep) {
+          if (inviteeDeltaRep.hasOwnProperty('numConvs')) {
+            // this function only gets invoked once per query source, so it's
+            //  fine and won't screw up and increment several times.
+            clientData.data.numConvs += inviteeDeltaRep.numConvs;
+            // (it's okay to clobber this since we maintain an absolute count
+            //  in clientData.data.)
+            outDeltaRep.numConvs = clientData.data.numConvs;
+          }
+          return outDeltaRep;
+        });
+    }
+    // - notify for the recipients
+    for (var i = 0; i < recipRootKeys.length; i++) {
+      var rootKey = recipRootKeys[i];
+      if (rootKey !== inviteeRootKey) {
+        this._notif.namespaceItemModified(
+          NS_PEEPS, recipRootKeys[i], null, null, peepIndexValues);
+      }
+    }
   },
 
   _fetchAndReportPeepBlurbsById: function(queryHandle, usingIndex, indexParam,
@@ -1037,11 +1106,11 @@ LocalStore.prototype = {
       indexValues: [],
       deps: null, // peeps have no additional deps
     };
-    queryHandle.membersByLocal[localName] = clientData;
+    queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
     fullMap[peepRootKey] = clientData;
     addToDeps.push(clientData);
 
-    return clientData.localName;
+    return localName;
   },
 
   //////////////////////////////////////////////////////////////////////////////

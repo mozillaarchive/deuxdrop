@@ -985,17 +985,28 @@ var TestModaActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Holding: Backside Communications
 
+  /**
+   * Hold commands received by the backside that were sent by a moda bridge.
+   */
   holdAllModaCommands: function() {
     if (!("__hold_all" in this._backside))
       $testwrap_backside.modaBacksideWrap(this._backside, this._logger);
     this._backside.__hold_all(true);
   },
 
+  /**
+   * Expcet that the backside will receive a command with the given name from
+   *  a moda bridge.
+   */
   expectModaCommand: function(cmd) {
     this.RT.reportActiveActorThisStep(this);
     this.expect_backsideReceived(cmd);
   },
 
+  /**
+   * Release a held moda-bridge-to-moda-backside command with the given name,
+   *  returning the return value of the invocation of that command.
+   */
   releaseAndPeekAtModaCommand: function(cmd) {
     return this._backside.__release_and_peek__handle(cmd);
   },

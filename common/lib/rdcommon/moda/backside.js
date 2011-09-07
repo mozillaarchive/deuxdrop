@@ -114,12 +114,17 @@ ModaBackside.prototype = {
    */
   XXXcreateBridgeChannel: function(bridgeHandlerFunc) {
     this._bridgeName = this.name;
+    var self = this;
     this._sendObjFunc = function(msg) {
-      var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
-      bridgeHandlerFunc(jsonRoundtripped);
+      try {
+        var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
+        bridgeHandlerFunc(jsonRoundtripped);
+      }
+      catch (ex) {
+        self._log.sendFailure(ex);
+      }
     };
 
-    var self = this;
     return this._received.bind(this);
   },
 
@@ -367,6 +372,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     errors: {
       queryProblem: {ex: $log.EXCEPTION},
+      sendFailure: {ex: $log.EXCEPTION},
     },
   },
 });

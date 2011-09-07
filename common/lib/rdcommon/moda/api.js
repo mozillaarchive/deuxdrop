@@ -457,7 +457,7 @@ ModaBridge.prototype = {
     //  than needing to use _cacheLookupOrExplode themselves.
     // Messages aren't treated separately because they are immutable and small
     //  so we don't care about tracking them independently.
-    var i, key, values, val, dataMap;
+    var i, key, attr, values, val, dataMap, curRep, delta;
 
     // -- Servers
     if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
@@ -487,7 +487,21 @@ ModaBridge.prototype = {
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
-      // XXX process pinned changes, number of associated convs, etc.
+      values = msg.dataDelta[NS_PEEPS];
+      dataMap = liveset._dataByNS[NS_PEEPS];
+      for (key in values) {
+        if (!dataMap.hasOwnProperty(key))
+          throw new Error("dataDelta for unknown key: " + key);
+        curRep = dataMap[key];
+        delta = values[key];
+        for (attr in delta) {
+          switch (attr) {
+            case 'numConvs':
+              curRep._numConvs = delta.numConvs;
+              break;
+          }
+        }
+      }
     }
 
     // -- Conv Blurbs
@@ -504,7 +518,30 @@ ModaBridge.prototype = {
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
-      // XXX process pinned changes, unread count changes, etc.
+      values = msg.dataDelta[NS_CONVBLURBS];
+      dataMap = liveset._dataByNS[NS_CONVBLURBS];
+      for (key in values) {
+        if (!dataMap.hasOwnProperty(key))
+          throw new Error("dataDelta for unknown key: " + key);
+        curRep = dataMap[key];
+        delta = values[key];
+        for (attr in delta) {
+          switch (attr) {
+            case 'participants':
+              for (i = 0; i < delta.participants.length; i++) {
+                curRep.participants.push(
+                  liveset._dataByNS.peeps[delta.participants[i]]);
+              }
+              break;
+            case 'firstMessage':
+              // only use it if we don't already have one
+              if (!curRep.firstMessage)
+                curRep.firstMessage = this._transformMessage(delta.firstMessage,
+                                                             curRep, liveset);
+              break;
+          }
+        }
+      }
     }
 
     // --- Populate The Set = Apply Splices or Special Case.
@@ -631,9 +668,9 @@ ModaBridge.prototype = {
     var blurb = new ConversationBlurb(
       this, localName, participants, wireConv.pinned, wireConv.numUnread
     );
-    blurb.firstMessage =
+    blurb.firstMessage = wireConv.firstMessage &&
       this._transformMessage(wireConv.firstMessage, blurb, liveset);
-    blurb.firstUnreadMessage =
+    blurb.firstUnreadMessage = wireConv.firstUnreadMessage &&
       this._transformMessage(wireConv.firstUnreadMessage, blurb, liveset);
     return blurb;
   },
