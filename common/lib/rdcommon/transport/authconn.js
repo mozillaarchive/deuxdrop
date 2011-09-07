@@ -780,7 +780,11 @@ AuthorizingServer.prototype = {
     if (useIP === undefined)
       useIP = '127.0.0.1';
     if (usePort === undefined)
-      usePort = 0;
+      usePort = 8321;
+
+    this.listenIP = useIP;
+    this.listenPort = usePort;
+
     var self = this;
     function listening() {
       self.address = self._httpServer.address();

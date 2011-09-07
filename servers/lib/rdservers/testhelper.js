@@ -481,6 +481,27 @@ var TestClientActorMixins = {
     this._eRawClient.expect_replicaCaughtUp();
   },
 
+  assertInsecureFetchedSelfIdent: function(server) {
+    var domain = server._server.listenIP + ':' + server._server.listenPort,
+        selfIdent = server._server._endpoints['signup/signup']
+                    .serverConfig.selfIdent;
+
+    this.RT.reportActiveActorThisStep(this);
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+
+    this._eRawClient.expect_insecurelyGetServerSelfIdentUsingDomainNameSuccess(
+      selfIdent);
+
+    this.expect_insecurelyGetServerSelfIdentUsingDomainNameSuccess(selfIdent);
+
+    when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
+      function (obj) {
+      this._logger.insecurelyGetServerSelfIdentUsingDomainNameSuccess(
+        obj.selfIdent);
+      }
+    );
+  },
+
   /**
    * Assert that the client, per its local store, has a contact for the user
    *  represented by the provided client.
@@ -1206,9 +1227,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       // - hold-related
       replicaBlockNotifiedOnServer: {},
+
+      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {}
     },
     TEST_ONLY_events: {
       replicaBlockNotifiedOnServer: {block: false},
+      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {selfIdent: true}
     },
   },
   testServer: {
