@@ -319,65 +319,104 @@ LocalStore.prototype = {
                 function(cells) {
       // we need the meta on our side...
       clientData.data = cells['d:meta'];
+
       // -- build the client rep
-      var numMessages = cells['m'];
-      var participants = [];
-      for (var key in cells) {
-        // - participants
-        if (/^d:p/.test(key)) {
-          participants.push(self._deferringPeepQueryResolve(queryHandle,
-                                                            cells[key],
-                                                            deps));
-        }
+      queryHandle.dataMap[NS_CONVBLURBS][localName] =
+        self._convertConversationBlurb(queryHandle, cells, deps);
+      return clientData;
+    });
+  },
+
+  /**
+   * Create a send-to-moda-bridge wire representation representation of a
+   *  conversation blurb given its cells.
+   */
+  _convertConversationBlurb: function(queryHandle, cells, deps) {
+    var numMessages = cells['m'];
+    var participants = [];
+    for (var key in cells) {
+      // - participants
+      if (/^d:p/.test(key)) {
+        participants.push(this._deferringPeepQueryResolve(queryHandle,
+                                                          cells[key],
+                                                          deps));
       }
-      // - first (non-join) message...
-      var msg, iMsg, firstMsgRep;
-      for (iMsg = 0; iMsg < numMessages; iMsg++) {
-        msg = cells['d:m' + iMsg];
-        if (msg.type === 'message') {
-          firstMsgRep = {
+    }
+    // - first (non-join) message...
+    var msg, iMsg, firstMsgRep;
+    for (iMsg = 0; iMsg < numMessages; iMsg++) {
+      msg = cells['d:m' + iMsg];
+      if (msg.type === 'message') {
+        firstMsgRep = {
+          type: 'message',
+          author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
+                                                  deps),
+          composedAt: msg.composedAt,
+          receivedAt: msg.receivedAt,
+          text: msg.text,
+        };
+        break;
+      }
+    }
+
+    // - number of unread
+    // XXX unread status not yet dealt with. pragmatism!
+    var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
+    for (; iMsg <= numMessages; iMsg++) {
+      msg = cells['d:m' + iMsg];
+      if (msg.type === 'message') {
+        numUnreadTextMessages++;
+        // - first unread (non-join) message...
+        if (!firstUnreadMsgRep) {
+          firstUnreadMsgRep = {
             type: 'message',
-            author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
+            author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
                                                     deps),
             composedAt: msg.composedAt,
             receivedAt: msg.receivedAt,
             text: msg.text,
           };
+        }
+      }
+    }
+
+    return {
+      participants: participants,
+      firstMessage: firstMsgRep,
+      firstUnreadMessage: firstUnreadMsgRep,
+      pinned: false,
+      numUnread: numUnreadTextMessages,
+    };
+  },
+
+  /**
+   * Derive the current set of index values for the peep index parameter
+   *  for a conversation.  This is used when a peep joins a conversation and we
+   *  need the index values that otherwise would require a database lookup.
+   */
+  _rederiveConversationPeepIndices: function(convId, cells, peepRootKey) {
+    var highNum = cells['d:m'];
+
+    var write = null, recip = null, any = null;
+    for (var i = 1; i <= highNum; i++) {
+      var msgRec = cells['d:m' + i];
+
+      any = msgRec.receivedAt;
+      switch (msgRec.type) {
+        case 'message':
+          if (msgRec.authorId === peepRootKey)
+            write = msgRec.receivedAt;
+          else
+            recip = msgRec.receivedAt;
           break;
-        }
       }
+    }
 
-      // - number of unread
-      // XXX unread status not yet dealt with. pragmatism!
-      var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
-      for (; iMsg < numMessages; iMsg++) {
-        msg = cells['d:m' + iMsg];
-        if (msg.type === 'message') {
-          numUnreadTextMessages++;
-          // - first unread (non-join) message...
-          if (!firstUnreadMsgRep) {
-            firstUnreadMsgRep = {
-              type: 'message',
-              author: self._deferringPeepQueryResolve(queryHandle, msg.authorId,
-                                                      deps),
-              composedAt: msg.composedAt,
-              receivedAt: msg.receivedAt,
-              text: msg.text,
-            };
-          }
-        }
-      }
-
-      queryHandle.dataMap[NS_CONVBLURBS][localName] = {
-        participants: participants,
-        firstMessage: firstMsgRep,
-        firstUnreadMessage: firstUnreadMsgRep,
-        pinned: false,
-        numUnread: numUnreadTextMessages,
-      };
-
-      return clientData;
-    });
+    return [
+      [$lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, peepRootKey, null, write],
+      [$lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT, peepRootKey, null, recip],
+      [$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, peepRootKey, null, any]
+    ];
   },
 
   /**
@@ -387,17 +426,49 @@ LocalStore.prototype = {
    *
    * We are notified about conversations once our user is joined to them.
    */
-  _notifyNewConversation: function(convMeta, cells) {
-    //if (this._notif.checkForInterestedQueries(NS_CONVBLURBS
+  _notifyNewConversation: function(convId, cells, mutatedCells,
+                                   indexValues) {
+    var mergedCells = null;
+    this._notif.namespaceItemAdded(
+      NS_CONVBLURBS, convId, cells, mutatedCells, indexValues,
+      function buildReps(clientData, queryHandle) {
+        if (!mergedCells) // merge only the first time needed
+          mergedCells = mergeCells(baseCells, mutatedCells);
+        // back data
+        clientData.data = mergedCells['d:meta'];
+        return this._store._convertConversationBlurb(
+          queryHandle, mergedCells, clientData.deps
+        );
+      });
   },
 
   /**
-   * Notification about a new message in a conversation; we trigger updates
-   *  for both blurbs (about message counts) and full conversations (provide
-   *  the message with lookups and deps).
+   * Notification about a newly added participant in a conversation for the
+   *  purposes of generating blurb notifications.
    */
-  _notifyNewMessage: function(messageType) {
+  _notifyConvParticipantAdded: function(convId, cells, mutatedCells,
+                                        frontDataDelta, updatedIndexValues) {
+    var mergedCells = nul;
+    this._notif.namespaceItemModified(
+      NS_CONVBLURBS, convId, cells, mutatedCells, updatedIndexValues,
+      function (clientData, queryHandle) {
+        if (!mergedCells) // merge only the first time needed
+          mergedCells = mergeCells(baseCells, mutatedCells);
+        // back data
+        clientData.data = mergedCells['d:meta'];
+        return this._store._convertConversationBlurb(
+          queryHandle, mergedCells, clientData.deps
+        );
+      });
   },
+
+  /**
+   * Notification about a message being added to a conversation for the
+   *  purposes of generating a blurb notification.
+   */
+  _notifyConvMessageAdded: function(convId, cells, mutatedCells) {
+  },
+
 
   queryConversationMessages: function(queryHandle, convId) {
     // - Loop the blurb in for GC purposes
@@ -427,6 +498,10 @@ LocalStore.prototype = {
   /**
    * Convert message records (as pulled from or pushed to hbase) into wire
    *  representations to send to the moda bridge.
+   *
+   * If you change this method, you need to also change
+   *  `_fetchConversationBlurb` which currently inlines the same
+   *  transformations.
    */
   _convertConversationMessages: function(queryHandle, msgRecs, deps) {
     var messages = [];
@@ -520,7 +595,7 @@ LocalStore.prototype = {
    * ]
    */
   queryAndWatchPeepConversationBlurbs: function(queryHandle, peepRootKey) {
-    // - pick the index to use
+    // pick the index to use
     var index;
     switch (queryHandle.queryDef.by) {
       case 'any':
@@ -539,6 +614,34 @@ LocalStore.prototype = {
     queryHandle.index = index;
     queryHandle.indexParam = peepRootKey;
 
+    // comparison predicate is keyed off the index
+    queryHandle.cmpFunc = function(aClientData, bClientData) {
+      var aVal = assertGetIndexValue(aClientData.indexValues,
+                                     index, peepRootKey),
+          bVal = assertGetIndexValue(aClientData.indexValues,
+                                     index, peepRootKey);
+      return aVal - bVal;
+    };
+
+    // test predicate is keyed off the presence of the peep in the conversation
+    queryHandle.testFunc = function(baseCells, mutatedCells, convId) {
+      var key;
+      // We can because we don't know their tell key right here, and eventually
+      //  there might be multiple tell keys.  This is not super-great efficient.
+      //  Before optimizing this too much, it would likely be worth creating
+      //  a variant on the test function that is incremental and so would
+      //  only check out mutatedCells...
+      for (key in mutatedCells) {
+        if (/^d:p/.test(key) && mutatedCells[key] === peepRootKey)
+          return true;
+      }
+      for (key in cells) {
+        if (/^d:p/.test(key) && cells[key] === peepRootKey)
+          return true;
+      }
+      return false;
+    };
+
     // - generate an index scan, netting us the conversation id's, hand-off
     return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey, -1,
                                    null, null, null, null, null, null),
@@ -553,37 +656,47 @@ LocalStore.prototype = {
   //  so we centralize it.
 
   /**
-   * Update conversation indices, both global and per-peep; this covers
-   *  write/recip/any and pinned permutations.  (Note that we don't
-   *  have per-peep pinned indices because the presumption is that filtering
-   *  will be cheap enough in that case.)
+   * Update peep (write/recip/any) and conversation indices (global and
+   *  per-peep, including pinned variants).
    */
-  _updateConvIndices: function(convId, convPinned, authorRootKey, recipRootKeys,
-                               timestamp) {
-    var updates = [],
-        authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
+  _makeConvIndexUpdates: function(convId, convUpdates, peepMaxes,
+                                  convPinned, authorRootKey,
+                                  recipRootKeys, timestamp) {
+    var authorIsOurUser = (authorRootKey === this._keyring.rootPublicKey);
     // - global conversation list
-    updates.push([$lss.IDX_ALL_CONVS, '', convId, timestamp]);
+    convUpdates.push([$lss.IDX_ALL_CONVS, '', convId, timestamp]);
     // - global pinned conversation list
     if (convPinned)
-      updates.push([$lss.IDX_ALL_CONVS, PINNED, convId, timestamp]);
+      convUpdates.push([$lss.IDX_ALL_CONVS, PINNED, convId, timestamp]);
 
     // - per-peep write/any involvement for the author
-    updates.push([$lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
+    peepMaxes.push([$lss.IDX_PEEP_WRITE_INVOLVEMENT, '',
+                    authorRootKey, timestamp]);
+    peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '',
+                    authorRootKey, timestamp]);
+    // XXX pinned peep; need to know they are pinned. ughs.
+
+    convUpdates.push([$lss.IDX_CONV_PEEP_WRITE_INVOLVEMENT, authorRootKey,
                   convId, timestamp]);
-    updates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
+    convUpdates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, authorRootKey,
                   convId, timestamp]);
 
     // - per-peep (maybe recip)/any involvement for the recipients
     for (var iRecip = 0; iRecip < recipRootKeys.length; iRecip++) {
       var rootKey = recipRootKeys[iRecip];
       // - boost any involvement
-      updates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, rootKey,
+      peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '', rootKey, timestamp]);
+
+      convUpdates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, rootKey,
                     convId, timestamp]);
       // - boost recip involvement
-      if (authorIsOurUser)
-        updates.push([$lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT, rootKey,
+      if (authorIsOurUser) {
+        peepMaxes.push([$lss.IDX_PEEP_RECIP_INVOLVEMENT, '',
+                        rootKey, timestamp]);
+
+        convUpdates.push([$lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT, rootKey,
                       convId, timestamp]);
+      }
     }
 
     return this._db.updateMultipleIndexValues($lss.TBL_CONV_DATA, updates);
@@ -770,32 +883,35 @@ LocalStore.prototype = {
                                               idx, indexParam));
   },
 
-  _notifyNewContact: function(peepRootKey, cells, mutatedCells) {
-    // -- bail if no one cares
-    if (!this._notif.checkForInterestedQueries(NS_PEEPS, cells, mutatedCells))
-      return;
-
-    // -- normalize the cells into the blurb rep
-    // XXX much of this could probably be refactored to avoid duplication
-    //  between us an _fetchPeepBlurb.
-    var ourRep = {
-      oident: mutatedCells['d:oident'] || cells['d:oident'] || null,
-      sident: mutatedCells['d:sident'] || cells['d:sident'],
+  /**
+   * Convert a peep hbase representation into our reps.
+   */
+  _convertPeepToBothReps: function(baseCells, mutatedCells, clientData) {
+    var cells = mutatedCells ? $notifking.mergeCells(baseCells, mutatedCells)
+                             : baseCells;
+    var signedOident = cells.hasOwnProperty('d:oident') ?
+                         cells['d:oident'] : null;
+    clientData.data = {
+      oident: signedOident,
+      sident: cells['d:sident'],
     };
 
-    var ourPoco = ourRep.oident ?
-      $pubident.peekOtherPersonIdentNOVERIFY(ourRep.oident).localPoco : null;
+    // -- client data
+    var ourPoco = signedOident ?
+      $pubident.peekOtherPersonIdentNOVERIFY(signedOident).localPoco : null;
+
     var selfPoco =
-      $pubident.peekPersonSelfIdentNOVERIFY(ourRep.sident).poco;
-    var blurbRep = {
+      $pubident.peekPersonSelfIdentNOVERIFY(cells['d:sident']).poco;
+    return {
       ourPoco: ourPoco,
       selfPoco: selfPoco,
-      numUnread: (mutatedCells.hasOwnProperty('d:nunread') ?
-                    mutatedCells['d:nunread'] : cells['d:nunread']),
-      numConvs: (mutatedCells.hasOwnProperty('d:nconvs') ?
-                   mutatedCells['d:nconvs'] : cells['d:nconvs']),
+      numUnread: cells['d:nunread'],
+      numConvs: cells['d:nconvs'],
+      pinned: false,
     };
+  },
 
+  _notifyNewContact: function(peepRootKey, cells, mutatedCells) {
     // XXX this construction is sorta synthetic and redundant; the only actual
     //  update is the string one and it happens in `PeepNameTrackTask`.
     var indexValues = [];
@@ -813,9 +929,9 @@ LocalStore.prototype = {
                       peepRootKey, now]);
 
     // -- generate the notification
-    this._notif.namespaceItemAdded(NS_PEEPS, peepRootKey,
-                                   cells, mutatedCells, indexValues,
-                                   blurbRep, ourRep);
+    this._notif.namespaceItemAdded(
+      NS_PEEPS, peepRootKey, cells, mutatedCells, indexValues,
+      this._convertPeepToBothReps.bind(this, cells, mutatedCells));
   },
 
   _fetchAndReportPeepBlurbsById: function(queryHandle, usingIndex, indexParam,
@@ -893,26 +1009,8 @@ LocalStore.prototype = {
     return when(this._db.getRow($lss.TBL_PEEP_DATA, peepRootKey, null),
                 function(cells) {
       self._log.fetchPeepBlurb(queryHandle.uniqueId, peepRootKey, cells);
-      // -- our data
-      var signedOident = cells.hasOwnProperty('d:oident') ?
-                           cells['d:oident'] : null;
-      clientData.data = {
-        oident: signedOident,
-        sident: cells['d:sident'],
-      };
-      // -- client data
-      var ourPoco = signedOident ?
-        $pubident.peekOtherPersonIdentNOVERIFY(signedOident).localPoco : null;
-
-      var selfPoco =
-        $pubident.peekPersonSelfIdentNOVERIFY(cells['d:sident']).poco;
-      queryHandle.dataMap[NS_PEEPS][clientData.localName] = {
-        ourPoco: ourPoco,
-        selfPoco: selfPoco,
-        numUnread: cells['d:nunread'],
-        numConvs: cells['d:nconvs'],
-        pinned: false,
-      };
+      queryHandle.dataMap[NS_PEEPS][clientData.localName] =
+                    self._convertPeepToBothReps(cells, null, clientData);
       return clientData;
     });
   },
@@ -923,13 +1021,11 @@ LocalStore.prototype = {
    *  not already known.
    */
   _deferringPeepQueryResolve: function(queryHandle, peepRootKey, addToDeps) {
-    var fullMap = queryHandle.membersByFull[NS_PEEPS], clientData;
-    if (fullMap.hasOwnProperty(peepRootKey)) {
-      clientData = fullMap[peepRootKey];
-      clientData.count++;
-      addToDeps.push(clientData);
+    var fullMap = queryHandle.membersByFull[NS_PEEPS],
+        clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_PEEPS,
+                                                     peepRootKey);
+    if (clientData)
       return clientData.localName;
-    }
 
     queryHandle.dataNeeded[NS_PEEPS].push(peepRootKey);
     var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);

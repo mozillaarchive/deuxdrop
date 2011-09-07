@@ -188,6 +188,10 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
       return undefined;
     },
     generate_notifications: function() {
+      // We only care about generating the creation notification and
+      //  incrementing the number of conversations the peep is involved in.
+      //  The write/recip/any timestamp views are updated by the tasks that
+      //  actually process messages for the conversations.
       if (this.isContactAdd)
         return this.store._notifyNewContact(this.peepPubring.rootPublicKey,
                                             this.cells, this.writeCells);
@@ -195,7 +199,7 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
         return this.store._notif.namespaceItemModified(NS_PEEPS,
                                                 this.peepPubring.rootPublicKey,
                                                 this.cells, this.writeCells,
-                                                'd:nconvs');
+                                                'd:nconvs', []);
       return null;
     },
     all_done: function() {
@@ -205,12 +209,16 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
 });
 
 /**
- * Process a conversation invitation by validating its attestation and
- *  creating the appropriate database row.  The conversation will not become
- *  visible to the user until the first message in the conversation is seen.
- *  (The choice of the first message is made so that we never have a
- *  conversation blurb that claims to have zero messages, which would violate
- *  many apparent invariants.
+ * Process a conversation invitation by validating its attestation and creating
+ *  the appropriate database row.  This is mainly a book-keeping exercise, but
+ *  is also an important cryptographic check since the client is (usually) the
+ *  first layer of the software stack that has the body box key and thus is able
+ *  to see the true payload.
+ *
+ * The conversation will not become visible to the user until the first message
+ *  in the conversation is seen.  (The choice of the first message is made so
+ *  that we never have a conversation blurb that claims to have zero messages,
+ *  which would violate many apparent invariants.)
  */
 var ConvInviteTask = exports.ConvInviteTask = taskMaster.defineTask({
   name: 'convInvite',
@@ -265,7 +273,9 @@ var ConvInviteTask = exports.ConvInviteTask = taskMaster.defineTask({
 });
 
 /**
- * Process a join message.
+ * Process a join message, the notification from the fanout server that someone
+ *  has joined the conversation.  (Which means they have now seen the backlog,
+ *  will see all new messages, and can post messages to the conversation.)
  */
 var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
   name: 'convJoin',
@@ -315,51 +325,46 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
     // PeepNameTrackTask returns the pubring from the oident to be nice.
     update_conv_data: function(inviteePubring) {
       var inviterRootKey = this.inviterPubring.rootPublicKey;
-      var inviteeRootKey = inviteePubring.rootPublicKey;
+      var inviteeRootKey = this.inviteeRootKey =
+        inviteePubring.rootPublicKey;
+      var timestamp = this.fanoutEnv.receivedAt;
 
-      var writeCells = {};
+      var writeCells = this.writeCells = {};
       // - add the invitee as an authorized participant by their tell key
       writeCells["d:p" + this.fanoutEnv.invitee] = inviteeRootKey;
       // - add the join entry in the message sequence
-      var msgNum = writeCells["d:m"] = parseInt(this.cells["d:m"]) + 1;
-      var msgRec = writeCells["d:m" + msgNum] = {
+      var msgNum = this.msgNum = writeCells["d:m"] =
+        parseInt(this.cells["d:m"]) + 1;
+      var msgRec = this.msgRec = writeCells["d:m" + msgNum] = {
         type: 'join',
         by: inviterRootKey,
         id: inviteeRootKey,
-        receivedAt: this.fanoutEnv.receivedAt,
+        receivedAt: timestamp,
       };
+
 
       // - peep change notification
       // (timestamps are affected and so is the number of conversations)
-      var peepConvIndexUpdates = [
+      var peepConvIndexUpdates = this.peepConvIndexUpdates = [
+        // create peep conversation involvement index entry
         [$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
          this.convMeta.id, timestamp],
       ];
 
-      var peepIndexMaxes = [
+      var peepIndexMaxes = this.peepIndexMaxes = [
+        // peep activity index entry
         [$lss.IDX_PEEP_ANY_INVOLVEMENT, '', inviteeRootKey, timestamp],
       ];
-      this.store._notif.namespaceItemModified(
-        NS_PEEPS, inviteeRootKey, { numConvs: 1 }, peepIndexUpdates);
-
-      // - message notification
-      this.store._notif.trackNewishMessage(this.convMeta.id, msgNum, msgRec);
-
-      var timestamp = this.fanoutEnv.receivedAt;
 
       var self = this;
       return $Q.join(
         this.store._db.putCells($lss.TBL_CONV_DATA, this.convMeta.id,
                                 writeCells),
-        // - create peep conversation involvement index entry
-        this.store._db.updateIndexValue(
-          $lss.TBL_CONV_DATA, $lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
-          this.convMeta.id, timestamp),
-        // - touch peep activity entry
-        this.store._db.maximizeIndexValue(
-          $lss.TBL_PEEP_DATA, $lss.IDX_PEEP_ANY_INVOLVEMENT, '',
-          inviteeRootKey, timestamp),
-        // - boost their involved conversation count
+        this.store._db.updateMultipleIndexValues(
+          $lss.TBL_CONV_DATA, peepConvIndexUpdates),
+        this.store._db.maximizeMultipleIndexValues(
+          $lss.TBL_PEEP_DATA, peepIndexMaxes),
+        // boost their involved conversation count
         this.store._db.incrementCell($lss.TBL_PEEP_DATA, inviteeRootKey,
                                      'd:nconvs', 1),
         function() {
@@ -370,6 +375,25 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
     },
     // this has to happen after we perform the db maxification
     generate_notifications: function() {
+      // - peep modification
+      this.store._notif.namespaceItemModified(
+        NS_PEEPS, this.inviteeRootKey, { numConvs: 1 }, this.peepIndexMaxes);
+
+      // - conversation blurb notification
+      if (this.msgNum === 1)
+        this.store._notifyNewConversation(
+          this.convMeta.id, this.cells, this.mutatedCells,
+          this.peepConvIndexUpdates);
+      else
+        this.store_notifyModifiedConversation(
+          this.convMeta.id, this.cells, this.mutatedCells,
+          // participants needs the new guy added
+          this.peepConvIndexUpdates);
+
+      // - "new" notifications, conv messages notifications
+      this.store._notif.trackNewishMessage(this.convMeta.id, this.msgNum,
+                                           this.msgRec,
+                                           this.cells, this.writeCells);
     },
   },
 });
@@ -421,9 +445,9 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
 
 
       // - persist the message
-      var writeCells = {};
-      var msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
-      var msgRec = {
+      var writeCells = this.writeCells = {};
+      var msgNum = this.msgNum = writeCells["d:m"] = parseInt(cells["d:m"]) + 1;
+      var msgRec = this.msgRec = {
         type: 'message',
         authorId: authorRootKey,
         composedAt: convBody.composedAt,
@@ -432,8 +456,6 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
       };
       writeCells["d:m" + msgNum] = msgRec;
 
-      // - message notification
-      this.store._notif.trackNewishMessage(convMeta.id, msgNum, msgRec);
 
       var timestamp = fanoutEnv.receivedAt;
 
@@ -451,10 +473,17 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
         recipRootKeys.push(cells[key]);
       }
 
+      const convPinned = false;
+
       // - conversation (all and per-peep) index updating
-      promises.push(
-        this.store._updateConvIndices(convMeta.id, /* pinned */ false,
-                                      authorRootKey, recipRootKeys, timestamp));
+      var convIndexUpdates = [], peepIndexMaxes = [];
+      this.store._makeConvIndexUpdates(
+        convMeta.id, convPinned, convIndexUpdates, peepIndexMaxes,
+        authorRootKey, recipRootKeys, timestamp);
+      promises.push(this.store._db.maximizeMultipleIndexValues(
+                      $lss.TBL_PEEP_DATA, peepIndexMaxes));
+      promises.push(this.store._db.updateMultipleIndexValues(
+                      $lss.TBL_CONV_DATA, convIndexUpdates));
 
       // - author is not us
       if (!authorIsOurUser) {
@@ -468,13 +497,19 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
           authorIsOurUser ? 0 : 1));
       }
 
-      // XXX notifications
-      var self = this;
-      return when($Q.all(promises),
-        function() {
-          self.store._log.conversationMessage(convMeta.id, fanoutEnv.nonce);
-        }
-      );
+      return $Q.all(promises);
+    },
+    generate_notifications: function(resolvedPromises) {
+      // - peep notifications
+
+      // - conversation notifications
+
+      // - "new" notification / convmsgs notification
+      this.store._notif.trackNewishMessage(
+        this.convMeta.id, this.msgNum, this.msgRec);
+
+      this.store._log.conversationMessage(this.convMeta.id,
+                                          this.fanoutEnv.nonce);
     },
   },
 });

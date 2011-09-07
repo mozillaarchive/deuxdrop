@@ -146,6 +146,7 @@
  *       @param[mutatedCells]{
  *         The set of hbase-style cells that we are writing to the database.
  *       }
+ *       @param[fullName]
  *     ]
  *     @return[Boolean]{
  *       Based on the provided cells, should the described item be in this set?
@@ -433,6 +434,26 @@ const assertGetIndexValue = exports.assertGetIndexValue =
 };
 
 /**
+ * Merge the `mutatedCells` on top of `baseCells`, attempting to maintain the
+ *  ordering of baseCells with all the extra bits added afterwards.
+ */
+const mergeCells = exports.mergeCells =
+    function mergeCells(baseCells, mutatedCells) {
+  var oot = {}, key; // canadian for "out"
+  for (key in baseCells) {
+    if (mutatedCells.hasOwnProperty(key))
+      oot[key] = mutatedCells[key];
+    else
+      oot[key] = baseCells[key];
+  }
+  for (key in mutatedCells) {
+    if (!oot.hasOwnProperty(key))
+      oot[key] = mutatedCells[key];
+  }
+  return oot;
+};
+
+/**
  * Tracks outstanding queries, notifies them about changes, and is also in
  *  charge of maintaining "new" aggregate status objects.
  *
@@ -716,46 +737,51 @@ NotificationKing.prototype = {
   //  of messages into conversations is unique within our system.
 
   /**
-   * Notification of a message that is new to us for the purposes of
-   *  1) notifying existing queries and 2) tracking the new message for
-   *  user notification purposes.  For #2, we won't know for sure until we are
-   *  done with our update phase (because it might be marked read by a later
-   *  replica block).
+   * Omnibus generation of message-related notifications based on being told
+   *  about all conversation messages (both joins and human messages).
    *
-   * We also need to deal with conversations becoming relevant to conversation
-   *  blurb queries.  This can be the case if:
-   * - We have a query over all conversations and this is a new conversation.
-   * - We have a query on conversations involving a specific peep and that peep
-   *    is joining a conversation.
-   * - We have either type of query but constrained to a subset and new
-   *    message(s) are changing the effective position of the conversation
-   *    in the global scheme of things so it falls in the range.
-   * Likewise, a conversation can become irrelevant to a blurb query if:
-   * - Position changes cause it to no longer be 'in view'.
+   * The following namespaces derive their notifications from us:
+   * - newness: XXX notyet; notifications about new messages/conversations
+   * - convmsgs: the queries on the messages in a conversation.
    *
-   * The conversation blurb cases are simplified by the fact that multiple
-   *  messages may be received in a batch and only the final position/state
-   *  really matters.  To that end, we do not figure conversation blurb
-   *  updates until the update phase has completed.
+   * We update all queries immediately, although they will not be flushed to
+   *  the moda layer until `updatePhaseDoneReleaseNotifications` is invoked.
+   *  This coalesces notifications without significantly complicating our
+   *  logic.
    */
-  trackNewishMessage: function(convId, msgIndex, msgRec) {
+  trackNewishMessage: function(convId, msgIndex, msgRec, baseCells,
+                               mutatedCells) {
     var newishForConv;
     // -- newness tracking
+// this is speculative logic...
+/*
     if (!this._newishMessagesByConvId.hasOwnProperty(convId))
       newishForConv = this._newishMessagesByConvId[convId] = [];
     else
       newishForConv = this._newishMessagesByConvId[convId];
     newishForConv.push({index: msgIndex, rec: msgRec});
+*/
 
     // -- NS_CONVBLURBS queries
-    // - 'new' conversation! woo!
+    // - 'new' conversation => item added
     // XXX may want to relocate this to around where we do the index updates
+    //  or its own helper
     if (msgIndex === 0) {
+      var mergedCells = null;
+      this.helpAddToInterestedQueries(
+        NS_CONVBLURBS, convId, baseCells, mutatedCells,
+        function buildReps(clientData) {
+      });
     }
+    // - existing conversation => item modified
     else {
     }
 
     // -- update NS_CONVMSGS queries
+    // we can skip out early since you can't have a query about a conversation
+    //  you've never heard of.
+    if (msgIndex === 0)
+      return;
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[NS_CONVMSGS];
@@ -820,15 +846,32 @@ NotificationKing.prototype = {
    *  so the caller can determine if it needs to perform additional lookups
    *  in order to generate a proper notification.
    */
-  checkForInterestedQueries: function(namespace, baseCells, mutatedCells) {
+  helpAddToInterestedQueries: function(namespace, fullName,
+                                       baseCells, mutatedCells) {
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
+      var clientData = null;
+
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
-        if (queryHandle.testFunc(baseCells, mutatedCells))
-          return true;
+        if (!queryHandle.testFunc(baseCells, mutatedCells, fullName))
+          continue;
+
+        if (!clientData) {
+          var localName = "" + (querySource.nextUniqueIdAlloc++);
+          var deps = [];
+          clientData = {
+            localName: localName,
+            fullName: fullName,
+            count: 1,
+            data: null,
+            indexValues: [],
+            deps: deps,
+          };
+
+        }
       }
     }
 
@@ -868,9 +911,21 @@ NotificationKing.prototype = {
 
       while (querySource.pending.length) {
         var queryHandle = querySource.pending.pop();
-        this._store._fillOutQueryDepsAndSend(queryHandle);
+
+        // a promise is returned if we go async
+        var sendResult;
+        if ((sendResult = this._store._fillOutQueryDepsAndSend(queryHandle))) {
+          // In order to ensure that the queries are released in the sequential
+          //  order they were added, defer the rest of our execution until the
+          //  thing gets sent.  (We are doing this mainly for unit tests, but
+          //  it's conceivable this could be very beneficial for moda bridge
+          //  consumers that are not carefully written.)
+          return when(sendResult,
+                      this.updatePhaseDoneReleaseNotifications.bind(this));
+        }
       }
     }
+    return undefined;
   },
 
   /**
@@ -891,26 +946,39 @@ NotificationKing.prototype = {
    *     cell deletion.
    *   }
    *   @param[indexValues IndexValues]
-   *   @param[frontData]{
-   *     The client-side representation of the data.
+   *   @param[optFrontData @oneof[Object Function]]{
+   *     The client-side representation of the data OR a function that takes
+   *     a `ClientData` structure whose 'data' field should be filled-in with
+   *     the back-end representation and whose return value should be the
+   *     front-end representation.  The function is only invoked once per
+   *     query source since the representations can be reused by other queries
+   *     belonging to the same query source.
    *   }
-   *   @param[backData]{
+   *   @param[optBackData]{
    *     The back-side representation of the data;
    *   }
    * ]
    */
   namespaceItemAdded: function(namespace, fullName,
                                baseCells, mutatedCells, indexValues,
-                               frontData, backData) {
+                               optFrontData, optBackData) {
+    var clientDataPopulater;
+    if (typeof(optFrontData) === 'function')
+      clientDataPopulater = optFrontData;
+    else
+      clientDataPopulater = function(clientData) {
+        clientData.data = optBackData;
+        return optFrontData;
+      };
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
-      var localName = null, clientData = null;
+      var localName = null, clientData = null, frontData = null;
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
-        if (!queryHandle.testFunc(baseCells, mutatedCells))
+        if (!queryHandle.testFunc(baseCells, mutatedCells, fullName))
           continue;
 
         // - ensure client data exists
@@ -920,15 +988,17 @@ NotificationKing.prototype = {
             localName: localName,
             fullName: fullName,
             count: 1,
-            data: backData,
+            // gets filled in by clientDataPopulater
+            data: null,
             // starts out empty; we push indices in that are actually used
             indexValues: [],
             // XXX dep propagation (we should either pass in the names or
             //  have the caller explicitly speak to us about a specific
             //  querysource so we can just consume existing clientdata
             //  references)
-            deps: null,
+            deps: [],
           };
+          frontData = clientDataPopulater(clientData, queryHandle);
         }
         else {
           clientData.count++;
@@ -939,7 +1009,7 @@ NotificationKing.prototype = {
         queryHandle.dataMap[namespace][localName] = frontData;
 
         // - put the used index value in to track it.
-        assertTransferIndexValue(indexValues, queryHandle.indexValues,
+        assertTransferIndexValue(indexValues, clientData.indexValues,
                                  queryHandle.index, queryHandle.indexParam);
 
         // - find the splice point
@@ -970,34 +1040,60 @@ NotificationKing.prototype = {
    * We check:
    * - If the indexed value used by any queries has changed.
    * - If a query's test result changes to merit addition/removal.
+   *
+   * XXX we need to provide a rep generation callback like `namespaceItemAdded`
+   *  has for the cases where a transition in object state can change its
+   *  query visibility.
    */
   namespaceItemModified: function(namespace, fullName,
-                                  frontDataDelta,
-                                  indexValuesUpdated) {
+                                  baseCells, mutatedCells, indexValuesUpdated,
+                                  clientDataPopulater
+                                  ) {
 
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
-      var clientData = null;
+      var clientData = null, frontData = null, localName = null;
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
 
         var prePresent =
           queryHandle.membersByFull[namespace].hasOwnProperty(fullName);
-        // XXX for the time being, assume that items only get added to queries
-        //  on addition, never modification.  This will become incorrect once
-        //  we implement 'pinned' status and range slices.
-        if (!prePresent)
-          continue;
-
-        if (!clientData)
+        // -- newly matching query
+        if (!prePresent) {
+          // try and reuse an existing clientData rep if possible
+          if (!clientData)
+            clientData = this.reuseIfAlreadyKnown(queryHandle, namespace,
+                                                  fullId);
+          if (!clientData) {
+            localName = "" + (querySource.nextUniqueIdAlloc++);
+            clientData = {
+              localName: localName,
+              fullName: fullName,
+              count: 1,
+              // gets filled in by clientDataPopulater
+              data: null,
+              // starts out empty; we push indices in that are actually used
+              indexValues: [],
+              deps: [],
+            };
+            frontData = clientDataPopulater(clientData, queryHandle);
+          }
+          else {
+            localName = clientData.localName;
+            if (!frontData)
+              frontData = clientDataPopulater(clientData, queryHandle);
+          }
+        }
+        else if (!clientData)
           clientData = queryHandle.membersByFull[namespace][fullName];
 
         var anyChanges = false;
         if (frontDataDelta) {
-          queryHandle.dataDelta[namespace][localName] = frontDataDelta;
+          queryHandle.dataDelta[namespace][clientData.localName] =
+            frontDataDelta;
           anyChanges = true;
         }
         if (indexValuesUpdated && indexValuesUpdated.length) {

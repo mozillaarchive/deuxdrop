@@ -449,7 +449,7 @@ RedisDbConn.prototype = {
       if (err)
         deferred.reject(err);
       else
-        deferred.resolve();
+        deferred.resolve(updates);
     });
     return deferred.promise;
   },

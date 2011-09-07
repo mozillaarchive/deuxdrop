@@ -523,7 +523,7 @@ IndexedDbConn.prototype = {
     var transaction = this._db.transaction(aggrNames,
                                            IDBTransaction.READ_WRITE);
     transaction.oncomplete = function() {
-      deferred.resolve();
+      deferred.resolve(updates);
     };
     transaction.onerror = function() {
       deferred.reject(transaction.errorCode);
@@ -635,7 +635,7 @@ IndexedDbConn.prototype = {
           // update db if our new value is bigger
           if (existing < newValue)
             store.put(newValue, cellName);
-          // update memory rep if existing value is bugger
+          // update memory rep if existing value is bigger
           else
             maxdate[3] = existing;
         }
