@@ -322,8 +322,7 @@ exports.makeServerDef = function(serverConfig) {
           var selfIdent = serverConfig.selfIdentBlob,
               contents = JSON.stringify({selfIdent: selfIdent});
           response.writeHead(200, {
-          'Content-Type': 'application/json;charset=UTF-8',
-          'Content-Length': contents.length
+          'Content-Type': 'text/plain;charset=utf-8'
         });
         response.write(contents, 'utf8');
         response.end();

@@ -484,7 +484,7 @@ var TestClientActorMixins = {
   assertInsecureFetchedSelfIdent: function(server) {
     var domain = server._server.listenIP + ':' + server._server.listenPort,
         selfIdent = server._server._endpoints['signup/signup']
-                    .serverConfig.selfIdent;
+                    .serverConfig.selfIdentBlob;
 
     this.RT.reportActiveActorThisStep(this);
     this.RT.reportActiveActorThisStep(this._eRawClient);
@@ -496,8 +496,9 @@ var TestClientActorMixins = {
 
     when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
       function (obj) {
-      this._logger.insecurelyGetServerSelfIdentUsingDomainNameSuccess(
-        obj.selfIdent);
+
+        this._logger.insecurelyGetServerSelfIdentUsingDomainNameSuccess(
+          obj.selfIdent);
       }
     );
   },
