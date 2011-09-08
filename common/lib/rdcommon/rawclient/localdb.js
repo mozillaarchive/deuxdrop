@@ -1020,7 +1020,6 @@ LocalStore.prototype = {
 
   _fetchAndReportPeepBlurbsById: function(queryHandle, usingIndex, indexParam,
                                           peepRootKeys) {
-    this._log.fetchPeepBlurbs(queryHandle.uniqueId, peepRootKeys);
     var deferred = $Q.defer();
     var iPeep = 0, stride = 1, self = this,
         viewItems = [], clientDataItems = null;
@@ -1092,7 +1091,6 @@ LocalStore.prototype = {
     var self = this;
     return when(this._db.getRow($lss.TBL_PEEP_DATA, peepRootKey, null),
                 function(cells) {
-      self._log.fetchPeepBlurb(queryHandle.uniqueId, peepRootKey, cells);
       queryHandle.dataMap[NS_PEEPS][clientData.localName] =
                     self._convertPeepToBothReps(cells, null, clientData);
       return clientData;
@@ -1212,15 +1210,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       newConversation: {convId: true},
       conversationMessage: {convId: true, nonce: true},
-
-      // -- query
-      fetchPeepBlurbs: {handle: false},
-      fetchPeepBlurb: {handle: false},
     },
     TEST_ONLY_events: {
-      // -- query
-      fetchPeepBlurbs: {peepRootKeys: false},
-      fetchPeepBlurb: {peepRootKey: false, cells: false},
     },
     calls: {
       replicaCmd: {command: true},
