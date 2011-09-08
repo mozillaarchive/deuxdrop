@@ -175,8 +175,7 @@ var TestClientActorMixins = {
         // - fork an identity with a new client keypair
         self._rawClient = $rawclient_api.getClientForExistingIdentity(
             opts.clone._rawClient.__forkNewPersistedIdentityForNewClient(),
-            self._db,
-            self._logger);
+            self._db, self._logger, true);
         // (This leaves the thing we are cloning knowing about us, and we know
         //  about it.  But this is a pairwise thing so any other clones should
         //  also fork off of the same guy as us, leaving only that one guy

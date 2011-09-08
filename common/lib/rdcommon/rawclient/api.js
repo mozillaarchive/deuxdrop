@@ -256,7 +256,7 @@ MailstoreConn.prototype = {
  *  authenticator and then verify it, it does avoid us having to write a second
  *  code-path.
  */
-function RawClientAPI(persistedBlob, dbConn, _logger) {
+function RawClientAPI(persistedBlob, dbConn, isFirstRun, _logger) {
   this._dbConn = dbConn;
 
   // -- restore keyrings
@@ -297,7 +297,7 @@ function RawClientAPI(persistedBlob, dbConn, _logger) {
 
   // -- create store
   this.store = new $localdb.LocalStore(dbConn, this._keyring, this._pubring,
-                                       this._log);
+                                       isFirstRun, this._log);
 
 
   /**
@@ -469,12 +469,17 @@ RawClientAPI.prototype = {
     // and our dubious self other-ident...
     this._selfOthIdentBlob = $pubident.generateOtherPersonIdent(
                                this._longtermKeyring, this._selfIdentBlob,
-                               {});
+                               this._poco);
     this._pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
                       this._selfIdentBlob);
 
     if (!doNotNotify && this._accountListener)
       this._accountListener.accountChanged(this);
+
+    // Save our self other-ident into the database so when we end up presenting
+    //  ourself as a peep we look like a contact.
+    this.store.saveOurOwnSelfIdents(this._selfIdentBlob,
+                                    this._selfOthIdentBlob);
   },
 
   getPoco: function() {
@@ -1003,7 +1008,7 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
     otherClientAuths: [],
   };
 
-  return new RawClientAPI(persistedBlob, dbConn, _logger);
+  return new RawClientAPI(persistedBlob, dbConn, true, _logger);
 };
 
 /**
@@ -1012,8 +1017,8 @@ exports.makeClientForNewIdentity = function(poco, dbConn, _logger) {
  *  probably what you want to use if you are on a device.
  */
 exports.getClientForExistingIdentity = function(persistedBlob, dbConn,
-                                                _logger) {
-  return new RawClientAPI(persistedBlob, dbConn, _logger);
+                                                _logger, forceBeNew) {
+  return new RawClientAPI(persistedBlob, dbConn, Boolean(forceBeNew), _logger);
 };
 
 var LOGFAB = exports.LOGFAB = $log.register($module, {

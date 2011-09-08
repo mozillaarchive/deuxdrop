@@ -606,7 +606,7 @@ function simplifyInsaneObjects(obj, curDepth) {
  *  We are explicitly choosing this depth to support our test simple state
  *  representation expresseb by our `STATEREP` constant.
  */
-const COMPARE_DEPTH = 3;
+const COMPARE_DEPTH = 4;
 function boundedCmpObjs(a, b, depthLeft) {
   var aAttrCount = 0, bAttrCount = 0, key, nextDepth = depthLeft - 1;
 
@@ -624,11 +624,12 @@ function boundedCmpObjs(a, b, depthLeft) {
         return false;
     }
   }
-
+  // the theory is that if every key in a is in b and its value is equal, and
+  //  there are the same number of keys in b, then they must be equal.
   for (key in b) {
     bAttrCount++;
   }
-  if (aAttrCount != bAttrCount)
+  if (aAttrCount !== bAttrCount)
     return false;
   return true;
 }
@@ -639,7 +640,7 @@ function boundedCmpObjs(a, b, depthLeft) {
  * }
  */
 function smartCompareEquiv(a, b, depthLeft) {
-  if (typeof(a) !== 'object' || (a == null))
+  if (typeof(a) !== 'object' || (a == null) || (b == null))
     return a === b;
   // fast-path for identical objects
   if (a === b)
@@ -650,7 +651,7 @@ function smartCompareEquiv(a, b, depthLeft) {
     if (a.length !== b.length)
       return false;
     for (var iArr = 0; iArr < a.length; iArr++) {
-      if (!smartCompareEquiv(a[iArr], b[iArr]))
+      if (!smartCompareEquiv(a[iArr], b[iArr], depthLeft - 1))
         return false;
     }
     return true;

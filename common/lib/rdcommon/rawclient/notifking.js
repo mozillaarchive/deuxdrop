@@ -1145,10 +1145,13 @@ NotificationKing.prototype = {
           }
 
           queryHandle.dataMap[namespace][localName] = frontData;
+          anyChanges = true;
         }
+        // -- item already present in query result
         else {
           if (!clientData)
             clientData = queryHandle.membersByFull[namespace][fullName];
+          localName = clientData.localName;
 
           // generate the delta rep if required.
           if (deltaPopulater) {
@@ -1158,7 +1161,8 @@ NotificationKing.prototype = {
               if (queryHandle.dataDelta[namespace].hasOwnProperty(localName))
                 frontDataDelta = queryHandle.dataDelta[namespace][localName];
               else
-                frontDataDelta = {};
+                frontDataDelta = queryHandle.dataDelta[namespace][localName] =
+                                   {};
               deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
             }
 

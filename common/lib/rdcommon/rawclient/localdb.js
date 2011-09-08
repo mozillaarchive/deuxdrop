@@ -96,7 +96,7 @@ const setIndexValue = $notifking.setIndexValue,
  *  load of the related contacts, etc. rather than defining a more abstract
  *  schema or set of helper classes that try and magically do it for us.
  */
-function LocalStore(dbConn, keyring, pubring, _logger) {
+function LocalStore(dbConn, keyring, pubring, isFirstRun, _logger) {
   this._log = LOGFAB.localStore(this, _logger, null);
 
   this._db = dbConn;
@@ -112,7 +112,7 @@ function LocalStore(dbConn, keyring, pubring, _logger) {
   // initialize the db schema and kickoff the bootstrap once the db is happy
   var self = this;
   when(this._db.defineSchema($lss.dbSchemaDef), function() {
-    self._bootstrap();
+    self._bootstrap(isFirstRun);
   });
 }
 exports.LocalStore = LocalStore;
@@ -126,9 +126,19 @@ LocalStore.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Bootstrap
-  _bootstrap: function() {
+  _bootstrap: function(isFirstRun) {
     // - load our list of pinned peeps by root key
     // XXX actually load after we actually support pinned peeps
+
+    // populate our fake self-peep data that `saveOurOwnSelfIdents` doesn't
+    //  address
+    if (isFirstRun) {
+      this._db.putCells($lss.TBL_PEEP_DATA, this._keyring.rootPublicKey, {
+        'd:meta': {},
+        'd:nunread': 0,
+        'd:nconvs': 0,
+      });
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -393,6 +403,10 @@ LocalStore.prototype = {
     };
   },
 
+  /**
+   * Create a send-to-moda-bridge wire delta representation for changes to a
+   *  converstaion blurb given the changed hbase cells.
+   */
   _convertConversationBlurbDelta: function(queryHandle, clientData, outDeltaRep,
                                            cells, mutatedCells) {
     for (var key in mutatedCells) {
@@ -1170,6 +1184,19 @@ LocalStore.prototype = {
   _cmd_delContact: function() {
   },
   */
+
+  /**
+   * Save our self other-ident into the database so our 'peep' data about
+   *  ourselves makes us look like a contact.  This is so simplify the lives
+   *  of logic that can get away without needing to be explicitly aware of the
+   *  concept of 'me'.
+   */
+  saveOurOwnSelfIdents: function(selfIdentBlob, selfOtherIdentBlob) {
+    this._db.putCells($lss.TBL_PEEP_DATA, this._keyring.rootPublicKey, {
+      'd:oident': selfOtherIdentBlob,
+      'd:sident': selfIdentBlob,
+    });
+  },
 
   //////////////////////////////////////////////////////////////////////////////
 };

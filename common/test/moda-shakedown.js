@@ -152,7 +152,11 @@ TD.commonCase('moda basics', function(T) {
       tConv1_msg1 = T.thing('message', 'c1:1:a');
   moda_a.do_createConversation(tConv1, tConv1_msg1, lqAllPeeps, [client_b]);
 
-  // the B query should now contain the conversation...
+  // the B query should now contain the conversation... (but not C)
+  // ??? these could perhaps be checked automatically, or via a
+  // "checkAllOutstandingQueries" type mechanism... or on query completed?
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
 
   // - have B reply to the conversation (not using moda)
   T.group('B replies (non-moda)');

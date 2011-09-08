@@ -368,6 +368,7 @@ var TestModaActorMixins = {
     //  before generating their added messages expectations
     self._dynPendingConvMsgs = [];
 
+
     self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
 
     self.T.convenienceSetup(self, 'initialize', self._eBackside, function() {
@@ -392,6 +393,20 @@ var TestModaActorMixins = {
       // - link backside and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
                                     self._bridge._receive.bind(self._bridge));
+
+      // - create an unlisted dynamic contact info for ourselves
+      // (we want to know about ourselves for participant mapping purposes, but
+      //  peep queries should never return us in their results.)
+      var nowSeq = self.RT.testDomainSeq;
+      self._contactMetaInfoByName[self._testClient.__name] = {
+        isUs: true,
+        rootKey: self._testClient._rawClient.rootPublicKey,
+        name: self._testClient.__name,
+        involvedConvs: [],
+        any: nowSeq,
+        write: nowSeq,
+        recip: nowSeq,
+      };
     });
   },
 
@@ -424,6 +439,9 @@ var TestModaActorMixins = {
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
+      // XXX for now, all peep queries care about all peep things, but not once
+      //  we add pinned, etc.
+
       // in the case of an addition we expect a positioned splice followed
       //  by a completion notification
       var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCinfo);
@@ -443,6 +461,9 @@ var TestModaActorMixins = {
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
+      // XXX for now, all peep queries care about all peep things, but not once
+      //  we add pinned, etc.
+
       var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo);
       if (deltaRep) {
         this.RT.reportActiveActorThisStep(this);
@@ -455,6 +476,10 @@ var TestModaActorMixins = {
     var queries = this._dynamicPeepConvQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
+
+      // the query only cares if its dude is involved
+      if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
+        continue;
 
       var deltaRep = DeltaHelper.peepConvsExpDelta_joined(lqt, convInfo);
       this.RT.reportActiveActorThisStep(this);
@@ -471,6 +496,10 @@ var TestModaActorMixins = {
     var queries = this._dynamicPeepConvQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
+
+      // the query only cares if its dude is involved
+      if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
+        continue;
 
       var deltaRep = DeltaHelper.peepConvsExpMaybeDelta_newmsg(lqt, convInfo);
       if (deltaRep) {
@@ -489,6 +518,10 @@ var TestModaActorMixins = {
     convInfo.highestMsgReported = convInfo.highestMsgSeen;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
+
+      // the query only cares if it's the same conversation it cares about
+      if (convInfo.tConv !== lqt.data.tConv)
+        continue;
 
       var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
       this.RT.reportActiveActorThisStep(this);
@@ -509,6 +542,7 @@ var TestModaActorMixins = {
     // (most of this is for view ordering expectations)
     this._dynamicContacts.push(other);
     var newCinfo = this._contactMetaInfoByName[other.__name] = {
+      isUs: false,
       rootKey: other._rawClient.rootPublicKey,
       // in our test we always use the testing name as the displayName
       name: other.__name,
@@ -532,6 +566,7 @@ var TestModaActorMixins = {
       highestMsgSeen: 0,
       highestMsgReported: 0,
       peepSeqsByName: {},
+      participantInfos: [],
     };
     this._dynamicConvInfos.push(convInfo);
     this._convInfoByName[tConv.__name] = convInfo;
@@ -592,10 +627,12 @@ var TestModaActorMixins = {
       }
     }
     else if (tMsg.data.type === 'join') {
-      var joineeName = tMsg.data.who.__name, jinfo = null;
-      if (this._contactMetaInfoByName.hasOwnProperty(joineeName))
-        jinfo = this._contactMetaInfoByName[joineeName];
+      var joineeName = tMsg.data.who.__name,
+          jinfo = this._contactMetaInfoByName[joineeName];
       var joineePartIndices = convInfo.peepSeqsByName[joineeName] = {};
+
+      jinfo.involvedConvs.push(convInfo);
+      convInfo.participantInfos.push(jinfo);
 
       // even if the joinee is not yet a contact, we want to maintain the index
       //  information in case they later become a contact.
@@ -605,7 +642,7 @@ var TestModaActorMixins = {
       joineePartIndices.write = null;
       joineePartIndices.recip = null;
 
-      if (jinfo)
+      if (!jinfo.isUs)
         this._notifyPeepJoinedConv(jinfo, convInfo);
     }
   },
@@ -765,6 +802,10 @@ var TestModaActorMixins = {
         lqt, cinfo, self._dynamicConvInfos, query.by);
       self.expect_queryCompleted(lqt.__name, delta);
 
+      lqt.data = {
+        contactInfo: cinfo,
+      };
+
       lqt._liveset = self._bridge.queryPeepConversations(peep, query,
                                                          self, lqt);
       self._dynamicPeepConvQueries.push(lqt);
@@ -791,6 +832,9 @@ var TestModaActorMixins = {
 
       lqt._liveset = self._bridge.queryConversationMessages(convBlurb,
                                                             self, lqt);
+      lqt.data = {
+        tConv: tConv,
+      };
 
       self._dynamicConvMsgsQueries.push(lqt);
     });
@@ -807,6 +851,123 @@ var TestModaActorMixins = {
    *  we will throw up errors.
    */
   do_killQuery: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Query Content Assertions
+
+  _peepBlurbToLoggable: function(peep) {
+    return {
+      ourPoco: peep.ourPoco,
+      selfPoco: peep.selfPoco,
+      // XXX numUnread is beyond our abilities right now...
+      numConvs: peep._numConvs,
+    };
+  },
+  _msgBlurbToLoggable: function(msg) {
+    if (!msg)
+      return msg;
+    if (msg.type === 'join') {
+      return {
+        type: 'join',
+        inviter: this._peepBlurbToLoggable(msg.inviter),
+        invitee: this._peepBlurbToLoggable(msg.invitee),
+        // no receivedAt, we don't track that through the test framework,
+        //  although we could certainly attach it once it gets to rawclient...
+      };
+    }
+    else if (msg.type === 'message') {
+      return {
+        type: 'message',
+        author: this._peepBlurbToLoggable(msg.author),
+        // no composedAt/receivedAt, same logic as for join.
+        text: msg.text,
+      };
+    }
+    else {
+      throw new Error("Unable to convert message type: " + msg.type);
+    }
+  },
+  _convBlurbToLoggable: function(blurb) {
+    return {
+      participants: blurb.participants.map(this._peepBlurbToLoggable),
+      firstMessage: this._msgBlurbToLoggable(blurb.firstMessage),
+      // XXX no unread stuff yet
+      //firstUnreadMessage: this._msgBlurbToLoggable(blurb.firstUnreadMessage),
+      // XXX no pinned stuff yet
+      //pinned: blurb._pinned,
+    };
+  },
+
+  _clientInfoToLoggable: function(testClient) {
+    var cinfo = this._contactMetaInfoByName[testClient.__name];
+    return this._dynContactInfoToLoggable(cinfo);
+  },
+  _dynContactInfoToLoggable: function(cinfo) {
+    if (!cinfo)
+      return cinfo;
+    return {
+      ourPoco: {
+        displayName: cinfo.name,
+      },
+      selfPoco: {
+        displayName: cinfo.name,
+      },
+      numConvs: cinfo.involvedConvs.length,
+    };
+  },
+  _thingMsgToLoggable: function(tMsg) {
+    if (!tMsg)
+      return tMsg;
+    var dmsg = tMsg.data;
+    if (dmsg.type === 'join') {
+      return {
+        type: 'join',
+        inviter: this._clientInfoToLoggable(dmsg.inviter),
+        invitee: this._clientInfoToLoggable(dmsg.who),
+      };
+    }
+    else if (dmsg.type === 'message') {
+      return {
+        type: 'message',
+        author: this._clientInfoToLoggable(dmsg.author),
+        text: dmsg.text,
+      };
+    }
+    else {
+      throw new Error("Unable to convert thing message type: " + dmsg.type);
+    }
+  },
+  _thingConvToBlurbLoggable: function(tConv) {
+    var convInfo = this._convInfoByName[tConv.__name];
+
+    var seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen);
+    var firstThingMsg = null;
+    for (var i = 0; i < seenMsgs.length; i++) {
+      if (seenMsgs[i].data.type === 'message') {
+        firstThingMsg = seenMsgs[i];
+        break;
+      }
+    }
+
+    return {
+      participants: convInfo.participantInfos.map(
+                      this._dynContactInfoToLoggable.bind(this)),
+      firstMessage: this._thingMsgToLoggable(firstThingMsg),
+      // XXX no pinned stuff yet
+    };
+  },
+
+  check_queryContainsConvBlurbs: function(lqt, tConvs) {
+    var self = this;
+    this.T.check(this, 'checks', lqt, 'contains', tConvs, function() {
+      var blurbs = lqt._liveset.items;
+      for (var i = 0; i < blurbs.length; i++) {
+        var blurb = blurbs[i], tConv = tConvs[i];
+        self.expect_convBlurbCheck(self._thingConvToBlurbLoggable(tConv));
+        self._logger.convBlurbCheck(self._convBlurbToLoggable(blurb));
+      }
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1026,10 +1187,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     topBilling: true,
 
     events: {
-      queryCompleted: {name: true, keys: true},
+      queryCompleted: { name: true, keys: true },
+
+      convBlurbCheck: { blurbRep: true },
 
       // - wrapper holds for the backside
-      backsideReceived: {cmd: true},
+      backsideReceived: { cmd: true },
     },
   },
 });

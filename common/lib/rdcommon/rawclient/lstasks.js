@@ -130,7 +130,7 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
       else {
         writeCells = this.writeCells = {};
         if (!this.isContactAdd)
-          writeCells['d:nconvs'] = cells['d:nconvs'] + 1;
+          writeCells['d:nconvs'] = (cells['d:nconvs'] || 0) + 1;
         if (cells.hasOwnProperty('d:oident'))
           this.isContact = true;
       }
@@ -188,19 +188,14 @@ var PeepNameTrackTask = exports.PeepNameTrackTask = taskMaster.defineTask({
       return undefined;
     },
     generate_notifications: function() {
-      // We only care about generating the creation notification and
-      //  incrementing the number of conversations the peep is involved in.
-      //  The write/recip/any timestamp views are updated by the tasks that
-      //  actually process messages for the conversations.
+      // We only care about generating the creation notification.
+      // The number of conversations and write/recip/any timestamp views are
+      //  updated by the tasks that actually process messages for the
+      //  conversations.
       if (this.isContactAdd)
         return this.store._notifyNewContact(this.peepPubring.rootPublicKey,
                                             this.cells, this.writeCells,
                                             this.peepOident.localPoco);
-      else if (this.isContact)
-        return this.store._notif.namespaceItemModified(NS_PEEPS,
-                                                this.peepPubring.rootPublicKey,
-                                                this.cells, this.writeCells,
-                                                'd:nconvs', []);
       return null;
     },
     all_done: function() {
@@ -377,10 +372,7 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
         this.store._db.updateMultipleIndexValues(
           $lss.TBL_CONV_DATA, convIndexUpdates),
         this.store._db.maximizeMultipleIndexValues(
-          $lss.TBL_PEEP_DATA, peepIndexMaxes),
-        // boost the invitee's involved conversation count
-        this.store._db.incrementCell($lss.TBL_PEEP_DATA, inviteeRootKey,
-                                     'd:nconvs', 1)
+          $lss.TBL_PEEP_DATA, peepIndexMaxes)
       );
     },
     // this has to happen after we perform the db maxification
