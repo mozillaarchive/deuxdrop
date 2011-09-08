@@ -479,6 +479,7 @@ var TestActorProtoBase = {
   },
 
   __resetExpectations: function() {
+    var expectationsWereMet = this._expectationsMetSoFar;
     this._expectationsMetSoFar = true;
     // kill all processed entries.
     this._iExpectation = 0;
@@ -486,6 +487,7 @@ var TestActorProtoBase = {
     this._expectDeath = false;
     this._deferred = null;
     this._activeForTestStep = false;
+    return expectationsWereMet;
   },
 
   __failUnmetExpectations: function() {
@@ -540,7 +542,20 @@ var TestActorProtoBase = {
       }
       return;
     }
-    // XXX explode on logs without expectations?
+    // - unexpected log events should count as failure
+    // We only care if: 1) we were marked active, 2) we had at least one
+    //  expectation this step.
+    // Because we will already have resolved() our promise if we get here,
+    //  it's up to the test driver to come back and check us for this weird
+    //  failure, possibly after waiting a tick to see if any additional events
+    //  come in.
+    if (this._activeForTestStep && this._expectations.length &&
+        (this._iExpectation === this._expectations.length) &&
+        (entries.length > this._iEntry)) {
+      this._expectationsMetSoFar = false;
+      // no need to -1 because we haven't incremented past the entry.
+      this._logger.__unexpectedEntry(this._iEntry, entries[this._iEntry]);
+    }
 
     if ((this._iExpectation >= this._expectations.length) && this._deferred &&
         (this._expectDeath ? (this._logger && this._logger._died) : true)) {

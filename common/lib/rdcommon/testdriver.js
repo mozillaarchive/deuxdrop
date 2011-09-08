@@ -292,15 +292,21 @@ TestDefinerRunner.prototype = {
         if (!deferred) return;
         clearTimeout(countdownTimer);
 
+        // We should have passed, but it's possible that some logger generated
+        //  events after the list of expectations.  It was too late for it to
+        //  generate a rejection at that point, so we need to check now.
+        var passed = true;
         // - tell the actors we are done with this round
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
           actor = liveActors[iActor];
-          actor.__resetExpectations();
+          // detect if we ended up with a weird error.
+          if (!actor.__resetExpectations())
+            passed = false;
         }
         self._runtimeContext._liveActors = null;
 
         step.log.run_end();
-        step.log.result('pass');
+        step.log.result(passed ? 'pass' : 'fail');
         deferred.resolve(allGood);
         deferred = null;
       }, function failed(expPair) {

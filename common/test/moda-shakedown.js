@@ -158,15 +158,19 @@ TD.commonCase('moda basics', function(T) {
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
 
+  // - query on the messages in the conversation
+  T.group('messages query on the conversation');
+  var lqConv1Msgs = moda_a.do_queryConversationMessages(
+                      'conv1:msgs', lqBconvBlurbs, tConv1);
+
   // - have B reply to the conversation (not using moda)
   T.group('B replies (non-moda)');
   var tConv1_msg2 = T.thing('message', 'c1:2:b');
   client_b.do_replyToConversationWith(tConv1, tConv1_msg2);
 
+  // XXX the conversation blurb object unread count should have been increased
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
-
-  // the conversation blurb object unread count should have been increased
 
   T.group('A replies (moda)');
   var tConv1_msg3 = T.thing('message', 'c1:2:a');

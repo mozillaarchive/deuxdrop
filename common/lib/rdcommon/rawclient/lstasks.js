@@ -70,8 +70,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 var taskMaster = $task.makeTaskMasterForModule($module, LOGFAB);
 
 const NS_PEEPS = 'peeps',
-      NS_CONVBLURBS = 'convblurbs',
-      NS_CONVALL = 'convall';
+      NS_CONVBLURBS = 'convblurbs', NS_CONVMSGS = 'convmsgs',
+      NS_SERVERS = 'servers';
 
 /**
  * Process an other-person-ident issued by us or someone else to ensure we have

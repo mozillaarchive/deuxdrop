@@ -148,7 +148,10 @@ var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
  */
 function markListIntoObj(list, obj, value) {
   for (var i = 0; i < list.length; i++) {
-    obj[list[i]] = value;
+    var name = list[i];
+    if (obj.hasOwnProperty(name))
+      throw new Error("list already has '" + name + "' in it");
+    obj[name] = value;
   }
 }
 
@@ -186,6 +189,17 @@ var DeltaHelper = exports.DeltaHelper = {
 
   _PEEPCONV_QUERY_KEYFUNC: function(x) { return x.tConv.digitalName; },
   _THINGMSG_KEYFUNC: function(x) { return x.digitalName; },
+  _THINGMSG_TEXTFUNC: function(t) {
+    var data = t.data;
+    switch (data.type) {
+      case 'join':
+        return 'join:' + data.who.__name;
+      case 'message':
+        return data.author.__name + ': ' + data.text;
+      default:
+        throw new Error("Unknown message type: " + data.type);
+    }
+  },
 
   /**
    * Generate the delta rep for the initial result set of a peep query.
@@ -324,15 +338,15 @@ var DeltaHelper = exports.DeltaHelper = {
 
   convMsgsDelta_base: function(lqt, seenMsgs) {
     var delta = this.makeEmptyDelta();
-    markListInfoObj(seenMsgs.map(this._THINGMSG_KEYFUNC), delta.state, null);
-    markListInfoObj(seenMsgs.map(this._THINGMSG_KEYFUNC), delta.postAnno, 1);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.postAnno, 1);
     return delta;
   },
 
   convMsgsDelta_added: function(lqt, seenMsgs, addedMsgs) {
     var delta = this.makeEmptyDelta();
-    markListInfoObj(seenMsgs.map(this._THINGMSG_KEYFUNC), delta.state, null);
-    markListInfoObj(addedMsgs.map(this._THINGMSG_KEYFUNC), delta.postAnno, 1);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
+    markListIntoObj(addedMsgs.map(this._THINGMSG_TEXTFUNC), delta.postAnno, 1);
     return delta;
   },
 };
@@ -515,7 +529,7 @@ var TestModaActorMixins = {
       // the query only cares if its dude is involved
       if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
         continue;
-
+console.log("  ?? peepConvTimestampsChanged");
       var deltaRep = DeltaHelper.peepConvsExpMaybeDelta_newmsg(lqt, convInfo);
       if (deltaRep) {
         this.RT.reportActiveActorThisStep(this);
@@ -537,7 +551,7 @@ var TestModaActorMixins = {
       // the query only cares if it's the same conversation it cares about
       if (convInfo.tConv !== lqt.data.tConv)
         continue;
-
+console.log("  ?? convGainedMessages");
       var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
       this.RT.reportActiveActorThisStep(this);
       this.expect_queryCompleted(lqt.__name, deltaRep);
@@ -599,6 +613,7 @@ var TestModaActorMixins = {
   },
 
   __receiveConvMessage: function(tConv, tMsg) {
+console.log("@@ receiveConv");
     var convInfo = this._convInfoByName[tConv.__name];
     if (this._dynPendingConvMsgs.indexOf(convInfo) === -1)
       this._dynPendingConvMsgs.push(convInfo);
@@ -690,6 +705,7 @@ var TestModaActorMixins = {
    *  can occur in a single test step.
    */
   __updatePhaseComplete: function() {
+console.log("@@ updatePhaseComplete");
     // -- flush out pending message addition NS_CONVMSGS queries
     var pendingConvInfos = this._dynPendingConvMsgs;
     for (var iConv = 0; iConv < pendingConvInfos.length; iConv++) {
@@ -735,21 +751,38 @@ var TestModaActorMixins = {
     else
       delta = lqt._pendingDelta;
 
+    var keymapper, self = this;
+    if (liveSet._ns === 'convmsgs') {
+      keymapper = function(msg) {
+        switch (msg.type) {
+          case 'join':
+            return 'join:' + msg.invitee.selfPoco.displayName;
+          case 'message':
+            return msg.author.selfPoco.displayName + ': ' + msg.text;
+          default:
+            throw new Error("Unknown mesasge type '" + msg.type + "'");
+        }
+      };
+    }
+    else {
+      keymapper = function(item) {
+        return self._remapLocalToFullName(liveSet._ns, item._localName);
+      };
+    }
+
     // - removals
     // this happens prior to actually performing the splice on the set's items
     var iRemoved = index, highRemoved = index + howMany, rootKey;
     for (; iRemoved < highRemoved; iRemoved++) {
       // (this is dealing with the moda 'user' visible representations)
-      rootKey = this._remapLocalToFullName(liveSet._ns,
-                                           liveSet.items[iRemoved]._localName);
+      rootKey = keymapper(liveSet.items[iRemoved]);
       delta.preAnno[rootKey] = -1;
     }
 
     // - additions
     for (var iAdded = 0; iAdded < addedItems.length; iAdded++) {
-      // (this is dealing with the wire rep)
-      rootKey = this._remapLocalToFullName(liveSet._ns,
-                                           addedItems[iAdded]._localName);
+      // (this is dealing with the moda 'user' visible representations)
+      rootKey = keymapper(addedItems[iAdded]);
       delta.postAnno[rootKey] = 1;
     }
 
@@ -766,10 +799,28 @@ var TestModaActorMixins = {
     else
       delta = lqt._pendingDelta;
 
+    var keymapper, self = this;
+    if (liveSet._ns === 'convmsgs') {
+      keymapper = function(msg) {
+        switch (msg.type) {
+          case 'join':
+            return 'join:' + msg.invitee.selfPoco.displayName;
+          case 'message':
+            return msg.author.selfPoco.displayName + ': ' + msg.text;
+          default:
+            throw new Error("Unknown mesasge type '" + msg.type + "'");
+        }
+      };
+    }
+    else {
+      keymapper = function(item) {
+        return self._remapLocalToFullName(liveSet._ns, item._localName);
+      };
+    }
+
     // - revised state
     for (var i = 0; i < liveSet.items.length; i++) {
-      rootKey = this._remapLocalToFullName(liveSet._ns,
-                                           liveSet.items[i]._localName);
+      rootKey = keymapper(liveSet.items[i]);
       delta.state[rootKey] = null;
     }
 
@@ -841,7 +892,7 @@ var TestModaActorMixins = {
     throw new Error("XXX no all-conversations query testing support yet");
   },
 
-  do_queryConversationMessages: function(usingQuery, tConv) {
+  do_queryConversationMessages: function(thingName, usingQuery, tConv) {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     this.T.action(this, 'create', lqt, function() {

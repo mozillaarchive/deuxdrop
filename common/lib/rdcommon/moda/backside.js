@@ -68,7 +68,7 @@ define(
 const when = $Q.when;
 
 const NS_PEEPS = 'peeps',
-      NS_CONVBLURBS = 'convblurbs', NS_CONVALL = 'convall',
+      NS_CONVBLURBS = 'convblurbs', NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers';
 
 /**

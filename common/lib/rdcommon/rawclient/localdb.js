@@ -72,7 +72,8 @@ const PINNED = 'pinned';
 
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
-      NS_CONVMSGS = 'convmsgs';
+      NS_CONVMSGS = 'convmsgs',
+      NS_SERVERS = 'servers';
 
 const setIndexValue = $notifking.setIndexValue,
       setReuseIndexValue = $notifking.setReuseIndexValue,
@@ -527,14 +528,14 @@ LocalStore.prototype = {
     //  Because we only allow this query to be created from an existing blurb,
     //  we can rely on the blurb already being known to the bridge and explode
     //  if it somehow is no longer known.)
-    var blurbClientData = this._notifking.reuseIfAlreadyKnown(
+    var blurbClientData = this._notif.reuseIfAlreadyKnown(
                             queryHandle, NS_CONVBLURBS, convId);
     if (!blurbClientData) {
       throw this._notifking.badQuery(queryHandle, "Conv blurb does not exist!");
     }
 
     // - does the bridge already know the answer to the question?
-    var msgsClientData = this._notifking.reuseIfAlreadyKnown(
+    var msgsClientData = this._notif.reuseIfAlreadyKnown(
                            queryHandle, NS_CONVMSGS, convId);
     if (msgsClientData) {
       this._fillOutQueryDepsAndSend(queryHandle);
@@ -618,11 +619,11 @@ LocalStore.prototype = {
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
       // -- build the client rep
-      var numMessages = cells['m'];
+      var numMessages = cells['d:m'];
 
       // - all messages
       var msgRecs = [];
-      for (var iMsg = 0; iMsg < numMessages; iMsg++) {
+      for (var iMsg = 1; iMsg <= numMessages; iMsg++) {
         msgRecs.push(cells['d:m' + iMsg]);
       }
 

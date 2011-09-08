@@ -581,12 +581,15 @@ ModaBridge.prototype = {
           var newMessages = this._transformConvMessages(liveset.blurb,
                                                         key, val, liveset)
                                   .messages;
+          if (!liveset._dataByNS[NS_CONVMSGS].hasOwnProperty(key))
+            throw new Error("liveset lacks data on conv '" + key + "'");
           var curData = liveset._dataByNS[NS_CONVMSGS][key];
           // notify the liveset and its consumers
           liveset._notifyAndSplice(curData.messages.length, 0, newMessages);
           // update our liveset references so that if a redundant query is
           //  issued the cache gets the right/up-to-date data.
-          curData.messages.splice(curData.messages.length, 0, newMessages);
+          curData.messages.splice.apply(
+            curData.messages, [curData.messages.length, 0].concat(newMessages));
 
           // - process watermark changes
           // XXX yes, process watermarks.

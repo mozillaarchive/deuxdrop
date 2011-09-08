@@ -556,6 +556,7 @@ NotificationKing.prototype = {
       nextUniqueIdAlloc: 0,
       queryHandlesByNS: makeEmptyListsByNS(),
       pending: [],
+      pendingAggr: [],
     };
     return querySource;
   },
@@ -711,6 +712,12 @@ NotificationKing.prototype = {
     return null;
   },
 
+  /**
+   * Map a local name (a stringified number) in a query source back to its full
+   *  name (the naming crypto key / other).  Primarily used by unit tests to
+   *  get names the logging system can humanize from the otherwise largely
+   *  useless local names.
+   */
   mapLocalNameToFullName: function(querySource, namespace, localName) {
     var queryHandles = querySource.queryHandlesByNS[namespace];
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
@@ -723,6 +730,10 @@ NotificationKing.prototype = {
     throw new Error("No such local name '" + localName + "'");
   },
 
+  /**
+   * Map a local name (a stringified number) in a query source to the associated
+   *  `LocallyNamedClientData` structure for that query source.
+   */
   mapLocalNameToClientData: function(querySource, namespace, localName) {
     var queryHandles = querySource.queryHandlesByNS[namespace];
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
@@ -755,7 +766,7 @@ NotificationKing.prototype = {
    *  This coalesces notifications without significantly complicating our
    *  logic.
    */
-  trackNewishMessage: function(convId, msgIndex, msgRec, baseCells,
+  trackNewishMessage: function(convId, msgNum, msgRec, baseCells,
                                mutatedCells) {
     var newishForConv;
     // -- newness tracking
@@ -768,25 +779,10 @@ NotificationKing.prototype = {
     newishForConv.push({index: msgIndex, rec: msgRec});
 */
 
-    // -- NS_CONVBLURBS queries
-    // - 'new' conversation => item added
-    // XXX may want to relocate this to around where we do the index updates
-    //  or its own helper
-    if (msgIndex === 0) {
-      var mergedCells = null;
-      this.helpAddToInterestedQueries(
-        NS_CONVBLURBS, convId, baseCells, mutatedCells,
-        function buildReps(clientData) {
-      });
-    }
-    // - existing conversation => item modified
-    else {
-    }
-
     // -- update NS_CONVMSGS queries
     // we can skip out early since you can't have a query about a conversation
     //  you've never heard of.
-    if (msgIndex === 0)
+    if (msgNum === 1)
       return;
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
@@ -797,29 +793,45 @@ NotificationKing.prototype = {
         if (queryHandle.queryDef.convId !== convId)
           continue;
 
-        var outMessages;
+        var clientData = queryHandle.membersByFull[NS_CONVMSGS][convId],
+            localName = clientData.localName, outMessages;
         switch (queryHandle.pending) {
           case PENDING_INITIAL:
-            outMessages = queryHandle.dataMap[NS_CONVMSGS][convId].messages;
+            outMessages = queryHandle.dataMap[NS_CONVMSGS][localName].messages;
             break;
           case PENDING_NOTIF:
-            outMessages = queryHandle.dataDelta[NS_CONVMSGS][convId].messages;
-            break;
+            // It's possible / likely that a dependent object (like our blurb)
+            //  will cause us to enter this state, so dataDelta may not actually
+            //  be populated if we are here.
+            if (queryHandle.dataDelta[NS_CONVMSGS].hasOwnProperty(localName)) {
+              outMessages =
+                queryHandle.dataDelta[NS_CONVMSGS][localName].messages;
+              break;
+            }
+            // (fall-through since we need to create the dataDelta struct)
           case PENDING_NONE:
-            queryHandle.dataDelta[NS_CONVMSGS][convId] = {
+            queryHandle.dataDelta[NS_CONVMSGS][localName] = {
               messages: (outMessages = []),
             };
             queryHandle.pending = PENDING_NOTIF;
-            querySource.pending.push(queryHandle);
+            // XXX The test framework expects the event sequencing to be that
+            //  message updates are enqueued only when the update phase is
+            //  completed.  To this end we use a separate queue for these
+            //  things for now.  The ideal solution is likely to be able to
+            //  put an actor's expectations in an unordered mode of operation
+            //  so we don't really need to worry about this.  (Noting that
+            //  the ordering is already slightly important in terms of making
+            //  sure that our avoidance of sending redundant data will
+            //  break if we reorder them.)
+            querySource.pendingAggr.push(queryHandle);
             break;
         }
 
-        var clientData = queryHandle.membersByFull[NS_CONVMSGS][convId];
         // this is a synchronous operation that may introduce new peeps
         //  dependencies that will be resolved by _fillOutQueryDepsAndSend.
         var converted = this._store._convertConversationMessages(
-                          queryHandle, messages, clientData.deps);
-        outMessages.splice(outMessages.length, 0, converted);
+                          queryHandle, [msgRec], clientData.deps);
+        outMessages.splice(outMessages.length, 0, converted[0]);
       }
     }
   },
@@ -846,60 +858,17 @@ NotificationKing.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Generic Notifications from LocalStore
-
-  /**
-   * Find out if there are any queries that care about the item in question
-   *  so the caller can determine if it needs to perform additional lookups
-   *  in order to generate a proper notification.
-   */
-  helpAddToInterestedQueries: function(namespace, fullName,
-                                       baseCells, mutatedCells) {
-    for (var qsKey in this._activeQuerySources) {
-      var querySource = this._activeQuerySources[qsKey];
-      var queryHandles = querySource.queryHandlesByNS[namespace];
-
-      var clientData = null;
-
-      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-        var queryHandle = queryHandles[iQuery];
-        if (!queryHandle.testFunc(baseCells, mutatedCells, fullName))
-          continue;
-
-        if (!clientData) {
-          var localName = "" + (querySource.nextUniqueIdAlloc++);
-          var deps = [];
-          clientData = {
-            localName: localName,
-            fullName: fullName,
-            count: 1,
-            data: null,
-            indexValues: [],
-            deps: deps,
-          };
-
-        }
-      }
-    }
-
-    return false;
-  },
-
-  /**
-   * Find queries potentially affected by a change.
-   *
-   * Basic strategy (for each query source):
-   * - Fast bail if there are no queries for the namespace.
-   * - Map the name of the changed item into the query source namespace,
-   *    coincidentally determining if it is already present in any queries.
-   * - Loop over the queries:
-   *   - see if the query's test function matches the item
-   *   - infer add/modified/removed based on whether the item was already known
-   *      to the query and the reslt of the test invocation
-   *   - if the query has ordered results, figure out the new view index,
-   *      generate a splice if there was a change/this is an addition.
-   */
-  _findAffectedQueries: function(namespace) {
-  },
+  //
+  // Basic strategy (for each query source):
+  // - Fast bail if there are no queries for the namespace.
+  // - Map the name of the changed item into the query source namespace,
+  //    coincidentally determining if it is already present in any queries.
+  // - Loop over the queries:
+  //   - see if the query's test function matches the item
+  //   - infer add/modified/removed based on whether the item was already known
+  //      to the query and the reslt of the test invocation
+  //   - if the query has ordered results, figure out the new view index,
+  //      generate a splice if there was a change/this is an addition.
 
   /**
    * We are now up-to-speed and should generate any notifications we were
@@ -915,9 +884,13 @@ NotificationKing.prototype = {
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
 
-      while (querySource.pending.length) {
+      // we have 2 queues for now: see `trackNewishMessage` and its comment
+      while (querySource.pending.length ||
+             querySource.pendingAggr.length) {
         // (we need to use shift to avoid inverting the ordering)
-        var queryHandle = querySource.pending.shift();
+        var queryHandle = querySource.pending.length ?
+                            querySource.pending.shift() :
+                            querySource.pendingAggr.shift();
 
         // a promise is returned if we go async
         var sendResult;
