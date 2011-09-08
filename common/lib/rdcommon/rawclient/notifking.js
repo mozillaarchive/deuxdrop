@@ -257,7 +257,10 @@ const when = $Q.when;
 const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = exports.NS_CONVMSGS = 'convmsgs',
-      NS_SERVERS = exports.NS_SERVERS = 'servers';
+      NS_SERVERS = exports.NS_SERVERS = 'servers',
+      // dependent namespaces that need to be checked for updates
+      DEP_NAMESPACES = [NS_PEEPS, NS_SERVERS],
+      DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS];
 
 /**
  * There is no pending message that must be sent regarding this query.
@@ -913,7 +916,8 @@ NotificationKing.prototype = {
       var querySource = this._activeQuerySources[qsKey];
 
       while (querySource.pending.length) {
-        var queryHandle = querySource.pending.pop();
+        // (we need to use shift to avoid inverting the ordering)
+        var queryHandle = querySource.pending.shift();
 
         // a promise is returned if we go async
         var sendResult;
@@ -1090,14 +1094,16 @@ NotificationKing.prototype = {
 
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
-      var queryHandles = querySource.queryHandlesByNS[namespace];
+      // --- primary updates
+      var queryHandles = querySource.queryHandlesByNS[namespace], iQuery,
+          queryHandle;
 
       var clientData = null, frontData = null, localName = null,
           frontDataDelta = undefined, updatedIndices = false;
 
-      for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-        var queryHandle = queryHandles[iQuery],
-            anyChanges = false;
+      for (iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+        queryHandle = queryHandles[iQuery];
+        var anyChanges = false;
 
         var prePresent =
           queryHandle.membersByFull[namespace].hasOwnProperty(fullName);
@@ -1145,7 +1151,7 @@ NotificationKing.prototype = {
           }
 
           queryHandle.dataMap[namespace][localName] = frontData;
-          anyChanges = true;
+          anyChanges = 'full';
         }
         // -- item already present in query result
         else {
@@ -1161,15 +1167,13 @@ NotificationKing.prototype = {
               if (queryHandle.dataDelta[namespace].hasOwnProperty(localName))
                 frontDataDelta = queryHandle.dataDelta[namespace][localName];
               else
-                frontDataDelta = queryHandle.dataDelta[namespace][localName] =
-                                   {};
+                frontDataDelta = {};
               deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
             }
 
             if (frontDataDelta !== null) {
-              queryHandle.dataDelta[namespace][clientData.localName] =
-                frontDataDelta;
-              anyChanges = true;
+              queryHandle.dataDelta[namespace][localName] = frontDataDelta;
+              anyChanges = 'delta';
             }
           }
         }
@@ -1195,17 +1199,66 @@ NotificationKing.prototype = {
                   { index: preIdx, howMany: 1, items: null });
               queryHandle.splices.push(
                 { index: insertIdx, howMany: 0, items: [clientData.localName]});
-              anyChanges = true;
+              if (anyChanges)
+                anyChanges += '-index';
+              else
+                anyChanges = 'index';
             }
           }
         }
 
         if (anyChanges) {
-          this._log.nsItemModified(queryHandle.uniqueId, fullName);
+          this._log.nsItemModified(queryHandle.uniqueId, fullName, anyChanges);
 
           if (queryHandle.pending === PENDING_NONE) {
             queryHandle.pending = PENDING_NOTIF;
             querySource.pending.push(queryHandle);
+          }
+        }
+      }
+
+      // --- dependent item updates
+      // All the above handled updates relating to direct queries over items.
+      // We are now concerned about making sure queries that have references
+      //  to our item due to a reference/dependency hear about the update,
+      //  so let's check the namespaces that can reference our namespace.
+
+      // no point trying to do this if we can't generate deltas.
+      if (!deltaPopulater)
+        continue;
+      for (var iDepNS = 0; iDepNS < DEP_HAVING_NAMESPACES.length; iDepNS++) {
+        var depNS = DEP_HAVING_NAMESPACES[iDepNS];
+        if (depNS === namespace)
+          continue;
+
+        queryHandles = querySource.queryHandlesByNS[depNS];
+        for (iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+          queryHandle = queryHandles[iQuery];
+
+          // bail if not present
+          if (!queryHandle.membersByFull[namespace].hasOwnProperty(fullName))
+            continue;
+          clientData = queryHandle.membersByFull[namespace][fullName];
+          localName = clientData.localName;
+
+          // generate delta rep if not previously generated
+          if (frontDataDelta === undefined) {
+            // XXX duped logic from above
+            if (queryHandle.dataDelta[namespace].hasOwnProperty(localName))
+              frontDataDelta = queryHandle.dataDelta[namespace][localName];
+            else
+              frontDataDelta = {};
+            deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
+          }
+          if (frontDataDelta !== null) {
+            queryHandle.dataDelta[namespace][localName] = frontDataDelta;
+
+            this._log.nsItemModified(queryHandle.uniqueId, fullName, 'dep');
+
+            if (queryHandle.pending === PENDING_NONE) {
+              queryHandle.pending = PENDING_NOTIF;
+              querySource.pending.push(queryHandle);
+            }
           }
         }
       }
@@ -1232,6 +1285,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     TEST_ONLY_events: {
       nsItemAdded: {clientDataCount: false, spliceIndex: false,
                     prePending: false},
+      nsItemModified: {changeType: false},
       sendQueryResults: {msg: false},
     },
     errors: {

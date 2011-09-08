@@ -603,10 +603,10 @@ function simplifyInsaneObjects(obj, curDepth) {
 
 /**
  * Maximum comparison depth for argument equivalence in expectation checking.
- *  We are explicitly choosing this depth to support our test simple state
- *  representation expresseb by our `STATEREP` constant.
+ *  This value gets bumped every time I throw something at it that fails that
+ *  still seems reasonable to me.
  */
-const COMPARE_DEPTH = 4;
+const COMPARE_DEPTH = 6;
 function boundedCmpObjs(a, b, depthLeft) {
   var aAttrCount = 0, bAttrCount = 0, key, nextDepth = depthLeft - 1;
 

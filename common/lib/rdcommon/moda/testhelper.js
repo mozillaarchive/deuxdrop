@@ -268,7 +268,7 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._sorter = function(a, b) {
       var va = a.peepSeqsByName[cinfo.name][queryBy],
           vb = b.peepSeqsByName[cinfo.name][queryBy];
-      return va - cb;
+      return va - vb;
     };
     lqt._convs.sort(lqt._sorter);
 
@@ -303,11 +303,14 @@ var DeltaHelper = exports.DeltaHelper = {
    *  to the conversation that necessarily affects some timestamps, but it may
    *  also not occur if it isn't a relevant timestamp or it does not change
    *  the ordering of the conversation relative to other conversations.
+   *
+   * We may also explicitly know that a change has occurred, in which case we
+   *  definitely generate a delta.
    */
-  peepConvsExpMaybeDelta_newmsg: function(lqt, convInfo) {
+  peepConvsExpMaybeDelta_newmsg: function(lqt, convInfo, changeKnown) {
     var preIndex = lqt._convs.indexOf(convInfo);
     lqt._convs.sort(lqt._sorter);
-    if (lqt._convs.indexOf(convInfo) === preIndex)
+    if (!changeKnown && lqt._convs.indexOf(convInfo) === preIndex)
       return null;
 
     var delta = this.makeEmptyDelta();
@@ -452,11 +455,17 @@ var TestModaActorMixins = {
   },
 
   /**
-   * Conversation activity has (possibly) affected a peep's indices,
-   *  generate expectations for the relevant queries if we believe ordering
-   *  is affected.
+   * Conversation activity has (possibly) affected a peep's indices OR the
+   *  peep has joined a conversation and needs their number of conversations
+   *  bumped. Generate expectations for the relevant queries if we believe
+   *  ordering is affected or we are explicitly told there is another change.
    */
-  _notifyPeepTimestampsChanged: function(cinfo) {
+  _notifyPeepChanged: function(cinfo, knownChange) {
+    // ignore changes about our own peep; it does not affect peep queries
+    //  directly. XXX it will affect dependent references.
+    if (cinfo.name === this._testClient.__name)
+      return;
+
     var queries = this._dynamicPeepQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
@@ -464,7 +473,8 @@ var TestModaActorMixins = {
       // XXX for now, all peep queries care about all peep things, but not once
       //  we add pinned, etc.
 
-      var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo);
+      var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo,
+                                                          knownChange);
       if (deltaRep) {
         this.RT.reportActiveActorThisStep(this);
         this.expect_queryCompleted(lqt.__name, deltaRep);
@@ -472,6 +482,10 @@ var TestModaActorMixins = {
     }
   },
 
+// nop-ing out because I believe the timestamp changes cover this notification
+//  as a side-effect, and I think we can cover the peep changed case with the
+//  join case.
+/*
   _notifyPeepJoinedConv: function(cinfo, convInfo) {
     var queries = this._dynamicPeepConvQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
@@ -486,6 +500,7 @@ var TestModaActorMixins = {
       this.expect_queryCompleted(lqt.__name, deltaRep);
     }
   },
+*/
 
   /**
    * Conversation activity has affected a conversation blurb's indices,
@@ -588,62 +603,70 @@ var TestModaActorMixins = {
     if (this._dynPendingConvMsgs.indexOf(convInfo) === -1)
       this._dynPendingConvMsgs.push(convInfo);
 
-    if (tMsg.data.type === 'message') {
-      // update the author peep if it's not us.
-      if (tMsg.data.author !== this._testClient) {
-        var ainfo = this._lookupContactInfo(tMsg.data.author),
-            convAuthIndices = convInfo.peepSeqsByName[tMsg.data.author.__name];
+    convInfo.highestMsgSeen++;
 
-        ainfo.write = Math.max(ainfo.write, tMsg.data.seq);
-        ainfo.any = Math.max(ainfo.any, tMsg.data.seq);
-        this._notifyPeepTimestampsChanged(ainfo);
+    var self = this;
+    function goNotify(authorInfo, participantInfos, joineeInfo) {
+      var convAuthIndices = convInfo.peepSeqsByName[authorInfo.name],
+          ourInfo = self._contactMetaInfoByName[self._testClient.__name];
 
-        convAuthIndices.write = tMsg.data.seq;
-        convAuthIndices.any = tMsg.data.seq;
-        this._notifyPeepConvTimestampsChanged(ainfo, convAuthIndices, convInfo);
-      }
+      authorInfo.write = Math.max(authorInfo.write, tMsg.data.seq);
+      authorInfo.any = Math.max(authorInfo.any, tMsg.data.seq);
 
-      var participants = tConv.data.participants;
-      for (var iPart = 0; iPart < participants.length; iPart++) {
-        var participant = participants[iPart];
-        // do not process 'me', do not process the author again
-        if (participant === this._testClient ||
-            participant === tMsg.data.author)
+      convAuthIndices.write = tMsg.data.seq;
+      convAuthIndices.any = tMsg.data.seq;
+
+      // - peep notifications
+      self._notifyPeepChanged(authorInfo);
+
+      var iPart, pinfo;
+      for (iPart = 0; iPart < participantInfos.length; iPart++) {
+        pinfo = participantInfos[iPart];
+        // do not process the author again
+        if (pinfo === authorInfo)
           continue;
-        var pinfo = this._lookupContactInfo(participant),
-            convPartIndices = convInfo.peepSeqsByName[participant.__name];
 
         // recip is only updated for messages authored by our user.
-        if (tMsg.data.author === this._testClient)
+        if (authorInfo === ourInfo)
           pinfo.recip = Math.max(pinfo.recip, tMsg.data.seq);
         pinfo.any = Math.max(pinfo.any, tMsg.data.seq);
-        this._notifyPeepTimestampsChanged(pinfo);
+        self._notifyPeepChanged(pinfo, pinfo === joineeInfo);
+      }
 
-        if (tMsg.data.author === this._testClient)
+      // - conversation notifications
+      self._notifyPeepConvTimestampsChanged(authorInfo, convAuthIndices,
+                                            convInfo);
+      for (iPart = 0; iPart < participantInfos.length; iPart++) {
+        pinfo = participantInfos[iPart];
+        // do not process the author again
+        if (pinfo === authorInfo)
+          continue;
+        var convPartIndices = convInfo.peepSeqsByName[pinfo.name];
+
+        if (authorInfo === ourInfo)
           convPartIndices.recip = tMsg.data.seq;
         convPartIndices.any = tMsg.data.seq;
-        this._notifyPeepConvTimestampsChanged(pinfo, convPartIndices,
+
+        self._notifyPeepConvTimestampsChanged(pinfo, convPartIndices,
                                               convInfo);
       }
     }
+
+    if (tMsg.data.type === 'message') {
+      var authorInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
+      goNotify(authorInfo, convInfo.participantInfos);
+    }
     else if (tMsg.data.type === 'join') {
-      var joineeName = tMsg.data.who.__name,
-          jinfo = this._contactMetaInfoByName[joineeName];
-      var joineePartIndices = convInfo.peepSeqsByName[joineeName] = {};
+      var joinerName = tMsg.data.inviter.__name,
+          joinerInfo = this._contactMetaInfoByName[joinerName],
+          joineeName = tMsg.data.who.__name,
+          joineeInfo = this._contactMetaInfoByName[joineeName];
+      convInfo.peepSeqsByName[joineeName] = {};
 
-      jinfo.involvedConvs.push(convInfo);
-      convInfo.participantInfos.push(jinfo);
+      joineeInfo.involvedConvs.push(convInfo);
+      convInfo.participantInfos.push(joineeInfo);
 
-      // even if the joinee is not yet a contact, we want to maintain the index
-      //  information in case they later become a contact.
-      joineePartIndices.any = tMsg.data.seq;
-      // XXX the implementation itself is a bit confused by these right now;
-      //  there's no obvious right value.
-      joineePartIndices.write = null;
-      joineePartIndices.recip = null;
-
-      if (!jinfo.isUs)
-        this._notifyPeepJoinedConv(jinfo, convInfo);
+      goNotify(joinerInfo, convInfo.participantInfos, joineeInfo);
     }
   },
 
@@ -941,7 +964,7 @@ var TestModaActorMixins = {
   _thingConvToBlurbLoggable: function(tConv) {
     var convInfo = this._convInfoByName[tConv.__name];
 
-    var seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen);
+    var seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen + 1);
     var firstThingMsg = null;
     for (var i = 0; i < seenMsgs.length; i++) {
       if (seenMsgs[i].data.type === 'message') {
@@ -1106,7 +1129,8 @@ var TestModaActorMixins = {
     this._testClient._expdo_replyToConversation_fanout_onwards(tConv, tNewMsg);
   },
 
-  do_inviteToConversation: function(usingPeepQuery, invitedTestClient, tConv) {
+  do_inviteToConversation: function(usingPeepQuery, invitedTestClient,
+                                    tConv, usingConvQuery) {
     tConv.sdata.participants.push(invitedTestClient);
     var tJoin = this.T.thing('message', 'join ' + invitedTestClient.__name);
 
@@ -1118,10 +1142,9 @@ var TestModaActorMixins = {
 
       var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(usingConvQuery,
                                                                  tConv);
-      convBlurb.inviteToConversation({
-        peep: self._grabPeepFromQueryUsingClient(usingPeepQuery,
-                                                 invitedTestClient),
-      });
+      convBlurb.inviteToConversation(
+        self._grabPeepFromQueryUsingClient(usingPeepQuery,
+                                           invitedTestClient));
     });
     // - bridge processes it
     this.T.action(this._eBackside, 'processes createConversation, invokes on',

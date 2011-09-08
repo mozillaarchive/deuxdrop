@@ -346,21 +346,14 @@ LocalStore.prototype = {
    *  conversation blurb given its cells.
    */
   _convertConversationBlurb: function(queryHandle, cells, deps) {
-    var numMessages = cells['m'];
+    var numMessages = cells['d:m'];
     var participants = [];
-    for (var key in cells) {
-      // - participants
-      if (/^d:p/.test(key)) {
-        participants.push(this._deferringPeepQueryResolve(queryHandle,
-                                                          cells[key],
-                                                          deps));
-      }
-    }
-    // - first (non-join) message...
-    var msg, iMsg, firstMsgRep = null;
-    for (iMsg = 0; iMsg < numMessages; iMsg++) {
+
+    // - first message, participants list
+    var msg, iMsg, firstMsgRep = null, iFirstMsg = null;
+    for (iMsg = 1; iMsg <= numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
-      if (msg.type === 'message') {
+      if (!iFirstMsg && msg.type === 'message') {
         firstMsgRep = {
           type: 'message',
           author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
@@ -369,14 +362,21 @@ LocalStore.prototype = {
           receivedAt: msg.receivedAt,
           text: msg.text,
         };
-        break;
+        iFirstMsg = iMsg;
+      }
+      else if (msg.type === 'join') {
+        participants.push(this._deferringPeepQueryResolve(queryHandle,
+                                                          msg.id,
+                                                          deps));
       }
     }
+    if (!iFirstMsg)
+      iFirstMsg = 1;
 
     // - number of unread
     // XXX unread status not yet dealt with. pragmatism!
     var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
-    for (; iMsg <= numMessages; iMsg++) {
+    for (iMsg = iFirstMsg; iMsg <= numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
       if (msg.type === 'message') {
         numUnreadTextMessages++;

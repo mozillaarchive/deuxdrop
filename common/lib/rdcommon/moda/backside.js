@@ -211,8 +211,6 @@ ModaBackside.prototype = {
                            this._querySource, NS_PEEPS, invData.peepName).data;
     if (!peepOurData.oident)
       throw new Error("Impossible to invite a non-contact peep to a conv");
-    peepOIdents.push(peepOurData.oident);
-    peepPubrings.push();
 
     // returned for testing purposes (see createConversation)
     return this._rawClient.inviteToConversation(

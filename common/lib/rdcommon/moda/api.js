@@ -183,7 +183,7 @@ ConversationBlurb.prototype = {
     var msgData = {
       messageText: args.text,
     };
-    this._bridge.send('replyToConv', this._localName, msgData);
+    this._bridge._send('replyToConv', this._localName, msgData);
   },
 
   /**
@@ -205,7 +205,7 @@ ConversationBlurb.prototype = {
     var invData = {
       peepName: peep._localName,
     };
-    this._bridge.send('inviteToConv', this._localName, invData);
+    this._bridge._send('inviteToConv', this._localName, invData);
   },
 };
 

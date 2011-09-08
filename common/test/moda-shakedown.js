@@ -163,15 +163,24 @@ TD.commonCase('moda basics', function(T) {
   var tConv1_msg2 = T.thing('message', 'c1:2:b');
   client_b.do_replyToConversationWith(tConv1, tConv1_msg2);
 
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
+
   // the conversation blurb object unread count should have been increased
 
   T.group('A replies (moda)');
   var tConv1_msg3 = T.thing('message', 'c1:2:a');
   moda_a.do_replyToConversationWith(tConv1, tConv1_msg3, lqBconvBlurbs);
 
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
+
   // - A invites C to the conversation (using moda)
   T.group('A invites C');
   moda_a.do_inviteToConversation(lqAllPeeps, client_c, tConv1, lqBconvBlurbs);
+
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, [tConv1]);
 
   // the conversation blurb should now know that C is involved in the conv
   // the C query should now contain the conversation...
@@ -182,6 +191,9 @@ TD.commonCase('moda basics', function(T) {
       tConv2_msg1 = T.thing('message', 'c2:1:a');
   moda_a.do_createConversation(tConv2, tConv2_msg1, lqAllPeeps,
                                [client_b, client_c]);
+
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv2, tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, [tConv2, tConv1]);
 
   // both queries should now contain the conversation..
 

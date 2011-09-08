@@ -386,11 +386,11 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
       // - conversation blurb notification
       if (this.msgNum === 1)
         this.store._notifyNewConversation(
-          this.convMeta.id, this.cells, this.mutatedCells,
+          this.convMeta.id, this.cells, this.writeCells,
           this.peepConvIndexUpdates);
       else
         this.store._notifyModifiedConversation(
-          this.convMeta.id, this.cells, this.mutatedCells,
+          this.convMeta.id, this.cells, this.writeCells,
           this.peepConvIndexUpdates);
 
       // - "new" notifications, conv messages notifications
@@ -493,10 +493,6 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
 
       // - author is not us
       if (!authorIsOurUser) {
-        // - peep indices
-        promises.push(this.store._db.maximizeIndexValue(
-          $lss.TBL_PEEP_DATA, $lss.IDX_PEEP_WRITE_INVOLVEMENT, '',
-          authorRootKey, timestamp));
         // - boost unread message count
         promises.push(this.store._db.incrementCell(
           $lss.TBL_PEEP_DATA, authorRootKey, 'd:nunread',
