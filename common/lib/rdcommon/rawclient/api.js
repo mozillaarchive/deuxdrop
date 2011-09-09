@@ -80,6 +80,7 @@ define(
     '../messages/generator',
     './localdb',
     'xmlhttprequest',
+    'timers',
     'module',
     'exports'
   ],
@@ -92,6 +93,7 @@ define(
     $msg_gen,
     $localdb,
     $xmlhttprequest,
+    $timers,
     $module,
     exports
   ) {
@@ -379,6 +381,11 @@ RawClientAPI.prototype = {
     this._log.disconnected();
     this._conn = null;
     if (this._connectionDesired) {
+      var self = this;
+      $timers.setTimeout(function() {
+        if (!self._conn)
+          self._connect();
+      }, this._RECONNECT_DELAY_MS);
     }
   },
 

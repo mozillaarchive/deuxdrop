@@ -305,6 +305,7 @@ function OurUserAccount(_bridge, poco, usingServer) {
    *  yet.
    */
   this._pendingListeners = [];
+  this._signupListener = null;
 }
 OurUserAccount.prototype = {
   get havePersonalInfo() {
@@ -332,11 +333,12 @@ OurUserAccount.prototype = {
     this._bridge._send('insecurelyGetServerSelfIdentUsingDomainName', null, domain);
   },
 
-  signupWithServer: function(serverInfo) {
+  signupWithServer: function(serverInfo, signupListener) {
     if (this.usingServer)
       throw new Error("Already signed up with a server!");
 
-    this._bridge._send('signup', null, serverInfo._selfIdentBlob);
+    this._signupListener = signupListener;
+    this._bridge._send('signup', null, serverInfo._localName);
   },
 };
 
@@ -413,6 +415,8 @@ ModaBridge.prototype = {
         return this._receiveWhoAmI(msg);
       case 'insecurelyGetServerSelfIdentUsingDomainName':
         return this._receiveInsecureServerSelfIdent(msg);
+      case 'signupResult':
+        return this._receiveSignupResult(msg);
       case 'query':
         return this._receiveQueryUpdate(msg);
     }
@@ -454,6 +458,13 @@ ModaBridge.prototype = {
         listeners[i].onCompleted(serverInfo);
     }
 
+  },
+
+  _receiveSignupResult: function(msg) {
+    if (this._ourUser._signupListener) {
+      this._ourUser._signupListener.onCompleted(msg.err);
+      this._ourUser._signupListener = null;
+    }
   },
 
   /**
@@ -764,18 +775,6 @@ ModaBridge.prototype = {
     this._sets.push(liveset);
     this._send('queryServers', handle, query);
     return liveset;
-  },
-
-  createIdentity: function (name, assertion, listener) {
-    setTimeout(function () {
-      listener.onCompleted(null);
-    }, 15);
-  },
-
-  useServer: function (id, listener) {
-    setTimeout(function () {
-      listener.onCompleted(null);
-    }, 15);
   },
 
   /**

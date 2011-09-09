@@ -310,8 +310,8 @@ ModaBackside.prototype = {
           indexValues: null,
           deps: null,
         };
-        queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
-        queryHandle.membersByFull[NS_PEEPS][serverIdent.rootPublicKey] =
+        queryHandle.membersByLocal[NS_SERVERS][localName] = clientData;
+        queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
           clientData;
         queryHandle.dataMap[NS_SERVERS][localName] =
           this._transformServerIdent(serverIdent);
@@ -378,7 +378,26 @@ ModaBackside.prototype = {
   _cmd_signupDangerouslyUsingDomainName: function() {
   },
 
-  _cmd_signupUsingServerSelfIdent: function() {
+  _cmd_signup: function(_ignored, serverLocalName) {
+    // the clientData data is just the self ident blob.
+    var serverSelfIdentBlob =
+      this._notif.mapLocalNameToClientData(
+        this._querySource, NS_SERVERS, serverLocalName).data;
+
+    var self = this;
+    when(this._rawClient.signupUsingServerSelfIdent(serverSelfIdentBlob),
+      function resolved() {
+        self.send({
+          type: 'signupResult',
+          err: null,
+        });
+      },
+      function rejected(err) {
+        self.send({
+          type: 'signupResult',
+          err: err,
+        });
+      });
   },
 
   //////////////////////////////////////////////////////////////////////////////

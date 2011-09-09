@@ -1222,6 +1222,57 @@ var TestModaActorMixins = {
   // Actions
 
   /**
+   * Trigger signup with a server using the moda API.  We have the servers
+   *  cram their self-ident blobs into the list of known servers during their
+   *  initialization, so then we can issue a query on the list of servers and
+   *  use that to identify the right handle to use and then use that.
+   */
+  setup_useServer: function setup_useServer(testServer) {
+    var self = this, me, servers;
+    // it is very important to update the static server info on the test client!
+    self._testClient._usingServer = testServer;
+    this.T.convenienceSetup(self, 'asks whoAmI', function() {
+      self.expect_whoAmI();
+      me = self._bridge.whoAmI({
+        onCompleted: function() {
+          self._logger.whoAmI();
+        },
+      });
+    });
+    this.T.convenienceSetup(self, 'asks for the list of servers', function() {
+      self.expect_serverQueryCompleted();
+      servers = self._bridge.queryServers({
+        onCompleted: function() {
+          self._logger.serverQueryCompleted();
+        },
+      });
+    });
+    this.T.convenienceSetup(self, 'triggers signup with the server',
+                            function() {
+      for (var i = 0; i < servers.items.length; i++) {
+        var modaServer = servers.items[i];
+        if (modaServer.displayName === testServer.__name) {
+          self.expect_signupResult(null);
+          self.RT.reportActiveActorThisStep(self._testClient._eRawClient);
+          self._testClient._eRawClient
+            .expect_signup_begin()
+            .expect_signedUp()
+            .expect_signup_end();
+
+          me.signupWithServer(modaServer, {
+            onCompleted: function(err) {
+              self._logger.signupResult(err);
+            }
+          });
+          return;
+        }
+      }
+      throw new Error("No server info for '" + testServer.__name +
+                      "' found!");
+    });
+  },
+
+  /**
    * Create a conversation (using the moda API).  The entire testClient
    *  conversation creation set of steps is run, plus we wait for the
    *  moda representation updates once the conversation creation process
@@ -1388,8 +1439,15 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     topBilling: true,
 
     events: {
+      // - signup related
+      whoAmI: {},
+      serverQueryCompleted: {},
+      signupResult: {err: true},
+
+      // - do_query* helpers (does not cover servers right now)
       queryCompleted: { name: true, keys: true },
 
+      // - query contents detailed results checkers (delta rep is very terse)
       convBlurbCheck: { blurbRep: true },
 
       // - wrapper holds for the backside

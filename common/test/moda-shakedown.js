@@ -94,7 +94,7 @@ TD.commonCase('moda basics', function(T) {
   T.group('setup');
 
   // only A needs to use moda for our tests.
-  var client_a = T.actor('testClient', 'A'),
+  var client_a = T.actor('testClient', 'A', {moda: true}),
       moda_a = T.actor('testModa', 'mA', {client: client_a}, client_a),
       client_b = T.actor('testClient', 'B'),
       client_c = T.actor('testClient', 'C');
@@ -104,7 +104,7 @@ TD.commonCase('moda basics', function(T) {
       server_y = T.actor('testServer', 'Y', serverOpts),
       server_z = T.actor('testServer', 'Z', serverOpts);
 
-  client_a.setup_useServer(server_x);
+  moda_a.setup_useServer(server_x);
   client_b.setup_useServer(server_y);
   client_c.setup_useServer(server_z);
 

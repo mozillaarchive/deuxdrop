@@ -80,6 +80,7 @@ var $rawclient_api = require('rdcommon/rawclient/api'),
     $client_notif = require('rdcommon/rawclient/notifking'),
     $client_tasks = require('rdcommon/rawclient/lstasks');
 
+var $serverlist = require('rdcommon/serverlist');
 
 var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
     // the mailstore is not wrapping an API so does not go in the clobber ns.
@@ -123,6 +124,10 @@ var TestClientActorMixins = {
    *       other and accordingly signups do the right thing.
    *
    *       This linkage is established before any tests are run.
+   *     }
+   *     @key[moda #:optional Boolean]{
+   *       Speculative marker to indicate that we are planning to bind a moda
+   *       testhelper instance to this client.
    *     }
    *   ]]
    * ]
@@ -1038,10 +1043,19 @@ var TestServerActorMixins = {
 
       var details = {
         tag: 'server:dummy',
+        meta: {
+          displayName: self.__name,
+        },
         url: 'ws://127.0.0.1:' + self._server.address.port + '/',
       };
       var signedSelfIdent = self.__signedSelfIdentBlob =
         $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
+
+      // - fource our self-ident JSON rep into the $serverlist list of servers
+      // this is how moda clients will know how to talk to us.
+      $serverlist.serverSelfIdents.push({
+        selfIdent: signedSelfIdent,
+      });
 
       // -- create api's, bind server definitions
       var serverConfig = self._config =
