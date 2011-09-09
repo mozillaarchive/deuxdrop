@@ -167,6 +167,20 @@ var DeltaHelper = exports.DeltaHelper = {
       postAnno: {},
     };
   },
+  makeOrReuseDelta: function(lqt) {
+    if (!lqt._pendingExpDelta) {
+      lqt._pendingExpDelta = {
+        preAnno: {},
+        state: {},
+        postAnno: {},
+      };
+    }
+    else {
+      // clear the state rep revery time so we can explode as needed
+      lqt._pendingExpDelta.state = {};
+    }
+    return lqt._pendingExpDelta;
+  },
 
   _PEEP_QUERY_KEYFUNC: function(x) { return x.rootKey; },
 
@@ -205,7 +219,7 @@ var DeltaHelper = exports.DeltaHelper = {
    * Generate the delta rep for the initial result set of a peep query.
    */
   peepExpDelta_base: function(lqt, cinfos, queryBy) {
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
 
     lqt._cinfos = cinfos;
     lqt._sorter = this._PEEP_QUERY_BY_TO_CMPFUNC[queryBy];
@@ -221,7 +235,7 @@ var DeltaHelper = exports.DeltaHelper = {
    * Generate the delta rep for a completely new contact.
    */
   peepExpDelta_added: function(lqt, newCinfo) {
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
 
     // -- preAnno
     // nothing to do for an addition; there are no removals
@@ -248,22 +262,25 @@ var DeltaHelper = exports.DeltaHelper = {
    * Check whether a new message has affected the ordering of a peep query and
    *  generate a delta if so.
    */
-  peepExpMaybeDelta_newmsg: function(lqt, modifiedCinfo) {
+  peepExpMaybeDelta_newmsg: function(lqt, modifiedCinfo, knownChange) {
     var cinfos = lqt._cinfos;
     var preIndex = cinfos.indexOf(modifiedCinfo);
     cinfos.sort(lqt._sorter);
     // no change in position, no delta.
-    if (cinfos.indexOf(modifiedCinfo) === preIndex)
+    var moved = (cinfos.indexOf(modifiedCinfo) !== preIndex);
+    if (!knownChange && !moved)
       return null;
 
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
     // mark the moving guy in the pre
-    delta.preAnno[modifiedCinfo.rootKey] = 0;
+    if (moved)
+      delta.preAnno[modifiedCinfo.rootKey] = 0;
     // fill in the new order
     var rootKeys = cinfos.map(this._PEEP_QUERY_KEYFUNC);
     markListIntoObj(rootKeys, delta.state, null);
     // mark the moving guy in the post too
-    delta.postAnno[modifiedCinfo.rootKey] = 0;
+    if (moved)
+      delta.postAnno[modifiedCinfo.rootKey] = 0;
 
     return delta;
   },
@@ -273,7 +290,7 @@ var DeltaHelper = exports.DeltaHelper = {
    *  query.
    */
   peepConvsExpDelta_base: function(lqt, cinfo, allConvs, queryBy) {
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
 
     // filter conversations to ones actually involving the given cinfo
     lqt._convs = allConvs.filter(function(convInfo) {
@@ -293,10 +310,13 @@ var DeltaHelper = exports.DeltaHelper = {
     return delta;
   },
 
+// nop-ing out in conjunction with nop-ing _notifyPeepJoinedConv which should
+//  not be required now that `peepConvsExpMaybeDelta_newmsg` is smarter.
   /**
    * Generate the delta rep for a peep being added to a conversation for a
    *  conversations-by-peep query.
    */
+/*
   peepConvsExpDelta_joined: function(lqt, convInfo) {
     var delta = this.makeEmptyDelta();
 
@@ -310,6 +330,7 @@ var DeltaHelper = exports.DeltaHelper = {
 
     return delta;
   },
+*/
 
   /**
    * Check whether a rep delta occurs for a conversations-by-peep query and
@@ -323,16 +344,23 @@ var DeltaHelper = exports.DeltaHelper = {
    */
   peepConvsExpMaybeDelta_newmsg: function(lqt, convInfo, changeKnown) {
     var preIndex = lqt._convs.indexOf(convInfo);
+    var added = (preIndex === -1);
+    if (added)
+      lqt._convs.push(convInfo);
     lqt._convs.sort(lqt._sorter);
-    if (!changeKnown && lqt._convs.indexOf(convInfo) === preIndex)
+    var moved = (lqt._convs.indexOf(convInfo) !== preIndex);
+    if (!changeKnown && !moved)
       return null;
 
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
     markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
                     delta.state, null);
     var convId = this._PEEPCONV_QUERY_KEYFUNC(convInfo);
-    delta.preAnno[convId] = 0;
-    delta.postAnno[convId] = 0;
+    if (moved) {
+      if (!added)
+        delta.preAnno[convId] = 0;
+      delta.postAnno[convId] = added ? 1 : 0;
+    }
     return delta;
   },
 
@@ -462,9 +490,7 @@ var TestModaActorMixins = {
       // in the case of an addition we expect a positioned splice followed
       //  by a completion notification
       var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCinfo);
-
-      this.RT.reportActiveActorThisStep(this);
-      this.expect_queryCompleted(lqt.__name, deltaRep);
+      this._ensureExpectedQuery(lqt);
     }
   },
 
@@ -483,16 +509,14 @@ var TestModaActorMixins = {
     var queries = this._dynamicPeepQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
-
+console.log("??", lqt.__name, cinfo, knownChange);
       // XXX for now, all peep queries care about all peep things, but not once
       //  we add pinned, etc.
 
       var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo,
                                                           knownChange);
-      if (deltaRep) {
-        this.RT.reportActiveActorThisStep(this);
-        this.expect_queryCompleted(lqt.__name, deltaRep);
-      }
+      if (deltaRep)
+        this._ensureExpectedQuery(lqt);
     }
   },
 
@@ -521,7 +545,8 @@ var TestModaActorMixins = {
    *  generate expectations for the relevant queries if this has affected
    *  blurb ordering.
    */
-  _notifyPeepConvTimestampsChanged: function(cinfo, convIndices, convInfo) {
+  _notifyPeepConvTimestampsChanged: function(cinfo, convIndices, convInfo,
+                                             joinOccurred) {
     var queries = this._dynamicPeepConvQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
@@ -529,33 +554,50 @@ var TestModaActorMixins = {
       // the query only cares if its dude is involved
       if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
         continue;
-console.log("  ?? peepConvTimestampsChanged");
-      var deltaRep = DeltaHelper.peepConvsExpMaybeDelta_newmsg(lqt, convInfo);
-      if (deltaRep) {
-        this.RT.reportActiveActorThisStep(this);
-        this.expect_queryCompleted(lqt.__name, deltaRep);
-      }
+
+      var deltaRep = DeltaHelper.peepConvsExpMaybeDelta_newmsg(
+        lqt, convInfo, joinOccurred);
+      if (deltaRep)
+        this._ensureExpectedQuery(lqt);
     }
   },
 
   _notifyConvGainedMessages: function(convInfo) {
-    var queries = this._dynamicConvMsgsQueries,
+    var queries = this._dynamicConvMsgsQueries, iQuery, lqt,
         backlog = convInfo.tConv.data.backlog,
-        seenMsgs = backlog.slice(0, convInfo.highestMsgSeen + 1),
-        addedMsgs = backlog.slice(convInfo.highestMsgReported + 1,
-                                  convInfo.highestMsgSeen + 1);
+        // these are all 1-based indices, so this works out.
+        seenMsgs = backlog.slice(0, convInfo.highestMsgSeen),
+        addedMsgs = backlog.slice(convInfo.highestMsgReported,
+                                  convInfo.highestMsgSeen);
     convInfo.highestMsgReported = convInfo.highestMsgSeen;
-    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
-      var lqt = queries[iQuery];
+    for (iQuery = 0; iQuery < queries.length; iQuery++) {
+      lqt = queries[iQuery];
 
       // the query only cares if it's the same conversation it cares about
       if (convInfo.tConv !== lqt.data.tConv)
         continue;
-console.log("  ?? convGainedMessages");
+
       var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
       this.RT.reportActiveActorThisStep(this);
       this.expect_queryCompleted(lqt.__name, deltaRep);
     }
+  },
+
+  /**
+   * Ensure that we have an expectation for a query at most once.  This is to
+   *  match up with the notification king which maintains a list of pending
+   *  queries which should be flushed when the update phase completes.  Because
+   *  our expectations are already an ordered queue, it suffices that we
+   *  just make sure to only add things to a queue once as long as we make
+   *  sure to mutate our representation (finishing the mutations before the
+   *  actual log entry gets generated).
+   */
+  _ensureExpectedQuery: function(lqt) {
+    if (this._dynPendingQueries.indexOf(lqt) !== -1)
+      return;
+    this._dynPendingQueries.push(lqt);
+    this.RT.reportActiveActorThisStep(this);
+    this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -621,7 +663,7 @@ console.log("@@ receiveConv");
     convInfo.highestMsgSeen++;
 
     var self = this;
-    function goNotify(authorInfo, participantInfos, joineeInfo) {
+    function goNotify(authorInfo, participantInfos, joineeInfo, forceUpdate) {
       var convAuthIndices = convInfo.peepSeqsByName[authorInfo.name],
           ourInfo = self._contactMetaInfoByName[self._testClient.__name];
 
@@ -632,7 +674,7 @@ console.log("@@ receiveConv");
       convAuthIndices.any = tMsg.data.seq;
 
       // - peep notifications
-      self._notifyPeepChanged(authorInfo);
+      self._notifyPeepChanged(authorInfo, joineeInfo === authorInfo);
 
       var iPart, pinfo;
       for (iPart = 0; iPart < participantInfos.length; iPart++) {
@@ -649,8 +691,8 @@ console.log("@@ receiveConv");
       }
 
       // - conversation notifications
-      self._notifyPeepConvTimestampsChanged(authorInfo, convAuthIndices,
-                                            convInfo);
+      self._notifyPeepConvTimestampsChanged(
+        authorInfo, convAuthIndices, convInfo, forceUpdate || !!joineeInfo);
       for (iPart = 0; iPart < participantInfos.length; iPart++) {
         pinfo = participantInfos[iPart];
         // do not process the author again
@@ -662,14 +704,16 @@ console.log("@@ receiveConv");
           convPartIndices.recip = tMsg.data.seq;
         convPartIndices.any = tMsg.data.seq;
 
-        self._notifyPeepConvTimestampsChanged(pinfo, convPartIndices,
-                                              convInfo);
+        self._notifyPeepConvTimestampsChanged(
+          pinfo, convPartIndices, convInfo, forceUpdate || !!joineeInfo);
       }
     }
 
     if (tMsg.data.type === 'message') {
       var authorInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
-      goNotify(authorInfo, convInfo.participantInfos);
+      // force the update on messages because we are always sending blurb
+      //  updates with the message as a possible firstMessage as a hack
+      goNotify(authorInfo, convInfo.participantInfos, null, true);
     }
     else if (tMsg.data.type === 'join') {
       var joinerName = tMsg.data.inviter.__name,
@@ -705,15 +749,20 @@ console.log("@@ receiveConv");
    *  can occur in a single test step.
    */
   __updatePhaseComplete: function() {
-console.log("@@ updatePhaseComplete");
+    // -- clear the delta on the pending query expectations
+    var pendingExpQueries = this._dynPendingQueries;
+    for (var i = 0; i < pendingExpQueries.length; i++) {
+      pendingExpQueries[i]._pendingExpDelta = null;
+    }
+    pendingExpQueries.splice(0, pendingExpQueries.length);
+
     // -- flush out pending message addition NS_CONVMSGS queries
     var pendingConvInfos = this._dynPendingConvMsgs;
     for (var iConv = 0; iConv < pendingConvInfos.length; iConv++) {
       var convInfo = pendingConvInfos[iConv];
       this._notifyConvGainedMessages(convInfo);
     }
-    this._dynPendingConvMsgs.splice(
-      0, this._dynPendingConvMsgs.length);
+    pendingConvInfos.splice(0, pendingConvInfos.length);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -843,6 +892,7 @@ console.log("@@ updatePhaseComplete");
   do_queryPeeps: function(thingName, query) {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
 
     this.T.action(this, 'create', lqt, function() {
       // -- generate the expectation
@@ -850,7 +900,7 @@ console.log("@@ updatePhaseComplete");
       //  this.
       var delta = DeltaHelper.peepExpDelta_base(
                     lqt, self._getDynContactInfos(), query.by);
-      self.expect_queryCompleted(lqt.__name, delta);
+      self._ensureExpectedQuery(lqt);
 
       lqt._liveset = self._bridge.queryPeeps(query, self, lqt);
       self._dynamicPeepQueries.push(lqt);
@@ -868,13 +918,14 @@ console.log("@@ updatePhaseComplete");
                                       query)  {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
     this.T.action(this, 'create', lqt, function() {
       var peep = self._grabPeepFromQueryUsingClient(usingQuery, peepClient),
           cinfo = self._lookupContactInfo(peepClient);
 
       var delta = DeltaHelper.peepConvsExpDelta_base(
         lqt, cinfo, self._dynamicConvInfos, query.by);
-      self.expect_queryCompleted(lqt.__name, delta);
+      self._ensureExpectedQuery(lqt);
 
       lqt.data = {
         contactInfo: cinfo,
@@ -895,6 +946,7 @@ console.log("@@ updatePhaseComplete");
   do_queryConversationMessages: function(thingName, usingQuery, tConv) {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
     this.T.action(this, 'create', lqt, function() {
       var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(
                         usingQuery, tConv),
