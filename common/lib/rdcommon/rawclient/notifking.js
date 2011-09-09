@@ -614,6 +614,16 @@ NotificationKing.prototype = {
     return queryHandle;
   },
 
+  getQueryHandleByUniqueId: function(querySource, namespace, uniqueId) {
+    var handles = querySource.queryHandlesByNS[namespace];
+    for (var i = 0; i < handles.length; i++) {
+      if (handles[i].uniqueId === uniqueId)
+        return handles[i];
+    }
+    throw new Error("No query handle with unique id '" + uniqueId +
+                    "' in namespace '" + namespace + "'");
+  },
+
   forgetTrackedQuery: function(queryHandle) {
     var qhList = queryHandle.owner.queryHandlesByNS[queryHandle.namespace];
     var qhIndex = qhList.indexOf(queryHandle);

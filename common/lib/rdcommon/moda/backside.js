@@ -321,8 +321,11 @@ ModaBackside.prototype = {
     this._notif.sendQueryResults(queryHandle);
   },
 
-  _cmd_killQuery: function(bridgeQueryName, ignored) {
-    this._notif.forgetTrackedQuery(bridgeQueryName);
+  _cmd_killQuery: function(bridgeQueryName, namespace) {
+    var queryHandle = this._notif.getQueryHandleByUniqueId(this._querySource,
+                                                           namespace,
+                                                           bridgeQueryName);
+    this._notif.forgetTrackedQuery(queryHandle);
   },
 
   _cmd_whoAmI: function() {

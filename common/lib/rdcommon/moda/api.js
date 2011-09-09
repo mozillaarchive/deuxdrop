@@ -809,7 +809,7 @@ ModaBridge.prototype = {
       this._sets.splice(idxSet, 1);
       delete this._handleMap[liveSet._handle];
 
-      this._send('killQuery', liveSet._handle, null);
+      this._send('killQuery', liveSet._handle, liveSet._ns);
       liveSet._handle = null;
     }
   },

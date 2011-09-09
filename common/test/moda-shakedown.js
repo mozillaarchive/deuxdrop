@@ -189,6 +189,13 @@ TD.commonCase('moda basics', function(T) {
   // the conversation blurb should now know that C is involved in the conv
   // the C query should now contain the conversation...
 
+  // - kill the peeps final query
+  T.group('kill allPeepsFinal query');
+  // this should result in not receiving an update for the query; it would
+  //  otherwise receive an update because the peeps' number of conversations
+  //  they participate in would be updated.
+  moda_a.do_killQuery(lqFinalAllPeeps);
+
   // - create a conversation between A,B,C
   T.group('new conversation between A, B, C');
   var tConv2 = T.thing('conversation', 'conv2'),

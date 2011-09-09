@@ -1017,12 +1017,41 @@ var TestModaActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Queries: Kill
 
+  _assertRemoveFromList: function(list, thing) {
+    var idx = list.indexOf(thing);
+    if (idx === -1)
+      throw new Error("Thing not in list");
+    list.splice(idx, 1);
+  },
+
   /**
    * Unsubscribe a live query and forget about it.  We structure our listeners
    *  so that if the live query logic screws up and keeps sending us events
    *  we will throw up errors.
    */
-  do_killQuery: function() {
+  do_killQuery: function(lqt) {
+    var self = this;
+    this.T.action('close query', lqt, function() {
+      // - remove from our list of queries
+      switch (lqt._liveset._ns) {
+        case 'peeps':
+          self._assertRemoveFromList(self._dynamicPeepQueries, lqt);
+          break;
+        case 'convblurbs':
+          self._assertRemoveFromList(self._dynamicPeepConvQueries, lqt);
+          break;
+        case 'convmsgs':
+          self._assertRemoveFromList(self._dynamicConvMsgsQueries, lqt);
+          break;
+
+        case 'servers':
+          throw new Error(
+            "XXX we don't test the servers queries right about now");
+      }
+
+      // - close the query
+      lqt._liveset.close();
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
