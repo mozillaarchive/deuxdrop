@@ -556,7 +556,6 @@ NotificationKing.prototype = {
       nextUniqueIdAlloc: 0,
       queryHandlesByNS: makeEmptyListsByNS(),
       pending: [],
-      pendingAggr: [],
     };
     return querySource;
   },
@@ -806,24 +805,19 @@ NotificationKing.prototype = {
             if (queryHandle.dataDelta[NS_CONVMSGS].hasOwnProperty(localName)) {
               outMessages =
                 queryHandle.dataDelta[NS_CONVMSGS][localName].messages;
-              break;
             }
-            // (fall-through since we need to create the dataDelta struct)
+            else {
+              queryHandle.dataDelta[NS_CONVMSGS][localName] = {
+                messages: (outMessages = []),
+              };
+            }
+            break;
           case PENDING_NONE:
             queryHandle.dataDelta[NS_CONVMSGS][localName] = {
               messages: (outMessages = []),
             };
             queryHandle.pending = PENDING_NOTIF;
-            // XXX The test framework expects the event sequencing to be that
-            //  message updates are enqueued only when the update phase is
-            //  completed.  To this end we use a separate queue for these
-            //  things for now.  The ideal solution is likely to be able to
-            //  put an actor's expectations in an unordered mode of operation
-            //  so we don't really need to worry about this.  (Noting that
-            //  the ordering is already slightly important in terms of making
-            //  sure that our avoidance of sending redundant data will
-            //  break if we reorder them.)
-            querySource.pendingAggr.push(queryHandle);
+            querySource.pending.push(queryHandle);
             break;
         }
 
@@ -885,12 +879,9 @@ NotificationKing.prototype = {
       var querySource = this._activeQuerySources[qsKey];
 
       // we have 2 queues for now: see `trackNewishMessage` and its comment
-      while (querySource.pending.length ||
-             querySource.pendingAggr.length) {
+      while (querySource.pending.length) {
         // (we need to use shift to avoid inverting the ordering)
-        var queryHandle = querySource.pending.length ?
-                            querySource.pending.shift() :
-                            querySource.pendingAggr.shift();
+        var queryHandle = querySource.pending.shift();
 
         // a promise is returned if we go async
         var sendResult;
