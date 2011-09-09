@@ -529,8 +529,12 @@ ModaBridge.prototype = {
           switch (attr) {
             case 'participants':
               for (i = 0; i < delta.participants.length; i++) {
-                curRep.participants.push(
-                  liveset._dataByNS.peeps[delta.participants[i]]);
+                // to make this idempotent in the face of our redundant updates
+                //  we need to check to make sure we didn't already add them.
+                var participant =
+                  liveset._dataByNS.peeps[delta.participants[i]];
+                if (curRep.participants.indexOf(participant) === -1)
+                  curRep.participants.push(participant);
               }
               break;
             case 'firstMessage':

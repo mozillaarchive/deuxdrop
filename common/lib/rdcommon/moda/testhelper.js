@@ -365,16 +365,22 @@ var DeltaHelper = exports.DeltaHelper = {
   },
 
   convMsgsDelta_base: function(lqt, seenMsgs) {
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
     markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
     markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.postAnno, 1);
     return delta;
   },
 
   convMsgsDelta_added: function(lqt, seenMsgs, addedMsgs) {
-    var delta = this.makeEmptyDelta();
+    var delta = this.makeOrReuseDelta(lqt);
     markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
     markListIntoObj(addedMsgs.map(this._THINGMSG_TEXTFUNC), delta.postAnno, 1);
+    return delta;
+  },
+
+  convMsgsDelta_nop: function(lqt, seenMsgs) {
+    var delta = this.makeOrReuseDelta(lqt);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
     return delta;
   },
 };
@@ -501,15 +507,20 @@ var TestModaActorMixins = {
    *  ordering is affected or we are explicitly told there is another change.
    */
   _notifyPeepChanged: function(cinfo, knownChange) {
-    // ignore changes about our own peep; it does not affect peep queries
-    //  directly. XXX it will affect dependent references.
+    // -- dependent (indirect) queries
+    // queries that know about this peep for dependency reasons will also
+    //  receive a notification
+    this._notifyDepConvMsgs(cinfo, cinfo.involvedConvs);
+
+    // -- direct queries
+    // ignore changes about our own peep for direct queries.
     if (cinfo.name === this._testClient.__name)
       return;
 
     var queries = this._dynamicPeepQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
-console.log("??", lqt.__name, cinfo, knownChange);
+
       // XXX for now, all peep queries care about all peep things, but not once
       //  we add pinned, etc.
 
@@ -518,6 +529,7 @@ console.log("??", lqt.__name, cinfo, knownChange);
       if (deltaRep)
         this._ensureExpectedQuery(lqt);
     }
+
   },
 
 // nop-ing out because I believe the timestamp changes cover this notification
@@ -578,25 +590,58 @@ console.log("??", lqt.__name, cinfo, knownChange);
         continue;
 
       var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
-      this.RT.reportActiveActorThisStep(this);
-      this.expect_queryCompleted(lqt.__name, deltaRep);
+      this._ensureExpectedQuery(lqt);
+    }
+  },
+
+  /**
+   * Generate dependent notifications about conversations.
+   */
+  _notifyDepConvMsgs: function(source, touchesConvInfos) {
+    var queries = this._dynamicConvMsgsQueries, iQuery, lqt;
+
+    var tConvs = [];
+    for (var i = 0; i < touchesConvInfos.length; i++) {
+      tConvs.push(touchesConvInfos[i].tConv);
+    }
+
+    for (iQuery = 0; iQuery < queries.length; iQuery++) {
+      lqt = queries[iQuery];
+
+      var idxAffected = tConvs.indexOf(lqt.data.tConv);
+      if (idxAffected === -1)
+        continue;
+
+      var convInfo = touchesConvInfos[idxAffected],
+          backlog = convInfo.tConv.data.backlog,
+          // these are all 1-based indices, so this works out.
+          seenMsgs = backlog.slice(0, convInfo.highestMsgSeen);
+      var deltaRep = DeltaHelper.convMsgsDelta_nop(lqt, seenMsgs);
+      this._ensureExpectedQuery(lqt);
     }
   },
 
   /**
    * Ensure that we have an expectation for a query at most once.  This is to
-   *  match up with the notification king which maintains a list of pending
-   *  queries which should be flushed when the update phase completes.  Because
-   *  our expectations are already an ordered queue, it suffices that we
-   *  just make sure to only add things to a queue once as long as we make
-   *  sure to mutate our representation (finishing the mutations before the
-   *  actual log entry gets generated).
+   *  match up with the notification king which only flushes query results
+   *  when the update phase completes.  (All query-updating logic knows to
+   *  update the pending representations rather than clobbering the state,
+   *  so accumulated notifications should be fine.)  We keep the expected
+   *  object around (on lqt._pendingExpDelta) so we can mutate that accordingly,
+   *  and our __updatePhaseComplete implementation knows how to clean that out
+   *  as well as our list we push onto here.
    */
   _ensureExpectedQuery: function(lqt) {
     if (this._dynPendingQueries.indexOf(lqt) !== -1)
       return;
+    // put our actor into 'set' expectations mode for this step since the
+    //  query ordering is proving to be intractable to mirror and we don't
+    //  really care.
+    if (this._dynPendingQueries.length === 0) {
+      this.RT.reportActiveActorThisStep(this);
+      this.expectUseSetMatching();
+    }
     this._dynPendingQueries.push(lqt);
-    this.RT.reportActiveActorThisStep(this);
     this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
   },
 
@@ -655,7 +700,6 @@ console.log("??", lqt.__name, cinfo, knownChange);
   },
 
   __receiveConvMessage: function(tConv, tMsg) {
-console.log("@@ receiveConv");
     var convInfo = this._convInfoByName[tConv.__name];
     if (this._dynPendingConvMsgs.indexOf(convInfo) === -1)
       this._dynPendingConvMsgs.push(convInfo);
@@ -736,26 +780,18 @@ console.log("@@ receiveConv");
    *  `NotificationKing` which then uses it to decide to release any batched
    *  up convmsgs updates in a single batch.
    *
-   * Ordering consistency in the event of a batch of multiple conversations
-   *  (that is, avoiding non-determinism due to inconsistent traversal orders
-   *  of hash tables) is avoided by the use of a pending query list that gets
-   *  appended to in event order.
-   *
-   * XXX We will likely need to update the other notification mechanisms to
-   *  use the pending list and defer actual generation until this marker, as
-   *  moda does consistently use that mechanism.  However, it's not an
-   *  immediate problem because apart from backlog joins, our unit test steps
-   *  are so granular (and always online right now) that nothing complicated
-   *  can occur in a single test step.
+   * We used to be concerned about the ordering of the query results because the
+   *  logging/testing framework was matching everything in an ordered fashion.
+   *  We now put it in an unordered mode of event checking for steps where
+   *  query completions happen, so we are less concerned.  However, it is still
+   *  important that we only emit a single expectation per update phase (as the
+   *  notification king does).  Accordingly, our code uses _ensureExpectedQuery
+   *  to make sure we only queue the expectation once.  Our job in this method
+   *  then becomes to clean out the state used by that function and its
+   *  `DeltaHelper.makeOrReuseDelta` helper so that we generate new expectations
+   *  next round.
    */
   __updatePhaseComplete: function() {
-    // -- clear the delta on the pending query expectations
-    var pendingExpQueries = this._dynPendingQueries;
-    for (var i = 0; i < pendingExpQueries.length; i++) {
-      pendingExpQueries[i]._pendingExpDelta = null;
-    }
-    pendingExpQueries.splice(0, pendingExpQueries.length);
-
     // -- flush out pending message addition NS_CONVMSGS queries
     var pendingConvInfos = this._dynPendingConvMsgs;
     for (var iConv = 0; iConv < pendingConvInfos.length; iConv++) {
@@ -763,6 +799,13 @@ console.log("@@ receiveConv");
       this._notifyConvGainedMessages(convInfo);
     }
     pendingConvInfos.splice(0, pendingConvInfos.length);
+
+    // -- clear the delta on the pending query expectations
+    var pendingExpQueries = this._dynPendingQueries;
+    for (var i = 0; i < pendingExpQueries.length; i++) {
+      pendingExpQueries[i]._pendingExpDelta = null;
+    }
+    pendingExpQueries.splice(0, pendingExpQueries.length);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -901,6 +944,7 @@ console.log("@@ receiveConv");
       var delta = DeltaHelper.peepExpDelta_base(
                     lqt, self._getDynContactInfos(), query.by);
       self._ensureExpectedQuery(lqt);
+      lqt._pendingExpDelta = null;
 
       lqt._liveset = self._bridge.queryPeeps(query, self, lqt);
       self._dynamicPeepQueries.push(lqt);
@@ -926,6 +970,7 @@ console.log("@@ receiveConv");
       var delta = DeltaHelper.peepConvsExpDelta_base(
         lqt, cinfo, self._dynamicConvInfos, query.by);
       self._ensureExpectedQuery(lqt);
+      lqt._pendingExpDelta = null;
 
       lqt.data = {
         contactInfo: cinfo,
@@ -951,10 +996,11 @@ console.log("@@ receiveConv");
       var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(
                         usingQuery, tConv),
           convInfo = self._convInfoByName[tConv.__name],
-          seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen + 1);
+          seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen);
 
       var delta = DeltaHelper.convMsgsDelta_base(lqt, seenMsgs);
       self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
 
       lqt._liveset = self._bridge.queryConversationMessages(convBlurb,
                                                             self, lqt);
@@ -1067,7 +1113,7 @@ console.log("@@ receiveConv");
   _thingConvToBlurbLoggable: function(tConv) {
     var convInfo = this._convInfoByName[tConv.__name];
 
-    var seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen + 1);
+    var seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen);
     var firstThingMsg = null;
     for (var i = 0; i < seenMsgs.length; i++) {
       if (seenMsgs[i].data.type === 'message') {

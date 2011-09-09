@@ -317,6 +317,14 @@ TestDefinerRunner.prototype = {
         // - tell the actors we are done with this round
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
           actor = liveActors[iActor];
+          // let's generate failures so it's clear what might might have yet
+          //  to fail because of some other built-in failures.  This should
+          //  help make all our expectations more explicit.  This is
+          //  particularly helpful in the unordered case where mismatches are
+          //  now reported as unexpected events instead of mismatches (because
+          //  we have no edit distance type algorithm to tell which in a set
+          //  was closest/close at all, etc.).
+          actor.__failUnmetExpectations();
           actor.__resetExpectations();
         }
         self._runtimeContext._liveActors = null;

@@ -444,6 +444,21 @@ var TestActorProtoBase = {
   },
 
   /**
+   * Set this actor to use 'set' matching for only this round; the list of
+   *  expectations will be treated as an unordered set of expectations to
+   *  match instead of an ordered list that must be matched exactly in order.
+   *  Failures will still be generated if an entry is encountered that does not
+   *  have a corresponding entry in the expectation list.
+   *
+   * One side-effect of this mode is that we no longer can detect what
+   *  constitutes a mismatch, so we call everything unexpected that doesn't
+   *  match.
+   */
+  expectUseSetMatching: function() {
+    this._unorderedSetMode = true;
+  },
+
+  /**
    * Prepare for activity in a test step.  If we do not already have a paired
    *  logger, this will push us onto the tracking list so we will be paired when
    *  the logger is created.
@@ -485,6 +500,7 @@ var TestActorProtoBase = {
     this._iExpectation = 0;
     this._expectations.splice(0, this._expectations.length);
     this._expectDeath = false;
+    this._unorderedSetMode = false;
     this._deferred = null;
     this._activeForTestStep = false;
     return expectationsWereMet;
@@ -507,11 +523,64 @@ var TestActorProtoBase = {
    */
   __loggerFired: function() {
     // we can't do anything if we don't have an actor.
-    var entries = this._logger._entries;
+    var entries = this._logger._entries, expy, entry;
+    // -- unordered mode
+    if (this._unorderedSetMode) {
+
+      while (this._iExpectation < this._expectations.length &&
+             this._iEntry < entries.length) {
+        entry = entries[this._iEntry++];
+        // ignore meta-entries (which are prefixed with a '!')
+        if (entry[0][0] === "!")
+          continue;
+
+        // - try all the expectations for a match
+        var foundMatch = false;
+        for (var iExp = this._iExpectation; iExp < this._expectations.length;
+             iExp++) {
+          expy = this._expectations[iExp];
+
+          // - on matches, reorder the expectation and bump our pointer
+          if (this['_verify_' + expy[0]](expy, entry)) {
+            if (iExp !== this._iExpectation) {
+              this._expectations[iExp] = this._expectations[this._iExpectation];
+              this._expectations[this._iExpectation] = expy;
+            }
+            this._iExpectation++;
+            foundMatch = true;
+            break;
+          }
+        }
+        if (!foundMatch) {
+          this._logger.__unexpectedEntry(this._iEntry - 1, entry);
+          this._expectationsMetSoFar = false;
+          if (this._deferred)
+            this._deferred.reject([this.__defName, expy, entry]);
+        }
+      }
+
+      // - generate an unexpected failure if we ran out of expectations
+      if ((this._iExpectation === this._expectations.length) &&
+          (entries.length > this._iEntry)) {
+        // note: as below, there is no point trying to generate a rejection
+        //  at this stage.
+        this._expectationsMetSoFar = false;
+        // no need to -1 because we haven't incremented past the entry.
+        this._logger.__unexpectedEntry(this._iEntry, entries[this._iEntry]);
+      }
+      // - generate success if we have used up our expectations
+      else if ((this._iExpectation >= this._expectations.length) &&
+               this._deferred) {
+        this._deferred.resolve();
+      }
+      return;
+    }
+
+    // -- ordered mode
     while (this._iExpectation < this._expectations.length &&
            this._iEntry < entries.length) {
-      var expy = this._expectations[this._iExpectation];
-      var entry = entries[this._iEntry++];
+      expy = this._expectations[this._iExpectation];
+      entry = entries[this._iEntry++];
 
       // ignore meta-entries (which are prefixed with a '!')
       if (entry[0][0] === "!")
@@ -523,10 +592,10 @@ var TestActorProtoBase = {
         this._logger.__unexpectedEntry(this._iEntry - 1, entry);
         // (fallout, triggers error)
       }
-      else if(!this['_verify_' + expy[0]](expy, entry)) {
+      else if (!this['_verify_' + expy[0]](expy, entry)) {
         this._logger.__mismatchEntry(this._iEntry - 1, expy, entry);
         // things did line up correctly though, so boost the expecation number
-        //  so we don't convert subsequent expecations into unexpected ones.
+        //  so we don't convert subsequent expectations into unexpected ones.
         this._iExpectation++;
         // (fallout, triggers error)
       }
@@ -1217,6 +1286,7 @@ LoggestClassMaker.prototype = {
       this._expectations = [];
       this._expectationsMetSoFar = true;
       this._expectDeath = false;
+      this._unorderedSetMode = false;
       this._activeForTestStep = false;
       this._iEntry = this._iExpectation = 0;
     };
