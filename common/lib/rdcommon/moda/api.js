@@ -283,6 +283,11 @@ ServerInfo.prototype = {
 };
 
 /**
+ * Stores listeners for getting serverInfo from unknown servers.
+ */
+var insecureServerInfoListeners = {};
+
+/**
  * Represents the account information for the human being using this messaging
  *  system.  Provides the current portable contacts schema identifying the user
  *  to others and a means to change it.  Provides information on the account
@@ -318,6 +323,13 @@ OurUserAccount.prototype = {
   },
 
   provideProofOfIdentity: function(identityType, proofOrigin, proof) {
+  },
+
+  insecurelyGetServerSelfIdentUsingDomainName: function (domain, listener) {
+    (insecureServerInfoListeners[domain] ||
+     (insecureServerInfoListeners[domain] = [])).push(listener);
+
+    this._bridge._send('insecurelyGetServerSelfIdentUsingDomainName', null, domain);
   },
 
   signupWithServer: function(serverInfo) {
@@ -399,6 +411,8 @@ ModaBridge.prototype = {
     switch (msg.type) {
       case 'whoAmI':
         return this._receiveWhoAmI(msg);
+      case 'insecurelyGetServerSelfIdentUsingDomainName':
+        return this._receiveInsecureServerSelfIdent(msg);
       case 'query':
         return this._receiveQueryUpdate(msg);
     }
@@ -421,6 +435,25 @@ ModaBridge.prototype = {
       this._ourUser._pendingListeners[i].onCompleted(this._ourUser);
     }
     this._ourUser._pendingListeners = [];
+  },
+
+  _receiveInsecureServerSelfIdent: function(msg) {
+    // Get listeners related to the domain queried, and set up
+    // serverInfo for the server.
+    var listeners = insecureServerInfoListeners[msg.domain],
+        server = msg.server,
+        serverInfo = server ?
+                     this._transformServerInfo(server.localName, server) : null;
+
+    // clean up listener object
+    delete insecureServerInfoListeners[msg.domain];
+
+    // notify listeners
+    for (var i = 0; i < listeners.length; i++) {
+      if (listeners[i].onComplete)
+        listeners[i].onCompleted(serverInfo);
+    }
+
   },
 
   /**

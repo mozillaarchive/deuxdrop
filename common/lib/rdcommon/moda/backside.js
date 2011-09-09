@@ -346,6 +346,35 @@ ModaBackside.prototype = {
     this._rawClient.updatePoco(newPoco);
   },
 
+  _cmd_insecurelyGetServerSelfIdentUsingDomainName: function(domain) {
+    when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
+      function (selfIdentInfo) {
+        var serverInfo = null;
+
+        if (selfIdentInfo) {
+          var serverIdentBlob = selfIdentInfo.selfIdent;
+          var serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
+
+          // TODO: should this be integrated into the query list of servers?
+          serverInfo = {
+            localName: "" + (this._querySource.nextUniqueIdAlloc++),
+            fullName: serverIdent.rootPublicKey,
+            count: 1,
+            data: serverIdentBlob,
+            indexValues: null,
+            deps: null
+          };
+        }
+
+        this.send({
+          type: 'insecurelyGetServerSelfIdentUsingDomainName',
+          domain: domain,
+          server: serverInfo
+        });
+      }
+    );
+  },
+
   _cmd_signupDangerouslyUsingDomainName: function() {
   },
 

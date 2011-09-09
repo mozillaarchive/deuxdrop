@@ -316,6 +316,18 @@ exports.makeServerDef = function(serverConfig) {
         },
       },
     },
+    urls: {
+      '/.well-known/deuxdrop-server.selfident.json':
+        function handleSelfIdent(request, response) {
+          var selfIdent = serverConfig.selfIdentBlob,
+              contents = JSON.stringify({selfIdent: selfIdent});
+          response.writeHead(200, {
+          'Content-Type': 'text/plain;charset=utf-8'
+        });
+        response.write(contents, 'utf8');
+        response.end();
+      }
+    }
   };
 };
 

@@ -79,6 +79,7 @@ define(
     'rdcommon/identities/pubident', 'rdcommon/crypto/pubring',
     '../messages/generator',
     './localdb',
+    'xmlhttprequest',
     'module',
     'exports'
   ],
@@ -90,6 +91,7 @@ define(
     $pubident, $pubring,
     $msg_gen,
     $localdb,
+    $xmlhttprequest,
     $module,
     exports
   ) {
@@ -499,7 +501,30 @@ RawClientAPI.prototype = {
    *  insecure fashion.  See `signupDangerouslyUsingDomainName` for the broad
    *  strokes on why this is a horrible idea.
    */
-  insecurelyGetServerSelfIdentUsingDomainName: function() {
+  insecurelyGetServerSelfIdentUsingDomainName: function(domain) {
+    // Fetch the well-known location for the selfIdent
+    var deferred = $Q.defer(),
+        request = new $xmlhttprequest.XMLHttpRequest();
+
+    request.open('GET', 'http://' + domain +
+                 '/.well-known/deuxdrop-server.selfident.json', true);
+
+    var self = this;
+    request.onreadystatechange = function(evt) {
+      if (request.readyState == 4) {
+        if (request.status == 200) {
+          self._log.insecurelyGetServerSelfIdentUsingDomainNameSuccess();
+          var json = JSON.parse(request.responseText);
+          deferred.resolve(json);
+        } else {
+          self._log.insecurelyGetServerSelfIdentUsingDomainNameFailure();
+          deferred.resolve(null);
+        }
+      }
+    };
+    request.send(null);
+
+    return deferred.promise;
   },
 
   /**
@@ -1041,9 +1066,13 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     asyncJobs: {
       signup: {},
     },
+    TEST_ONLY_events: {
+      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {selfIdent: true},
+    },
     events: {
       signedUp: {},
       signupChallenged: {},
+      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {},
 
       connecting: {},
       connected: {},
@@ -1054,6 +1083,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     errors: {
       signupFailure: {},
+      insecurelyGetServerSelfIdentUsingDomainNameFailure: {}
     },
   }
 });

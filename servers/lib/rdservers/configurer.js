@@ -374,6 +374,8 @@ exports.cmdRunConfig = function runConfig(configDir) {
   liveServerInfo.serverConfig = serverConfig;
   ALIVE_LIST.push(liveServerInfo);
 
+  serverConfig.__registerServers(server);
+
   // - start server
   server.listen(serializedConfig.listenIP, serializedConfig.listenPort);
   console.log("Server started on",

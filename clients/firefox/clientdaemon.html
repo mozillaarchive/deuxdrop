@@ -87,6 +87,8 @@ function BOOTSTRAP(callbackWhenLoaded) {
         'path': '../../addon/js/path',
         'timers': '../../addon/js/timers',
         'util': '../../addon/js/util',
+        'url': '../../addon/js/url',
+        'xmlhttprequest': '../../addon/js/xmlhttprequest',
         // testing-informed stubs
         'event-queue': '../../addon/js/event-queue',
 
@@ -152,7 +154,7 @@ function DEAD_MODA_CLIENT(name) {
 var logbacklog = [], MAX_LOG_BACKLOG = 60;
 var loggerClients = [];
 
-// once a second, potentially generate a log 
+// once a second, potentially generate a log
 setInterval(function() {
   var logTimeSlice = LOG_REAPER.reapHierLogTimeSlice();
   // if nothing interesting happened, this could be empty, yos.

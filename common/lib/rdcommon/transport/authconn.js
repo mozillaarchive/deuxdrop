@@ -137,6 +137,7 @@ define(
     'http', // (for server role stuff)
     'q',
     'nacl',
+    'url',
     'websocket',
     'rdcommon/log',
     'rdcommon/taskidiom',
@@ -147,6 +148,7 @@ define(
     $http,
     $Q,
     $nacl,
+    $url,
     $ws,
     $log,
     $task,
@@ -688,12 +690,22 @@ function serve404s(request, response) {
  */
 function AuthorizingServer(_logger, extraNaming) {
   this._endpoints = {};
+  this._urls = {};
 
   this._extraNaming = extraNaming || "server";
   this.log = LOGFAB.server(this, _logger, [this._extraNaming]);
 
   // That which is not a websocket shall be severely disappointed currently.
-  var httpServer = this._httpServer = $http.createServer(serve404s);
+  var httpServer = this._httpServer = $http.createServer(
+      function handleURL(request, response) {
+
+    var path = $url.parse(request.url).pathname;
+
+    if (this._urls.hasOwnProperty(path))
+      this._urls[path](request, response);
+    else
+      serve404s(request, response);
+  }.bind(this));
 
   var server = this._wsServer = new $ws.WebSocketServer({
     httpServer: httpServer,
@@ -748,11 +760,19 @@ AuthorizingServer.prototype = {
     this.log.endpointRegistered(path);
   },
 
+  _registerURL: function registerURL(path, urlDef) {
+    this._urls[path] = urlDef;
+    this.log.urlRegistered(path);
+  },
+
   registerServer: function registerServer(serverDef) {
-    if (!("endpoints" in serverDef))
-      throw new Error("A server definition must have endpoints.");
+    if (!("endpoints" in serverDef) && !("urls" in serverDef))
+      throw new Error("A server definition must have endpoints or urls.");
     for (var endpointName in serverDef.endpoints) {
       this._registerEndpoint(endpointName, serverDef.endpoints[endpointName]);
+    }
+    for (var urlName in serverDef.urls) {
+      this._registerURL(urlName, serverDef.urls[urlName]);
     }
   },
 
@@ -760,7 +780,11 @@ AuthorizingServer.prototype = {
     if (useIP === undefined)
       useIP = '127.0.0.1';
     if (usePort === undefined)
-      usePort = 0;
+      usePort = 8321;
+
+    this.listenIP = useIP;
+    this.listenPort = usePort;
+
     var self = this;
     function listening() {
       self.address = self._httpServer.address();
@@ -897,6 +921,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     topBilling: true,
     events: {
       endpointRegistered: {path: true},
+      urlRegistered: {path: true},
       listening: {},
 
       request: {protocol: true},

@@ -328,9 +328,7 @@ define(function (require) {
     },
 
     'connectToServer': function (data) {
-      var serverInfo = data.id ? servers.items[data.id] : {
-        url: data.url
-      };
+      var serverInfo = servers.items[data.id];
 
       //TODO: this call does not return anything/no callbacks?
       me.signupWithServer(serverInfo);
@@ -468,10 +466,25 @@ define(function (require) {
           evt.preventDefault();
           evt.stopPropagation();
 
-          var url = $(evt.target).find('[name="server"]').val().trim().toLowerCase();
-          if (url) {
-            update.connectToServer({
-              url: url
+          var domain = $(evt.target).find('[name="server"]').val().trim().toLowerCase();
+          if (domain) {
+
+            //Fetch the server info
+            me.insecurelyGetServerSelfIdentUsingDomainName(domain,
+              function (serverInfo) {
+
+              if (!serverInfo) {
+                // TODO: Use Andy's better dialogs.
+                alert('Domain ' + domain + ' does not support deuxdrop');
+                return;
+              }
+
+              // Stash in local copy of servers.
+              servers.items[serverInfo.localName] = serverInfo;
+
+              update.connectToServer({
+                id: serverInfo.localName
+              });
             });
           }
         }
