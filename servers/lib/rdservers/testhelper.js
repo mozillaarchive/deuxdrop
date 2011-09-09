@@ -822,6 +822,9 @@ var TestClientActorMixins = {
       // the welcome
       tConv.sdata.fanoutServer.expectSSMessageToServerUser(
         'fannedmsg', invitedTestClient._usingServer, invitedTestClient);
+      // update the list of participants
+      tConv.data.participants.push(invitedTestClient);
+
       // the join messages
       for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
         var recipTestClient = tConv.data.participants[iRecip];
