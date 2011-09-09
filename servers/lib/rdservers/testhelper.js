@@ -493,9 +493,10 @@ var TestClientActorMixins = {
 
     this.expect_insecurelyGetServerSelfIdentUsingDomainNameSuccess(selfIdent);
 
+    var self = this;
     when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
       function (obj) {
-        this._logger.insecurelyGetServerSelfIdentUsingDomainNameSuccess(
+        self._logger.insecurelyGetServerSelfIdentUsingDomainNameSuccess(
           obj.selfIdent);
       }
     );
