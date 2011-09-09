@@ -331,20 +331,26 @@ define(function (require) {
       var serverInfo = servers.items[data.id];
 
       //TODO: this call does not return anything/no callbacks?
-      me.signupWithServer(serverInfo);
+      me.signupWithServer(serverInfo, function (err) {
 
-      //For now, assume it works?
+        if (err) {
+          // TODO: make this a pretty Andy dialog.
+          alert('Signup failed: ' + err);
+          return;
+        }
 
-      // Remove the sign in/server setup cards
-      $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
-        '[data-cardid="enterServer"], [data-cardid="needServer"]',
-        '#cardContainer').remove();
+        // Remove the sign in/server setup cards
+        $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
+          '[data-cardid="enterServer"], [data-cardid="needServer"]',
+          '#cardContainer').remove();
 
-      // Show the start card
-      cards.onNav('start', {});
+        // Show the start card
+        cards.onNav('start', {});
 
-      // Go back one to see the start card.
-      history.back();
+        // Go back one to see the start card.
+        history.back();
+
+      });
     },
 
     'peeps': function (data, dom) {

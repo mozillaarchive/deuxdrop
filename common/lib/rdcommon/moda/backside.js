@@ -346,7 +346,7 @@ ModaBackside.prototype = {
     this._rawClient.updatePoco(newPoco);
   },
 
-  _cmd_insecurelyGetServerSelfIdentUsingDomainName: function(domain) {
+  _cmd_insecurelyGetServerSelfIdentUsingDomainName: function(ignored, domain) {
     when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
       function (selfIdentInfo) {
         var serverInfo = null;
@@ -371,7 +371,7 @@ ModaBackside.prototype = {
           domain: domain,
           server: serverInfo
         });
-      }
+      }.bind(this)
     );
   },
 

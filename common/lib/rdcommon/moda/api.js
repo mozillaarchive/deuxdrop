@@ -454,10 +454,8 @@ ModaBridge.prototype = {
 
     // notify listeners
     for (var i = 0; i < listeners.length; i++) {
-      if (listeners[i].onComplete)
-        listeners[i].onCompleted(serverInfo);
+      listeners[i](serverInfo);
     }
-
   },
 
   _receiveSignupResult: function(msg) {
