@@ -374,6 +374,8 @@ function ModaBridge() {
 
   /** `OurUserAccount` */
   this._ourUser = null;
+
+  this._mootedMessageReceivedListener = null;
 }
 exports.ModaBridge = ModaBridge;
 ModaBridge.prototype = {
@@ -489,6 +491,8 @@ ModaBridge.prototype = {
       if (msg.op === 'dead')
         delete this._handleMap[msg.handle];
       // (otherwise this is a notifcation we no longer care about)
+      if (this._mootedMessageReceivedListener)
+        this._mootedMessageReceivedListener(msg);
       return;
     }
 
@@ -774,6 +778,23 @@ ModaBridge.prototype = {
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryServers', handle, query);
+    return liveset;
+  },
+
+  /**
+   * Ask all the servers known to our client/server for the list of their users
+   *  who are willing to be known to us.  Presumably they told their server it
+   *  was okay to let it be known to the public or some friend-graph thing was
+   *  satisfied.
+   */
+  queryAllKnownServersForPeeps: function(listener, data) {
+    var handle = this._nextHandle++;
+    var query = {};
+    var liveset = new LiveOrderedSet(this, handle, NS_PEEPS, query,
+                                     listener, data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryMakeNewFriends', handle, query);
     return liveset;
   },
 

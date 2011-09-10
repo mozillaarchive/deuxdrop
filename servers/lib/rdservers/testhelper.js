@@ -80,7 +80,9 @@ var $rawclient_api = require('rdcommon/rawclient/api'),
     $client_notif = require('rdcommon/rawclient/notifking'),
     $client_tasks = require('rdcommon/rawclient/lstasks');
 
-var $serverlist = require('rdcommon/serverlist');
+var $serverlist = require('rdcommon/serverlist'),
+    clobberedServerList = false;
+
 
 var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
     // the mailstore is not wrapping an API so does not go in the clobber ns.
@@ -1007,6 +1009,16 @@ var TestClientActorMixins = {
 
 var TestServerActorMixins = {
   __constructor: function(self, opts) {
+    // clobber the list of servers so that our unit tests only know about
+    //  test servers we instantiate.  we defer this to the first actor's
+    //  instantiation to avoid a stray dependency breaking something that
+    //  does not intend to benefit from incredible testing prowess.
+    if (!clobberedServerList) {
+      $serverlist.serverSelfIdents.splice(
+        0, $serverlist.serverSelfIdents.length);
+      clobberedServerList = true;
+    }
+
     self._eServer = self.T.actor('server', self.__name, null, self);
     self._eDb = self.T.actor('gendbConn', self.__name, null, self);
     var rootKeyring, keyring;

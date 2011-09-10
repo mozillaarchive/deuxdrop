@@ -42,15 +42,21 @@
 define(
   [
     'q',
+    'timers',
     'rdcommon/log',
     'rdcommon/identities/pubident',
+    'rdcommon/serverlist',
+    'rdservers/signup/phonebook-client',
     './ustore',
     'exports'
   ],
   function(
     $Q,
+    $timers,
     $log,
     $pubident,
+    $serverlist,
+    $phonebook_client,
     $ustore,
     exports
   ) {
@@ -321,6 +327,83 @@ ClientServicingConnection.prototype = {
    * Fetch messages in a conversation.
    */
   _msg_root_convGetMsgs: function(msg) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Phonebook Searches
+
+  /**
+   * Ask ourselves and all the servers we know for their list of public peeps
+   *  so we can report them to our client so it can make new friends.  It is up
+   *  to the client to filter out any friends it already knows about (if it
+   *  wants to.)
+   * We do this by spinning off connections in parallel.
+   */
+  _msg_root_findFriends: function(msg) {
+    var deferred = $Q.defer(), self = this;
+    var allKnownServers = $serverlist.serverSelfIdents, iServer,
+        useServerIdents = [], mySelfIdentBlob = this.config.selfIdentBlob,
+        peepSelfIdents = [], serverIdentPayload;
+    // -- figure out what servers to ask
+    for (iServer = 0; iServer < allKnownServers.length; iServer++) {
+      var serverSelfIdentBlob = allKnownServers[iServer].selfIdent;
+      // ignore ourselves
+      if (serverSelfIdentBlob === mySelfIdentBlob)
+        continue;
+      serverIdentPayload = $pubident.peekServerSelfIdentNOVERIFY(
+                             serverSelfIdentBlob);
+      // ignore servers that have "development" in the displayName or lack
+      //  a valid meta
+      if (!serverIdentPayload.meta || !serverIdentPayload.meta.displayName ||
+          /development/.test(serverIdentPayload.meta.displayName))
+        continue;
+
+      useServerIdents.push(serverIdentPayload);
+    }
+
+    var timeoutId = null;
+    function sendAndBeDone() {
+      // acknowledge the request with a payload
+      self.conn.writeMessage({
+        type: 'ackRequest',
+        selfIdentBlobs: peepSelfIdents,
+      });
+      // (and stay in the root state)
+      deferred.resolve('root');
+      if (timeoutId !== null)
+        $timers.clearTimeout(timeoutId);
+    }
+    var pendingCount = 1;
+    function gotSomeIdents(newPeepSelfIdents) {
+      peepSelfIdents = peepSelfIdents.concat(newPeepSelfIdents);
+      if (--pendingCount === 0)
+        sendAndBeDone();
+    }
+    function phonebookProblem() {
+      if (--pendingCount === 0)
+        deferred.resolve(peepSelfIdents);
+    }
+
+    // -- ask ourselves
+    when(this.config.authApi.phonebookScanPublicListing(),
+         gotSomeIdents, phonebookProblem);
+
+    // -- spin off parallel requests to the other servers
+    for (iServer = 0; iServer < useServerIdents.length; iServer++) {
+      pendingCount++;
+      serverIdentPayload = useServerIdents[iServer];
+      var pclient = new $phonebook_client.PhonebookClientConnection(
+                      this.config.keyring, serverIdentPayload.publicKey,
+                      serverIdentPayload.url, this.conn.log);
+      when(pclient.promise, gotSomeIdents, phonebookProblem);
+    }
+    const PEEP_QUERY_TIMEOUT_MS = 1000;
+    timeoutId = $timers.setTimeout(function() {
+      timeoutId = null;
+      sendAndBeDone();
+    }, PEEP_QUERY_TIMEOUT_MS);
+
+    return deferred.promise;
   },
 
   //////////////////////////////////////////////////////////////////////////////

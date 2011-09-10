@@ -271,10 +271,16 @@ var AuthClientCommon = {
     this._ephemKeyPair = $nacl.box_keypair();
   },
 
+  _connectError: function() {
+    // make _onClose generate a __closed event for connection failures too.
+    this._conn = undefined;
+    this._onClose();
+  },
+
   _onError: function(error) {
     this.log.websocketError(error);
   },
-  _onClose: function() {
+  _onClose: function(reason) {
     if (this._conn === null)
       return;
     this._conn = null;
@@ -494,9 +500,11 @@ AuthClientConn.prototype = {
 
   _onConnectError: function(error) {
     this.log.connectError(error);
+    this._connectError();
   },
   _onConnectFailed: function(error) {
     this.log.connectFailed(error);
+    this._connectError();
   },
   _onConnected: function(conn) {
     this._connected(conn);

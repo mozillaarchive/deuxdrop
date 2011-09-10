@@ -284,6 +284,9 @@ ModaBackside.prototype = {
     };
   },
 
+  /**
+   * Get a list of all known servers.
+   */
   _cmd_queryServers: function(bridgeQueryName, payload) {
     var queryHandle = this._notif.newTrackedQuery(
                         this._querySource, bridgeQueryName,
@@ -319,6 +322,61 @@ ModaBackside.prototype = {
       viewItems.push(clientData.localName);
     }
     this._notif.sendQueryResults(queryHandle);
+  },
+
+  _cmd_queryMakeNewFriends: function(bridgeQueryName) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_PEEPS, {}),
+        self = this;
+    when(this._rawClient.queryServerForPossibleFriends(queryHandle),
+      function resolved(blobsAndPayloads) {
+        var viewItems = [];
+        for (var i = 0; i < blobsAndPayloads.length; i++) {
+          var blobAndPayload = blobsAndPayloads[i],
+              selfIdentBlob = blobAndPayload.blob,
+              selfIdentPayload = blobAndPayload.payload,
+              fullName = selfIdentPayload.root.rootSignPubKey;
+
+          var clientData = self._notif.reuseIfAlreadyKnown(
+                             queryHandle, NS_PEEPS, fullName);
+          if (clientData) {
+            viewItems.push(clientData.localName);
+            continue;
+          }
+
+          var localName = "" + (self._querySource.nextUniqueIdAlloc++);
+          clientData = {
+            localName: localName,
+            fullName: fullName,
+            count: 1,
+            data: null,
+            indexValues: [],
+            deps: [],
+          };
+          var frontData = self._store._convertPeepSelfIdentToBothReps(
+                            selfIdentBlob, selfIdentPayload, clientData);
+
+          queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
+          queryHandle.membersByFull[NS_PEEPS][fullName] = clientData;
+
+          queryHandle.dataMap[NS_PEEPS][localName] = frontData;
+
+          viewItems.push(localName);
+        }
+
+        queryHandle.splices.push(
+          { index: 0, howMany: 0, items: viewItems });
+
+        // no dep analysis is required, these are just peeps
+        self._notif.sendQueryResults(queryHandle);
+      },
+      function rejected(err) {
+        // Although something bad happened, let's pretend like we just didn't
+        //  get any results.  we should probably sideband an error message to
+        //  the UI though.
+        self._notif.sendQueryResults(queryHandle);
+      });
   },
 
   _cmd_killQuery: function(bridgeQueryName, namespace) {

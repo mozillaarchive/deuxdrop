@@ -95,6 +95,12 @@ const BOX_PUB_KEYSIZE = $keyops.boxPublicKeyLength;
  * User account by root key.
  */
 const TBL_USER_ACCOUNT = "auth:userAccountByRootKey";
+
+/**
+ * Publicly friendable peeps by their displayName (without any munging.)
+ */
+const IDX_PUB_FRIEND_PEEPS_NAME = 'auth:idxPubFriendPeepsName';
+
 /**
  * User account by tell key; fastcheck it's our user.
  */
@@ -128,7 +134,7 @@ exports.dbSchemaDef = {
     {
       name: TBL_USER_ACCOUNT,
       columnFamilies: ['d'],
-      indices: [],
+      indices: [IDX_PUB_FRIEND_PEEPS_NAME],
     },
     {
       name: TBL_USER_TELLKEY,
@@ -198,7 +204,8 @@ AuthApi.prototype = {
    *  levels to split that out for us and our consumers.)
    */
   serverCreateUserAccount: function(selfIdentPayload, selfIdentBlob,
-                                    clientAuthsMap, storeKeyring) {
+                                    clientAuthsMap, storeKeyring,
+                                    publicListInfo) {
     var rootKey = selfIdentPayload.root.rootSignPubKey;
 
     var promises = [];
@@ -217,6 +224,16 @@ AuthApi.prototype = {
     promises.push(
       this._db.putCells(TBL_USER_TELLKEY, selfIdentPayload.keys.tellBoxPubKey,
                         {"d:rootKey": rootKey}));
+
+    // - phonebook entries
+    if (publicListInfo) {
+      if (publicListInfo.displayName)
+        promises.push(
+          this._db.updateStringIndexValue(
+            TBL_USER_ACCOUNT, IDX_PUB_FRIEND_PEEPS_NAME, '', rootKey,
+            publicListInfo.displayName));
+    }
+
     return $Q.all(promises);
   },
 
@@ -293,6 +310,40 @@ AuthApi.prototype = {
     return when(this.serverGetUserAccountByTellKey(tellKey), function(rootKey) {
       return self.serverFetchUserEffigyUsingRootKey(rootKey, serverRole, null);
     });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Phonebook mechanisms
+
+  phonebookScanPublicListing: function() {
+    var self = this;
+    // - get all the root keys
+    return when(this._db.scanStringIndex(
+                  TBL_USER_ACCOUNT, IDX_PUB_FRIEND_PEEPS_NAME, '', 1),
+      function(results) {
+        var deferred = $Q.defer();
+
+        // - map the root keys to self idents
+        var rootKeys = [];
+        for (var iResult = 0; iResult < results.length; iResult += 2) {
+          rootKeys.push(results[iResult]);
+        }
+
+        var iRootKey = 0, selfIdentBlobs = [];
+        function getNext(selfIdentBlob) {
+          if (selfIdentBlob)
+            selfIdentBlobs.push(selfIdentBlob);
+
+          if (iRootKey >= rootKeys.length)
+            return selfIdentBlobs;
+
+          var rootKey = rootKeys[iRootKey++];
+          return when(
+            self._db.getRowCell(TBL_USER_ACCOUNT, rootKey, 'd:selfIdent'),
+            getNext);
+        }
+        return getNext();
+      });
   },
 
   //////////////////////////////////////////////////////////////////////////////

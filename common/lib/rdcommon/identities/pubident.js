@@ -232,6 +232,17 @@ exports.peekServerSelfIdentBoxingKeyNOVERIFY = function(serverSelfIdentBlob) {
 
 
 /**
+ * Return the payload of a server's self ident *without verifying the
+ *  signature*.  Only do this if you have mechanisms in place to make sure that
+ *  the signature is known good.
+ */
+exports.peekServerSelfIdentNOVERIFY = function(serverSelfIdentBlob) {
+  var peekedObj =
+    JSON.parse($keyops.generalPeekInsideSignatureUtf8(serverSelfIdentBlob));
+  return peekedObj;
+};
+
+/**
  * Generate a person self-ident blob.
  */
 exports.generatePersonSelfIdent = function(longtermKeyring,

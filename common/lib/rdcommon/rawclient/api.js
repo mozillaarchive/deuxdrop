@@ -97,7 +97,7 @@ define(
     $module,
     exports
   ) {
-var when = $Q.when;
+const when = $Q.when;
 
 /**
  * Connect to the server, give it the signup bundle, expose our result via a
@@ -212,9 +212,9 @@ MailstoreConn.prototype = {
   /**
    * Server acknowledging completion of a request we issued.
    */
-  _msg_root_ackRequest: function() {
+  _msg_root_ackRequest: function(msg) {
     this.pendingAction = false;
-    this._owner._actionCompleted();
+    this._owner._actionCompleted(msg);
     return 'root';
   },
 
@@ -389,11 +389,13 @@ RawClientAPI.prototype = {
     }
   },
 
-  _actionCompleted: function() {
+  _actionCompleted: function(replyMsg) {
     // we only eat the action now that it's completed
-    this._actionQueue.shift();
+    var actionRequest = this._actionQueue.shift();
+    if (actionRequest.deferred)
+      actionRequest.deferred.resolve(replyMsg);
     if (this._actionQueue.length)
-      this._conn.sendAction(this._actionQueue[0]);
+      this._conn.sendAction(this._actionQueue[0].msg);
     else
       this._log.allActionsProcessed();
   },
@@ -406,10 +408,29 @@ RawClientAPI.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Actions
 
-  _enqueueAction: function(msg) {
-    this._actionQueue.push(msg);
+  /**
+   * (Theoretically) persistently enqueue an action for reliable dispatch to
+   *  the server.  This action should persist until we manage to deliver it
+   *  to our mailstore server.
+   */
+  _enqueuePersistentAction: function(msg) {
+    this._actionQueue.push({msg: msg, deferred: null});
     if (!this._conn.pendingAction)
-      this._conn.sendAction(this._actionQueue[0]);
+      this._conn.sendAction(this._actionQueue[0].msg);
+  },
+
+  /**
+   * Send a message to the server and notify us via promise when it completes.
+   *  In the event of power loss/system shutdown, the action will be discarded.
+   * XXX support some means of cancelation in case the caller changes their
+   *  mind before our callback completes.
+   */
+  _enqueueEphemeralActionAndResolveResult: function(msg) {
+    var deferred = $Q.defer();
+    this._actionQueue.push({msg: msg, deferred: deferred});
+    if (!this._conn.pendingAction)
+      this._conn.sendAction(this._actionQueue[0].msg);
+    return deferred.promise;
   },
 
   get hasPendingActions() {
@@ -629,6 +650,59 @@ RawClientAPI.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Phonebook
+
+  /**
+   * Ask our mailstore to find a bunch of possible friends.  This is currently
+   *  handled by having the (assumed fullpub) server ask itself and all the
+   *  servers in `serverlist.js` for their public identities and concatenating
+   *  them.
+   * We do filter ourself and anyone who is already our friend from the list.
+   */
+  queryServerForPossibleFriends: function(queryHandle) {
+    var self = this;
+    return when(
+      $Q.all([
+        this._enqueueEphemeralActionAndResolveResult({type: 'findFriends'}),
+        this.store.getRootKeysForAllContacts(),
+      ]),
+      function success(results) {
+        var msg = results[0], knownFriendRootKeys = results[1],
+            myRootKey = self.rootPublicKey;
+
+        // - filter out us, existing friends
+        var selfIdentBlobs = msg.selfIdentBlobs, blobsAndPayloads = [];
+        for (var i = 0; i < selfIdentBlobs.length; i++) {
+          var identBlob = selfIdentBlobs[i];
+          // We are the client, so it's okay for us to pay the assertion
+          //  checking cost, except that we are not capping the size of our
+          //  queries, so this could be some ridiculously large N.  As such,
+          //  since we have a hard-coded list of servers that we control that
+          //  tell us things, we will currently rely on their integrity to
+          //  provide some degree of confidence about the validity of the blob.
+          //  The good news is that we will check the assertion again if our
+          //  user actually attempts to connect to the person.
+          var identPayload = $pubident.peekPersonSelfIdentNOVERIFY(identBlob);
+
+          var identRootKey = identPayload.root.rootSignPubKey;
+          if (identRootKey === myRootKey ||
+              knownFriendRootKeys.indexOf(identRootKey) !== -1)
+            continue;
+          blobsAndPayloads.push({name: identPayload.poco.displayName,
+                                 blob: identBlob, payload: identPayload});
+        }
+
+        // - sort them alphabetically by display name
+        // (we are really doing this for the unit test, but humans will like it
+        //  too.)
+        blobsAndPayloads.sort(function(a, b) {
+          return a.name.localeCompare(b.name);
+        });
+        return blobsAndPayloads;
+      }); // rejection pass-through is fine.
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Request Querying
 
   // email/time
@@ -639,6 +713,9 @@ RawClientAPI.prototype = {
   // Peep Relationships
 
   /**
+   * XXX speculative webfinger support that is NOT implemented but would go here
+   *  if it was.
+   *
    * Initiate the connection process using webfinger.  Steps from our
    *  perspective look like:
    *
@@ -703,7 +780,7 @@ RawClientAPI.prototype = {
       innerEnvelope: boxedRequestTransitInner,
     };
 
-    this._enqueueAction({
+    this._enqueuePersistentAction({
       type: 'reqContact',
       userRootKey: identPayload.root.rootSignPubKey,
       userTellKey: identPayload.keys.tellBoxPubKey,
@@ -730,7 +807,7 @@ RawClientAPI.prototype = {
 
     var replicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
       'metaContact', peepRootKey, peepMeta);
-    this._enqueueAction({
+    this._enqueuePersistentAction({
       type: 'metaContact',
       userRootKey: peepRootKey,
       replicaBlock: replicaBlock,
@@ -820,7 +897,7 @@ RawClientAPI.prototype = {
     };
 
     // - send the message
-    this._enqueueAction({
+    this._enqueuePersistentAction({
       type: 'createConversation',
       toTransit: ccpsOuterEnvelope
     });
@@ -854,7 +931,7 @@ RawClientAPI.prototype = {
                        convMeta.transitServerKey,
                        'messaging', 'tellBox'),
     };
-    this._enqueueAction({
+    this._enqueuePersistentAction({
       type: 'convMessage',
       toTransit: psOuterEnvelope,
       toServer: convMeta.transitServerKey,
@@ -875,7 +952,7 @@ RawClientAPI.prototype = {
       convMeta, peepPubring, inviteInfo);
 
     // - send it to the invitee's maildrop/fan-in role
-    this._enqueueAction({
+    this._enqueuePersistentAction({
       type: 'convMessage',
       toTransit: joinConvOuterEnv,
       toServer: peepPubring.transitServerPublicKey,
@@ -896,7 +973,7 @@ RawClientAPI.prototype = {
       {
         pinned: pinned,
       });
-    this._enqueueAction({
+    this._enqueuePersistentAction({
       type: 'convMeta',
       replicaBlock: replicaBlock,
     });

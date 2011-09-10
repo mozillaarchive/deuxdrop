@@ -131,8 +131,17 @@ TD.commonCase('moda basics', function(T) {
   // the all query should have noticed that B is pinned
   // the pinned query should have gained B
 
+  // - find possible friends (which is C)
+  T.group("list possible friends (C)");
+  var lqPossibleFriends = moda_a.do_queryPossibleFriends('friendable1',
+                                                         [client_c]);
+
   // - add C as a friend
+  T.group("add C as friend via suggestion");
   client_a.setup_friendClique([client_c]);
+
+  // forget about our lqPossibleFriends
+  moda_a.do_killQuery(lqPossibleFriends);
 
   // -- peep final state queries.
   var lqFinalAllPeeps = moda_a.do_queryPeeps("allPeepsFinal", {by: 'alphabet'});

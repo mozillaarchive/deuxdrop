@@ -182,6 +182,10 @@ var DeltaHelper = exports.DeltaHelper = {
     return lqt._pendingExpDelta;
   },
 
+  _TESTCLIENT_QUERY_KEYFUNC: function (testClient) {
+    return testClient._rawClient.rootPublicKey;
+  },
+
   _PEEP_QUERY_KEYFUNC: function(x) { return x.rootKey; },
 
   _PEEP_QUERY_BY_TO_CMPFUNC: {
@@ -213,6 +217,21 @@ var DeltaHelper = exports.DeltaHelper = {
       default:
         throw new Error("Unknown message type: " + data.type);
     }
+  },
+
+  /**
+   * Generate peep expectations from a pre-ordered set of test clients.  The
+   *  expectation is that this query will never update because it is from
+   *  a static data source.
+   */
+  peepExpStaticDelta: function(lqt, testClients) {
+    var delta = this.makeOrReuseDelta(lqt);
+
+    var rootKeys = testClients.map(this._TESTCLIENT_QUERY_KEYFUNC);
+    markListIntoObj(rootKeys, delta.state, null);
+    markListIntoObj(rootKeys, delta.postAnno, 1);
+
+    return delta;
   },
 
   /**
@@ -445,6 +464,12 @@ var TestModaActorMixins = {
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
                                     self._bridge._receive.bind(self._bridge));
 
+      // - log when a mooted message is received
+      // (this should not happen under test)
+      self._bridge._mootedMessageReceivedListener = function(msg) {
+        self._logger.mootedMessageReceived(msg);
+      };
+
       // - create an unlisted dynamic contact info for ourselves
       // (we want to know about ourselves for participant mapping purposes, but
       //  peep queries should never return us in their results.)
@@ -490,8 +515,10 @@ var TestModaActorMixins = {
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
-      // XXX for now, all peep queries care about all peep things, but not once
-      //  we add pinned, etc.
+      // skip non-index queries (ex: new friends queries)
+      if (!lqt._liveset.query.hasOwnProperty('by'))
+        continue;
+      // XXX we also need to discard based on 'pinned' constraints soon
 
       // in the case of an addition we expect a positioned splice followed
       //  by a completion notification
@@ -521,8 +548,10 @@ var TestModaActorMixins = {
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
-      // XXX for now, all peep queries care about all peep things, but not once
-      //  we add pinned, etc.
+      // skip non-index queries (ex: new friends queries)
+      if (!lqt._liveset.query.hasOwnProperty('by'))
+        continue;
+      // XXX we also need to discard based on 'pinned' constraints soon
 
       var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo,
                                                           knownChange);
@@ -1015,6 +1044,51 @@ var TestModaActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Queries: Issue Static Queries
+  //
+  // Things that use the query mechanism but aren't really updated because their
+  // data source is once and done.
+
+  /**
+   * Issue the query for possible friends, with the caller providing the
+   *  expected result list to simplify the logic here for now.  (This doesn't
+   *  need to get tested all that much.)
+   */
+  do_queryPossibleFriends: function(thingName, expectedClients) {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
+    this.T.action('moda sends request for possible friends to', this._eBackside,
+                  function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('queryMakeNewFriends');
+
+      lqt._liveset = self._bridge.queryAllKnownServersForPeeps(self, lqt);
+      self._dynamicPeepQueries.push(lqt);
+    });
+    this.T.action(this._eBackside,
+                  'processes friend query request, invokes on',
+                  this._testClient._eRawClient,
+                  ', and LOTS of stuff happens, then', this,
+                  'hears the results',
+                  function() {
+      // XXX WAY TOO MUCH STUFF HAPPENS IN THIS STEP, AND WITHOUT EXPECTATIONS.
+      // The only real harm apart from a giant mish-mash of entries in the output
+      //  is that the death of connections could spill over into the next step
+      //  which could be confusing.  From a correctness perspective, our results
+      //  expectation should be sufficient.
+      var delta = DeltaHelper.peepExpStaticDelta(lqt, expectedClients);
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
+
+      self.releaseAndPeekAtModaCommand('queryMakeNewFriends');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+    });
+
+    return lqt;
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Queries: Kill
 
   _assertRemoveFromList: function(list, thing) {
@@ -1453,6 +1527,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       // - wrapper holds for the backside
       backsideReceived: { cmd: true },
     },
+
+    errors: {
+      mootedMessageReceived: { msg: false },
+    }
   },
 });
 

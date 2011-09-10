@@ -872,6 +872,25 @@ LocalStore.prototype = {
     return false;
   },
 
+  /**
+   * Return a list of all the root keys belonging to our contacts.  This is
+   *  intended for use to easily perform intersections between list of peeps
+   *  found elsewhere and our current set of contacts.  It may make sense to
+   *  replace this with a higher level API.
+   */
+  getRootKeysForAllContacts: function() {
+    return when(this._db.scanIndex($lss.TBL_PEEP_DATA,
+                                   $lss.IDX_PEEP_ANY_INVOLVEMENT, '',
+                                   -1),
+      function(rootKeysWithScores) {
+        var rootKeys = [];
+        for (var i = 0; i < rootKeysWithScores.length; i += 2) {
+          rootKeys.push(rootKeysWithScores[i]);
+        }
+        return rootKeys;
+      }); // failure pass-through is fine
+  },
+
   queryAndWatchPeepBlurbs: function(queryHandle) {
     var idx, scanFunc = 'scanIndex', scanDir = -1, indexParam;
     switch (queryHandle.queryDef.by) {
@@ -959,6 +978,27 @@ LocalStore.prototype = {
       selfPoco: selfPoco,
       numUnread: cells['d:nunread'],
       numConvs: cells['d:nconvs'],
+      pinned: false,
+    };
+  },
+
+  /**
+   * Like `_convertPeepToBothReps` but intended for contact requests and
+   *  friend-finding excursions where the only representation we have is the
+   *  self-ident blob.
+   */
+  _convertPeepSelfIdentToBothReps: function(selfIdentBlob, selfIdentPayload,
+                                             clientData) {
+    clientData.data = {
+      oident: null,
+      sident: selfIdentBlob,
+      numConvs: 0,
+    };
+    return {
+      ourPoco: null,
+      selfPoco: selfIdentPayload.poco,
+      numUnread: 0,
+      numConvs: 0,
       pinned: false,
     };
   },

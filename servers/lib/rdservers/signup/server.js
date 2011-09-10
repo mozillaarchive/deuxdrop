@@ -158,6 +158,10 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
       if (this.personSelfIdentPayload.transitServerIdent !==
           this.arg.serverConfig.selfIdentBlob)
         throw new $taskerrors.KeyMismatchError("transit server is not us");
+
+      // - poco has a display name
+      if (!this.personSelfIdentPayload.poco.hasOwnProperty("displayName"))
+        throw new $taskerrors.MalformedPayloadError("No poco displayName");
     },
     /**
      * Make sure all named clients are authorized and that we are talking to one
@@ -254,11 +258,19 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
       // XXX everyone wins!
     },
     doTheSignup: function() {
+      var poco = this.selfIdentPayload.poco;
+
+      // XXX list them publicly for now.
+      var publicListInfo = {
+        displayName: poco.displayName,
+      };
+
       return this.arg.conn.serverConfig.authApi.serverCreateUserAccount(
         this.selfIdentPayload,
         this.arg.msg.selfIdent,
         this.clientAuthsMap,
-        this.arg.msg.storeKeyring);
+        this.arg.msg.storeKeyring,
+        publicListInfo);
     },
     tellThemTheyAreSignedUp: function() {
       this.arg.conn.writeMessage({
@@ -304,6 +316,38 @@ SignupConnection.prototype = {
   },
 };
 
+var PhonebookTask = taskMaster.defineTask({
+  name: 'phonebook',
+  args: ['msg', 'conn'],
+  steps: {
+    scan_phonebook: function() {
+      return this.conn.serverConfig.authApi.phonebookScanPublicListing();
+    },
+    report_results_and_close: function(selfIdentBlobs) {
+      this.conn.writeMessage({
+        type: 'listing',
+        selfIdentBlobs: selfIdentBlobs,
+      });
+      return this.conn.close();
+    },
+  },
+});
+
+function PhonebookServerConnection(conn) {
+  this.conn = conn;
+}
+PhonebookServerConnection.prototype = {
+  INITIAL_STATE: 'root',
+
+  /**
+   * Request the listing of the peeps the client/server we are talking to is
+   *  allowed to hear about.
+   */
+  _msg_root_listPeeps: function(msg) {
+    return new PhonebookTask({msg: msg, conn: this.conn}, this.conn.log);
+  },
+};
+
 exports.makeServerDef = function(serverConfig) {
   return {
     endpoints: {
@@ -312,6 +356,15 @@ exports.makeServerDef = function(serverConfig) {
         serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {
           // (we have no identity on file)
+          return true;
+        },
+      },
+      'signup/phonebook': {
+        implClass: PhonebookServerConnection,
+        serverConfig: serverConfig,
+        authVerifier: function(endpoint, clientKey) {
+          // we could do something where we figure out if the other thing
+          //  is someone we already know...
           return true;
         },
       },
