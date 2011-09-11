@@ -375,7 +375,9 @@ exports.makeServerDef = function(serverConfig) {
           var selfIdent = serverConfig.selfIdentBlob,
               contents = JSON.stringify({selfIdent: selfIdent});
           response.writeHead(200, {
-          'Content-Type': 'text/plain;charset=utf-8'
+            //Yes, we really want anyone to be able to ask for the selfident
+            'Access-Control-Allow-Origin': '*',
+            'Content-Type': 'text/plain;charset=utf-8'
         });
         response.write(contents, 'utf8');
         response.end();
