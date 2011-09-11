@@ -232,6 +232,7 @@
  *   NS_CONVBLURBS
  *   NS_CONVMSGS
  *   NS_SERVERS
+ *   NS_CONNREQS
  * ]]
  * @typedef[QueryHandlesByNS @dictof[
  *   @key[namespace QueryNamespace]
@@ -258,8 +259,12 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = exports.NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = exports.NS_SERVERS = 'servers',
+      NS_CONNREQS = exports.NS_CONNREQS = 'connreqs',
       // dependent namespaces that need to be checked for updates
       DEP_NAMESPACES = [NS_PEEPS, NS_SERVERS],
+      // namespaces that can have dependencies on the above namespaces.
+      // nb: NS_CONNREQS populates its peeps itself and they never get updates,
+      //  so it is not included in this list.
       DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS];
 
 /**
@@ -282,6 +287,7 @@ function makeEmptyListsByNS() {
     convblurbs: [],
     convmsgs: [],
     servers: [],
+    connreqs: [],
   };
 };
 
@@ -291,6 +297,7 @@ function makeEmptyMapsByNS() {
     convblurbs: {},
     convmsgs: {},
     servers: {},
+    connreqs: {},
   };
 };
 

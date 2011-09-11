@@ -122,6 +122,12 @@
  *   them via __receiveConvWelcome.  They become associated with contacts as
  *   we hear the join messages.
  * }
+ *
+ * @typedef[DynConnReqInfo @dict[
+ *   @key[testClient]
+ *   @key[receivedAt Number]
+ *   @key[messageText String]
+ * ]]
  **/
 
 define(function(require, exports, $module) {
@@ -217,6 +223,39 @@ var DeltaHelper = exports.DeltaHelper = {
       default:
         throw new Error("Unknown message type: " + data.type);
     }
+  },
+
+  _REQINFO_KEYFUNC: function(reqInfo) {
+    return reqInfo.testClient.__name + ': ' + reqInfo.messageText;
+  },
+  _REQINFO_CMPFUNC: function(a, b) {
+    return b.receivedAt - a.receivedAt;
+  },
+
+  connReqDelta_base: function(lqt, reqInfos) {
+    var delta = this.makeOrReuseDelta(lqt);
+
+    lqt._reqInfos = reqInfos.concat();
+    lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
+
+    var keys = lqt._reqFormattedStrs.map(this._REQINFO_KEYFUNC);
+    markListIntoObj(keys, delta.state, null);
+    markListIntoObj(keys, delta.postAnno, 1);
+
+    return delta;
+  },
+
+  connReqDelta_added: function(lqt, reqInfo) {
+    var delta = this.makeOrReuseDelta(lqt);
+
+    lqt._reqInfos.push(reqInfo);
+    lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
+
+    markListIntoObj(lqt._reqFormattedStrs.map(this._REQINFO_KEYFUNC),
+                    delta.state, null);
+    delta.postAnno[this._REQINFO_KEYFUNC(reqInfo)] = 1;
+
+    return delta;
   },
 
   /**
@@ -428,6 +467,9 @@ var TestModaActorMixins = {
     /** @dictof["conv thing human name" DynamicConvInfo] */
     self._convInfoByName = {};
 
+    /** @listof[DynamicConnReqInfo] */
+    self._dynConnReqInfos = [];
+
     self._dynamicPeepQueries = [];
     self._dynamicPeepConvQueries = [];
     // XXX need an all-conv-queries thing
@@ -437,6 +479,8 @@ var TestModaActorMixins = {
     // convinfos queries awaiting a __updatePhaseComplete notification to occur
     //  before generating their added messages expectations
     self._dynPendingConvMsgs = [];
+
+    self._dynamicConnReqQueries = [];
 
 
     self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
@@ -504,6 +548,18 @@ var TestModaActorMixins = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Query Update Helpers
+
+  _notifyConnectRequest: function(reqInfo) {
+    var queries = this._dynamicConnReqQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+      // all connect request queries are the same right now so they all care
+      // (this changes when we start slicing)
+
+      var deltaRep = DeltaHelper.connReqDelta_added(lqt, reqInfo);
+      this._ensureExpectedQuery(lqt);
+    }
+  },
 
   /**
    * We have heard about a newly added contact, generate expectations for all
@@ -676,6 +732,21 @@ var TestModaActorMixins = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Notifications from testClient
+
+  /**
+   * Invoked during the test step where the connect request is released to the
+   *  client.  All data structure manipulation should be on dynamic ones.
+   */
+  __receiveConnectRequest: function(other, messageText) {
+    var nowSeq = this.RT.testDomainSeq;
+    var reqInfo = {
+      testClient: other,
+      receivedAt: nowSeq,
+      mesageText: messageText,
+    };
+    this._dynConnReqInfos.push(reqInfo);
+    this._notifyConnectRequest(reqInfo);
+  },
 
   /**
    * Invoked during the action step where the replica block is released to the
@@ -1043,6 +1114,23 @@ var TestModaActorMixins = {
     return lqt;
   },
 
+  do_queryConnectRequests: function(thingName) {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
+    this.T.action(this, 'create', lqt, function() {
+      var delta = DeltaHelper.connReqDelta_base(lqt, self._dynConnReqInfos);
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
+
+      lqt._liveset = self._bridge.query
+
+      self._dynamicConnReqQueries.push(lqt);
+    });
+
+    return lqt;
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Queries: Issue Static Queries
   //
@@ -1116,6 +1204,9 @@ var TestModaActorMixins = {
           break;
         case 'convmsgs':
           self._assertRemoveFromList(self._dynamicConvMsgsQueries, lqt);
+          break;
+        case 'connreqs':
+          self._assertRemoveFromList(self._dynamicConnReqQueries, lqt);
           break;
 
         case 'servers':
@@ -1344,6 +1435,35 @@ var TestModaActorMixins = {
       throw new Error("No server info for '" + testServer.__name +
                       "' found!");
     });
+  },
+
+  /**
+   * Generate a connect request to another peep.  If the other peep has already
+   *  requested to connect to us then this will complete the circuit.  Most of
+   *  this is on the testClient testhelper, including figuring out which of the
+   *  connect cases it is.
+   */
+  do_connectToPeep: function(usingPeepQuery, other, interesting) {
+    var self = this, messageText,
+        closesLoop = this._testClient._dohelp_closesConnReqLoop(other);
+    this.T.action('moda sends connectToPeep to', this._eBackside,
+                  function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('connectToPeep');
+
+      var peep = self._grabPeepFromQueryUsingClient(usingPeepQuery, other);
+      messageText = fakeDataMaker.makeSubject();
+      self._bridge.connectToPeep(peep, peep.selfPoco, messageText);
+    });
+    this.T.action(this._eBackside, 'processes connectToPeep, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._testClient._expect_contactRequest_prep(other, closesLoop);
+      self._testClient._expect_contactRequest_issued(other,
+        self.releaseAndPeekAtModaCommand('connectToPeep'));
+      self.stopHoldingAndAssertNoHeldModaCommands();
+    });
+    this._testClient._expdo_contactRequest_everything_else(
+      other, messageText, interesting);
   },
 
   /**

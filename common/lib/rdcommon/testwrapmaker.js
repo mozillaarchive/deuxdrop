@@ -122,6 +122,9 @@ WrapMaker.prototype = {
         throw new Error("No such pool queue");
       var holdQueue = holdPool[holdKey];
 
+      if (holdQueue.length === 0)
+        throw new Error("Hold pool '" + poolName + "' with key '" +
+                        holdKey + "' is empty!");
       var invocTup = holdQueue.shift();
       invocTup[0].apply(invocTup[1], invocTup[2]);
 

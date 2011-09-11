@@ -176,6 +176,13 @@ ModaBackside.prototype = {
     return rval;
   },
 
+  _cmd_connectToPeep: function(_ignored, payload) {
+    var clientData = this._notif.mapLocalNameToClientData(
+                       this._querySource, NS_PEEPS, payload.peepLocalName);
+    this._rawClient.connectToPeepUsingSelfIdent(clientData.sident,
+                                                payload.localPoco);
+  },
+
   _cmd_createConversation: function(_ignored, convData) {
     var peepOIdents = [], peepPubrings = [];
     for (var iPeep = 0; iPeep < convData.peeps.length; iPeep++) {
@@ -377,6 +384,14 @@ ModaBackside.prototype = {
         //  the UI though.
         self._notif.sendQueryResults(queryHandle);
       });
+  },
+
+  _cmd_queryConnRequests: function(bridgeQueryName) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_CONNREQS, queryDef);
+    when(this._store.queryAndWatchConnRequests(queryHandle), null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
   },
 
   _cmd_killQuery: function(bridgeQueryName, namespace) {

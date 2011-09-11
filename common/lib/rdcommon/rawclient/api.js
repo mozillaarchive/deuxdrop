@@ -728,7 +728,8 @@ RawClientAPI.prototype = {
   connectToPeepUsingWebfinger: function(email, optionalMessage) {
   },
 
-  connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco) {
+  connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco,
+                                        messageText) {
     var identPayload = $pubident.assertGetPersonSelfIdent(personSelfIdentBlob);
     var othPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
       personSelfIdentBlob);
@@ -750,6 +751,8 @@ RawClientAPI.prototype = {
     // - request body (for client)
     var requestBody = {
       otherPersonIdent: otherPersonIdentBlob,
+      selfIdent: this._selfIdentBlob,
+      messageText: messageText,
     };
     var boxedRequestBody = this._keyring.boxUtf8With(
                              JSON.stringify(requestBody), nonce,

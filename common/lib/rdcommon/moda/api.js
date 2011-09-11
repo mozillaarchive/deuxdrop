@@ -55,7 +55,8 @@ define(
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
-      NS_SERVERS = 'servers';
+      NS_SERVERS = 'servers',
+      NS_CONNREQS = 'connreqs';
 
 
 /**
@@ -342,6 +343,36 @@ OurUserAccount.prototype = {
   },
 };
 
+/**
+ * An attempt to establish a contact relationship with our user by someone.
+ *  This includes how that person identifies themself represented as a
+ *  `PeepBlurb`, when the request was received by our transit server, how they
+ *  are identifying us, and an optional message text sent with their request.
+ *
+ * In the future, we may also include extra information like conversations we
+ *  are already involved in with the person, existing contacts who have
+ *  indicated a contact relationship with the person via conversation joins
+ *  or other mechanisms, etc.
+ *
+ * Note that `theirPocoForUs` is not guaranteed to be the poco for us they will
+ *  use when inviting us to join conversations.  They could call us "the king"
+ *  in the connect request but call us "the king's fool" when inviting us to
+ *  join conversations.
+ */
+function ConnectRequest(_bridge, peep, theirPocoForUs, receivedAt,
+                        messageText) {
+  this._bridge = bridge;
+  this.peep = peep;
+  this.theirPocoForUs = theirPocoForUs;
+  this.receivedAt = new Date(receivedAt);
+  this.mesageText = messageText;
+}
+ConnectRequest.prototype = {
+  acceptConnectRequest: function(ourPocoForThem) {
+    this._bridge.connectToPeep(this.peep, ourPocoForThem);
+  },
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 // Notification Representations
 
@@ -596,6 +627,19 @@ ModaBridge.prototype = {
       }
     }
 
+    if (msg.dataMap.hasOwnProperty(NS_CONNREQS)) {
+      values = msg.dataMap[NS_CONNREQS];
+      dataMap = liveset._dataByNS[NS_CONNREQS];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(NS_CONNREQS, key);
+        else
+          dataMap[key] = this._transformConnectRequest(key, val, liveset);
+      }
+    }
+
     // --- Populate The Set = Apply Splices or Special Case.
 
     // -- Special Case: Conv Messages
@@ -744,6 +788,15 @@ ModaBridge.prototype = {
     };
   },
 
+  /**
+   * Create a `ConnectRequest` represetation from the wire rep.
+   */
+  _transformConnectRequest: function(wireRep, liveset) {
+    var peepWireRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
+    return new ConnectRequest(this,
+      this._transformPeepBlurb(wireRep.peepLocalName, peepWireRep, liveset),
+      wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
+  },
 
 
   //////////////////////////////////////////////////////////////////////////////
@@ -875,21 +928,22 @@ ModaBridge.prototype = {
    *  conversation participant we did not invite, request, some kind of search
    *  mechanism that surfaces peeps somehow.
    */
-  connectToPeep: function(peep) {
+  connectToPeep: function(peep, localPoco, optionalMessageText) {
+    this._send('connectToPeep', null, {
+      peepLocalName: peep._localName,
+      localPoco: localPoco,
+      messageText: optionalMessageText || "",
+    });
   },
 
   /**
    * Connect to a new person using their self-ident blob.  This is being added
    *  for testing reasons right now, but theoretically this might happen on
    *  a desktop via drag-n-drop.
-   *
-   * Does not return anything because the connection process
    */
-  connectToPeepUsingSelfIdent: function(selfIdentBlob, localPoco) {
-
-  },
-
-  connectToPeepUsingEmail: function(email, optionalMessage) {
+  connectToPeepUsingSelfIdent: function(selfIdentBlob, localPoco,
+                                        optionalMessageText) {
+    throw new Error("XXX this is currently a lie, but it's not hard to un-lie");
   },
 
   /**

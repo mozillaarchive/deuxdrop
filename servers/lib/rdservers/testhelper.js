@@ -159,6 +159,17 @@ var TestClientActorMixins = {
     self._staticModaActors = [];
 
     /**
+     * @dictof[name Boolean]{
+     *   Has the test client issued a connection request at us?  This lets us
+     *   know which helper to use to send a connect request which is important
+     *   because it impacts the event sequence and accordingly expectations.
+     *   This is statically maintained since it (needs to) impact static test
+     *   (test case top-level runtime) control flow.
+     * }
+     */
+    self._staticConnReqReceived = {};
+
+    /**
      * @field[@dictof[name OtherPersonIdentBlob]]{
      *   Dynamic (only known/updated during steps) known peeps map.
      * }
@@ -374,29 +385,88 @@ var TestClientActorMixins = {
    *  consolidate and perform both directions as a single conceptual operation.
    */
   setup_mutualContact: function(other, interesting) {
-    var self = this;
-    // -- SELF req OTHER
+    this.do_requestContact(other, interesting);
+    other.do_requestContact(this, interesting);
+  },
+
+  /**
+   * Send a contact request to the given client.  This is smart and figures out
+   *  if we already should have seen a contact request
+   */
+  do_requestContact: function(other, interesting) {
+    var messageText = fakeDataMaker.makeSubject();
+
+    this._expdo_contactRequest_issue(other, messageText, interesting);
+    this._expdo_contactRequest_everything_else(other, messageText, interesting);
+  },
+
+  _dohelp_closesConnReqLoop: function(other) {
+    return this._staticConnReqReceived.hasOwnProperty(other.__name);
+  },
+
+  /**
+   * Initiate a contact request where we know the other client has not yet
+   *  requested to be our contact.  This means the other side will receive a
+   *  request notification and we will not get our contact notification back.
+   */
+  _expdo_contactRequest_issue: function(other, messageText, interesting) {
     // - issue request, client through send, hold at sender
+    var self = this,
+        closesLoop = this._dohelp_closesConnReqLoop(other);
     this.T.convenienceSetup(self._eRawClient, 'request contact of', other,
                                    function() {
-      // mark the local-store as active to make sure it generates no entries
-      self.RT.reportActiveActorThisStep(self._eLocalStore);
-      // the server should process this
-      self.expectServerTaskToRun('userOutgoingContactRequest');
-      self._eRawClient.expect_allActionsProcessed();
-      // and let's expect and gate its request to the other user
-      self._usingServer.holdAllMailSenderMessages();
-      self._usingServer.expectContactRequestToServerUser(other._usingServer,
-                                                         other);
+      self._expect_contactRequest_prep(other, closesLoop);
 
       // initiate the connect process, save off the othident for test needs.
       var localPoco = {
         displayName: other.__name,
       };
-      self._peepsByName[other.__name] =
+
+      self._expect_contactRequest_issued(other,
         self._rawClient.connectToPeepUsingSelfIdent(
-          other._rawClient._selfIdentBlob, localPoco);
+          other._rawClient._selfIdentBlob, localPoco, messageText));
     }).log.boring(!interesting);
+  },
+
+  _expect_contactRequest_prep: function(other, closesTheLoop) {
+    // mark the local-store as active to make sure it generates no entries
+    this.RT.reportActiveActorThisStep(this._eLocalStore);
+    // the server should process this
+    this.expectServerTaskToRun('userOutgoingContactRequest');
+    this._eRawClient.expect_allActionsProcessed();
+    // and let's expect and gate its request to the other user
+    this._usingServer.holdAllMailSenderMessages();
+    this._usingServer.expectContactRequestToServerUser(other._usingServer,
+                                                       other);
+
+    if (closesTheLoop) {
+      // add-contact replica block is good to go!
+      this._usingServer.holdAllReplicaBlocksForUser(this);
+      this._usingServer.expectReplicaBlocksForUser(this, 1);
+    }
+  },
+
+  _expect_contactRequest_issued: function(other, retval) {
+    this._peepsByName[other.__name] = retval;
+  },
+
+  _expdo_contactRequest_everything_else: function(other, messageText,
+                                                  interesting) {
+    if (this._dohelp_closesConnReqLoop(other)) {
+      this._expdo_closeContactRequest(other, messageText, interesting);
+    }
+    else {
+      this._expdo_openContactRequest(other, messageText, interesting);
+    }
+  },
+
+  _expdo_openContactRequest: function(other, messageText, interesting) {
+    var self = this;
+    // mark the other test client as having received a connect request from us
+    //  so if it issues a `do_requestContact` call, it will properly choose the
+    //  close-the-loop variant.
+    other._staticConnReqReceived[this.__name] = true;
+
     // - release to sender, their drop, mailstore. hold replica.
     this.T.convenienceSetup(other._usingServer,
         'receives contact request for', other, 'from', self, function() {
@@ -418,66 +488,60 @@ var TestClientActorMixins = {
         self._rawClient.tellBoxKey);
       paramClient._eRawClient.expect_replicaCaughtUp();
 
+      paramClient._dynamicNotifyModaActors('receiveConnectRequest', self,
+                                           messageText);
+
       other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
+  },
 
 
-    // -- OTHER req SELF
-    this.T.convenienceSetup(other._eRawClient, 'request contact of', self,
-                                   function() {
-      other.expectServerTaskToRun('userOutgoingContactRequest');
-      other._eRawClient.expect_allActionsProcessed();
-      // the request message being sent to SELF
-      other._usingServer.holdAllMailSenderMessages();
-      other._usingServer.expectContactRequestToServerUser(self._usingServer,
-                                                          self);
-      // add-contact replica block is good to go!
-      other._usingServer.holdAllReplicaBlocksForUser(other);
-      other._usingServer.expectReplicaBlocksForUser(other, 1);
+  /**
+   * Initiate a contact request where we know the other client has already
+   *  requested to be our contact.  This means the other side will not receive
+   *  a request notification and we both will experience successful contact
+   *  establishment events.
+   */
+  _expdo_closeContactRequest: function(other, messageText, interesting) {
+    var self = this;
 
-      var localPoco = {
-        displayName: other.__name,
-      };
-      other._peepsByName[self.__name] =
-        other._rawClient.connectToPeepUsingSelfIdent(
-          self._rawClient._selfIdentBlob, localPoco);
-    }).log.boring(!interesting);
     // - release replica of addcontact
-    other._T_connectedClientsStep(other._usingServer,
-        'delivers contact request to', '*PARAM*', function(paramClient) {
-      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
-      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
-      paramClient._eLocalStore.expect_replicaCmd('addContact',
-                                                 self._rawClient.rootPublicKey);
-      paramClient._eRawClient.expect_replicaCaughtUp();
-
-      paramClient._dynamicNotifyModaActors('addingContact', self);
-
-      other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
-    });
-    // - release to sender, their drop, mailstore. hold replica.
-    this.T.convenienceSetup(self._usingServer,
-        'receives contact request for', self, 'from', other, function() {
-      self.expectServerTaskToRun('userIncomingContactRequest');
-
-      self._usingServer.holdAllReplicaBlocksForUser(self);
-      self._usingServer.expectReplicaBlocksForUser(self, 1);
-
-      other._usingServer.releaseContactRequestToServerUser(self._usingServer,
-                                                           self);
-    });
-    // - release replica, boring.
     this._T_connectedClientsStep(self._usingServer,
-        'delivers contact request to', '*PARAM*', function(paramClient) {
-      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
-      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
+        'delivers contact addition replica block to', '*PARAM*',
+        function(paramClient) {
+      other.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      other.RT.reportActiveActorThisStep(paramClient._eRawClient);
       paramClient._eLocalStore.expect_replicaCmd('addContact',
-                                                 self._rawClient.rootPublicKey);
+                                                 other._rawClient.rootPublicKey);
       paramClient._eRawClient.expect_replicaCaughtUp();
 
       paramClient._dynamicNotifyModaActors('addingContact', other);
 
       self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
+    });
+    // - release to sender, their drop, mailstore. hold replica.
+    this.T.convenienceSetup(other._usingServer,
+        'receives contact request for', other, 'from', self, function() {
+      other.expectServerTaskToRun('userIncomingContactRequest');
+
+      other._usingServer.holdAllReplicaBlocksForUser(other);
+      other._usingServer.expectReplicaBlocksForUser(other, 1);
+
+      self._usingServer.releaseContactRequestToServerUser(other._usingServer,
+                                                           other);
+    });
+    // - release replica, boring.
+    other._T_connectedClientsStep(other._usingServer,
+        'delivers contact request to', '*PARAM*', function(paramClient) {
+      other.RT.reportActiveActorThisStep(paramClient._eLocalStore);
+      other.RT.reportActiveActorThisStep(paramClient._eRawClient);
+      paramClient._eLocalStore.expect_replicaCmd('addContact',
+                                                 other._rawClient.rootPublicKey);
+      paramClient._eRawClient.expect_replicaCaughtUp();
+
+      paramClient._dynamicNotifyModaActors('addingContact', self);
+
+      other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
 
   },

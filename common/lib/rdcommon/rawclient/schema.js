@@ -109,6 +109,23 @@ exports.IDX_PEEP_RECIP_INVOLVEMENT = "idxPeepRecip";
 exports.IDX_PEEP_ANY_INVOLVEMENT = "idxPeepAny";
 
 /**
+ * Contact requests, keyed by the root key of the requester.  This is not a
+ *  particularly efficient way to store the requests.  We could just be keying
+ *  off of "timestamp + rootkey" with the rootkey present just for uniqueness.
+ *  However, our redis gendb implementation is not amenable to such a
+ *  represetation, so that's a future refactoring once we dump redis or what
+ *  not.
+ * XXX potentially refactor our storage of this, ideally with gendb change
+ *
+ * - d:req {selfIdent: selfIdentBlob, receivedAt: timestamp, mesageText: "..."}
+ */
+exports.TBL_CONNREQ_DATA = "connRequests";
+/**
+ * Timestamp of when the connect request was received.
+ */
+exports.IDX_CONNREQ_RECEIVED = "idxReceived";
+
+/**
  * Conversation data.
  *
  * row id: conversation id

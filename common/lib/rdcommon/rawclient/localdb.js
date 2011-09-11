@@ -73,7 +73,8 @@ const PINNED = 'pinned';
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
-      NS_SERVERS = 'servers';
+      NS_SERVERS = 'servers',
+      NS_CONNREQS = 'connreqs';
 
 const setIndexValue = $notifking.setIndexValue,
       setReuseIndexValue = $notifking.setReuseIndexValue,
@@ -754,11 +755,176 @@ LocalStore.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Contact Request Processing
+  // Contact Requests
 
   _proc_reqmsg: function(reqmsg) {
-    // XXX store, do display stuff, etc.
     this._log.contactRequest(reqmsg.senderKey);
+
+    // - open the inner envelope
+    var reqEnv = JSON.parse(
+      this._keyring.openBoxUtf8With(reqmsg.innerEnvelope.envelope, reqmsg.nonce,
+                                    reqmsg.senderKey,
+                                    'messaging', 'envelopeBox'));
+    if (!reqEnv.hasOwnProperty('type') ||
+        reqEnv.type !== 'contactRequest')
+      throw new $taskerrors.MalformedOrReplayPayloadError(
+        "request type is '" + reqEnv.type + "' instead of 'contactRequest'");
+
+    // - open the body
+    var reqBody = JSON.parse(
+      this._keyring.openBoxUtf8With(reqEnv.body, reqmsg.nonce,
+                                    reqmsg.senderKey,
+                                    'messaging', 'bodyBox'));
+
+    // - validate the enclosed self-ident matches the sender key
+    var othSelfIdentPayload = $pubident.assertGetPersonSelfIdent(
+                                reqBody.selfIdent);
+    var othPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                       reqBody.selfIdent);
+    if (othPubring.getPublicKeyFor('messaging', 'tellBox') !== reqmsg.senderKey)
+      throw new $taskerrors.SelfIdentKeyMismatchError(
+        "self-ident inconsistent with sender of connect request");
+
+    // - validate they enclosed a vaid other person ident for us
+    var theirOthIdentOfUsPayload = $pubident.assertGetOtherPersonIdent(
+                                     reqBody.otherPersonIdent, othPubring,
+                                     reqmsg.receivedAt);
+    // (we know it's of us because the root key will be checked against ours)
+    var enclosedSelfIdentPayload = $pubident.assertGetPersonSelfIdent(
+                                     theirOthIdentOfUsPayload.personSelfIdent,
+                                     this._keyring.rootPublicKey);
+    var theirPocoForUs = theirOthIdentOfUsPayload.localPoco;
+
+    // - build persisted rep
+    var persistRep = {
+      selfIdent: reqBody.selfIdent,
+      receivedAt: reqmsg.receivedAt,
+      theirPocoForUs: theirPocoForUs,
+      messageText: reqBody.messageText,
+    };
+    var cells = {'d:req': persistRep};
+    var indexValues = [
+      [$lss.IDX_CONNREQ_RECEIVED, '',
+       othPubring.rootPublicKey, reqmsg.receivedAt],
+    ];
+
+    // - persist
+    // We key the record by the sender's root key.  The other possibility would
+    //  be to use their tell key, which might be a better idea because the
+    //  duplicate suppression is keyed off of the tell key rather than the
+    //  root key.
+    var self = this;
+    return when($Q.wait(
+        this._db.putCells($lss.TBL_CONNREQ_DATA, othPubring.rootPublicKey,
+                          cells),
+        this._db.updateMultipleIndexValues($lss.TBL_CONNREQ_DATA,
+                                           indexValues)
+      ),
+      function() {
+        // - notify
+        self._notif.namespaceItemAdded(
+          NS_CONNREQS, othPubring.rootPublicKey, cells, null, indexValues,
+          function(clientData, queryHandle) {
+            return self._convertConnectRequest(
+              persistRep, othPubring.rootPublicKey, queryHandle, clientData);
+          });
+      }); // rejection pass-through is fine
+  },
+
+  _convertConnectRequest: function(reqRep, fullName, queryHandle, clientData) {
+    // our direct representation has nothing in it, nothing to do.
+
+    // - synthesize the peep rep
+    var peepClientData = this._notif.reuseIfAlreadyKnown(
+                           queryHandle, NS_PEEPS, fullName);
+    if (!peepClientData) {
+      var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
+      peepClientData = {
+        localName: localName,
+        fullName: fullName,
+        count: 1,
+        data: null,
+        indexValues: [],
+        deps: [],
+      };
+      var selfIdentPayload = $pubident.peekPersonSelfIdentNOVERIFY(
+                               reqRep.selfIdent);
+      var frontData = this._convertPeepSelfIdentToBothReps(
+                        reqRep.selfIdent, selfIdentPayload, peepClientData);
+
+      queryHandle.membersByLocal[NS_PEEPS][localName] = peepClientData;
+      queryHandle.membersByFull[NS_PEEPS][fullName] = peepClientData;
+
+      queryHandle.dataMap[NS_PEEPS][localName] = frontData;
+    }
+    clientData.deps.push(peepClientData);
+
+    return {
+      peepLocalName: peepClientData.localName,
+      theirPocoForUs: reqRep.theirPocoForUs,
+      receivedAt: reqRep.receivedAt,
+      messageText: reqRep.messageText,
+    };
+  },
+
+  queryAndWatchConnRequests: function(queryHandle) {
+    var self = this, querySource = queryHandle.owner;
+    return when(this._db.scanIndex(
+                  $lss.TBL_CONNREQ_DATA, $lss.IDX_CONNREQ_RECEIVED, '', -1),
+      function(results) {
+        var rootKeys = [];
+        for (var iRes = 0; iRes < results.length; iRes += 2) {
+          rootKeys.push(results[iRes]);
+        }
+
+        var viewItems = [];
+        queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+
+        var iKey = 0;
+        function getNextMaybeGot(reqRep) {
+          var clientData;
+          // (use a while loop so in the event this is a duplicate conn req
+          //  query our reuse invocations can fast-path without blowing the
+          //  stack on non-tail-call optimized impls.)
+          while (iKey < rootKeys.length) {
+            if (reqRep) {
+              var localName = "" + (querySource.nextUniqueIdAlloc++),
+                  fullName = rootKeys[iKey - 1]; // (infinite loop protection)
+              clientData = {
+                localName: localName,
+                fullName: fullName,
+                count: 1,
+                data: null,
+                indexValues: [],
+                deps: null,
+              };
+              queryHandle.membersByLocal[NS_CONNREQS][localName] = clientData;
+              queryHandle.membersByFull[NS_CONNREQS][fullName] = clientData;
+
+              queryHandle.dataMap[NS_CONNREQS][localName] =
+                self._convertConnectRequest(reqRep, fullName,
+                                            queryHandle, clientData);
+              viewItems.push(localName);
+              reqRep = null;
+            }
+            if ((clientData = self._notif.reuseIfAlreadyKnown(
+                                queryHandle, NS_CONNREQS, rootKeys[iKey]))) {
+              viewItems.push(clientData.localName);
+              iKey++;
+              continue;
+            }
+
+            // increment every time to avoid ending up in an infinite loop
+            //  in case of data invariant violation
+            return when(self._db.getRowCell($lss.TBL_CONNREQ_DATA,
+                                            rootKeys[iKey++], 'd:req'),
+                        getNextMaybeGot);
+          }
+          return self._fillOutQueryDepsAndSend(queryHandle);
+        }
+
+        return getNextMaybeGot();
+      }); // rejection pass-through is desired
   },
 
   //////////////////////////////////////////////////////////////////////////////
