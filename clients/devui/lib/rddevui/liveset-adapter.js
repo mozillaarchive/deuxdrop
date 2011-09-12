@@ -36,93 +36,41 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- *
+ * Liveset viewslice adapter.
  **/
 
 define(
   [
-    'wmsy/wmsy',
-    './liveset-adapter',
-    'text!./tab-signup.css',
     'exports'
   ],
   function(
-    $wmsy,
-    $liveset,
-    $_css,
     exports
   ) {
 
-// define our tab type in the tabs domain
-var ty = exports.ty =
-  new $wmsy.WmsyDomain({id: "tab-signup", domain: "tabs"});
+/**
+ * Make a ViewSlice that hooks up to a LiveSet.
+ */
+function LiveSetListenerViewSliceAdapter(liveSet) {
+  this._listener = null;
+  this.data = null;
+  this.liveSet = liveSet;
+  liveSet._listener = this;
+}
+exports.LiveSetListenerViewSliceAdapter = LiveSetListenerViewSliceAdapter;
+LiveSetListenerViewSliceAdapter.prototype = {
+  seek: function() {
+    if (this.liveSet.items.length)
+      this._listener.didSplice(0, this.liveSet.items.length, this.liveSet.items,
+                               true, false);
+  },
 
-var wy = exports.wy =
-  new $wmsy.WmsyDomain({id: "tab-signup", domain: "moda"});
+  onSplice: function(index, howMany, addedItems, liveSet) {
+    this._listener.didSplice(index, howMany, addedItems, true, false, this);
+  },
 
-ty.defineWidget({
-  name: 'signup-tab',
-  constraint: {
-    type: 'tab',
-    obj: { kind: 'signup' },
+  onCompleted: function() {
+    // no need to do anything, the splice logic covers everything
   },
-  focus: wy.focus.container.vertical('userPoco', 'servers', 'btnSignup'),
-  structure: {
-    userInfoBlock: {
-      userPoco: wy.widget({type: 'poco-edit'},
-                          ['userAccount', 'poco']),
-    },
-    emailInfoBlock: {
-      eiLabel: "browserid goes here.",
-    },
-    serverListBlock: {
-      siLabel: "Pick a server to use:",
-      servers: wy.vertList({type: 'server'}),
-    },
-    buttonBar: {
-      btnSignup: wy.button("Signup"),
-    },
-  },
-  impl: {
-    postInit: function() {
-      var moda = this.__context.moda;
-
-      var serverSet = moda.queryServers();
-      var vs = new $liveset.LiveSetListenerViewSliceAdapter(serverSet);
-      this.servers_set(vs);
-    },
-  }
-});
-
-wy.defineWidget({
-  name: 'poco-editor',
-  constraint: {
-    type: 'poco-edit',
-  },
-  focus: wy.focus.container.vertical('displayName'),
-  structure: {
-    dnLabel: { // want a wy.label for this.
-      ldn0: "I want to be known to the world as ",
-      displayName: wy.text('displayName'),
-      ldn1: "."
-    },
-  },
-});
-
-wy.defineWidget({
-  name: 'server-info',
-  constraint: {
-    type: 'server',
-  },
-  focus: wy.focus.item,
-  structure: {
-    urlBlock: [
-      'Server URL: ', wy.bind('url'),
-    ],
-    dnBlock: [
-      'Server Description: ', wy.bind('displayName'),
-    ],
-  },
-});
+};
 
 }); // end define

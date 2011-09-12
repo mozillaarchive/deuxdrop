@@ -45,6 +45,7 @@ define(
     'modality',
     './tabs',
     './tab-signup',
+    './tabs-common',
     'text!./app.css',
     'exports'
   ],
@@ -53,6 +54,7 @@ define(
     $modality,
     $_tabs,
     $_tab_signup,
+    $_tabs_common,
     $_css,
     exports
   ) {
