@@ -80,7 +80,21 @@ TD.commonCase('moda basics', function(T) {
   client_a.setup_connect();
   client_b.setup_connect();
 
-  var lqaRequests;
+  T.group('A queries conn requests (for dynamic update)');
+  var lqaRequests = moda_a.do_queryConnectRequests('reqsA-before');
+
+  T.group('B finds A');
+  var lqbPossibleFriends = moda_b.do_queryPossibleFriends('possfriendsB',
+                                                          [client_a]);
+
+  T.group('B requests friendship with A');
+  moda_b.do_connectToPeep(lqbPossibleFriends, client_a, true);
+
+  T.group('A queries conn requests (already populated)');
+  var lqaStaticRequests = moda_a.do_queryConnectRequests('reqsA-after');
+
+  T.group('A responds based on the request');
+  moda_a.do_connectToPeep(lqaRequests, client_b, true);
 
   T.group("cleanup");
 });

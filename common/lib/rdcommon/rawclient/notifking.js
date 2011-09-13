@@ -56,6 +56,7 @@
  *     maps for safety purposes.
  *   }
  *   @key[queryHandlesByNS QueryHandlesByNS]
+ *   @key[allQueryHandles]
  *   @key[pending @listof[QueryHandle]]{
  *     The set of queries that have pending data to be sent.
  *   }
@@ -562,6 +563,7 @@ NotificationKing.prototype = {
       prefix: prefixId,
       nextUniqueIdAlloc: 0,
       queryHandlesByNS: makeEmptyListsByNS(),
+      allQueryHandles: [],
       pending: [],
     };
     return querySource;
@@ -618,6 +620,7 @@ NotificationKing.prototype = {
       dataDelta: makeEmptyMapsByNS(),
     };
     querySource.queryHandlesByNS[namespace].push(queryHandle);
+    querySource.allQueryHandles.push(queryHandle);
     return queryHandle;
   },
 
@@ -632,10 +635,16 @@ NotificationKing.prototype = {
   },
 
   forgetTrackedQuery: function(queryHandle) {
+    // remove from per-namespace list
     var qhList = queryHandle.owner.queryHandlesByNS[queryHandle.namespace];
     var qhIndex = qhList.indexOf(queryHandle);
     if (qhIndex === -1)
       throw new Error("Query handle life-cycle violation; does not exist!");
+    qhList.splice(qhIndex, 1);
+
+    // remove from the big list
+    qhList = queryHandle.owner.allQueryHandles;
+    qhIndex = qhList.indexOf(queryHandle);
     qhList.splice(qhIndex, 1);
   },
 
@@ -735,7 +744,7 @@ NotificationKing.prototype = {
    *  useless local names.
    */
   mapLocalNameToFullName: function(querySource, namespace, localName) {
-    var queryHandles = querySource.queryHandlesByNS[namespace];
+    var queryHandles = querySource.allQueryHandles;
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
       var queryHandle = queryHandles[iQuery];
       var nsMembers = queryHandle.membersByLocal[namespace];
@@ -751,7 +760,7 @@ NotificationKing.prototype = {
    *  `LocallyNamedClientData` structure for that query source.
    */
   mapLocalNameToClientData: function(querySource, namespace, localName) {
-    var queryHandles = querySource.queryHandlesByNS[namespace];
+    var queryHandles = querySource.allQueryHandles;
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
       var queryHandle = queryHandles[iQuery];
       var nsMembers = queryHandle.membersByLocal[namespace];

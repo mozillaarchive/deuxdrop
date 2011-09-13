@@ -69,7 +69,8 @@ const when = $Q.when;
 
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs', NS_CONVMSGS = 'convmsgs',
-      NS_SERVERS = 'servers';
+      NS_SERVERS = 'servers',
+      NS_CONNREQS = 'connreqs';
 
 /**
  * The other side of a ModaBridge instance/connection.  This is intended to be
@@ -179,7 +180,7 @@ ModaBackside.prototype = {
   _cmd_connectToPeep: function(_ignored, payload) {
     var clientData = this._notif.mapLocalNameToClientData(
                        this._querySource, NS_PEEPS, payload.peepLocalName);
-    this._rawClient.connectToPeepUsingSelfIdent(clientData.sident,
+    this._rawClient.connectToPeepUsingSelfIdent(clientData.data.sident,
                                                 payload.localPoco);
   },
 
@@ -389,7 +390,7 @@ ModaBackside.prototype = {
   _cmd_queryConnRequests: function(bridgeQueryName) {
     var queryHandle = this._notif.newTrackedQuery(
                         this._querySource, bridgeQueryName,
-                        NS_CONNREQS, queryDef);
+                        NS_CONNREQS, {});
     when(this._store.queryAndWatchConnRequests(queryHandle), null,
          this._needsbind_queryProblem.bind(this, queryHandle));
   },

@@ -758,8 +758,6 @@ LocalStore.prototype = {
   // Contact Requests
 
   _proc_reqmsg: function(reqmsg) {
-    this._log.contactRequest(reqmsg.senderKey);
-
     // - open the inner envelope
     var reqEnv = JSON.parse(
       this._keyring.openBoxUtf8With(reqmsg.innerEnvelope.envelope, reqmsg.nonce,
@@ -828,6 +826,7 @@ LocalStore.prototype = {
             return self._convertConnectRequest(
               persistRep, othPubring.rootPublicKey, queryHandle, clientData);
           });
+        self._log.contactRequest(reqmsg.senderKey);
       }); // rejection pass-through is fine
   },
 
@@ -869,6 +868,14 @@ LocalStore.prototype = {
 
   queryAndWatchConnRequests: function(queryHandle) {
     var self = this, querySource = queryHandle.owner;
+    queryHandle.index = $lss.IDX_CONNREQ_RECEIVED;
+    queryHandle.indexParam = '';
+    queryHandle.testFunc = function() {
+      return true;
+    };
+    queryHandle.cmpFunc = function(a, b) {
+      return b.receivedAt - a.receivedAt;
+    };
     return when(this._db.scanIndex(
                   $lss.TBL_CONNREQ_DATA, $lss.IDX_CONNREQ_RECEIVED, '', -1),
       function(results) {

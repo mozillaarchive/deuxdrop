@@ -238,7 +238,7 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._reqInfos = reqInfos.concat();
     lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
 
-    var keys = lqt._reqFormattedStrs.map(this._REQINFO_KEYFUNC);
+    var keys = lqt._reqInfos.map(this._REQINFO_KEYFUNC);
     markListIntoObj(keys, delta.state, null);
     markListIntoObj(keys, delta.postAnno, 1);
 
@@ -251,7 +251,7 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._reqInfos.push(reqInfo);
     lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
 
-    markListIntoObj(lqt._reqFormattedStrs.map(this._REQINFO_KEYFUNC),
+    markListIntoObj(lqt._reqInfos.map(this._REQINFO_KEYFUNC),
                     delta.state, null);
     delta.postAnno[this._REQINFO_KEYFUNC(reqInfo)] = 1;
 
@@ -956,6 +956,11 @@ var TestModaActorMixins = {
         }
       };
     }
+    else if (liveSet._ns === 'connreqs') {
+      keymapper = function(connReq) {
+        return connReq.peep.selfPoco.displayName + ': ' + connReq.messageText;
+      };
+    }
     else {
       keymapper = function(item) {
         return self._remapLocalToFullName(liveSet._ns, item._localName);
@@ -1002,6 +1007,11 @@ var TestModaActorMixins = {
           default:
             throw new Error("Unknown mesasge type '" + msg.type + "'");
         }
+      };
+    }
+    else if (liveSet._ns === 'connreqs') {
+      keymapper = function(connReq) {
+        return connReq.peep.selfPoco.displayName + ': ' + connReq.messageText;
       };
     }
     else {
@@ -1123,7 +1133,7 @@ var TestModaActorMixins = {
       self.expect_queryCompleted(lqt.__name, delta);
       lqt._pendingExpDelta = null;
 
-      lqt._liveset = self._bridge.query
+      lqt._liveset = self._bridge.queryConnectRequests(self, lqt);
 
       self._dynamicConnReqQueries.push(lqt);
     });
@@ -1340,10 +1350,19 @@ var TestModaActorMixins = {
   // Query Lookup Helpers
 
   _grabPeepFromQueryUsingClient: function(lqt, testClient) {
-    var items = lqt._liveset.items;
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].selfPoco.displayName === testClient.__name)
-        return items[i];
+    var items = lqt._liveset.items, i;
+
+    if (lqt._liveset._ns === 'connreqs') {
+      for (i = 0; i < items.length; i++) {
+        if (items[i].peep.selfPoco.displayName === testClient.__name)
+          return items[i].peep;
+      }
+    }
+    else {
+      for (i = 0; i < items.length; i++) {
+        if (items[i].selfPoco.displayName === testClient.__name)
+          return items[i];
+      }
     }
     throw new Error("Unable to map testClient '" + testClient.__name +
                     + "' back to a PeepBlurb instsance.");

@@ -55,7 +55,7 @@ define(
  *  objects like {selfIdent: BLOB} and JSON-encoded.
  */
 exports.serverSelfIdents = [
-{"selfIdent":"4o`­\u0001e)ýßãxõ!Æ{ÈÏË\u0006¨Â\u000f¢EèÂ\u001d{\"tag\":\"server:full\",\"url\":\"ws://dragonette.local:8001/\",\"meta\":{\"displayName\":\"A development server\"},\"publicKey\":\"ÂÃ,N\\u0018JÃ®p=Â¤^\\u001eÃ¤Â_F'AÂÃÂ¥ÃRA_Ã«Ã¢Ã¼Â¾LÂB\",\"rootPublicKey\":\"8Ã®Â\\r~\\tÃ1Ã²\\u0018\\u001f\\u001bÂ©*Â±\\u00175ÃÃÂEfÃ¶ÃQÂÃAm0ÂÂ±\"}nõ%þ]y\u0014å±n9ÎùÏRu'\\lÉk\u0005k°\u000bv\u0004"},
+{"selfIdent":"Ò²yMØþWJ¨¶1·£\u0007Ån|Ö&ýëí\"l+Ã/iv{\"tag\":\"server:full\",\"url\":\"ws://bwo.local:9876/\",\"meta\":{\"displayName\":\"Andrew's laptop development server\"},\"publicKey\":\"Â«Ã¯~IÃ¤z{ÃÂ¬bi]\\u000e(Ã¶\\u0016ÂÂ\\\\Â=\\u0005Ãº%\\r\\u0017Âº<\\u001aÃ¯b!\",\"rootPublicKey\":\"ÃÃÂ¶Ã²Ã¤ÂÃ2*Â¾Â¿Â°qÃÂ®Ã\\u0002\\u0014ÂÂ¸I4Â¨wÃ\\u000f-UÃ\\\\GÃ°\"}¦\u001cOR6\u0001²\u000eçA\u001eg\u001a\u000e>ì7\t`\u001bj\u0002+Ëý¤Ü\u000f"},
 ];
 
 }); // end define

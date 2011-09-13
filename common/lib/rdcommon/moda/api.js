@@ -222,6 +222,7 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
     convblurbs: {},
     convmsgs: {},
     servers: {},
+    connreqs: {},
   };
   this.query = query;
   this.items = [];
@@ -359,9 +360,10 @@ OurUserAccount.prototype = {
  *  in the connect request but call us "the king's fool" when inviting us to
  *  join conversations.
  */
-function ConnectRequest(_bridge, peep, theirPocoForUs, receivedAt,
+function ConnectRequest(_bridge, localName, peep, theirPocoForUs, receivedAt,
                         messageText) {
-  this._bridge = bridge;
+  this._bridge = _bridge;
+  this._localName = localName;
   this.peep = peep;
   this.theirPocoForUs = theirPocoForUs;
   this.receivedAt = new Date(receivedAt);
@@ -789,9 +791,9 @@ ModaBridge.prototype = {
   /**
    * Create a `ConnectRequest` represetation from the wire rep.
    */
-  _transformConnectRequest: function(wireRep, liveset) {
+  _transformConnectRequest: function(localName, wireRep, liveset) {
     var peepWireRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
-    return new ConnectRequest(this,
+    return new ConnectRequest(this, localName,
       this._transformPeepBlurb(wireRep.peepLocalName, peepWireRep, liveset),
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
   },
@@ -903,7 +905,19 @@ ModaBridge.prototype = {
     return liveset;
   },
 
-  queryAllConversations: function(query, listener) {
+  queryAllConversations: function(query, listener, data) {
+  },
+
+  queryConnectRequests: function(listener, data) {
+    var handle = this._nextHandle++;
+    // passing null for the query def because there is nothing useful we can
+    //  track on this side.
+    var liveset = new LiveOrderedSet(this, handle, NS_CONNREQS, null, listener,
+                                     data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryConnRequests', handle);
+    return liveset;
   },
 
   killQuery: function(liveSet) {
