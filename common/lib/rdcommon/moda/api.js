@@ -367,7 +367,7 @@ function ConnectRequest(_bridge, localName, peep, theirPocoForUs, receivedAt,
   this.peep = peep;
   this.theirPocoForUs = theirPocoForUs;
   this.receivedAt = new Date(receivedAt);
-  this.mesageText = messageText;
+  this.messageText = messageText;
 }
 ConnectRequest.prototype = {
   acceptConnectRequest: function(ourPocoForThem) {

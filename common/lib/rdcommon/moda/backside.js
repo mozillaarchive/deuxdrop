@@ -181,7 +181,8 @@ ModaBackside.prototype = {
     var clientData = this._notif.mapLocalNameToClientData(
                        this._querySource, NS_PEEPS, payload.peepLocalName);
     this._rawClient.connectToPeepUsingSelfIdent(clientData.data.sident,
-                                                payload.localPoco);
+                                                payload.localPoco,
+                                                payload.messageText);
   },
 
   _cmd_createConversation: function(_ignored, convData) {

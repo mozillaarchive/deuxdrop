@@ -742,7 +742,7 @@ var TestModaActorMixins = {
     var reqInfo = {
       testClient: other,
       receivedAt: nowSeq,
-      mesageText: messageText,
+      messageText: messageText,
     };
     this._dynConnReqInfos.push(reqInfo);
     this._notifyConnectRequest(reqInfo);
@@ -952,7 +952,7 @@ var TestModaActorMixins = {
           case 'message':
             return msg.author.selfPoco.displayName + ': ' + msg.text;
           default:
-            throw new Error("Unknown mesasge type '" + msg.type + "'");
+            throw new Error("Unknown message type '" + msg.type + "'");
         }
       };
     }
@@ -1463,7 +1463,7 @@ var TestModaActorMixins = {
    *  connect cases it is.
    */
   do_connectToPeep: function(usingPeepQuery, other, interesting) {
-    var self = this, messageText,
+    var self = this, messageText = fakeDataMaker.makeSubject(),
         closesLoop = this._testClient._dohelp_closesConnReqLoop(other);
     this.T.action('moda sends connectToPeep to', this._eBackside,
                   function() {
@@ -1471,7 +1471,6 @@ var TestModaActorMixins = {
       self.expectModaCommand('connectToPeep');
 
       var peep = self._grabPeepFromQueryUsingClient(usingPeepQuery, other);
-      messageText = fakeDataMaker.makeSubject();
       self._bridge.connectToPeep(peep, peep.selfPoco, messageText);
     });
     this.T.action(this._eBackside, 'processes connectToPeep, invokes on',
