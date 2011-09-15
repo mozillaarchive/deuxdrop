@@ -325,7 +325,8 @@ OurUserAccount.prototype = {
     this._bridge._send('updatePoco', null, newPoco);
   },
 
-  provideProofOfIdentity: function(identityType, proofOrigin, proof) {
+  provideProofOfIdentity: function(proof) {
+    this._bridge._send('provideProofOfIdentity', proof);
   },
 
   insecurelyGetServerSelfIdentUsingDomainName: function (domain, listener) {

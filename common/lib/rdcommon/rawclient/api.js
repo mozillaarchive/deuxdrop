@@ -98,6 +98,8 @@ define(
     exports
   ) {
 const when = $Q.when;
+const browserIdSignInUrl = 'https://browserid.org/verify';
+var xhr = $xmlhttprequest.XMLHttpRequest;
 
 /**
  * Connect to the server, give it the signup bundle, expose our result via a
@@ -521,6 +523,58 @@ RawClientAPI.prototype = {
     this._regenerateSelfIdent();
   },
 
+  provideProofOfIdentity: function(proof) {
+    var deferred = $Q.defer(),
+        self = this;
+    if (proof.source === 'browserid') {
+      var request = new xhr();
+
+      request.open('POST', browserIdSignInUrl, true);
+
+      request.onreadystatechange = function(evt) {
+        if (request.readyState == 4) {
+          if (request.status == 200) {
+            self._log.provideProofOfIdentitySuccess();
+            var json = JSON.parse(request.responseText);
+            deferred.resolve(json);
+          } else {
+            self._log.provideProofOfIdentityFailure();
+            deferred.resolve(null);
+          }
+        }
+      };
+      request.send(data);
+
+      return deferred.promise;
+    }
+  },
+
+  fetchGravatarImageUrl: function(email) {
+    var deferred = $Q.defer(),
+        self = this,
+        request = new xhr();
+
+    request.open('GET', XXXX, true);
+
+XX?X? BROKEN: how to get the image data.
+
+    request.onreadystatechange = function(evt) {
+      if (request.readyState == 4) {
+        if (request.status == 200) {
+          self._log.fetchGravatarImageUrlSuccess();
+          var json = JSON.parse(request.responseText);
+          deferred.resolve(XXX);
+        } else {
+          self._log.fetchGravatarImageUrlFailure();
+          deferred.resolve(null);
+        }
+      }
+    };
+    request.send(data);
+
+    return deferred.promise;
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Server Signup
 
@@ -532,7 +586,7 @@ RawClientAPI.prototype = {
   insecurelyGetServerSelfIdentUsingDomainName: function(domain) {
     // Fetch the well-known location for the selfIdent
     var deferred = $Q.defer(),
-        request = new $xmlhttprequest.XMLHttpRequest();
+        request = new xhr();
 
     request.open('GET', 'http://' + domain +
                  '/.well-known/deuxdrop-server.selfident.json', true);
@@ -1160,6 +1214,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       signedUp: {},
       signupChallenged: {},
       insecurelyGetServerSelfIdentUsingDomainNameSuccess: {},
+      provideProofOfIdentitySuccess: {},
+      fetchGravatarImageUrlSuccess: {}
 
       connecting: {},
       connected: {},
@@ -1170,7 +1226,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     errors: {
       signupFailure: {},
-      insecurelyGetServerSelfIdentUsingDomainNameFailure: {}
+      insecurelyGetServerSelfIdentUsingDomainNameFailure: {},
+      provideProofOfIdentityFailure: {},
+      fetchGravatarImageUrlFailure: {}
     },
   }
 });
