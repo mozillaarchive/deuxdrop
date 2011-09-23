@@ -506,7 +506,8 @@ var TestModaActorMixins = {
 
       // - link backside and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
-                                    self._bridge._receive.bind(self._bridge));
+                                    self._bridge._receive.bind(self._bridge),
+                                    process.nextTick.bind(process));
 
       // - log when a mooted message is received
       // (this should not happen under test)
@@ -1416,10 +1417,11 @@ var TestModaActorMixins = {
     // it is very important to update the static server info on the test client!
     self._testClient._usingServer = testServer;
     this.T.convenienceSetup(self, 'asks whoAmI', function() {
-      self.expect_whoAmI();
+      self.expect_whoAmI({displayName: self._testClient.__name}, null);
       me = self._bridge.whoAmI({
         onCompleted: function() {
-          self._logger.whoAmI();
+          self._logger.whoAmI(me.poco,
+                              me.usingServer && me.usingServer.url);
         },
       });
     });
@@ -1453,6 +1455,18 @@ var TestModaActorMixins = {
       }
       throw new Error("No server info for '" + testServer.__name +
                       "' found!");
+    });
+    // make sure that if we refresh the whoAmI call that we get the updated
+    //  server info.
+    this.T.convenienceSetup(self, 'checks post-signup whoAmI', function() {
+      self.expect_whoAmI({displayName: self._testClient.__name},
+                          testServer.__url);
+      me = self._bridge.whoAmI({
+        onCompleted: function() {
+          self._logger.whoAmI(me.poco,
+                              me.usingServer && me.usingServer.url);
+        },
+      });
     });
   },
 
@@ -1652,7 +1666,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
     events: {
       // - signup related
-      whoAmI: {},
+      whoAmI: {poco: true, serverUrl: true},
       serverQueryCompleted: {},
       signupResult: {err: true},
 

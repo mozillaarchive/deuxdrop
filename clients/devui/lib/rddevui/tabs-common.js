@@ -43,7 +43,7 @@ define(
   [
     'wmsy/wmsy',
     './liveset-adapter',
-    'text!./tab-common.css',
+    'text!./tabs-common.css',
     'exports'
   ],
   function(
@@ -131,7 +131,7 @@ wy.defineWidget({
   },
   focus: wy.focus.item,
   structure: {
-    peep: wy.bind({type: 'peep-blurb'}, 'peep'),
+    peep: wy.widget({type: 'peep-blurb'}, 'peep'),
     messageText: wy.bind('messageText'),
   },
 });
@@ -209,28 +209,6 @@ ty.defineWidget({
       this.messages_set(vs);
     },
   }
-});
-
-wy.defineWidget({
-  name: 'peep-blurb',
-  constraint: {
-    type: 'peep-blurb',
-  },
-  focus: wy.focus.item,
-  structure: {
-    name: "",
-    unread: wy.bind('numUnreadAuthoredMessages'),
-  },
-  impl: {
-    postInitUpdate: function() {
-      var name;
-      if (this.obj.ourPoco && this.obj.ourPoco.hasOwnProperty("displayName"))
-        name = this.obj.ourPoco.displayName;
-      else
-        name = this.obj.selfPoco.displayName;
-      this.name_element.textContent = name;
-    },
-  },
 });
 
 ty.defineWidget({

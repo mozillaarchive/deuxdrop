@@ -311,7 +311,7 @@ function OurUserAccount(_bridge, poco, usingServer) {
 }
 OurUserAccount.prototype = {
   get havePersonalInfo() {
-    return !this.poco || !!this.poco.displayName;
+    return this.poco && !!this.poco.displayName;
   },
 
   get haveServerAccount() {
@@ -467,7 +467,7 @@ ModaBridge.prototype = {
   _receiveWhoAmI: function(msg) {
     // update the representation
     this._ourUser.poco = msg.poco;
-    this._ourUser.usingServer = this._transformServerInfo(msg.server);
+    this._ourUser.usingServer = this._transformServerInfo(null, msg.server);
 
     // notify listeners
     for (var i = 0; i < this._ourUser._pendingListeners.length; i++) {

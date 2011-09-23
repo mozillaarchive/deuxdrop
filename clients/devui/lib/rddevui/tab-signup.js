@@ -55,10 +55,10 @@ define(
 
 // define our tab type in the tabs domain
 var ty = exports.ty =
-  new $wmsy.WmsyDomain({id: "tab-signup", domain: "tabs"});
+  new $wmsy.WmsyDomain({id: "tab-signup", domain: "tabs", css: $_css});
 
 var wy = exports.wy =
-  new $wmsy.WmsyDomain({id: "tab-signup", domain: "moda"});
+  new $wmsy.WmsyDomain({id: "tab-signup", domain: "moda", css: $_css});
 
 ty.defineWidget({
   name: 'signup-tab',
@@ -67,7 +67,11 @@ ty.defineWidget({
     obj: { kind: 'signup' },
   },
   focus: wy.focus.container.vertical('userPoco', 'servers', 'btnSignup'),
+  emit: ['openTab', 'closeTab'],
   structure: {
+    errBlock: {
+      errMsg: "",
+    },
     userInfoBlock: {
       userPoco: wy.widget({type: 'poco-edit'},
                           ['userAccount', 'poco']),
@@ -90,8 +94,52 @@ ty.defineWidget({
       var serverSet = moda.queryServers();
       var vs = new $liveset.LiveSetListenerViewSliceAdapter(serverSet);
       this.servers_set(vs);
+
+      this.selectedServerBinding = null;
+      this.btnSignup_element.disabled = true;
     },
-  }
+
+    // notification the signup completed
+    onCompleted: function(err) {
+      var serverInfo = this.signupServerInfo;
+      if (err) {
+        this.errMsg_element.textContent = "" + err;
+      }
+      else {
+        var tabObj = {
+          kind: "signed-up",
+          name: "Signed Up!",
+          serverInfo: serverInfo,
+        };
+        this.emit_openTab(tabObj, true, this.obj);
+        this.emit_closeTab(this.obj);
+      }
+    },
+  },
+  events: {
+    servers: {
+      command: function(serverBinding) {
+        if (this.selectedServerBinding)
+          this.selectedServerBinding.domNode.removeAttribute("selected");
+        this.selectedServerBinding = serverBinding;
+        this.selectedServerBinding.domNode.setAttribute("selected", "true");
+
+        this.btnSignup_element.disabled = false;
+      },
+    },
+    btnSignup: {
+      command: function() {
+        var self = this,
+            serverInfo = this.signupServerInfo = this.selectedServerBinding.obj;
+
+        // er, should we be using emit/receive on this?  having it transparently
+        //  update something out of our context?
+        this.obj.userAccount.updatePersonalInfo(
+          this.userPoco_element.binding.gimmePoco());
+        this.obj.userAccount.signupWithServer(serverInfo, this);
+      },
+    }
+  },
 });
 
 wy.defineWidget({
@@ -105,6 +153,13 @@ wy.defineWidget({
       ldn0: "I want to be known to the world as ",
       displayName: wy.text('displayName'),
       ldn1: "."
+    },
+  },
+  impl: {
+    gimmePoco: function() {
+      return {
+        displayName: this.displayName_element.value,
+      };
     },
   },
 });
@@ -122,6 +177,22 @@ wy.defineWidget({
     dnBlock: [
       'Server Description: ', wy.bind('displayName'),
     ],
+  },
+});
+
+
+ty.defineWidget({
+  name: 'signed-up-tab',
+  constraint: {
+    type: 'tab',
+    obj: { kind: 'signed-up' },
+  },
+  structure: {
+    headerLabel: "Signed Up with Server!",
+    descBlock: {
+      longLabel: ['You signed up with: ',
+                  wy.bind(['serverInfo', 'displayName'])],
+    },
   },
 });
 

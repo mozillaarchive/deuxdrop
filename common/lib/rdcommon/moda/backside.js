@@ -113,17 +113,21 @@ ModaBackside.prototype = {
    * Hack to establish a *fake* *magic* link between us and a bridge.  ONLY
    *  FOR USE BY UNIT TESTS.
    */
-  XXXcreateBridgeChannel: function(bridgeHandlerFunc) {
+  XXXcreateBridgeChannel: function(bridgeHandlerFunc, nextTickFunc) {
     this._bridgeName = this.name;
     var self = this;
     this._sendObjFunc = function(msg) {
-      try {
-        var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
-        bridgeHandlerFunc(jsonRoundtripped);
-      }
-      catch (ex) {
-        self._log.sendFailure(ex);
-      }
+      // it's important we don't actually call this until next round if we want
+      //  to avoid weird ordering things happening in unit tests.
+      nextTickFunc(function() {
+        try {
+          var jsonRoundtripped = JSON.parse(JSON.stringify(msg));
+          bridgeHandlerFunc(jsonRoundtripped);
+        }
+        catch (ex) {
+          self._log.sendFailure(ex);
+        }
+      });
     };
 
     return this._received.bind(this);

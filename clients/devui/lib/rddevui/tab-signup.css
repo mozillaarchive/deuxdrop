@@ -7,4 +7,23 @@
     padding: 1em;
     border-radius: 4px;
   }
+
+  #errMsg: {
+    color: red;
+    font-size: 140%;
+  }
+}
+
+#server-info {
+  #root[selected="true"] {
+    font-weight: bold;
+    background-color: #ffc;
+  }
+
+  #urlBlock {
+    margin-right: 1em;
+  }
+  #urlBlock0, #dnBlock0 {
+    font-style: italic;
+  }
 }

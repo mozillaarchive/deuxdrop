@@ -1126,6 +1126,7 @@ var TestServerActorMixins = {
       };
       var signedSelfIdent = self.__signedSelfIdentBlob =
         $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
+      self.__url = details.url;
 
       // - fource our self-ident JSON rep into the $serverlist list of servers
       // this is how moda clients will know how to talk to us.
