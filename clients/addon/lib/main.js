@@ -54,9 +54,9 @@
  **/
 
 define([ 'exports', 'self', 'page-mod', 'hidden-frame', 'chrome', 'nacl',
-         './jetpack-protocol/index'],
+         './jetpack-protocol/index', 'timers'],
 function (exports,   self,   pageMod,    hiddenFrame,    chrome,   nacl,
-          protocol) {
+          protocol, $timers) {
 
 var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
     jsm = {},
@@ -84,6 +84,7 @@ var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
     clientDaemonUrl = data.url('web/firefox/clientdaemon.html'),
 
     uiRedirectorHandler, devUiRedirectorHandler, logUiRedirectorHandler,
+    serverLogUiRedirectorHandler,
     Services, XPCOMUtils;
 
 
@@ -155,6 +156,14 @@ logUiRedirectorHandler = protocol.about('loggest', {
 });
 logUiRedirectorHandler.register();
 
+serverLogUiRedirectorHandler = protocol.about('loggest-server', {
+  onRequest: function (request, response) {
+    response.uri = aboutUrl;
+  }
+});
+serverLogUiRedirectorHandler.register();
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Client Daemon Moda Communication
 
@@ -202,6 +211,10 @@ function daemonSendLoggerClientMessage(clientUnique, data) {
   loggerClientRegistry[clientUnique].postMessage(data);
 }
 
+
+function daemonDemandServerUrl(callback) {
+  callback(gWinJS.GIMME_TRANSIT_SERVER_URL());
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Client Daemon Setup
@@ -294,6 +307,25 @@ exports.main = function () {
     }
   });
 
+  // hack to be able to parameterize the loggest page given that the resource
+  //  URI does not seem to want to be able to encode a hash or search query.
+  var loggestStack = [];
+  pageMod.PageMod({
+    include: ['about:loggest-server'],
+    contentScriptWhen: 'start',
+    contentScriptFile: redirectorUrl,
+    onAttach: function onAttach(worker) {
+      worker.on('message', function (message) {
+        daemonDemandServerUrl(function(url) {
+          url = "http" + url.substring(2);
+          loggestStack.push(url + "debuglog/gimme.json");
+          worker.postMessage(logInterfaceUrl);
+        });
+      });
+    }
+  });
+
+
   // - use a pageMod to be able to bind to pages showing our app UI
   log('SETTING UP PAGE MOD');
   pageMod.PageMod({
@@ -331,6 +363,17 @@ exports.main = function () {
     onAttach: function onAttach(uiWorker) {
       // (uiWorker is a jetpack abstraction that lets us send messages to the
       //  content page)
+
+      // about:loggest-server magic.
+      if (loggestStack.length) {
+        var remoteUrl = loggestStack.pop();
+        // we do not want to hook it up as a subscriber, just tell it the URL
+        //  to get the data from.
+        $timers.setTimeout(function() {
+            uiWorker.postMessage({type: 'url', url: remoteUrl});
+          }, 1000); // ugh, hack.
+        return;
+      }
 
       // unique identifier to name the query source and provide the pairing
       //  for the moda API bridge.

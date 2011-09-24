@@ -53,6 +53,8 @@ define(
     exports
   ) {
 
+var LiveSetListenerViewSliceAdapter = $liveset.LiveSetListenerViewSliceAdapter;
+
 // define our tab type in the tabs domain
 var ty = exports.ty =
   new $wmsy.WmsyDomain({id: "tab-common", domain: "tabs"});
@@ -67,6 +69,7 @@ ty.defineWidget({
     obj: { kind: 'peeps' },
   },
   focus: wy.focus.container.vertical('peeps'),
+  emit: ['openTab'],
   structure: {
     peeps: wy.vertList({type: 'peep-blurb'}),
   },
@@ -78,7 +81,18 @@ ty.defineWidget({
       var vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
     },
-  }
+  },
+  events: {
+    peeps: {
+      command: function(peepBinding) {
+        this.emit_openTab({
+          kind: 'conv-blurbs-tab',
+          name: "Convs with " + peepBinding.obj.displayName,
+          peep: peepBinding.obj,
+        });
+      },
+    },
+  },
 });
 
 wy.defineWidget({

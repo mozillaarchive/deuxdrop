@@ -4,7 +4,13 @@ Jetpack add-in.  Adds the following about URL's:
 
 - *about:dd*: Mobile deuxdrop UI.
 - *about:dddev*: Deuxdrop development UI.
-- *about:loggest*: Log viewer that shows what the client daemon gets up to.
+- *about:loggest*: Log viewer that shows what the client daemon gets up to
+   with live updates as they happen.
+- *about:loggest-server*: The same log viewer but tricked out to get its log
+   data from the server the user is signed up with.  The server needs to be
+   run with the "--loggest-web-debug" flag.  Note that in order to refresh
+   this view, you need to go to "about:loggest-server" again and not just hit
+   refresh.
 
 # Maybe Mobile
 

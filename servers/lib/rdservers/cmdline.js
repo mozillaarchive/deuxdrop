@@ -231,16 +231,23 @@ parser.command('define-server')
     });
   });
 
+var OPT_LOGGEST_WEB_DEBUG = {
+  string: "--loggest-web-debug",
+  default: false,
+  help: "Enable loggest web debugging interface; friendly but expensive",
+};
+
 parser.command('run-server')
   .help("Run an already defined server configuration.")
   .opts({
     configDir: OPT_CONFIG_DIR,
+    loggestWebDebug: OPT_LOGGEST_WEB_DEBUG,
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
       applyGlobalOptions(options);
       try {
-        $configurer.cmdRunConfig(options.configDir);
+        $configurer.cmdRunConfig(options.configDir, options.loggestWebDebug);
       }
       catch (ex) {
         console.error(ex);

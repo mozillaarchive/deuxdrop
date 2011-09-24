@@ -36,107 +36,73 @@
  * ***** END LICENSE BLOCK ***** */
 
 /**
- * Development UI main func; binds the whole UI into existence.
+ * Ideally eternal tab that in a non-development UI would be user-friendly but
+ *  for us is designed to be an egregious example of button-triggered tab
+ *  opening right now.
  **/
 
 define(
   [
     'wmsy/wmsy',
-    'modality',
-    './tabs',
-    './tab-home',
-    './tab-signup',
-    './tabs-common',
-    'text!./app.css',
+    './liveset-adapter',
+    'text!./tab-home.css',
     'exports'
   ],
   function(
     $wmsy,
-    $modality,
-    $_tabs,
-    $_tab_home,
-    $_tab_signup,
-    $_tabs_common,
+    $liveset,
     $_css,
     exports
   ) {
 
+// define our tab type in the tabs domain
+var ty = exports.ty =
+  new $wmsy.WmsyDomain({id: "tab-home", domain: "tabs", css: $_css});
 
 var wy = exports.wy =
-  new $wmsy.WmsyDomain({id: "app", domain: "tabs", css: $_css});
+  new $wmsy.WmsyDomain({id: "tab-home", domain: "moda", css: $_css});
 
-
-wy.defineWidget({
-  name: "root",
-  focus: wy.focus.domain.vertical("tl"),
+ty.defineWidget({
+  name: 'home-tab',
   constraint: {
-    type: "root",
+    type: 'tab',
+    obj: { kind: 'home' },
   },
-  provideContext: {
-    moda: "moda",
-  },
+  focus: wy.focus.container.horizontal('btnMakeFriends', 'btnFriendRequests',
+                                       'btnListFriends'),
+  emit: ['openTab'],
   structure: {
-    tl: wy.widget({type: "top-level"}, wy.SELF),
+    helloMe: ["Welcome home, ", ['userAccount', 'poco', 'displayName']],
+
+    buttonBar: {
+      btnMakeFriends: wy.button("Ask people to be your friend!"),
+      btnFriendRequests: wy.button("See who wants to be your friend!"),
+      btnListFriends:
+        wy.button("List existing friends and from there see conversations!"),
+    },
+  },
+  impl: {
+    postInit: function() {
+      this.moda = this.__context.moda;
+    },
+  },
+  events: {
+    btnMakeFriends: {
+      command: function() {
+        this.emit_openTab({ kind: 'make-friends', name: "Make Friends!" });
+      },
+    },
+    btnFriendRequests: {
+      command: function() {
+        this.emit_openTab({ kind: 'requests', name: "Accept Friends!" });
+      },
+    },
+    btnListFriends: {
+      command: function() {
+        this.emit_openTab({ kind: 'peeps', name: "Peeps!" });
+      },
+    },
   },
 });
-
-
-wy.defineWidget({
-  name: "top-level",
-  focus: wy.focus.container.horizontal("tabs"),
-  constraint: {
-    type: "top-level",
-    obj: {state: "connected"},
-  },
-  emit: ["openTab"],
-  structure: {
-    tabs: wy.widget({type: "tabbox", orientation: "vertical"}, "tabState"),
-  },
-});
-
-
-wy.defineWidget({
-  name: "about-tab",
-  constraint: {
-    type: "tab",
-    obj: { kind: "about" },
-  },
-  structure: {
-    blah: "This is a quality program here.  Ask anyone!",
-  },
-});
-
-exports.main = function(doc) {
-  var moda = $modality;
-  var me = moda.whoAmI({
-    onCompleted: function() {
-      var rootObj = {
-        moda: moda,
-        userAccount: me,
-        state: "connected",
-        tabState: {
-          index: 0,
-          vertical: true,
-          tabs: [
-          ],
-        }
-      };
-      var tabs = rootObj.tabState.tabs;
-      // create a 'signup' tab if not signed up already
-      if (!me.havePersonalInfo || !me.haveServerAccount) {
-        tabs.push({ kind: "signup", name: "Signup", userAccount: me });
-      }
-      else {
-        tabs.push({ kind: "home", name: "Home", userAccount: me });
-      }
-      // everybody always wants an 'about' tab!
-      tabs.push({ kind: "about", name: "About" });
-
-      // bind the UI into existence.
-      var binder = wy.wrapElement(doc.getElementById("body"));
-      binder.bind({type: "root", obj: rootObj});
-    }
-  });
-};
 
 }); // end define

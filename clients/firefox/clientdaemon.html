@@ -191,6 +191,10 @@ function DEAD_LOG_CLIENT(name) {
     loggerClients.splice(idx, 1);
 }
 
+function GIMME_TRANSIT_SERVER_URL() {
+  return RAW_CLIENT._transitServer && RAW_CLIENT._transitServer.url;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 window.onerror = function (err) {

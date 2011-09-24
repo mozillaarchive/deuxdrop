@@ -65,6 +65,8 @@ var $signup_server = require('rdservers/signup/server'),
     $mailstore_server = require('rdservers/mailstore/server'),
     $fanout_api = require('rdservers/fanout/api');
 
+var $debuglog_server = require('rdservers/debuglog/server');
+
 /**
  * Server roles in a weakly ordered sequence.
  */
@@ -93,6 +95,10 @@ var SERVER_ROLE_MODULES = {
     apiModule: $mailstore_api,
     serverModule: $mailstore_server,
   },
+  debuglog: {
+    apiModule: null,
+    serverModule: $debuglog_server,
+  },
 };
 
 /**
@@ -101,10 +107,11 @@ var SERVER_ROLE_MODULES = {
  *  apiModules get annotated on.  So "auth"'s "apiModule" gets instantiated and
  *  becomes "authApi", "sender"'s "apiModule" becomes "senderApi" and so on.
  */
-function ServerConfig(keyring, selfIdentBlob, dbConn) {
+function ServerConfig(keyring, selfIdentBlob, dbConn, rootLogger) {
   this.keyring = keyring;
   this.selfIdentBlob = selfIdentBlob;
   this.db = dbConn;
+  this.rootLogger = rootLogger;
   this._serverModules = [];
   this.aggrDbSchema = {
     tables: [],
@@ -176,7 +183,7 @@ const TBL_SERVER_IDENTITY = 'server:identity';
 var populateTestConfig = exports.__populateTestConfig =
     function populateTestConfig(keyring, selfIdentBlob, dbConn, roles,
                                 clobberNamespace, _logger) {
-  var serverConfig = new ServerConfig(keyring, selfIdentBlob, dbConn);
+  var serverConfig = new ServerConfig(keyring, selfIdentBlob, dbConn, _logger);
 
   for (var iRole = 0; iRole < roles.length; iRole++) {
     var roleName = roles[iRole];
@@ -336,7 +343,7 @@ var ALIVE_LIST = [];
 /**
  * Run an existing server configuration.
  */
-exports.cmdRunConfig = function runConfig(configDir) {
+exports.cmdRunConfig = function runConfig(configDir, debugLogging) {
   configDir = normalizeConfigPath(configDir);
   var liveServerInfo = {};
 
@@ -359,11 +366,17 @@ exports.cmdRunConfig = function runConfig(configDir) {
   var server = new $authconn.AuthorizingServer(logger,
                                                keyring.boxingPublicKey);
 
+  var roles = FULLPUB_ROLES.concat();
+
+  // - debug logging hookup
+  if (debugLogging)
+    roles.push('debuglog');
+
   // - server config
   var serverConfig = populateTestConfig(keyring,
                                         serializedConfig.signedSelfIdent,
                                         dbConn,
-                                        FULLPUB_ROLES,
+                                        roles,
                                         {}, // no clobbering (just for tests)
                                         logger);
 

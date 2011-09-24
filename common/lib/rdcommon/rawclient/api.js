@@ -415,7 +415,9 @@ RawClientAPI.prototype = {
    */
   _enqueuePersistentAction: function(msg) {
     this._actionQueue.push({msg: msg, deferred: null});
-    if (!this._conn.pendingAction)
+    if (!this._connectionDesired)
+      this.connect();
+    else if (this._conn && !this._conn.pendingAction)
       this._conn.sendAction(this._actionQueue[0].msg);
   },
 
@@ -428,7 +430,9 @@ RawClientAPI.prototype = {
   _enqueueEphemeralActionAndResolveResult: function(msg) {
     var deferred = $Q.defer();
     this._actionQueue.push({msg: msg, deferred: deferred});
-    if (!this._conn.pendingAction)
+    if (!this._connectionDesired)
+      this.connect();
+    else if (this._conn && !this._conn.pendingAction)
       this._conn.sendAction(this._actionQueue[0].msg);
     return deferred.promise;
   },

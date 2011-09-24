@@ -84,6 +84,12 @@ PeepBlurb.prototype = {
     return this._pinned;
   },
 
+  get displayName() {
+    if (this.ourPoco && this.ourPoco.displayName)
+      return this.ourPoco.displayName;
+    return "Alleged " + this.selfPoco.displayName;
+  },
+
   get numInvolvedConversations() {
     return this._numConvs;
   },

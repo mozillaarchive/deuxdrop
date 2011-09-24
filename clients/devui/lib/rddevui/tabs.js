@@ -163,7 +163,7 @@ wy.defineWidget({
   focus: wy.focus.item,
   constraint: {
     type: "tab-header",
-    obj: {kind: wy.WILD},
+    obj: { kind: wy.WILD },
   },
   emit: ["switchTab", "closeTab"],
   events: {

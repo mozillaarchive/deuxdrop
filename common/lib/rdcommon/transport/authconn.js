@@ -703,7 +703,6 @@ function AuthorizingServer(_logger, extraNaming) {
   this._extraNaming = extraNaming || "server";
   this.log = LOGFAB.server(this, _logger, [this._extraNaming]);
 
-  // That which is not a websocket shall be severely disappointed currently.
   var httpServer = this._httpServer = $http.createServer(
       function handleURL(request, response) {
 

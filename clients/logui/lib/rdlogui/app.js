@@ -50,6 +50,7 @@
 
 define(
   [
+    'xmlhttprequest',
     'wmsy/wmsy',
     'wmsy/viewslice-array',
     'wmsy/wlib/objdict',
@@ -60,6 +61,7 @@ define(
     'exports'
   ],
   function(
+    $xmlhttprequest,
     $wmsy,
     $vs_array,
     $_wlib_objdict, // dependency for side effect
@@ -204,6 +206,9 @@ LogUIApp.prototype = {
         this.processLogSlice(msg.backlog[i]);
       }
     }
+    else if (msg.type === 'url') {
+      remoteFetch(this, msg.url);
+    }
     else {
       throw new Error("Unknown message type from logger: " + msg.type);
     }
@@ -217,8 +222,32 @@ function sendMessageToClientDaemon(data) {
   window.dispatchEvent(event);
 }
 
-exports.main = function(doc) {
+function remoteFetch(app, url) {
+  var request = new $xmlhttprequest.XMLHttpRequest();
+
+  request.open('GET', url, true);
+
+  var self = this;
+  request.onreadystatechange = function(evt) {
+    if (request.readyState == 4) {
+      if (request.status == 200) {
+        app.receiveMessage(JSON.parse(request.responseText));
+      } else {
+        console.error("Problem loading loggest data from", url);
+      }
+    }
+  };
+  request.send(null);
+}
+
+exports.main = function(doc, cannedData) {
   var app = new LogUIApp();
+
+  // if we have canned data, don't hook up to the live feed.
+  if (cannedData) {
+    app.receiveMessage(cannedData);
+    return;
+  }
 
   // Listen for messages from the client daemon
   window.addEventListener('moda-daemon-to-ui', function (evt) {
