@@ -368,7 +368,7 @@ RawClientAPI.prototype = {
   _mailstoreConnected: function() {
     this._log.connected();
     if (this._actionQueue.length && !this._conn.pendingAction)
-      this._conn.sendAction(this._actionQueue[0]);
+      this._conn.sendAction(this._actionQueue[0].msg);
   },
 
   /**
