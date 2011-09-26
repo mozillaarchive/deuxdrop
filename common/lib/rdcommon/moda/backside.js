@@ -334,7 +334,7 @@ ModaBackside.prototype = {
           this._transformServerIdent(serverIdent);
       }
       viewItems.push(clientData.localName);
-      clientDataItems.push(clentData);
+      clientDataItems.push(clientData);
     }
     this._notif.sendQueryResults(queryHandle);
   },
