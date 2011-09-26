@@ -54,7 +54,7 @@ function LiveSetListenerViewSliceAdapter(liveSet, extraCallbacks) {
   this._listener = null;
   this.data = null;
   this.liveSet = liveSet;
-  this.extraCallbacks = extraCallbacks;
+  this.extraCallbacks = extraCallbacks || {};
   liveSet._listener = this;
 }
 exports.LiveSetListenerViewSliceAdapter = LiveSetListenerViewSliceAdapter;
