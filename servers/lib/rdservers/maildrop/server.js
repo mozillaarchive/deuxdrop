@@ -818,7 +818,7 @@ ReceiveEstablishConnection.prototype = {
 exports.makeServerDef = function(serverConfig) {
   return {
     endpoints: {
-      'drop/deliver': {
+      'deliver.deuxdrop': {
         implClass: ReceiveDeliveryConnection,
         serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {
@@ -826,7 +826,7 @@ exports.makeServerDef = function(serverConfig) {
           return serverConfig.authApi.serverCheckServerAuth(clientKey);
         }
       },
-      'drop/establish': {
+      'establish.deuxdrop': {
         implClass: ReceiveEstablishConnection,
         serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {

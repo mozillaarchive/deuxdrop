@@ -6,7 +6,7 @@
 	url = git://github.com/asutherland/node-djb-nacl.git
 [submodule "servers/node_modules/websocket"]
 	path = servers/node_modules/websocket
-	url = git://github.com/asutherland/WebSocket-Node.git
+	url = git://github.com/Worlize/WebSocket-Node.git
 [submodule "clients/deps/wmsy"]
 	path = clients/deps/wmsy
 	url = git://github.com/asutherland/wmsy.git

@@ -351,7 +351,7 @@ PhonebookServerConnection.prototype = {
 exports.makeServerDef = function(serverConfig) {
   return {
     endpoints: {
-      'signup/signup': {
+      'signup.deuxdrop': {
         implClass: SignupConnection,
         serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {
@@ -359,7 +359,7 @@ exports.makeServerDef = function(serverConfig) {
           return true;
         },
       },
-      'signup/phonebook': {
+      'phonebook.deuxdrop': {
         implClass: PhonebookServerConnection,
         serverConfig: serverConfig,
         authVerifier: function(endpoint, clientKey) {

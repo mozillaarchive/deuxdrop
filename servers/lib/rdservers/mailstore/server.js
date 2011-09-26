@@ -561,7 +561,7 @@ exports.makeServerDef = function(serverConfig) {
 
   return {
     endpoints: {
-      'mailstore/mailstore': {
+      'mailstore.deuxdrop': {
         implClass: ClientServicingConnection,
         serverConfig: serverConfig,
         /**

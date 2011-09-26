@@ -113,7 +113,7 @@ function ClientSignupConn(selfIdentBlob, clientAuthBlobs, storeKeyringPersisted,
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
-                serverUrl, 'signup/signup', _logger);
+                serverUrl, 'signup.deuxdrop', _logger);
   this._deferred = $Q.defer();
   this.promise = this._deferred.promise;
 }
@@ -176,7 +176,7 @@ function MailstoreConn(boxingKeyring, serverPublicKey, serverUrl,
                        owner, clientReplicaInfo, _logger) {
   this.conn = new $authconn.AuthClientConn(
                 this, boxingKeyring, serverPublicKey,
-                serverUrl, 'mailstore/mailstore', _logger);
+                serverUrl, 'mailstore.deuxdrop', _logger);
   this._owner = owner;
   this._replicaInfo = clientReplicaInfo;
 

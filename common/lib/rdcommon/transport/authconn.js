@@ -235,7 +235,12 @@ else {
     return $ws.helpers.btoa(s);
   };
   unTransitHackBinary = function(s) {
-    return $ws.helpers.atob(s);
+    try {
+      return $ws.helpers.atob(s);
+    }
+    catch(ex) {
+      throw new Error("Bad string to atob(): " + s);
+    }
   };
 }
 
@@ -450,6 +455,8 @@ var AuthClientCommon = {
     this.log.send(obj.type, obj);
     // XXX prefixing because of gecko websocket limitations (no binary frames)
     this._conn.sendUTF('T' + JSON.stringify(obj));
+var d = 'T' + JSON.stringify(obj);
+console.log("Sending: " + d.length + "\n");
   },
 
   writeMessage: function(obj) {
@@ -467,7 +474,8 @@ var AuthClientCommon = {
     this._conn.sendBytes(buf);
     */
     this._conn.sendUTF('B' + transitHackBinary(boxedJsonMsg));
-
+var d = 'B' + transitHackBinary(boxedJsonMsg);
+console.log("Sending: " +  d.length + "\n");
     this._myNextNonce = incNonce(this._myNextNonce);
   },
 };
@@ -494,7 +502,7 @@ function AuthClientConn(appConn, clientKeyring, serverPublicKey,
 
   // XXX forcing a super-short timeout because we don't care about close frames
   //  and we are experiencing odd issues when simultaneously closing...
-  var wsc = this._wsClient = new $ws.WebSocketClient({closeTimeout: 0});
+  var wsc = this._wsClient = new $ws.client({closeTimeout: 0});
   wsc.on('error', this._onConnectError.bind(this));
   wsc.on('connectFailed', this._onConnectFailed.bind(this));
   wsc.on('connect', this._onConnected.bind(this));
@@ -739,7 +747,7 @@ function AuthorizingServer(_logger, extraNaming) {
       serve404s(request, response);
   }.bind(this));
 
-  var server = this._wsServer = new $ws.WebSocketServer({
+  var server = this._wsServer = new $ws.server({
     httpServer: httpServer,
     // XXX see the client for our logic on using a zero close timeout.
     closeTimeout: 0,

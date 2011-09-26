@@ -124,7 +124,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
 
   T.setup(eServer, 'performs setup and listens', function() {
     // (it is implied that eServer is created this step)
-    eServer.expect_endpointRegistered('test/test');
+    eServer.expect_endpointRegistered('test.deuxdrop');
     eServer.expect_listening();
 
     // -- create keyrings
@@ -155,7 +155,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
 
     var TestServerDef = {
       endpoints: {
-        'test/test': {
+        'test.deuxdrop': {
           implClass: TestServerConnection,
           serverConfig: serverConfig,
           authVerifier: function(endpoint, clientKey) {
@@ -174,7 +174,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
            function() {
     // (it is implied that eServer and eServerConn are created this step)
     eClientConn.expect_connecting();
-    eServer.expect_request('test/test');
+    eServer.expect_request('test.deuxdrop');
     eServerConn.expect_connected();
 
     eClientConn.expect_connected();
@@ -195,7 +195,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
     eServerConn.expect_handleMsg('vouch');
     eServerConn.expect_send('authSuccess');
 
-    eServer.expect_endpointConn('test/test');
+    eServer.expect_endpointConn('test.deuxdrop');
 
     eServerConn.expect_connState('app');
 
@@ -204,7 +204,7 @@ TD.commonCase('working loopback authconn connection', function(T) {
     eClientConn.expect_connState('app');
 
     var url = "ws://" + server.address.address + ":" + server.address.port + "/";
-    var endpoint = "test/test";
+    var endpoint = "test.deuxdrop";
     clientConn = new TestClientConnection(clientKeyring,
                                           serverKeyring.boxingPublicKey,
                                           url, endpoint);

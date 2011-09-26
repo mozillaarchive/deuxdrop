@@ -298,7 +298,7 @@ var TestClientActorMixins = {
    *  `setup_useServer` function instead since it runs at step definition time.
    */
   _signupWith: function(testServerActor) {
-    expectAuthconnFromTo(this, testServerActor, 'signup/signup');
+    expectAuthconnFromTo(this, testServerActor, 'signup.deuxdrop');
 
     // expect
     this.RT.reportActiveActorThisStep(this._eRawClient);
@@ -359,8 +359,8 @@ var TestClientActorMixins = {
     this._eRawClient.expect_connected();
     this._eRawClient.expect_replicaCaughtUp();
 
-    this._usingServer._eServer.expect_request('mailstore/mailstore');
-    this._usingServer._eServer.expect_endpointConn('mailstore/mailstore');
+    this._usingServer._eServer.expect_request('mailstore.deuxdrop');
+    this._usingServer._eServer.expect_endpointConn('mailstore.deuxdrop');
 
     this._rawClient.connect();
   },
@@ -553,7 +553,7 @@ var TestClientActorMixins = {
 
   assertInsecureFetchedSelfIdent: function(server) {
     var domain = server._server.address.address + ':' + server._server.address.port,
-        selfIdent = server._server._endpoints['signup/signup']
+        selfIdent = server._server._endpoints['signup.deuxdrop']
                     .serverConfig.selfIdentBlob;
 
     this.RT.reportActiveActorThisStep(this);

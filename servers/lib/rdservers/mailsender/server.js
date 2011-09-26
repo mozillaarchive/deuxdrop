@@ -66,7 +66,7 @@ function SendDeliveryConnection(type, transitMsg,
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
-                serverUrl, 'drop/deliver', _logger);
+                serverUrl, 'deliver.deuxdrop', _logger);
   this._deferred = $Q.defer();
   this.promise = this._deferred.promise;
 }
@@ -109,7 +109,7 @@ function SendEstablishConnection(transitMsg,
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
-                serverUrl, 'drop/establish', _logger);
+                serverUrl, 'establish.deuxdrop', _logger);
   this._deferred = $Q.defer();
   this.promise = this._deferred.promise;
 }

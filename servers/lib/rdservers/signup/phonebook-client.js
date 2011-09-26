@@ -61,7 +61,7 @@ function PhonebookClientConnection(ourServerKeyring,
                                    _logger) {
   this.conn = new $authconn.AuthClientConn(
                 this, ourServerKeyring, otherServerPublicKey,
-                otherServerUrl, 'signup/phonebook', _logger);
+                otherServerUrl, 'phonebook.deuxdrop', _logger);
   this._deferred = $Q.defer();
   this.promise = this._deferred.promise;
 }

@@ -64,7 +64,7 @@ function WebSocketClient(opts) {
   this.ws = null;
   this.handlers = {};
 }
-exports.WebSocketClient = WebSocketClient;
+exports.client = WebSocketClient;
 WebSocketClient.prototype = {
   connect: function(url, protocols) {
     var ws = new MozWebSocket(url, protocols);
@@ -92,6 +92,7 @@ WebSocketConnShim.prototype = {
   on: function(what, handler) {
     if (what === 'message') {
       this.ws.onmessage = function(e) {
+console.log("WSDATA: " + e.data.length + "\n"); // + ": " + e.data + "\n");
         var fake = {
           type: 'utf8',
           utf8Data: e.data,
