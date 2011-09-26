@@ -189,14 +189,19 @@ TD.commonCase('working loopback authconn connection', function(T) {
     eClientConn.expect_receive('key');
     eClientConn.expect_handleMsg('key');
     eClientConn.expect_send('vouch');
-    eClientConn.expect_connState('app');
+    eClientConn.expect_connState('awaitingAuthConfirmation');
 
     eServerConn.expect_receive('vouch');
     eServerConn.expect_handleMsg('vouch');
+    eServerConn.expect_send('authSuccess');
 
     eServer.expect_endpointConn('test/test');
 
     eServerConn.expect_connState('app');
+
+    eClientConn.expect_receive('authSuccess');
+    eClientConn.expect_handleMsg('authSuccess');
+    eClientConn.expect_connState('app');
 
     var url = "ws://" + server.address.address + ":" + server.address.port + "/";
     var endpoint = "test/test";
