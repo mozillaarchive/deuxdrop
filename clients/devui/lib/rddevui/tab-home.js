@@ -89,17 +89,17 @@ ty.defineWidget({
   events: {
     btnMakeFriends: {
       command: function() {
-        this.emit_openTab({ kind: 'make-friends', name: "Make Friends!" });
+        this.emit_openTab({ kind: 'make-friends', name: "Make Friends!" }, true);
       },
     },
     btnFriendRequests: {
       command: function() {
-        this.emit_openTab({ kind: 'requests', name: "Accept Friends!" });
+        this.emit_openTab({ kind: 'requests', name: "Accept Friends!" }, true);
       },
     },
     btnListFriends: {
       command: function() {
-        this.emit_openTab({ kind: 'peeps', name: "Peeps!" });
+        this.emit_openTab({ kind: 'peeps', name: "Peeps!" }, true);
       },
     },
   },
