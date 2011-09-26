@@ -419,15 +419,17 @@ RawClientAPI.prototype = {
    * - We nuke the server binding from our self-ident/etc. so that next startup
    *    the client should properly detect that we need to perform server signup.
    * - We generate an error that is exposed to error queries.
+   * - XXX we should really either nuke most/all of our local datastore or
+   *    attempt to reconstitute the server's world-view from our own world-view.
+   *    The former is obviously potentially data-lossy which is why we aren't
+   *    doing that right now.
    */
   _mailstoreDoesNotKnowWhoWeAre: function() {
-/*
     // - clear out our reference to the server
     this._transitServerBlob = null;
     this._transitServer = null;
     // (this will notify the account listener who should persist the change)
     this._regenerateSelfIdent();
-*/
     this.publishError('serverDoesNotKnowWhoWeAre', '',
                       { userActionRequired: true, permanent: true });
   },
