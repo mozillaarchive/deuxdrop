@@ -445,12 +445,16 @@ var AuthClientCommon = {
   },
 
   _writeRaw: function(obj) {
+    if (!this._conn)
+      return;
     this.log.send(obj.type, obj);
     // XXX prefixing because of gecko websocket limitations (no binary frames)
     this._conn.sendUTF('T' + JSON.stringify(obj));
   },
 
   writeMessage: function(obj) {
+    if (!this._conn)
+      return;
     this.log.send(obj.type, obj);
     var jsonMsg = JSON.stringify(obj);
     var nonce = this._myNextNonce;
@@ -739,6 +743,8 @@ function AuthorizingServer(_logger, extraNaming) {
     httpServer: httpServer,
     // XXX see the client for our logic on using a zero close timeout.
     closeTimeout: 0,
+    // default was 64KiB, we quadruple to 256KiB (firefox...)
+    maxReceivedFrameSize: 0x40000,
   });
   server.on('request', this._onRequest.bind(this));
 
