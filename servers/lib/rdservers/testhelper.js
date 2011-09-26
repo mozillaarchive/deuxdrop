@@ -362,7 +362,7 @@ var TestClientActorMixins = {
     this._usingServer._eServer.expect_request('mailstore/mailstore');
     this._usingServer._eServer.expect_endpointConn('mailstore/mailstore');
 
-    this._rawClient._connect();
+    this._rawClient.connect();
   },
 
   setup_connect: function() {
