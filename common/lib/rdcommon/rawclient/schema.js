@@ -165,6 +165,13 @@ exports.dbSchemaDef = {
       ],
     },
     {
+      name: exports.TBL_CONNREQ_DATA,
+      columnFamilies: ['d'],
+      indices: [
+        exports.IDX_CONNREQ_RECEIVED,
+      ],
+    },
+    {
       name: exports.TBL_CONV_DATA,
       columnFamilies: ['d'],
       indices: [
