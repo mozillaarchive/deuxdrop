@@ -94,7 +94,7 @@ wy.defineWidget({
       this.headers_slice.postSplice(index, 0);
       this.panels_slice.postSplice(index, 0);
 
-      if (this._selectedIndex === index)
+      if (this._selectedIndex >= index)
         this._selectedIndex++;
 
       if (showImmediately)
@@ -102,6 +102,14 @@ wy.defineWidget({
     },
     closeTab: function(obj) {
       this._closeTab(this.obj.tabs.indexOf(obj));
+    },
+    tabWantsAttention: function(obj) {
+      var index = this.obj.tabs.indexOf(obj);
+      // nothing to do if the tab is already focused
+      if (index === this._selectedIndex)
+        return;
+      var headerNode = this.headers_element.children[index];
+      headerNode.setAttribute("wantsAttention", "true");
     },
   },
   impl: {
@@ -129,6 +137,7 @@ wy.defineWidget({
       }
       var headerNode = this.headers_element.children[index];
       headerNode.setAttribute("selected", "true");
+      headerNode.removeAttribute("wantsAttention");
       // for automatically selected tabs this is needed, idempotent for others
       headerNode.binding.focus();
 

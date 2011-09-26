@@ -50,10 +50,11 @@ define(
 /**
  * Make a ViewSlice that hooks up to a LiveSet.
  */
-function LiveSetListenerViewSliceAdapter(liveSet) {
+function LiveSetListenerViewSliceAdapter(liveSet, extraCallbacks) {
   this._listener = null;
   this.data = null;
   this.liveSet = liveSet;
+  this.extraCallbacks = extraCallbacks;
   liveSet._listener = this;
 }
 exports.LiveSetListenerViewSliceAdapter = LiveSetListenerViewSliceAdapter;
@@ -66,6 +67,11 @@ LiveSetListenerViewSliceAdapter.prototype = {
 
   onSplice: function(index, howMany, addedItems, liveSet) {
     this._listener.didSplice(index, howMany, addedItems, true, false, this);
+
+    if (addedItems.length) {
+      if (this.extraCallbacks.hasOwnProperty("newItemAdded"))
+        this.extraCallbacks.newItemAdded();
+    }
   },
 
   onCompleted: function() {

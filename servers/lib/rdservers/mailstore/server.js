@@ -568,8 +568,15 @@ exports.makeServerDef = function(serverConfig) {
          * Verify that the client in question is allowed to talk to us.
          */
         authVerifier: function(endpoint, clientKey) {
-          return serverConfig.authApi.serverFetchUserEffigyUsingClient(
-            clientKey, "store");
+          return when(
+            serverConfig.authApi.serverFetchUserEffigyUsingClient(
+              clientKey, "store"),
+            null, // pass the success value through
+            function(err) {
+              // convert the rejection into a false result so we can indicate
+              //  an authentication failure.
+              return false;
+            });
         },
       },
     },

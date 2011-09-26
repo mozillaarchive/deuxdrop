@@ -127,6 +127,10 @@
  *     All server messages from this point on look the same.
  *     [Box[Message](S'->C')] using a strictly-incrementing little-endian
  *     binary number starting from 0 and prefixed by a 'S' character.
+ *
+ *     The server sends an "authFailure" or "authSuccess" message depenending
+ *     on whether authentication succeeded.  This is a new addition that is
+ *     intended to help disamgiuate why a server is dropping a connection.
  *   }
  * ]
  *
@@ -249,6 +253,7 @@ var AuthClientCommon = {
     this._pendingPromise = null;
     this._ephemKeyPair = null;
     this._otherPublicKey = null;
+    this._highLevelCloseReason = null;
 
     this._myNextNonce = myNextNonce;
     this._otherNextNonce = otherNextNonce;
@@ -288,8 +293,8 @@ var AuthClientCommon = {
 
     if (this.appConn && ("__closed" in this.appConn)) {
       var rval = this.log.appCloseHandler(this.appConn,
-                                          this.appConn.__closed);
-      // if an exception is thrown, kill the connection
+                                          this.appConn.__closed,
+                                          this._highLevelCloseReason);
       if (rval instanceof Error) {
         this.log.handlerFailure(rval);
       }
@@ -309,8 +314,10 @@ var AuthClientCommon = {
     var msg;
     // XXX Gecko's websockets can't do binary frames right now
     if (wsmsg.utf8Data[0] === 'T') { // (wsmsg.type === 'utf8') {
-      // app frames and the vouch frame are binary.
-      if (this.connState === 'app' && this.connState !== 'authClientVouch') {
+      // app frames and the vouch frame onward are binary.
+      if (this.connState === 'app' ||
+          this.connState === 'authClientVouch' ||
+          this.connState === 'awaitingAuthConfirmation') {
         this.log.badProto();
         this.close();
         return;
@@ -430,6 +437,8 @@ var AuthClientCommon = {
 
   close: function(isBad) {
     this.log.closing(Boolean(isBad));
+    if (isBad && (typeof(isBad) === "object"))
+      this._highLevelCloseReason = isBad;
     if (this._conn)
       this._conn.close();
     return MAGIC_CLOSE_MARKER;
@@ -553,6 +562,11 @@ AuthClientConn.prototype = {
       nonce: nonce,
       boxedVoucher: boxedVoucher
     });
+
+    return 'awaitingAuthConfirmation';
+  },
+
+  _msg_awaitingAuthConfirmation_authSuccess: function(msg) {
     // (transition to application space; no more protocol stuff to do)
     // -- invoke any on-connected handler...
     if ("__connected" in this.appConn) {
@@ -561,11 +575,14 @@ AuthClientConn.prototype = {
       // if an exception is thrown, kill the connection
       if (rval instanceof Error) {
         this.log.handlerFailure(rval);
-        this.close(true);
-        return MAGIC_CLOSE_MARKER;
+        return this.close(true);
       }
     }
     return 'app';
+  },
+
+  _msg_awaitingAuthConfirmation_authFailure: function(msg) {
+    return this.close(msg);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -668,8 +685,12 @@ AuthServerConn.prototype = {
                 function(authResult) {
       if (!authResult) {
         self.log.authFailed();
+        // XXX This is a new thing so the other side can know we claim they
+        //  don't exist.  Currently not unit tested.
+        self.writeMessage({ type: "authFailure", permanent: true });
         return self.close();
       }
+      self.writeMessage({ type: "authSuccess" });
       self.log.__updateIdent([self.serverKeyring.boxingPublicKey,
                               'on endpoint', self.endpoint,
                               'with client', self.clientPublicKey,

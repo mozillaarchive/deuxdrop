@@ -129,6 +129,7 @@ exports.main = function(doc) {
       else {
         tabs.push({ kind: "home", name: "Home", userAccount: me });
       }
+      tabs.push({ kind: 'errors', name: "Errors" });
       // everybody always wants an 'about' tab!
       tabs.push({ kind: "about", name: "About" });
 

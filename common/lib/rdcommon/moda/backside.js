@@ -70,7 +70,8 @@ const when = $Q.when;
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs', NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers',
-      NS_CONNREQS = 'connreqs';
+      NS_CONNREQS = 'connreqs',
+      NS_ERRORS = 'errors';
 
 /**
  * The other side of a ModaBridge instance/connection.  This is intended to be
@@ -333,6 +334,7 @@ ModaBackside.prototype = {
           this._transformServerIdent(serverIdent);
       }
       viewItems.push(clientData.localName);
+      clientDataItems.push(clentData);
     }
     this._notif.sendQueryResults(queryHandle);
   },
@@ -397,6 +399,14 @@ ModaBackside.prototype = {
                         this._querySource, bridgeQueryName,
                         NS_CONNREQS, {});
     when(this._store.queryAndWatchConnRequests(queryHandle), null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
+  },
+
+  _cmd_queryErrors: function(bridgeQueryName, queryDef) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_ERRORS, {});
+    when(this._rawClient.queryAndWatchErrors(queryHandle), null,
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
 

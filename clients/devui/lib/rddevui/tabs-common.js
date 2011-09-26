@@ -246,5 +246,48 @@ ty.defineWidget({
   }
 });
 
+ty.defineWidget({
+  name: 'errors-tab',
+  constraint: {
+    type: 'tab',
+    obj: { kind: 'errors' },
+  },
+  focus: wy.focus.container.vertical('errors'),
+  emit: ['tabWantsAttention'],
+  structure: {
+    errors: wy.vertList({type: 'error-rep'}),
+  },
+  impl: {
+    postInit: function() {
+      var moda = this.__context.moda;
+
+      var errorSet = moda.queryErrors(), self = this;
+      var vs = new LiveSetListenerViewSliceAdapter(errorSet, {
+        newItemAdded: function() {
+          self.emit_tabWantsAttention(self.obj);
+        },
+      });
+      this.errors_set(vs);
+    },
+  }
+});
+
+var l10nErrors = wy.defineLocalizedMap('errors', {
+    serverDoesNotKnowWhoWeAre:
+      "The server says we have no account.  Restart and sign-up again.",
+  }, "Unknown error id: #0");
+
+wy.defineWidget({
+  name: 'error-rep',
+  constraint: {
+    type: 'error-rep',
+  },
+  focus: wy.focus.item,
+  structure: {
+    date: wy.bind('firstReported'),
+    message: wy.bind('errorId', l10nErrors.lookup.bind(l10nErrors)),
+  },
+});
+
 
 }); // end define

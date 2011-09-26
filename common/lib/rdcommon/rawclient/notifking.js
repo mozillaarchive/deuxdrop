@@ -234,6 +234,7 @@
  *   NS_CONVMSGS
  *   NS_SERVERS
  *   NS_CONNREQS
+ *   NS_ERRORS
  * ]]
  * @typedef[QueryHandlesByNS @dictof[
  *   @key[namespace QueryNamespace]
@@ -261,12 +262,16 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVMSGS = exports.NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = exports.NS_SERVERS = 'servers',
       NS_CONNREQS = exports.NS_CONNREQS = 'connreqs',
+      NS_ERRORS = exports.NS_ERRORS = 'errors',
       // dependent namespaces that need to be checked for updates
       DEP_NAMESPACES = [NS_PEEPS, NS_SERVERS],
       // namespaces that can have dependencies on the above namespaces.
       // nb: NS_CONNREQS populates its peeps itself and they never get updates,
       //  so it is not included in this list.
-      DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS];
+      DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS],
+      // namespaces that can be dispatched immediately without waiting for an
+      //  update phase
+      IMMED_NAMESPACES = [NS_ERRORS];
 
 /**
  * There is no pending message that must be sent regarding this query.
@@ -289,6 +294,7 @@ function makeEmptyListsByNS() {
     convmsgs: [],
     servers: [],
     connreqs: [],
+    errors: [],
   };
 };
 
@@ -299,6 +305,7 @@ function makeEmptyMapsByNS() {
     convmsgs: {},
     servers: {},
     connreqs: {},
+    errors: {},
   };
 };
 
@@ -1026,8 +1033,14 @@ NotificationKing.prototype = {
                               clientData.count, insertIdx, queryHandle.pending);
 
         if (queryHandle.pending === PENDING_NONE) {
-          queryHandle.pending = PENDING_NOTIF;
-          querySource.pending.push(queryHandle);
+          // some namespaces are immediately dispatched, others are not
+          if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
+            queryHandle.pending = PENDING_NOTIF;
+            querySource.pending.push(queryHandle);
+          }
+          else {
+            this.sendQueryResults(queryHandle);
+          }
         }
       }
     }
@@ -1200,9 +1213,13 @@ NotificationKing.prototype = {
         if (anyChanges) {
           this._log.nsItemModified(queryHandle.uniqueId, fullName, anyChanges);
 
-          if (queryHandle.pending === PENDING_NONE) {
+          // some namespaces are immediately dispatched, others are not
+          if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
             queryHandle.pending = PENDING_NOTIF;
             querySource.pending.push(queryHandle);
+          }
+          else {
+            this.sendQueryResults(queryHandle);
           }
         }
       }
@@ -1246,6 +1263,7 @@ NotificationKing.prototype = {
             this._log.nsItemModified(queryHandle.uniqueId, fullName, 'dep');
 
             if (queryHandle.pending === PENDING_NONE) {
+              // (dependent item namespaces are currently never immediate)
               queryHandle.pending = PENDING_NOTIF;
               querySource.pending.push(queryHandle);
             }

@@ -99,6 +99,8 @@ define(
   ) {
 const when = $Q.when;
 
+const NS_ERRORS = 'errors';
+
 /**
  * Connect to the server, give it the signup bundle, expose our result via a
  *  promise.
@@ -197,9 +199,12 @@ MailstoreConn.prototype = {
     this._owner._mailstoreConnected(this);
   },
 
-  __closed: function() {
+  __closed: function(reasonProvided) {
+    if (reasonProvided && (reasonProvided.type === 'authFailure'))
+      this._owner._mailstoreDoesNotKnowWhoWeAre();
     // tell our owner we are dead so it can deal
-    this._owner._mailstoreDisconnected(this);
+    else
+      this._owner._mailstoreDisconnected(this);
   },
 
   sendAction: function(actionMsg) {
@@ -302,6 +307,7 @@ function RawClientAPI(persistedBlob, dbConn, isFirstRun, _logger) {
   // -- create store
   this.store = new $localdb.LocalStore(dbConn, this._keyring, this._pubring,
                                        isFirstRun, this._log);
+  this._notif = this.store._notif;
 
 
   /**
@@ -325,6 +331,19 @@ function RawClientAPI(persistedBlob, dbConn, isFirstRun, _logger) {
   this._actionQueue = [];
 
   this._accountListener = null;
+
+  /**
+   * @listof[@dict[
+   *   @key[errorId]
+   *   @key[errorParam]
+   *   @key[firstReported DateMS]
+   *   @key[lastReported DateMS]
+   *   @key[reportedCount Number]
+   *   @key[userActionRequired Boolean]
+   *   @key[permanent Boolean]
+   * ]]
+   */
+  this._publishedErrors = [];
 }
 RawClientAPI.prototype = {
   toString: function() {
@@ -387,6 +406,30 @@ RawClientAPI.prototype = {
           self._connect();
       }, this._RECONNECT_DELAY_MS);
     }
+  },
+
+  /**
+   * A notification from our `MailstoreConn` friend that the server closed its
+   *  connection claiming it had never heard of us.  This is likely/hopefully
+   *  due to a development server having its database blown away.  (A server
+   *  that otherwise loses its databases should probably generate new keys,
+   *  etc.)
+   *
+   * Our responses to this problem:
+   * - We nuke the server binding from our self-ident/etc. so that next startup
+   *    the client should properly detect that we need to perform server signup.
+   * - We generate an error that is exposed to error queries.
+   */
+  _mailstoreDoesNotKnowWhoWeAre: function() {
+/*
+    // - clear out our reference to the server
+    this._transitServerBlob = null;
+    this._transitServer = null;
+    // (this will notify the account listener who should persist the change)
+    this._regenerateSelfIdent();
+*/
+    this.publishError('serverDoesNotKnowWhoWeAre', '',
+                      { userActionRequired: true, permanent: true });
   },
 
   _actionCompleted: function(replyMsg) {
@@ -707,13 +750,6 @@ RawClientAPI.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Request Querying
-
-  // email/time
-  queryRequests: function() {
-  },
-
-  //////////////////////////////////////////////////////////////////////////////
   // Peep Relationships
 
   /**
@@ -1002,6 +1038,128 @@ RawClientAPI.prototype = {
   deleteConversation: function(conversation) {
   },
   */
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Error Tracking
+
+  _findPublishedError: function(errorId, errorParam) {
+    var errs = this._publishedErrors;
+    for (var i = 0; i < errs.length; i++) {
+      var curErr = errs[i];
+
+      if (curErr.errorId === errorId && curErr.errorParam === errorParam)
+        return curErr;
+    }
+    return null;
+  },
+
+  /**
+   * Publish an error to the UI(s).  Rather than provide a log style stream of
+   *  errors to the user, we instead try and track the set of current failures
+   *  and present them with simple statistics and an indication of whether the
+   *  errors require user action and/or the likely permanence of the problem.
+   *  In terms of statistics, this means being able to say "we have been
+   *  unable to contact the server for 2 hours and 17 attempts."
+   *
+   * @args[
+   *   @param[errorId String]{
+   *     The error identifier which names the type of error and provides the
+   *     string localization lookup for the error.
+   *   }
+   *   @param[errorParam String]{
+   *     The parameter for this error; combined with the `errorId` to form
+   *     a unique error identifier, only one of which may exist at a time.
+   *   }
+   *   @param[details @dict[
+   *     @key[userActionRequired Boolean]
+   *     @key[permanent Boolean]
+   *   ]]
+   * ]
+   */
+  publishError: function(errorId, errorParam, details) {
+    var err = this._findPublishedError(errorId, errorParam),
+        uniqueId = errorId + ":" + errorParam,
+        now = Date.now(),
+        indexValues = null;
+    if (err) {
+      err.lastReported = now;
+      err.reportedCount++;
+
+      indexValues = [
+        ['firstReported', '', uniqueId, err.firstReported],
+      ];
+      // we pass nulls for cells and the client data populater because there
+      //  is no filtering support for error queries so an item can't suddenly
+      //  match a query it didn't match before.
+      this._notif.namespaceItemModified(
+        NS_ERRORS, uniqueId, null, null, null, null,
+        function errorDelta() {
+          return {
+            lastReported: now,
+            reportedCount: err.reportedCount,
+          };
+        });
+    }
+    else {
+      err = {
+        uniqueId: uniqueId,
+        errorId: errorId,
+        errorParam: errorParam,
+        firstReported: now,
+        lastReported: now,
+        reportedCount: 1,
+        userActionRequired: details.userActionRequired || false,
+        permanent: details.permanent || false,
+      };
+      indexValues = [
+        ['firstReported', '', uniqueId, now],
+      ];
+
+      this._notif.namespaceItemAdded(NS_ERRORS, uniqueId,
+                                     null, null, indexValues,
+                                     err, err);
+    }
+  },
+
+  queryAndWatchErrors: function(queryHandle) {
+    queryHandle.index = 'firstReported';
+    queryHandle.indexParam = '';
+    queryHandle.testFunc = function() { return true; };
+    queryHandle.cmpFunc = function(aClientData, bClientData) {
+      return aClientData.data.firstReported - bClientData.data.firstReported;
+    };
+
+    var viewItems = [], clientDataItems = null;
+    queryHandle.items = clientDataItems = [];
+    queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+
+    var errs = this._publishedErrors,
+        querySource = queryHandle.owner;
+    for (var i = 0; i < errs.length; i++) {
+      var curErr = errs[i];
+      var clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_ERRORS,
+                                                       curErr.uniqueId);
+      if (!clientData) {
+        var localName = "" + (querySource.nextUniqueIdAlloc++);
+        clientData = {
+          localName: localName,
+          fullName: curErr.uniqueId,
+          count: 1,
+          data: curErr,
+          indexValues: [],
+          deps: null,
+        };
+        queryHandle.membersByLocal[NS_ERRORS][localName] = clientData;
+        queryHandle.membersByFull[NS_ERRORS][curErr.uniqueId] = clientData;
+        queryHandle.dataMap[NS_ERRORS][localName] = curErr;
+      }
+
+      viewItems.push(clientData.localName);
+      clientDataItems.push(clientData);
+    }
+
+    this._notif.sendQueryResults(queryHandle);
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // Other Clients

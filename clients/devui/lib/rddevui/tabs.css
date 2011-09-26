@@ -4,6 +4,7 @@
 @tab-border-color: black;
 @tab-border-radius: 4px;
 @tab-selected-color: #eeeeff;
+@tab-attention-color: #eeeeee;
 @tab-close-color: red;
 
 #tabbox {
@@ -46,6 +47,11 @@
     border-right: 1px solid white;
     background-color: @tab-selected-color;      
   }
+  #root[wantsAttention="true"] {
+    font-weight: bold;
+    background-color: @tab-attention-color;
+  }
+
   #root:focused {
     #label {
       outline: 1px @tab-border-color dotted;

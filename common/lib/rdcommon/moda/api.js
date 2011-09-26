@@ -56,7 +56,8 @@ const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers',
-      NS_CONNREQS = 'connreqs';
+      NS_CONNREQS = 'connreqs',
+      NS_ERRORS = 'errors';
 
 
 /**
@@ -229,6 +230,7 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
     convmsgs: {},
     servers: {},
     connreqs: {},
+    errors: {},
   };
   this.query = query;
   this.items = [];
@@ -379,6 +381,22 @@ ConnectRequest.prototype = {
   acceptConnectRequest: function(ourPocoForThem) {
     this._bridge.connectToPeep(this.peep, ourPocoForThem);
   },
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Error Representations
+
+function ErrorRep(errorId, errorParam, firstReported, lastReported, count,
+                  userActionRequired, permanent) {
+  this.errorId = errorId;
+  this.errorParam = errorParam;
+  this.firstReported = new Date(firstReported);
+  this.lastReported = new Date(lastReported);
+  this.count = count;
+  this.userActionRequired = userActionRequired;
+  this.permanent = permanent;
+}
+ErrorRep.prototype = {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -646,6 +664,32 @@ ModaBridge.prototype = {
       }
     }
 
+    if (msg.dataMap.hasOwnProperty(NS_ERRORS)) {
+      values = msg.dataMap[NS_ERRORS];
+      dataMap = liveset._dataByNS[NS_ERRORS];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(NS_ERRORS, key);
+        else
+          dataMap[key] = this._transformError(key, val, liveset);
+      }
+    }
+    if (msg.dataDelta.hasOwnProperty(NS_ERRORS)) {
+      values = msg.dataDelta[NS_ERRORS];
+      dataMap = liveset._dataByNS[NS_ERRORS];
+      for (key in values) {
+        if (!dataMap.hasOwnProperty(key))
+          throw new Error("dataDelta for unknown key: " + key);
+        curRep = dataMap[key];
+        delta = values[key];
+
+        curRep.lastReported = new Date(delta.lastReported);
+        curRep.reportedCount = delta.reportedCount;
+      }
+    }
+
     // --- Populate The Set = Apply Splices or Special Case.
 
     // -- Special Case: Conv Messages
@@ -795,13 +839,24 @@ ModaBridge.prototype = {
   },
 
   /**
-   * Create a `ConnectRequest` represetation from the wire rep.
+   * Create a `ConnectRequest` representation from the wire rep.
    */
   _transformConnectRequest: function(localName, wireRep, liveset) {
     var peepWireRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
     return new ConnectRequest(this, localName,
       this._transformPeepBlurb(wireRep.peepLocalName, peepWireRep, liveset),
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
+  },
+
+  /**
+   * Create an `ErrorRep` from the wire rep.
+   */
+  _transformError: function(localName, wireRep, liveset) {
+    return new ErrorRep(
+      wireRep.errorId, wireRep.errorParam,
+      wireRep.firstReported, wireRep.lastReported,
+      wireRep.reportedCount,
+      wireRep.userActionRequired, wireRep.permanent);
   },
 
 
@@ -1003,6 +1058,27 @@ ModaBridge.prototype = {
    * ]
    */
   queryNotifications: function() {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Error Queries
+
+  /**
+   * Query the current set of errors being experienced by the client and provide
+   *  updates as new errors occur, and existing errors are updated or are
+   *  removed because the problem got fixed/went away.
+   *
+   * XXX not unit tested
+   */
+  queryErrors: function(listener, data) {
+    var handle = this._nextHandle++;
+    var query = {};
+    var liveset = new LiveOrderedSet(this, handle, NS_ERRORS, query, listener,
+                                     data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryErrors', handle, query);
+    return liveset;
   },
 
   //////////////////////////////////////////////////////////////////////////////

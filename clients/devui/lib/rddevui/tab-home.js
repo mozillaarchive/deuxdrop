@@ -72,7 +72,7 @@ ty.defineWidget({
                                        'btnListFriends'),
   emit: ['openTab'],
   structure: {
-    helloMe: ["Welcome home, ", ['userAccount', 'poco', 'displayName']],
+    helloMe: ["Welcome home, ", wy.bind(['userAccount', 'poco', 'displayName'])],
 
     buttonBar: {
       btnMakeFriends: wy.button("Ask people to be your friend!"),

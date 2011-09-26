@@ -74,7 +74,8 @@ const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers',
-      NS_CONNREQS = 'connreqs';
+      NS_CONNREQS = 'connreqs',
+      NS_ERRORS = 'errors';
 
 const setIndexValue = $notifking.setIndexValue,
       setReuseIndexValue = $notifking.setReuseIndexValue,
