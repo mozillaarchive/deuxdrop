@@ -1,1 +1,47 @@
 /* hats */
+
+#peep-blurb {
+  #root {
+    min-width: 12em;
+    display: relative;
+    padding: 3px 0px;
+  }
+
+  #name {
+    font-weight: bold;
+  }
+
+  #unread {
+    float: right;
+    display: inline-block;
+    padding: 2px 6px;
+    margin-top: -3px;
+    background-color: gray;
+    border-radius: 8px;
+    color: white;
+  }
+}
+
+#author-contact-request-tab {
+  #root {
+    padding: 2em;
+  }
+
+  #overviewLabel0, #peep, #overviewLabel1 {
+    display: inline-block;
+  }
+  #peep {
+    margin: 1em;
+  }
+
+  #peepBlock, #localPocoBlock, #messageBlock, #buttonBlock {
+    padding: 0.4em;
+    margin-bottom: 1em;
+    border: 1px solid gray;
+    border-radius: 4px;
+  }
+
+  #messageText {
+    width: 60em;
+  }
+}

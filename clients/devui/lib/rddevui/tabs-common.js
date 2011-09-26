@@ -57,10 +57,10 @@ var LiveSetListenerViewSliceAdapter = $liveset.LiveSetListenerViewSliceAdapter;
 
 // define our tab type in the tabs domain
 var ty = exports.ty =
-  new $wmsy.WmsyDomain({id: "tab-common", domain: "tabs"});
+  new $wmsy.WmsyDomain({id: "tab-common", domain: "tabs", css: $_css});
 
 var wy = exports.wy =
-  new $wmsy.WmsyDomain({id: "tab-common", domain: "moda"});
+  new $wmsy.WmsyDomain({id: "tab-common", domain: "moda", css: $_css});
 
 ty.defineWidget({
   name: 'peeps-tab',
@@ -78,8 +78,12 @@ ty.defineWidget({
       var moda = this.__context.moda;
 
       var peepsSet = moda.queryPeeps();
-      var vs = new LiveSetListenerViewSliceAdapter(peepsSet);
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.vs.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
     },
   },
   events: {
@@ -131,9 +135,13 @@ ty.defineWidget({
     postInit: function() {
       var moda = this.__context.moda;
 
-      var peepsSet = moda.queryPeeps();
-      var vs = new LiveSetListenerViewSliceAdapter(peepsSet);
+      var peepsSet = moda.queryConnectRequests();
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.vs.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
     },
   }
 });
@@ -165,8 +173,12 @@ ty.defineWidget({
       var moda = this.__context.moda;
 
       var convBlurbsSet = moda.queryPeepsConversations(this.obj.peep, { by: 'any' });
-      var vs = new LiveSetListenerViewSliceAdapter(convBlurbsSet);
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(convBlurbsSet);
       this.convBlurbs_set(vs);
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.vs.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
     },
   }
 });
@@ -219,8 +231,12 @@ ty.defineWidget({
       var moda = this.__context.moda;
 
       var msgsSet = moda.queryConversationMessages(this.obj.convBlurb);
-      var vs = new LiveSetListenerViewSliceAdapter(msgsSet);
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(msgsSet);
       this.messages_set(vs);
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.vs.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
     },
   }
 });
@@ -232,6 +248,7 @@ ty.defineWidget({
     obj: { kind: 'make-friends' },
   },
   focus: wy.focus.container.vertical('peeps'),
+  emit: ['openTab'],
   structure: {
     peeps: wy.vertList({type: 'peep-blurb'}),
   },
@@ -240,11 +257,105 @@ ty.defineWidget({
       var moda = this.__context.moda;
 
       var peepsSet = moda.queryAllKnownServersForPeeps();
-      var vs = new LiveSetListenerViewSliceAdapter(peepsSet);
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
     },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.vs.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
+    },
+  },
+  events: {
+    peeps: {
+      command: function(peepBinding) {
+        var liveSet = this.vs.liveSet,
+            peep = peepBinding.obj;
+        // we need to keep the peep alive...
+        liveSet.boostRefCount();
+        this.emit_openTab({
+          kind: 'author-contact-request',
+          name: "Connect with " + peep.selfPoco.displayName,
+          liveSet: liveSet,
+          peep: peep,
+          peepPoco: peep.selfPoco,
+          message: '',
+        }, true);
+      },
+    }
   }
 });
+
+ty.defineWidget({
+  name: 'author-contact-request-tab',
+  constraint: {
+    type: 'tab',
+    obj: { kind: 'author-contact-request' },
+  },
+  focus: wy.focus.container.vertical('pocoEditor', 'messageText', 'btnSend'),
+  emit: ['closeTab'],
+  structure: {
+    peepBlock: {
+      overviewLabel0: "We are going to ask: ",
+      peep: wy.widget({ type: 'peep-blurb' }, 'peep'),
+      overviewLabel1: " to be our friend.",
+    },
+    localPocoBlock: {
+      pocoEditor: wy.widget({ type: 'oth-poco-edit' }, 'peepPoco'),
+    },
+    messageBlock: {
+      messageLabel: "Message to send with your contact request: ",
+      messageText: wy.text('message'),
+    },
+    buttonBlock: {
+      btnSend: wy.button("Send contact request"),
+    }
+  },
+  impl: {
+    postInit: function() {
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.obj.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
+    },
+  },
+  events: {
+    btnSend: {
+      command: function() {
+        var moda = this.__context.moda;
+        var ourPocoForPeep =
+          this.pocoEditor_element.binding.gimmePoco();
+        moda.connectToPeep(this.obj.peep, ourPocoForPeep,
+                           this.messageText_element.value);
+
+        this.emit_closeTab(this.obj);
+      },
+    }
+  },
+});
+
+wy.defineWidget({
+  name: 'other-person-poco-editor',
+  doc: 'variant of poco-editor in tab-signup.js',
+  constraint: {
+    type: 'oth-poco-edit',
+  },
+  focus: wy.focus.container.vertical('displayName'),
+  structure: {
+    dnLabel: { // want a wy.label for this.
+      ldn0: "I refer to this person amongst myself and others as: ",
+      displayName: wy.text('displayName'),
+      ldn1: "."
+    },
+  },
+  impl: {
+    gimmePoco: function() {
+      return {
+        displayName: this.displayName_element.value,
+      };
+    },
+  },
+});
+
 
 ty.defineWidget({
   name: 'errors-tab',
@@ -262,12 +373,16 @@ ty.defineWidget({
       var moda = this.__context.moda;
 
       var errorSet = moda.queryErrors(), self = this;
-      var vs = new LiveSetListenerViewSliceAdapter(errorSet, {
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(errorSet, {
         newItemAdded: function() {
           self.emit_tabWantsAttention(self.obj);
         },
       });
       this.errors_set(vs);
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.vs.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
     },
   }
 });

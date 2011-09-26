@@ -237,6 +237,8 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this.completed = false;
   this._listener = listener;
   this.data = data;
+
+  this._refCount = 1;
 }
 LiveOrderedSet.prototype = {
   /**
@@ -268,12 +270,24 @@ LiveOrderedSet.prototype = {
   },
 
   /**
+   * XXX Hackish stop-gap to let callers share the set for the purposes of
+   *  keeping the items alive when handing things off to sub-dialogs, etc.
+   *  It would probably be better to support some type of clone() operation,
+   *  possibly for a specific item to slice on it, but let's revisit that when
+   *  we figure out the multiplicity/listener stuff a bit more.
+   */
+  boostRefCount: function() {
+    this._refCount++;
+  },
+
+  /**
    * Closes the query so that we no longer receive updates about the query.
    *  Once this is invoked, the reference to the set and all of its contents
    *  should be dropped as they will no longer be valid or kept up-to-date.
    */
   close: function() {
-    this._bridge.killQuery(this);
+    if (--this._refCount === 0)
+      this._bridge.killQuery(this);
   },
 };
 

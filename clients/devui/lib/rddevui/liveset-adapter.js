@@ -49,6 +49,9 @@ define(
 
 /**
  * Make a ViewSlice that hooks up to a LiveSet.
+ *
+ * XXX should this automatically call close?  right now we are doing that
+ *  manually... seems dumb.
  */
 function LiveSetListenerViewSliceAdapter(liveSet, extraCallbacks) {
   this._listener = null;
