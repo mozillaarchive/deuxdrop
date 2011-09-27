@@ -279,7 +279,7 @@ LocalStore.prototype = {
                                                   conversationIds) {
     var deferred = $Q.defer();
     var iConv = 0, self = this,
-        viewItems = [];
+        viewItems = [], clientDataItems = queryHandle.items = [];
     queryHandle.splices.push({
       index: 0, howMany: 0, items: viewItems,
     });
@@ -291,6 +291,7 @@ LocalStore.prototype = {
                                                           NS_CONVBLURBS,
                                                           convId))) {
           viewItems.push(clientData.localName);
+          clientDataItems.push(clientData);
           iConv++;
           continue;
         }
@@ -299,6 +300,7 @@ LocalStore.prototype = {
                                                  conversationIds[iConv]),
                     function(clientData) {
           viewItems.push(clientData.localName);
+          clientDataItems.push(clientData);
           iConv++;
           return getNextMaybeGot();
         });
