@@ -51,3 +51,17 @@ The `cmdline` tool will help you get things running.  Use `./cmdline --help` for
 ## Docs
 
 See the [deuxdrop wiki](https://github.com/mozilla/deuxdrop/wiki) for more documentation
+
+## Debugging
+
+Try the built-in loggest displays:
+
+- The client daemon's logs are available at "about:loggest"
+- The server's logs are available at "about:loggest-server" if the server is
+   run with "--loggest-web-debug".
+
+Have Firefox display websocket connection details by enabling PRLogging for it:
+- "export NSPR_LOG_MODULES=nsWebSocket:5" then run, to get on stdout
+- "export NSPR_LOG_FILE=/tmp/firefox.log" if you don't want it on stdout
+- On windows, use "set NSPR_LOG_MODULES=nsWebSocket:5" and
+   "set NSPR_LOG_FILE=%TEMP%\log.txt"
