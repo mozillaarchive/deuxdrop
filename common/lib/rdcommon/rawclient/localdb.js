@@ -885,39 +885,42 @@ LocalStore.prototype = {
           rootKeys.push(results[iRes]);
         }
 
-        var viewItems = [];
+        var viewItems = [],
+            clientDataItems = queryHandle.items = [];
         queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
 
         var iKey = 0;
         function getNextMaybeGot(reqRep) {
           var clientData;
+          if (reqRep) {
+            var localName = "" + (querySource.nextUniqueIdAlloc++),
+                fullName = rootKeys[iKey - 1]; // (infinite loop protection)
+            clientData = {
+              localName: localName,
+              fullName: fullName,
+              count: 1,
+              data: null,
+              indexValues: [],
+              deps: [],
+            };
+            queryHandle.membersByLocal[NS_CONNREQS][localName] = clientData;
+            queryHandle.membersByFull[NS_CONNREQS][fullName] = clientData;
+
+            queryHandle.dataMap[NS_CONNREQS][localName] =
+              self._convertConnectRequest(reqRep, fullName,
+                                          queryHandle, clientData);
+            viewItems.push(localName);
+            clientDataItems.push(clientData);
+            reqRep = null;
+          }
           // (use a while loop so in the event this is a duplicate conn req
           //  query our reuse invocations can fast-path without blowing the
           //  stack on non-tail-call optimized impls.)
           while (iKey < rootKeys.length) {
-            if (reqRep) {
-              var localName = "" + (querySource.nextUniqueIdAlloc++),
-                  fullName = rootKeys[iKey - 1]; // (infinite loop protection)
-              clientData = {
-                localName: localName,
-                fullName: fullName,
-                count: 1,
-                data: null,
-                indexValues: [],
-                deps: null,
-              };
-              queryHandle.membersByLocal[NS_CONNREQS][localName] = clientData;
-              queryHandle.membersByFull[NS_CONNREQS][fullName] = clientData;
-
-              queryHandle.dataMap[NS_CONNREQS][localName] =
-                self._convertConnectRequest(reqRep, fullName,
-                                            queryHandle, clientData);
-              viewItems.push(localName);
-              reqRep = null;
-            }
             if ((clientData = self._notif.reuseIfAlreadyKnown(
                                 queryHandle, NS_CONNREQS, rootKeys[iKey]))) {
               viewItems.push(clientData.localName);
+              clientDataItems.push(clientData);
               iKey++;
               continue;
             }

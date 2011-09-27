@@ -327,7 +327,7 @@ var AuthClientCommon = {
         this.close();
         return;
       }
-      msg = JSON.parse(wsmsg.utf8Data.substring(1));
+      msg = JSON.parse(unTransitHackBinary(wsmsg.utf8Data.substring(1)));
     }
     else {
       var expNonce = this._otherNextNonce,
@@ -454,10 +454,10 @@ var AuthClientCommon = {
       return;
     this.log.send(obj.type, obj);
     // XXX prefixing because of gecko websocket limitations (no binary frames)
-    this._conn.sendUTF('T' + JSON.stringify(obj));
+    this._conn.sendUTF('T' + transitHackBinary(JSON.stringify(obj)));
 // XXX XXX heisenbug fighting; corrupt data was happening, but not now:
-//var d = 'T' + JSON.stringify(obj);
-//console.log("Sending: " + d.length + "\n");
+//var d = 'T' + transitHackBinary(JSON.stringify(obj));
+//console.log("Sending: " + d + "\n");
   },
 
   writeMessage: function(obj) {
@@ -477,7 +477,7 @@ var AuthClientCommon = {
     this._conn.sendUTF('B' + transitHackBinary(boxedJsonMsg));
 // XXX XXX heisenbug fighting
 //var d = 'B' + transitHackBinary(boxedJsonMsg);
-//console.log("Sending: " +  d.length + "\n");
+//console.log("Sending: " +  d + "\n");
     this._myNextNonce = incNonce(this._myNextNonce);
   },
 };

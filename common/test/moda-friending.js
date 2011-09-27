@@ -93,8 +93,13 @@ TD.commonCase('moda basics', function(T) {
   T.group('A queries conn requests (already populated)');
   var lqaStaticRequests = moda_a.do_queryConnectRequests('reqsA-after');
 
+  T.group('kill both queries and re-issue for non-reuse case');
+  moda_a.do_killQuery(lqaRequests);
+  moda_a.do_killQuery(lqaStaticRequests);
+  var lqaStatic2Requests = moda_a.do_queryConnectRequests('reqsA-after');
+
   T.group('A responds based on the request');
-  moda_a.do_connectToPeep(lqaRequests, client_b, true);
+  moda_a.do_connectToPeep(lqaStatic2Requests, client_b, true);
 
   T.group("cleanup");
 });
