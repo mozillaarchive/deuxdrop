@@ -207,7 +207,8 @@ function notifyDaemonOfDeadLoggerClient(senderUnique) {
 }
 
 function daemonSendLoggerClientMessage(clientUnique, data) {
-  log('RECEIVED DAEMON LOGGER MESSAGE: ' + JSON.stringify(data));
+  // These tend not to be huge and barely human readable, no more logging.
+  //log('RECEIVED DAEMON LOGGER MESSAGE: ' + JSON.stringify(data));
   loggerClientRegistry[clientUnique].postMessage(data);
 }
 
