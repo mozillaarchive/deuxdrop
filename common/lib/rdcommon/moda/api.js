@@ -856,9 +856,8 @@ ModaBridge.prototype = {
    * Create a `ConnectRequest` representation from the wire rep.
    */
   _transformConnectRequest: function(localName, wireRep, liveset) {
-    var peepWireRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
-    return new ConnectRequest(this, localName,
-      this._transformPeepBlurb(wireRep.peepLocalName, peepWireRep, liveset),
+    var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
+    return new ConnectRequest(this, localName, peepRep,
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
   },
 
