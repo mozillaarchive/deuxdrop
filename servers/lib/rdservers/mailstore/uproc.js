@@ -352,7 +352,7 @@ var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
     },
     persist: function() {
       return $Q.wait(
-        this.store.putIncomingContactRequest(this.receivedAt,
+        this.store.putIncomingContactRequest(this.receivedBundle.receivedAt,
                                              this.receivedBundle.senderKey,
                                              this.receivedBundle)
 
