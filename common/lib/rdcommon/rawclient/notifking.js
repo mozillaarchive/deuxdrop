@@ -1214,12 +1214,14 @@ NotificationKing.prototype = {
           this._log.nsItemModified(queryHandle.uniqueId, fullName, anyChanges);
 
           // some namespaces are immediately dispatched, others are not
-          if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
-            queryHandle.pending = PENDING_NOTIF;
-            querySource.pending.push(queryHandle);
-          }
-          else {
-            this.sendQueryResults(queryHandle);
+          if (queryHandle.pending === PENDING_NONE) {
+            if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
+              queryHandle.pending = PENDING_NOTIF;
+              querySource.pending.push(queryHandle);
+            }
+            else {
+              this.sendQueryResults(queryHandle);
+            }
           }
         }
       }
