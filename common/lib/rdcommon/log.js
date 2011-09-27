@@ -567,6 +567,8 @@ var TestActorProtoBase = {
         this._expectationsMetSoFar = false;
         // no need to -1 because we haven't incremented past the entry.
         this._logger.__unexpectedEntry(this._iEntry, entries[this._iEntry]);
+        // do increment past...
+        this._iEntry++;
       }
       // - generate success if we have used up our expectations
       else if ((this._iExpectation >= this._expectations.length) &&
