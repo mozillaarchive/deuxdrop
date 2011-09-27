@@ -106,12 +106,19 @@ ty.defineWidget({
         this.errMsg_element.textContent = "" + err;
       }
       else {
-        var tabObj = {
+        var successTabObj = {
           kind: "signed-up",
           name: "Signed Up!",
           serverInfo: serverInfo,
         };
-        this.emit_openTab(tabObj, true, this.obj);
+        this.emit_openTab(successTabObj, false, this.obj);
+        var homeTabObj = {
+          kind: "home",
+          name: "Home",
+          userAccount: this.obj.userAccount,
+        };
+        this.emit_openTab(homeTabObj, true, successTabObj);
+
         this.emit_closeTab(this.obj);
       }
     },

@@ -370,6 +370,10 @@ RawClientAPI.prototype = {
       throw new Error("No (transit) server configured!");
 
     this._log.connecting();
+    this._notif.sendMessageToAll({
+      type: 'connectionStatus',
+      status: 'connecting',
+    });
     this._conn = new MailstoreConn(
                    this._keyring.exposeSimpleBoxingKeyringFor('client',
                                                               'connBox'),
@@ -386,6 +390,10 @@ RawClientAPI.prototype = {
    */
   _mailstoreConnected: function() {
     this._log.connected();
+    this._notif.sendMessageToAll({
+      type: 'connectionStatus',
+      status: 'connected',
+    });
     if (this._actionQueue.length && !this._conn.pendingAction)
       this._conn.sendAction(this._actionQueue[0].msg);
   },
@@ -398,6 +406,10 @@ RawClientAPI.prototype = {
    */
   _mailstoreDisconnected: function() {
     this._log.disconnected();
+    this._notif.sendMessageToAll({
+      type: 'connectionStatus',
+      status: 'disconnected',
+    });
     this._conn = null;
     if (this._connectionDesired) {
       var self = this;
@@ -432,6 +444,10 @@ RawClientAPI.prototype = {
     this._regenerateSelfIdent();
     this.publishError('serverDoesNotKnowWhoWeAre', '',
                       { userActionRequired: true, permanent: true });
+    this._notif.sendMessageToAll({
+      type: 'connectionStatus',
+      status: 'unauthorized',
+    });
   },
 
   _actionCompleted: function(replyMsg) {

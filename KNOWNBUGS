@@ -1,0 +1,2 @@
+Quick list of known bugs that have not been uplifted to issues:
+- need to update reused peep data's oident slot when contact completion occurs.

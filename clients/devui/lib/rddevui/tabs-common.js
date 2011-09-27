@@ -42,12 +42,14 @@
 define(
   [
     'wmsy/wmsy',
+    'wmsy/viewslice-filter',
     './liveset-adapter',
     'text!./tabs-common.css',
     'exports'
   ],
   function(
     $wmsy,
+    $vsf,
     $liveset,
     $_css,
     exports
@@ -81,19 +83,16 @@ ty.defineWidget({
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
     },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.vs.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
-    },
   },
   events: {
     peeps: {
       command: function(peepBinding) {
         this.emit_openTab({
-          kind: 'conv-blurbs-tab',
+          kind: 'conv-blurbs',
           name: "Convs with " + peepBinding.obj.displayName,
           peep: peepBinding.obj,
-        });
+          sortBy: 'any',
+        }, true);
       },
     },
   },
@@ -139,10 +138,6 @@ ty.defineWidget({
       var connReqsSet = moda.queryConnectRequests();
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(connReqsSet);
       this.requests_set(vs);
-    },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.vs.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
     },
   },
   events: {
@@ -216,10 +211,6 @@ ty.defineWidget({
     }
   },
   impl: {
-    destroy: function(keepDom, forbidKeepDom) {
-      this.obj.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
-    },
   },
   events: {
     btnAccept: {
@@ -233,6 +224,139 @@ ty.defineWidget({
   },
 });
 
+wy.defineWidget({
+  name: 'peep-selector-popup',
+  constraint: {
+    type: 'peep-selector-popup',
+  },
+  focus: wy.focus.domain.vertical('peeps'),
+  emit: ['resizePopup'],
+  structure: {
+    peeps: wy.vertList({ type: 'peep-blurb' }),
+  },
+  impl: {
+    postInitUpdate: function() {
+      var filterOut = this.obj.filterOut, moda = this.__context.moda,
+          self = this;
+
+      var vsRaw = this.vsRaw = new LiveSetListenerViewSliceAdapter(
+        this.obj.peepsQuery, {
+          initialCompletion: function() {
+            // Because population was async, we now need to update the popup.
+            // The alternative would be to have the peep selection widget provide
+            //  a button.  The button would trigger the query, and only popup the
+            //  popup when the query returns its results.
+
+            self.emit_resizePopup();
+            self.FOCUS.ensureDomainFocused(self.__focusDomain);
+          }
+        });
+      var vsFilter = this.vs = new $vsf.DecoratingFilteringViewSlice(vsRaw, {
+          filter: function(considerObj) {
+            // only show things not in the filterOut list.
+            return (filterOut.indexOf(considerObj) === -1);
+          },
+        }, 0.8);
+      this.peeps_set(vsFilter);
+    },
+  },
+  events: {
+    peeps: {
+      command: function(binding) {
+        this.done(true, binding.obj);
+      },
+    },
+  },
+});
+
+wy.defineWidget({
+  name: 'conv-compose',
+  constraint: {
+    type: 'conv-compose',
+  },
+  popups: {
+    addPeep: {
+      constraint: {
+        type: 'peep-selector-popup',
+      },
+      clickAway: true,
+      popupWidget: wy.libWidget({ type: 'popup' }),
+      position: {
+        centerOn: "btnAddPeep",
+      },
+      size: {
+        maxWidth: 0.5,
+        maxHeight: 0.6,
+      },
+    },
+  },
+  focus: wy.focus.container.vertical('btnAddPeep', 'messageText'),
+  structure: {
+    peepBlock: {
+      peepsLabel: "Peeps: ",
+      peeps: wy.widgetFlow({type: 'peep-inline'}, 'peeps',
+                           {separator: ', '}),
+      btnAddPeep: wy.button("Add..."),
+    },
+    messageBlock: {
+      messageText: wy.textarea('messageText'),
+    },
+  },
+  events: {
+    btnAddPeep: {
+      command: function() {
+        var self = this;
+        // since we are handing off a reference to our query, boost its reference
+        //  count.
+        this.obj.peepsQuery.boostRefCount();
+        this.popup_addPeep({
+          sortBy: 'alphabet',
+          filterOut: this.obj.peeps,
+          peepsQuery: this.obj.peepsQuery,
+        }, this, function(success, peepToAdd) {
+          if (success)
+            self.peeps_slice.mutateSplice(self.obj.peeps.length, 0,
+                                          peepToAdd);
+        });
+      }
+    },
+  },
+  impl: {
+    postInit: function() {
+      var moda = this.__context.moda;
+      this.obj.peepsQuery = moda.queryPeeps({ by: 'any' });
+    },
+    gimmeConvArgs: function() {
+      return {
+        peeps: this.obj.peeps,
+        text: this.messageText_element.textContent,
+      };
+    },
+  },
+});
+
+ty.defineWidget({
+  name: 'conv-compose-tab',
+  constraint: {
+    type: 'tab',
+    obj: { kind: 'conv-compose' },
+  },
+  focus: wy.focus.container.vertical('composer', 'btnSend'),
+  emit: ['closeTab'],
+  structure: {
+    composer: wy.widget({ type: 'conv-compose' }, 'convSeed'),
+    btnSend: wy.button("Send!"),
+  },
+  events: {
+    btnSend: {
+      command: function() {
+        var moda = this.__context.moda;
+        moda.createConversation(this.composer_element.binding.gimmeConvArgs());
+        this.emit_closeTab(this.obj);
+      },
+    }
+  },
+});
 
 ty.defineWidget({
   name: 'conv-blurbs-tab',
@@ -240,21 +364,34 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'conv-blurbs' },
   },
-  focus: wy.focus.container.vertical('convBlurbs'),
+  focus: wy.focus.container.vertical('btnNewConv', 'convBlurbs'),
+  emit: ['openTab'],
   structure: {
+    btnNewConv: wy.button("Start a new conversation..."),
     convBlurbs: wy.vertList({type: 'conv-blurb'}),
   },
   impl: {
     postInit: function() {
       var moda = this.__context.moda;
 
-      var convBlurbsSet = moda.queryPeepsConversations(this.obj.peep, { by: 'any' });
+      var convBlurbsSet = moda.queryPeepConversations(
+                            this.obj.peep, { by: this.obj.sortBy });
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(convBlurbsSet);
       this.convBlurbs_set(vs);
     },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.vs.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
+  },
+  events: {
+    btnNewConv: {
+      command: function() {
+        this.emit_openTab({
+          kind: 'conv-compose',
+          name: 'Compose',
+          convSeed: {
+            peeps: [this.obj.peep],
+            messageText: "",
+          },
+        }, true);
+      }
     },
   }
 });
@@ -286,7 +423,8 @@ wy.defineWidget({
   },
   focus: wy.focus.item,
   structure: {
-    participants: wy.widgetFlow({type: 'peep-inline'}, 'participants', {separator: ', '}),
+    participants: wy.widgetFlow({ type: 'peep-inline' }, 'participants',
+                                { separator: ', ' }),
     firstMessageText: wy.bind(['firstMessage', 'messageText']),
     numUnread: wy.bind('numUnreadMessages'),
   },
@@ -310,10 +448,6 @@ ty.defineWidget({
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(msgsSet);
       this.messages_set(vs);
     },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.vs.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
-    },
   }
 });
 
@@ -335,10 +469,6 @@ ty.defineWidget({
       var peepsSet = moda.queryAllKnownServersForPeeps();
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
-    },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.vs.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
     },
   },
   events: {
@@ -388,10 +518,6 @@ ty.defineWidget({
   },
   impl: {
     postInit: function() {
-    },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.obj.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
     },
   },
   events: {
@@ -455,10 +581,6 @@ ty.defineWidget({
         },
       });
       this.errors_set(vs);
-    },
-    destroy: function(keepDom, forbidKeepDom) {
-      this.vs.liveSet.close();
-      this.__destroy(keepDom, forbidKeepDom);
     },
   }
 });

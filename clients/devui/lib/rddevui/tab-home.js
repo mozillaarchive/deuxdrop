@@ -69,7 +69,7 @@ ty.defineWidget({
     obj: { kind: 'home' },
   },
   focus: wy.focus.container.horizontal('btnMakeFriends', 'btnFriendRequests',
-                                       'btnListFriends'),
+                                       'btnListFriends', 'btnCompose'),
   emit: ['openTab'],
   structure: {
     helloMe: ["Welcome home, ", wy.bind(['userAccount', 'poco', 'displayName'])],
@@ -79,6 +79,7 @@ ty.defineWidget({
       btnFriendRequests: wy.button("See who wants to be your friend!"),
       btnListFriends:
         wy.button("List existing friends and from there see conversations!"),
+      btnCompose: wy.button("New Conversation"),
     },
   },
   impl: {
@@ -102,6 +103,18 @@ ty.defineWidget({
         this.emit_openTab({ kind: 'peeps', name: "Peeps!", sortBy: 'any' },
                           true);
       },
+    },
+    btnCompose: {
+      command: function() {
+        this.emit_openTab({
+          kind: 'conv-compose',
+          name: "Compose",
+          convSeed: {
+            peeps: [],
+            messageText: "",
+          },
+        }, true);
+      }
     },
   },
 });

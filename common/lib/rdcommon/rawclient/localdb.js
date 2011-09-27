@@ -258,7 +258,8 @@ LocalStore.prototype = {
     if (queryHandle.dataNeeded[NS_CONVBLURBS].length) {
       var convIds = queryHandle.dataNeeded[NS_CONVBLURBS].splice(0,
                       queryHandle.dataNeeded[NS_CONVBLURBS].length);
-      return this._fetchAndReportConversationBlurbsById(query, convIds);
+      return this._fetchAndReportConversationBlurbsById(query, null, null,
+                                                        convIds);
     }
     // fetch peep deps last-ish because they can't generate deps
     if (queryHandle.dataNeeded[NS_PEEPS].length) {
@@ -275,14 +276,17 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Conversation Lookup
 
-  _fetchAndReportConversationBlurbsById: function(queryHandle,
+  _fetchAndReportConversationBlurbsById: function(queryHandle, usingIndex,
+                                                  indexParam,
                                                   conversationIds) {
     var deferred = $Q.defer();
-    var iConv = 0, self = this,
-        viewItems = [], clientDataItems = queryHandle.items = [];
-    queryHandle.splices.push({
-      index: 0, howMany: 0, items: viewItems,
-    });
+    var iConv = 0, stride = 1, self = this,
+        viewItems = [], clientDataItems = null;
+    if (usingIndex) {
+      queryHandle.items = clientDataItems = [];
+      queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+      stride = 2;
+    }
     function getNextMaybeGot() {
       while (iConv < conversationIds.length) {
         var convId = conversationIds[iConv], clientData;
@@ -291,8 +295,9 @@ LocalStore.prototype = {
                                                           NS_CONVBLURBS,
                                                           convId))) {
           viewItems.push(clientData.localName);
-          clientDataItems.push(clientData);
-          iConv++;
+          if (clientDataItems)
+            clientDataItems.push(clientData);
+          iConv += stride;
           continue;
         }
 
@@ -300,8 +305,9 @@ LocalStore.prototype = {
                                                  conversationIds[iConv]),
                     function(clientData) {
           viewItems.push(clientData.localName);
-          clientDataItems.push(clientData);
-          iConv++;
+          if (clientDataItems)
+            clientDataItems.push(clientData);
+          iConv += 2;
           return getNextMaybeGot();
         });
       }
@@ -320,7 +326,7 @@ LocalStore.prototype = {
    *  control flow so that no duplicate loading occurs.
    */
   _fetchConversationBlurb: function(queryHandle, convId) {
-    var querySource = queryHandle.owner;
+    var querySource = queryHandle.owner, self = this;
     var localName = "" + (querySource.nextUniqueIdAlloc++);
     var deps = [];
     var clientData = {
@@ -700,7 +706,8 @@ LocalStore.prototype = {
     // - generate an index scan, netting us the conversation id's, hand-off
     return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey, -1,
                                    null, null, null, null, null, null),
-      this._fetchAndReportConversationBlurbsById.bind(this, queryHandle));
+      this._fetchAndReportConversationBlurbsById.bind(this, queryHandle,
+                                                      index, peepRootKey));
   },
 
 

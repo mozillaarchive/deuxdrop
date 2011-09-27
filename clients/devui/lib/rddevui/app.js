@@ -90,10 +90,51 @@ wy.defineWidget({
   },
   emit: ["openTab"],
   structure: {
+    globalBar: wy.widget({ type: 'global-bar' }, wy.SELF),
     tabs: wy.widget({type: "tabbox", orientation: "vertical"}, "tabState"),
   },
 });
 
+wy.defineWidget({
+  name: 'global-bar',
+  constraint: {
+    type: 'global-bar',
+  },
+  structure: {
+    widgets: wy.horizList({ type: 'global-bar-item' }, 'globalBarWidgets'),
+  },
+});
+
+wy.defineWidget({
+  name: 'gb-connected-status',
+  constraint: {
+    type: 'global-bar-item',
+    obj: { kind: 'connected-status' },
+  },
+  structure: wy.block({
+    // we could use css, but that's sketchy and not intended to be l10n-able
+    label: wy.computed('getConnStatusLabelString'),
+  }, { connection: ['moda', 'connectionStatus'] }),
+  impl: {
+    postInit: function() {
+      this._bound_statusChange = this._needsbind_statusChange.bind(this);
+      this.__context.moda.on('connectionStatusChange',
+                             this._bound_statusChange);
+    },
+    destroy: function(keepDom, forbidKeepDom) {
+      this.__context.moda.removeListener('connectionStatusChange',
+                                         this._bound_statusChange);
+      this.__destroy(keepDom, forbidKeepDom);
+    },
+    _needsbind_statusChange: function() {
+      this.update();
+    },
+    getConnStatusLabelString: function(s) {
+      // XXX just use the state directly for now...
+      return this.obj.moda.connectionStatus;
+    },
+  },
+});
 
 wy.defineWidget({
   name: "about-tab",
@@ -119,7 +160,10 @@ exports.main = function(doc) {
           vertical: true,
           tabs: [
           ],
-        }
+        },
+        globalBarWidgets: [
+          { kind: 'connected-status', moda: moda },
+        ]
       };
       var tabs = rootObj.tabState.tabs;
       // create a 'signup' tab if not signed up already

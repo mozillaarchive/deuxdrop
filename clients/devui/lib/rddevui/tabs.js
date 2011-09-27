@@ -125,7 +125,7 @@ wy.defineWidget({
       this._switchTab(this.obj.index);
     },
     _switchTab: function(index) {
-      if (this._selectedIndex == index)
+      if (this._selectedIndex === index)
         return;
       var panelNode;
       if (this._selectedIndex != null) {
@@ -162,6 +162,11 @@ wy.defineWidget({
         // the one replacing it
         else if (index < this.obj.tabs.length)
           this._switchTab(index);
+        else
+          this._switchTab(0);
+      }
+      else if (this._selectedIndex >  index) {
+        this._selectedIndex--;
       }
     },
   },

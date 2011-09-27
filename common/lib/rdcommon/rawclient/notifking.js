@@ -696,6 +696,13 @@ NotificationKing.prototype = {
     return new Error("Bad Query: " + msg);
   },
 
+  sendMessageToAll: function(msg) {
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      querySource.listener.send(msg);
+    }
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Cache checks
 

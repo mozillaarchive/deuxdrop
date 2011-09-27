@@ -1343,6 +1343,8 @@ var TestModaActorMixins = {
         var blurb = blurbs[i], tConv = tConvs[i];
         self.expect_convBlurbCheck(self._thingConvToBlurbLoggable(tConv));
         self._logger.convBlurbCheck(self._convBlurbToLoggable(blurb));
+        if (blurb.firstMessage.text === undefined)
+          self._logger.messageInvariantViolated("text should not be undefined");
       }
     });
   },
@@ -1682,6 +1684,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
     errors: {
       mootedMessageReceived: { msg: false },
+      messageInvariantViolated: { msg: false },
     }
   },
 });

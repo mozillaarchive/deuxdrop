@@ -59,16 +59,45 @@ function LiveSetListenerViewSliceAdapter(liveSet, extraCallbacks) {
   this.liveSet = liveSet;
   this.extraCallbacks = extraCallbacks || {};
   liveSet._listener = this;
+  this.completedCount = 0;
+
+  this.atFirst = this.atLast = true;
 }
 exports.LiveSetListenerViewSliceAdapter = LiveSetListenerViewSliceAdapter;
 LiveSetListenerViewSliceAdapter.prototype = {
+  noteRanges: function() {
+  },
+  grow: function() {
+  },
+
   seek: function() {
-    if (this.liveSet.items.length)
-      this._listener.didSplice(0, this.liveSet.items.length, this.liveSet.items,
-                               true, false);
+    this._listener.didSeek(this.liveSet.items, false, this, 0);
+    // send a synthetic completion notification in case we are late to the
+    //  query party.
+    if (this.liveSet.items.length && this.completedCount === 0)
+      this.onCompleted();
+  },
+
+  translateIndex: function(index) {
+    // XXX we should really be value-aware since the queries can be ordered
+    return index;
+  },
+
+  unlink: function() {
+    this.liveSet.close();
+    // stop it referencing us
+    // XXX the reference count bit is inconsistent with a single listener;
+    //  we will likely need to address this.
+    this.liveSet._listener = null;
+
+    this._listener = null;
+    this.extraCallbacks = {};
+    this.data = null;
   },
 
   onSplice: function(index, howMany, addedItems, liveSet) {
+    if (!this._listener)
+      return;
     this._listener.didSplice(index, howMany, addedItems, true, false, this);
 
     if (addedItems.length) {
@@ -79,6 +108,10 @@ LiveSetListenerViewSliceAdapter.prototype = {
 
   onCompleted: function() {
     // no need to do anything, the splice logic covers everything
+    if ((this.completedCount++ === 0) &&
+        this.extraCallbacks.hasOwnProperty("initialCompletion")) {
+      this.extraCallbacks.initialCompletion();
+    }
   },
 };
 

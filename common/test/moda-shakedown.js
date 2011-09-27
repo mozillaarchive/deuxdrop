@@ -221,6 +221,15 @@ TD.commonCase('moda basics', function(T) {
 
   // - have B reply to conv 2, bumping the conversation..
 
+  // - conversation loading without use
+  T.group('conversation queries without reuse');
+  moda_a.do_killQuery(lqBconvBlurbs);
+  moda_a.do_killQuery(lqCconvBlurbs);
+  moda_a.do_killQuery(lqConv1Msgs);
+
+  lqBconvBlurbs = moda_a.do_queryPeepConversations(
+                    'BconvBlurbs', lqAllPeeps, client_b, {by: 'any'});
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv2, tConv1]);
 
   T.group("cleanup");
 });

@@ -8,6 +8,10 @@
 @tab-close-color: red;
 
 #tabbox {
+  #root {
+    position: relative;
+  }
+
   #headers {
     position: absolute;
     left: 1px;

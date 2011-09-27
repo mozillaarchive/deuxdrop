@@ -178,7 +178,7 @@ exports.dbSchemaDef = {
         exports.IDX_ALL_CONVS,
         exports.IDX_CONV_PEEP_WRITE_INVOLVEMENT,
         exports.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
-        exports.IDX_PEEP_ANY_INVOLVEMENT,
+        exports.IDX_CONV_PEEP_ANY_INVOLVEMENT,
       ],
     },
   ],

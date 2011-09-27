@@ -448,6 +448,15 @@ function ModaBridge() {
   this._ourUser = null;
 
   this._mootedMessageReceivedListener = null;
+
+  /**
+   * Simple event listener map.
+   */
+  this._listeners = {
+    connectionStatusChange: [],
+  };
+
+  this.connectionStatus = 'disconnected';
 }
 exports.ModaBridge = ModaBridge;
 ModaBridge.prototype = {
@@ -496,8 +505,19 @@ ModaBridge.prototype = {
           throw new Error("Query '" + msg.handle + "' has died; " +
                           "check for loggest errors.");
         return this._receiveQueryUpdate(msg);
+
+      case 'connectionStatus':
+        this.connectionStatus = msg.status;
+        return this._fireEvent('connectionStatusChange', msg.status);
     }
     throw new Error("Received unknown message type: " + msg.type);
+  },
+
+  _fireEvent: function(name, arg) {
+    var listeners = this._listeners[name];
+    for (var i = 0; i < listeners.length; i++) {
+      listeners[i](arg);
+    }
   },
 
   _transformServerInfo: function(_localName, serialized) {
@@ -766,8 +786,11 @@ ModaBridge.prototype = {
         dataMap = liveset._dataByNS[liveset._ns];
         var spliceInfo = msg.splices[i];
         var objItems = [];
-        for (var iName = 0; iName < spliceInfo.items.length; iName++) {
-          objItems.push(dataMap[spliceInfo.items[iName]]);
+        // this might be only a deletion
+        if (spliceInfo.items) {
+          for (var iName = 0; iName < spliceInfo.items.length; iName++) {
+            objItems.push(dataMap[spliceInfo.items[iName]]);
+          }
         }
         liveset._notifyAndSplice(spliceInfo.index, spliceInfo.howMany,
                                  objItems);
@@ -877,6 +900,19 @@ ModaBridge.prototype = {
       wireRep.userActionRequired, wireRep.permanent);
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Simple Event Logic
+
+  on: function(name, callback) {
+    this._listeners[name].push(callback);
+  },
+
+  removeListener: function(name, callback) {
+    var handlers = this._listeners[name];
+    var index = handlers.indexOf(callback);
+    if (index !== -1)
+      handlers.splice(index, 1);
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // Data Queries

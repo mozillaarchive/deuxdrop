@@ -1,1 +1,30 @@
-/* no css for this, actualike */
+#global-bar {
+  #root {
+    background-color: black;
+    border-bottom: 1px solid gray;
+  }
+
+  #widgets-item {
+    display: inline-block;
+  }
+}
+
+#gb-connected-status {
+  #root {
+    padding: 2px 4px;
+    font-weight: bold;
+  }
+  #root[connection="connected"] {
+    color: green;
+  }
+  #root[connection="connecting"] {
+    color: yellow;
+  }
+  #root[connection="disconnected"] {
+    color: red;
+  }
+  #root[connection="unauthorized"] {
+    color: red;
+    font-weight: 900;
+  }
+}
