@@ -144,8 +144,17 @@ TD.commonCase('moda basics', function(T) {
   moda_a.do_killQuery(lqPossibleFriends);
 
   // -- peep final state queries.
+  T.group("peep query permutation checking: reuse, non-reuse, stay dead");
+  // reuse case
   var lqFinalAllPeeps = moda_a.do_queryPeeps("allPeepsFinal", {by: 'alphabet'});
-
+  // kill the queries to get a non-reuse case
+  moda_a.do_killQuery(lqAllPeeps);
+  moda_a.do_killQuery(lqFinalAllPeeps);
+  // Reissue allPeeps
+  lqAllPeeps = moda_a.do_queryPeeps("allPeeps2", {by: 'alphabet'});
+  // Additionally, we get test coverage from making sure the dead queries stay
+  //  dead because we should error out if we hear about an unknown query.  (And
+  //  notifications would be generated for involved conv count changes, etc.)
 
   // --- conversations
   T.group("A live-updating conversation query");
@@ -197,13 +206,6 @@ TD.commonCase('moda basics', function(T) {
 
   // the conversation blurb should now know that C is involved in the conv
   // the C query should now contain the conversation...
-
-  // - kill the peeps final query
-  T.group('kill allPeepsFinal query');
-  // this should result in not receiving an update for the query; it would
-  //  otherwise receive an update because the peeps' number of conversations
-  //  they participate in would be updated.
-  moda_a.do_killQuery(lqFinalAllPeeps);
 
   // - create a conversation between A,B,C
   T.group('new conversation between A, B, C');

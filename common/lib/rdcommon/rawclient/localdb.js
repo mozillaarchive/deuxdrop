@@ -1310,7 +1310,7 @@ LocalStore.prototype = {
                                          clientData),
                     function(resultClientData) {
           if (usingIndex) {
-            setIndexValue(clientData.indexValues, usingIndex, indexParam,
+            setIndexValue(resultClientData.indexValues, usingIndex, indexParam,
                           peepRootKeys[iPeep + 1]);
           }
           viewItems.push(resultClientData.localName);
