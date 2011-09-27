@@ -130,8 +130,9 @@ exports.main = function(doc) {
         tabs.push({ kind: "home", name: "Home", userAccount: me });
       }
       tabs.push({ kind: 'errors', name: "Errors" });
-      // everybody always wants an 'about' tab!
-      tabs.push({ kind: "about", name: "About" });
+      // The about tab is too useless to show right now, and is no longer
+      //  required to make us have multiple tabs.
+      //tabs.push({ kind: "about", name: "About" });
 
       // bind the UI into existence.
       var binder = wy.wrapElement(doc.getElementById("body"));

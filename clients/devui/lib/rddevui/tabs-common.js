@@ -77,7 +77,7 @@ ty.defineWidget({
     postInit: function() {
       var moda = this.__context.moda;
 
-      var peepsSet = moda.queryPeeps();
+      var peepsSet = moda.queryPeeps({by: this.obj.sortBy});
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
     },
@@ -127,21 +127,39 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'requests' },
   },
-  focus: wy.focus.container.vertical('peeps'),
+  focus: wy.focus.container.vertical('requests'),
+  emit: ['openTab'],
   structure: {
-    peeps: wy.vertList({type: 'conn-request'}),
+    requests: wy.vertList({type: 'conn-request'}),
   },
   impl: {
     postInit: function() {
       var moda = this.__context.moda;
 
-      var peepsSet = moda.queryConnectRequests();
-      var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
-      this.peeps_set(vs);
+      var connReqsSet = moda.queryConnectRequests();
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(connReqsSet);
+      this.requests_set(vs);
     },
     destroy: function(keepDom, forbidKeepDom) {
       this.vs.liveSet.close();
       this.__destroy(keepDom, forbidKeepDom);
+    },
+  },
+  events: {
+    requests: {
+      command: function(connReqBinding) {
+        var liveSet = this.vs.liveSet,
+            connReq = connReqBinding.obj;
+        // we need to keep the peep alive...
+        liveSet.boostRefCount();
+        this.emit_openTab({
+          kind: 'accept-request',
+          name: "Connect with " + connReq.peep.selfPoco.displayName,
+          liveSet: liveSet,
+          connReq: connReq,
+        }, true);
+
+      },
     },
   }
 });
@@ -153,10 +171,68 @@ wy.defineWidget({
   },
   focus: wy.focus.item,
   structure: {
-    peep: wy.widget({type: 'peep-blurb'}, 'peep'),
+    peep: wy.bind(['peep', 'selfPoco', 'displayName']),
+    server: wy.bind(['peepServer', 'url']),
     messageText: wy.bind('messageText'),
   },
 });
+
+ty.defineWidget({
+  name: 'accept-request-tab',
+  doc: 'Confirm accepting a connect request after seeing more details.',
+  constraint: {
+    type: 'tab',
+    obj: { kind: 'accept-request' },
+  },
+  focus: wy.focus.container.vertical('btnAccept'),
+  emit: ['closeTab'],
+  structure: {
+    overviewBlurb: [
+      "Someone calling themselves ",
+      wy.bind(['connReq', 'peep', 'selfPoco', 'displayName']),
+      " wants to connect with you."
+    ],
+    serverBlurb: [
+      "They are using server ",
+      wy.bind(['connReq', 'peepServer', 'url']),
+      " which claims to be '",
+      wy.bind(['connReq', 'peepServer', 'displayName']),
+      "'"
+    ],
+
+    messageBlurb: [
+      "They included the following message with their request: '",
+      wy.bind(['connReq', 'messageText']),
+      "'.",
+    ],
+
+    localPocoBlock: {
+      pocoEditor: wy.widget({ type: 'oth-poco-edit' },
+                            ['connReq', 'peep', 'selfPoco']),
+    },
+
+    buttonBar: {
+      btnAccept: wy.button("Accept connect request"),
+    }
+  },
+  impl: {
+    destroy: function(keepDom, forbidKeepDom) {
+      this.obj.liveSet.close();
+      this.__destroy(keepDom, forbidKeepDom);
+    },
+  },
+  events: {
+    btnAccept: {
+      command: function() {
+        var ourPocoForPeep =
+          this.pocoEditor_element.binding.gimmePoco();
+        this.obj.connReq.acceptConnectRequest(ourPocoForPeep);
+        this.emit_closeTab(this.obj);
+      },
+    }
+  },
+});
+
 
 ty.defineWidget({
   name: 'conv-blurbs-tab',

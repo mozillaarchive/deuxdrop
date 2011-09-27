@@ -289,16 +289,6 @@ ModaBackside.prototype = {
   },
 
   /**
-   * Transform a server ident blob for transport to a `ModaBridge`.
-   */
-  _transformServerIdent: function(serverIdent) {
-    return {
-      url: serverIdent.url,
-      displayName: serverIdent.meta.displayName,
-    };
-  },
-
-  /**
    * Get a list of all known servers.
    */
   _cmd_queryServers: function(bridgeQueryName, payload) {
@@ -331,7 +321,7 @@ ModaBackside.prototype = {
         queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
           clientData;
         queryHandle.dataMap[NS_SERVERS][localName] =
-          this._transformServerIdent(serverIdent);
+          this._store._transformServerIdent(serverIdent);
       }
       viewItems.push(clientData.localName);
       clientDataItems.push(clientData);
@@ -422,7 +412,7 @@ ModaBackside.prototype = {
     // XXX our use of serverInfo needs to integrate with the caching scheme
     //  for consistency here!
     if (this._rawClient._transitServerBlob)
-      serverInfo = this._transformServerIdent(
+      serverInfo = this._store._transformServerIdent(
                      this._rawClient._transitServer);
     this.send({
       type: 'whoAmI',

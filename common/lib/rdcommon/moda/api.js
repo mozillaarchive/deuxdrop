@@ -382,11 +382,12 @@ OurUserAccount.prototype = {
  *  in the connect request but call us "the king's fool" when inviting us to
  *  join conversations.
  */
-function ConnectRequest(_bridge, localName, peep, theirPocoForUs, receivedAt,
-                        messageText) {
+function ConnectRequest(_bridge, localName, peep, serverInfo, theirPocoForUs,
+                        receivedAt, messageText) {
   this._bridge = _bridge;
   this._localName = localName;
   this.peep = peep;
+  this.peepServer = serverInfo;
   this.theirPocoForUs = theirPocoForUs;
   this.receivedAt = new Date(receivedAt);
   this.messageText = messageText;
@@ -491,6 +492,9 @@ ModaBridge.prototype = {
       case 'signupResult':
         return this._receiveSignupResult(msg);
       case 'query':
+        if (msg.op === 'dead')
+          throw new Error("Query '" + msg.handle + "' has died; " +
+                          "check for loggest errors.");
         return this._receiveQueryUpdate(msg);
     }
     throw new Error("Received unknown message type: " + msg.type);
@@ -857,7 +861,8 @@ ModaBridge.prototype = {
    */
   _transformConnectRequest: function(localName, wireRep, liveset) {
     var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
-    return new ConnectRequest(this, localName, peepRep,
+    var serverRep = liveset._dataByNS.servers[wireRep.serverLocalName];
+    return new ConnectRequest(this, localName, peepRep, serverRep,
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
   },
 

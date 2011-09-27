@@ -99,7 +99,8 @@ ty.defineWidget({
     },
     btnListFriends: {
       command: function() {
-        this.emit_openTab({ kind: 'peeps', name: "Peeps!" }, true);
+        this.emit_openTab({ kind: 'peeps', name: "Peeps!", sortBy: 'any' },
+                          true);
       },
     },
   },

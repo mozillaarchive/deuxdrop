@@ -45,3 +45,44 @@
     width: 60em;
   }
 }
+
+#conn-request {
+  #peep, #server, #messageText {
+    display: block;
+  }
+  #peep {
+    font-weight: bold;
+  }
+  #messageText {
+    font-style: italic;
+  }
+}
+
+#accept-request-tab {
+  #overviewBlurb, #serverBlurb, #messageBlurb {
+    display: block;
+    margin: 0.5em 0;
+  }
+  /* real data that the user can't fake should be uniquely expressed */
+  /* anything the other user entered should be uniquely expressed */
+  #serverBlurb1 {
+    font-weight: bold;
+  }
+  #overviewBlurb1, #serverBlurb3, #messageBlurb1 {
+    font-weight: bold;
+    font-style: italic;
+  }
+  #overviewBlurb1:hover, #serverBlurb3:hover, #messageBlurb1:hover {
+    background-color: #ffcccc;
+  }
+
+
+  #localPocoBlock {
+    margin: 2em 0;
+  }
+
+  #buttonBar {
+    display: block;
+    margin-top: 1.5em;
+  }
+}

@@ -838,9 +838,12 @@ LocalStore.prototype = {
 
     // - synthesize the peep rep
     var peepClientData = this._notif.reuseIfAlreadyKnown(
-                           queryHandle, NS_PEEPS, fullName);
+                           queryHandle, NS_PEEPS, fullName),
+        selfIdentPayload = $pubident.peekPersonSelfIdentNOVERIFY(
+                             reqRep.selfIdent),
+        localName;
     if (!peepClientData) {
-      var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
+      localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
       peepClientData = {
         localName: localName,
         fullName: fullName,
@@ -849,8 +852,6 @@ LocalStore.prototype = {
         indexValues: [],
         deps: [],
       };
-      var selfIdentPayload = $pubident.peekPersonSelfIdentNOVERIFY(
-                               reqRep.selfIdent);
       var frontData = this._convertPeepSelfIdentToBothReps(
                         reqRep.selfIdent, selfIdentPayload, peepClientData);
 
@@ -861,11 +862,46 @@ LocalStore.prototype = {
     }
     clientData.deps.push(peepClientData);
 
+    // - synthesize the peep's server info rep
+    var serverIdent = $pubident.peekServerSelfIdentNOVERIFY(
+                        selfIdentPayload.transitServerIdent);
+    var serverClientData = this._notif.reuseIfAlreadyKnown(
+                             queryHandle, NS_SERVERS,
+                             serverIdent.rootPublicKey);
+    if (!serverClientData) {
+      localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
+      serverClientData = {
+        localName: localName,
+        fullName: serverIdent.rootPublicKey,
+        count: 1,
+        data: selfIdentPayload.transitServerIdent,
+        indexValues: null,
+        deps: null,
+      };
+      queryHandle.membersByLocal[NS_SERVERS][localName] = serverClientData;
+      queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
+        serverClientData;
+      queryHandle.dataMap[NS_SERVERS][localName] =
+        this._transformServerIdent(serverIdent);
+    }
+    clientData.deps.push(serverClientData);
+
     return {
       peepLocalName: peepClientData.localName,
+      serverLocalName: serverClientData.localName,
       theirPocoForUs: reqRep.theirPocoForUs,
       receivedAt: reqRep.receivedAt,
       messageText: reqRep.messageText,
+    };
+  },
+
+  /**
+   * Transform a server ident blob for transport to a `ModaBridge`.
+   */
+  _transformServerIdent: function(serverIdent) {
+    return {
+      url: serverIdent.url,
+      displayName: serverIdent.meta.displayName,
     };
   },
 
