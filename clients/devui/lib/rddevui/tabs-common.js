@@ -588,6 +588,8 @@ ty.defineWidget({
 var l10nErrors = wy.defineLocalizedMap('errors', {
     serverDoesNotKnowWhoWeAre:
       "The server says we have no account.  Restart and sign-up again.",
+    discardedReplicaBlock:
+      "The server told us something that made us sad, so we threw it away.",
   }, "Unknown error id: #0");
 
 wy.defineWidget({

@@ -228,11 +228,17 @@ MailstoreConn.prototype = {
    */
   _msg_root_replicaBlock: function(msg) {
     return when(this._owner.store.consumeReplicaBlock(msg.block),
-                this._bound_ackProcessedReplicaBlock
-                // rejection pass-through is fine
+                this._bound_ackProcessedReplicaBlock,
+                this._needsbind_failureProcessingReplicaBlock.bind(this, msg)
                );
   },
   _needsbind_ackProcessedReplicaBlock: function() {
+    this.conn.writeMessage({type: 'ackReplica'});
+    return 'root';
+  },
+  _needsbind_failureProcessingReplicaBlock: function(msg, err) {
+    // acknowledge the block even though we didn't process it successfully.
+    this._owner._replicaBlockProcessingFailure(msg, err);
     this.conn.writeMessage({type: 'ackReplica'});
     return 'root';
   },
@@ -464,6 +470,12 @@ RawClientAPI.prototype = {
   _replicaCaughtUp: function() {
     this._log.replicaCaughtUp();
     this.store.replicaCaughtUp();
+  },
+
+  _replicaBlockProcessingFailure: function(msg, err) {
+    this._log.replicaBlockProcessingFailure(err, msg);
+    this.publishError('discardedReplicaBlock', '',
+                      { userActionRequired: false, permanent: false });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1350,7 +1362,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     errors: {
       signupFailure: {},
-      insecurelyGetServerSelfIdentUsingDomainNameFailure: {}
+      insecurelyGetServerSelfIdentUsingDomainNameFailure: {},
+      replicaBlockProcessingFailure: {err: $log.EXCEPTION, msg: false},
     },
   }
 });
