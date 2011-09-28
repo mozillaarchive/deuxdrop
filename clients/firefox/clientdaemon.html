@@ -73,7 +73,8 @@ function sendAddOnMessage(data) {
   window.dispatchEvent(event);
 }
 
-var RAW_CLIENT = null, $backside, LOG_REAPER, LOG_SCHEMA, ROOT_LOGGER;
+var RAW_CLIENT = null, $backside, $LOG, $PUBIDENT,
+    LOG_REAPER, LOG_SCHEMA, ROOT_LOGGER, DEVELOPMENT_MODE = true;
 function BOOTSTRAP(callbackWhenLoaded) {
   require(
     {
@@ -101,10 +102,9 @@ function BOOTSTRAP(callbackWhenLoaded) {
       }
     },
     ['event-queue', 'rdcommon/rawclient/acctmgr', 'rdcommon/moda/backside',
-     'rdcommon/logreaper'],
-    function(_blahq, $acctmgr, _backside, $logreaper) {
+     'rdcommon/logreaper', 'rdcommon/log', 'rdcommon/identities/pubident'],
+    function(_blahq, $acctmgr, _backside, $logreaper, $log, $pubident) {
       console.log(":) :) :) client daemon bootstrapped!");
-      var DEVELOPMENT_MODE = true;
       var bundle = $acctmgr.loadAccount(DEVELOPMENT_MODE);
       RAW_CLIENT = bundle.rawClient;
       $backside = _backside;
@@ -112,6 +112,8 @@ function BOOTSTRAP(callbackWhenLoaded) {
       ROOT_LOGGER = bundle.rootLogger;
       LOG_REAPER = new $logreaper.LogReaper(bundle.rootLogger);
       LOG_SCHEMA = bundle.schema;
+      $LOG = $log;
+      $PUBIDENT = $pubident;
 
       if (callbackWhenLoaded)
         callbackWhenLoaded();
@@ -154,12 +156,111 @@ function DEAD_MODA_CLIENT(name) {
 var logbacklog = [], MAX_LOG_BACKLOG = 60;
 var loggerClients = [];
 
+var NAMEABLE_NAMESPACES = ['peeps', 'servers'];
+var NAMERS_BY_NAMESPACE = {
+  peeps: function(clientData, nameDb, logger, family) {
+    var selfIdentPayload = $PUBIDENT.peekPersonSelfIdentNOVERIFY(
+                             clientData.data.sident);
+    var displayName = selfIdentPayload.poco.displayName, thing;
+
+    nameDb[clientData.fullName] = true;
+
+    thing = $LOG.__makeThing('peep', displayName + ":root",
+                             selfIdentPayload.root.rootSignPubKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+
+    thing = $LOG.__makeThing('peep', displayName + ":longterm",
+                             selfIdentPayload.root.longtermSignPubKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+
+    thing = $LOG.__makeThing('peep', displayName + ":envelope",
+                             selfIdentPayload.keys.envelopeBoxPubKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+
+    thing = $LOG.__makeThing('peep', displayName + ":body",
+                             selfIdentPayload.keys.bodyBoxPubKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+
+    thing = $LOG.__makeThing('peep', displayName + ":announce",
+                             selfIdentPayload.keys.announceSignPubKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+
+    thing = $LOG.__makeThing('peep', displayName + ":tell",
+                             selfIdentPayload.keys.tellBoxPubKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+  },
+  servers: function(clientData, nameDb, logger) {
+    var serverIdentPayload = $PUBIDENT.peekServerSelfIdentNOVERIFY(
+                               clientData.data),
+        humanName = serverIdentPayload.url, thing;
+
+    nameDb[clientData.fullName] = true;
+
+    thing = $LOG.__makeThing('server', humanName + ":root",
+                             serverIdentPayload.rootPublicKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+
+    thing = $LOG.__makeThing('server', humanName + ":longterm",
+                             serverIdentPayload.publicKey);
+    thing.__hardcodedFamily = family;
+    logger.named[thing._uniqueName] = thing;
+  },
+};
+
+/**
+ * For development mode only, trawl the contents of the existing queryHandles
+ *  in order to generate naming entries to make our logs useful.
+ */
+function annotateLogFragWithNames(logFrag) {
+  if (!logFrag.hasOwnProperty("named"))
+    logFrag.named = {};
+
+  var notif = RAW_CLIENT._notif;
+  var namedAlready = {};
+
+  var nextFamily = 'b';
+
+  for (var qsKey in notif._activeQuerySources) {
+    var querySource = notif._activeQuerySources[qsKey];
+
+    var queryHandles = querySource.allQueryHandles;
+
+    for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+      var queryHandle = queryHandles[iQuery];
+      for (var iNS = 0; iNS < NAMEABLE_NAMESPACES.length; iNS++) {
+        var namespace = NAMEABLE_NAMESPACES[iNS],
+            namerFunc = NAMERS_BY_NAMESPACE[namespace];
+
+        var membersByFull = queryHandle.membersByFull[namespace];
+        for (var fullName in membersByFull) {
+          if (namedAlready.hasOwnProperty(fullName))
+            continue;
+
+          namerFunc(membersByFull[fullName], namedAlready, logFrag, nextFamily);
+          nextFamily = String.fromCharCode(nextFamily.charCodeAt(0) + 1);
+          if (nextFamily > 'z')
+            nextFamily = 'b';
+        }
+      }
+    }
+  }
+}
+
 // once a second, potentially generate a log
 setInterval(function() {
   var logTimeSlice = LOG_REAPER.reapHierLogTimeSlice();
   // if nothing interesting happened, this could be empty, yos.
   if (logTimeSlice.logFrag) {
     logbacklog.push(logTimeSlice);
+    if (DEVELOPMENT_MODE)
+      annotateLogFragWithNames(logTimeSlice.logFrag);
     // throw something away if we've got too much stuff already
     if (logbacklog.length > MAX_LOG_BACKLOG)
       logbacklog.shift();

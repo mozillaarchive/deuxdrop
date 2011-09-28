@@ -598,8 +598,9 @@ var TestModaActorMixins = {
 
     // -- direct queries
     // ignore changes about our own peep for direct queries.
-    if (cinfo.name === this._testClient.__name)
-      return;
+    // XXX should we filter ourselves out?
+//    if (cinfo.name === this._testClient.__name)
+//      return;
 
     var queries = this._dynamicPeepQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
@@ -866,6 +867,9 @@ var TestModaActorMixins = {
           joineeName = tMsg.data.who.__name,
           joineeInfo = this._contactMetaInfoByName[joineeName];
       convInfo.peepSeqsByName[joineeName] = {};
+
+      // - dep notifications for the joinee's already involved convs
+      this._notifyDepConvMsgs(joineeInfo, joineeInfo.involvedConvs);
 
       joineeInfo.involvedConvs.push(convInfo);
       convInfo.participantInfos.push(joineeInfo);
@@ -1339,6 +1343,9 @@ var TestModaActorMixins = {
     var self = this;
     this.T.check(this, 'checks', lqt, 'contains', tConvs, function() {
       var blurbs = lqt._liveset.items;
+      if (blurbs.length !== tConvs.length)
+        throw new Error("Have " + blurbs.length + " conv blurbs but " +
+                        tConvs.length + " conv things.");
       for (var i = 0; i < blurbs.length; i++) {
         var blurb = blurbs[i], tConv = tConvs[i];
         self.expect_convBlurbCheck(self._thingConvToBlurbLoggable(tConv));

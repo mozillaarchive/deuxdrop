@@ -176,6 +176,10 @@ TD.commonCase('moda basics', function(T) {
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
 
+  // - make sure that the conversation addition did not screw up our peeps list
+  T.group('check peeps list after conversation join');
+  lqFinalAllPeeps = moda_a.do_queryPeeps("allPeepsFinal:any", {by: 'any'});
+
   // - query on the messages in the conversation
   T.group('messages query on the conversation');
   var lqConv1Msgs = moda_a.do_queryConversationMessages(
@@ -242,9 +246,11 @@ TD.commonCase('moda basics', function(T) {
 
   lqBconvBlurbs = moda_a.do_queryPeepConversations(
                     'BconvBlurbs', lqAllPeeps, client_b, {by: 'any'});
-  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv2, tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv3, tConv2, tConv1]);
 
   T.group("cleanup");
+  moda_a.do_killQuery(lqAllPeeps);
+  moda_a.do_killQuery(lqFinalAllPeeps);
 });
 
 }); // end define

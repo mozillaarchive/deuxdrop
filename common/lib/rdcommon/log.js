@@ -267,12 +267,15 @@ var ThingProto = exports.ThingProto = {
     return '[Thing:' + this.__type + ']';
   },
   toJSON: function() {
-    return {
+    var o = {
       type: this.__type,
       name: this.__name,
       dname: this.__diginame,
       uniqueName: this._uniqueName,
     };
+    if (this.__hardcodedFamily)
+      o.family = this.__hardcodedFamily;
+    return o;
   },
 };
 
@@ -293,6 +296,7 @@ exports.__makeThing = function makeThing(type, humanName, digitalName, proto) {
     __type: type,
     __name: humanName,
     __diginame: digitalName,
+    __hardcodedFamily: null,
     _uniqueName: gUniqueThingName--,
   };
 };
