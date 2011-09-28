@@ -195,7 +195,7 @@ var NAMERS_BY_NAMESPACE = {
     thing.__hardcodedFamily = family;
     logger.named[thing._uniqueName] = thing;
   },
-  servers: function(clientData, nameDb, logger) {
+  servers: function(clientData, nameDb, logger, family) {
     var serverIdentPayload = $PUBIDENT.peekServerSelfIdentNOVERIFY(
                                clientData.data),
         humanName = serverIdentPayload.url, thing;
@@ -225,7 +225,32 @@ function annotateLogFragWithNames(logFrag) {
   var notif = RAW_CLIENT._notif;
   var namedAlready = {};
 
-  var nextFamily = 'b';
+  // -- generate names for our user and its transit server immediately
+  // - user
+  NAMERS_BY_NAMESPACE.peeps(
+    {
+      fullName: RAW_CLIENT.rootPublicKey,
+      data: { sident: RAW_CLIENT._selfIdentBlob }
+    },
+    namedAlready, logFrag, 'a');
+  var thing = $LOG.__makeThing(
+    'peep', RAW_CLIENT._poco.displayName + ":client",
+    RAW_CLIENT.clientPublicKey);
+  thing.__hardcodedFamily = 'a';
+  logFrag.named[thing._uniqueName] = thing;
+
+  // - transit server
+  if (RAW_CLIENT._transitServerBlob) {
+    NAMERS_BY_NAMESPACE.servers(
+      {
+        fullName: RAW_CLIENT._transitServer.rootPublicKey,
+        data: RAW_CLIENT._transitServerBlob,
+      },
+      namedAlready, logFrag, 'b');
+  }
+
+  // -- query trawling
+  var nextFamily = 'c';
 
   for (var qsKey in notif._activeQuerySources) {
     var querySource = notif._activeQuerySources[qsKey];
