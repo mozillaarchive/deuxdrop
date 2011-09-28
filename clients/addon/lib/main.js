@@ -193,9 +193,9 @@ function daemonSendClientMessage(clientUnique, data) {
 
 var loggerClientRegistry = {};
 
-function notifyDaemonOfNewLoggerClient(senderUnique, uiWorker) {
+function notifyDaemonOfNewLoggerClient(senderUnique, uiWorker, cannedDataUrl) {
   loggerClientRegistry[senderUnique] = uiWorker;
-  gWinJS.NEW_LOG_CLIENT(senderUnique);
+  gWinJS.NEW_LOG_CLIENT(senderUnique, cannedDataUrl);
 }
 
 function sendDaemonLoggerMessage(senderUnique, data) {
@@ -366,21 +366,15 @@ exports.main = function () {
       //  content page)
 
       // about:loggest-server magic.
-      if (loggestStack.length) {
-        var remoteUrl = loggestStack.pop();
-        // we do not want to hook it up as a subscriber, just tell it the URL
-        //  to get the data from.
-        $timers.setTimeout(function() {
-            uiWorker.postMessage({type: 'url', url: remoteUrl});
-          }, 1000); // ugh, hack.
-        return;
-      }
+      var remoteUrl = null;
+      if (loggestStack.length)
+        remoteUrl = loggestStack.pop();
 
       // unique identifier to name the query source and provide the pairing
       //  for the moda API bridge.
       var uniqueNum = nextQuerySourceUniqueNum++;
 
-      notifyDaemonOfNewLoggerClient(uniqueNum, uiWorker);
+      notifyDaemonOfNewLoggerClient(uniqueNum, uiWorker, remoteUrl);
 
       // Listen to messages from the UI and send them to the client daemon
       uiWorker.on('message', function (message) {

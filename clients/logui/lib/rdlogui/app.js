@@ -149,6 +149,8 @@ function LogUIApp() {
 
   this.fakePerms = [];
   this.vsPerms = new $vs_array.ArrayViewSlice(this.fakePerms);
+
+  this.useNamesMap = null;
 }
 LogUIApp.prototype = {
   processSchema: function(schema) {
@@ -166,6 +168,11 @@ LogUIApp.prototype = {
 
     var transformer = this.transformer;
     var rootLogger = logslice.logFrag;
+
+    // XXX in theory we might be provided with names by the server and so we
+    //  should merge things, but for now it's known to not be the case.
+    if (this.useNamesMap)
+      rootLogger.named = this.useNamesMap;
 
     var fakePerm = new $chew_loggest.TestCasePermutationLogBundle({});
     transformer._uniqueNameMap = fakePerm._uniqueNameMap;
@@ -207,6 +214,7 @@ LogUIApp.prototype = {
       }
     }
     else if (msg.type === 'url') {
+      this.useNamesMap = msg.annoFrag.named;
       remoteFetch(this, msg.url);
     }
     else {
@@ -240,14 +248,8 @@ function remoteFetch(app, url) {
   request.send(null);
 }
 
-exports.main = function(doc, cannedData) {
+exports.main = function(doc) {
   var app = new LogUIApp();
-
-  // if we have canned data, don't hook up to the live feed.
-  if (cannedData) {
-    app.receiveMessage(cannedData);
-    return;
-  }
 
   // Listen for messages from the client daemon
   window.addEventListener('moda-daemon-to-ui', function (evt) {

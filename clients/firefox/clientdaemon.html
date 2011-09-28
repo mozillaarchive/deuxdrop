@@ -296,12 +296,31 @@ setInterval(function() {
   }
 }, 1000);
 
-function NEW_LOG_CLIENT(name) {
+var LOGGER_CANNED_DATA_MAP = {};
+
+function NEW_LOG_CLIENT(name, cannedDataUrl) {
   // wait for the client to tell us about itself since loading can take a while
+  LOGGER_CANNED_DATA_MAP[name] = cannedDataUrl;
 }
 
 function LOG_CLIENT_MSG(name, msg) {
   if (msg.type === 'subscribe') {
+    var cannedDataUrl = LOGGER_CANNED_DATA_MAP[name];
+    delete LOGGER_CANNED_DATA_MAP[name];
+    if (cannedDataUrl) {
+      var msg = {
+        type: 'url',
+        url: cannedDataUrl,
+        annoFrag: {
+          named: {},
+        },
+      };
+      if (DEVELOPMENT_MODE)
+        annotateLogFragWithNames(msg.annoFrag);
+      daemonSendLoggerClientMessage(name, msg);
+      return;
+    }
+
     loggerClients.push(name);
     daemonSendLoggerClientMessage(name, {
       type: 'backlog',
