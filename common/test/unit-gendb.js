@@ -63,7 +63,8 @@ var TD = exports.TD = $tc.defineTestsFor($module, $gendb.LOGFAB, null,
 
 const TBL_HUMANS = 'humans',
       IDX_NAME = 'name',
-      IDX_AGE = 'age';
+      IDX_AGE = 'age',
+      TBQ_TODO = 'todo';
 
 var dbSchema = {
   tables: [
@@ -79,6 +80,9 @@ var dbSchema = {
 
   // XXX no queues for now, but we should test them
   queues: [
+    {
+      name: TBQ_TODO,
+    },
   ],
 };
 
@@ -531,6 +535,135 @@ TD.commonCase('reorderable collection index model', function(T) {
   });
 
   // - cleanup
+  T.group('cleanup');
+  T.cleanup(eLazy, 'cleanup', function() {
+    $gendb.cleanupTestDBConnection(conn);
+  });
+});
+
+TD.commonCase('queue model', function(T) {
+  // although the database connection has a logger, they're not really useful
+  //  for correctness, just for knowing what's happening, so we create a lazy
+  //  person's logger for the unit test.
+  var eLazy = T.lazyLogger('db'), conn;
+
+  // use a common rejection handler for everything.
+  function badNews(err) {
+    eLazy.error(err);
+  }
+  // helper to create a callback handler
+  function logEvent(what) {
+    return function() {
+      eLazy.event(what);
+    };
+  };
+  // helper to create a callback that logs the value passed to the callback
+  //  using namedValue.  Strictly speaking, we don't need to provide the name
+  //  because the testing framework enforces sequencing, I'm just trying to
+  //  make the logs perhaps a bit more readable.
+  function logNamedValue(name) {
+    return function(val) {
+      eLazy.namedValue(name, val);
+    };
+  };
+
+  T.group('setup');
+  T.action(eLazy, 'create connection', function() {
+    conn = $gendb.makeTestDBConnection('');
+  });
+  T.action(eLazy, 'define schema', function() {
+    eLazy.expect_event('schema defined');
+
+    when(conn.defineSchema(dbSchema), logEvent('schema defined'), badNews);
+  });
+
+  T.group('basics: append 1; peek 1; consume 1; peek 0');
+  T.action(eLazy, 'put A', function() {
+    eLazy.expect_event('put A');
+    when(conn.queueAppend(TBQ_TODO, 'letters', [{say: 'A'}]),
+         logEvent('put A'), badNews);
+  });
+  T.action(eLazy, 'peek A', function() {
+    eLazy.expect_namedValue('peek A', [{say: 'A'}]);
+    when(conn.queuePeek(TBQ_TODO, 'letters', 1),
+         logNamedValue('peek A'), badNews);
+  });
+  T.action(eLazy, 'peek A again, still there', function() {
+    eLazy.expect_namedValue('peek A', [{say: 'A'}]);
+    when(conn.queuePeek(TBQ_TODO, 'letters', 1),
+         logNamedValue('peek A'), badNews);
+  });
+  T.action(eLazy, 'consume A', function() {
+    eLazy.expect_event('consume A');
+    when(conn.queueConsume(TBQ_TODO, 'letters', 1),
+         logEvent('consume A'), badNews);
+  });
+  T.action(eLazy, 'peek now empty', function() {
+    eLazy.expect_namedValue('peek empty', []);
+    when(conn.queuePeek(TBQ_TODO, 'letters', 1),
+         logNamedValue('peek empty'), badNews);
+  });
+
+  T.group('greater depth, check consumeAndPeek too');
+  T.action(eLazy, 'put B, C', function() {
+    eLazy.expect_event('put B, C');
+    when(conn.queueAppend(TBQ_TODO, 'letters', [{say: 'B'}, {say: 'C'}]),
+         logEvent('put B, C'), badNews);
+  });
+  T.action(eLazy, 'peek B', function() {
+    eLazy.expect_namedValue('peek B', [{say: 'B'}]);
+    when(conn.queuePeek(TBQ_TODO, 'letters', 1),
+         logNamedValue('peek B'), badNews);
+  });
+  T.action(eLazy, 'put D, E', function() {
+    eLazy.expect_event('put D, E');
+    when(conn.queueAppend(TBQ_TODO, 'letters', [{say: 'D'}, {say: 'E'}]),
+         logEvent('put D, E'), badNews);
+  });
+  T.action(eLazy, 'consume B and peek C', function() {
+    eLazy.expect_namedValue('consumeAndPeek', [{say: 'C'}]);
+    when(conn.queueConsumeAndPeek(TBQ_TODO, 'letters', 1, 1),
+         logNamedValue('consumeAndPeek'), badNews);
+  });
+  T.action(eLazy, 'consume C,D and peek E', function() {
+    eLazy.expect_namedValue('consumeAndPeek', [{say: 'E'}]);
+    when(conn.queueConsumeAndPeek(TBQ_TODO, 'letters', 2, 1),
+         logNamedValue('consumeAndPeek'), badNews);
+  });
+
+  T.group('separate queues are separate');
+  T.action(eLazy, 'put 1, 2', function() {
+    eLazy.expect_event('put 1, 2');
+    when(conn.queueAppend(TBQ_TODO, 'numbers', [{say: 1}, {say: 2}]),
+         logEvent('put 1, 2'), badNews);
+  });
+  T.action(eLazy, 'peek E', function() {
+    eLazy.expect_namedValue('peek E', [{say: 'E'}]);
+    when(conn.queuePeek(TBQ_TODO, 'letters', 1),
+         logNamedValue('peek E'), badNews);
+  });
+  T.action(eLazy, 'peek 1', function() {
+    eLazy.expect_namedValue('peek 1', [{say: 1}]);
+    when(conn.queuePeek(TBQ_TODO, 'numbers', 1),
+         logNamedValue('peek 1'), badNews);
+  });
+  T.action(eLazy, 'consume 1', function() {
+    eLazy.expect_event('consume 1');
+    when(conn.queueConsume(TBQ_TODO, 'numbers', 1),
+         logEvent('consume 1'), badNews);
+  });
+  T.action(eLazy, 'peek E', function() {
+    eLazy.expect_namedValue('peek E', [{say: 'E'}]);
+    when(conn.queuePeek(TBQ_TODO, 'letters', 1),
+         logNamedValue('peek E'), badNews);
+  });
+  T.action(eLazy, 'peek 2', function() {
+    eLazy.expect_namedValue('peek 2', [{say: 2}]);
+    when(conn.queuePeek(TBQ_TODO, 'numbers', 1),
+         logNamedValue('peek 2'), badNews);
+  });
+
+
   T.group('cleanup');
   T.cleanup(eLazy, 'cleanup', function() {
     $gendb.cleanupTestDBConnection(conn);
