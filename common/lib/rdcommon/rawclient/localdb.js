@@ -495,7 +495,7 @@ LocalStore.prototype = {
       NS_CONVBLURBS, convId, cells, mutatedCells, indexValues,
       function buildReps(clientData, queryHandle) {
         if (!mergedCells) // merge only the first time needed
-          mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
+          mergedCells = $notifking.mergeCells(cells, mutatedCells);
         // back data
         clientData.data = mergedCells['d:meta'];
         return self._convertConversationBlurb(
