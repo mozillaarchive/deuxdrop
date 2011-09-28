@@ -423,10 +423,14 @@ wy.defineWidget({
   },
   focus: wy.focus.item,
   structure: {
-    participants: wy.widgetFlow({ type: 'peep-inline' }, 'participants',
-                                { separator: ', ' }),
-    firstMessageText: wy.bind(['firstMessage', 'messageText']),
-    numUnread: wy.bind('numUnreadMessages'),
+    mainBox: {
+      participants: wy.widgetFlow({ type: 'peep-inline' }, 'participants',
+                                  { separator: ', ' }),
+      firstMessageText: wy.bind(['firstMessage', 'messageText']),
+    },
+    metaBox: {
+      numUnread: wy.bind('numUnreadMessages'),
+    }
   },
 });
 

@@ -1,5 +1,14 @@
 /* hats */
 
+.unreadBubble {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-top: -3px;
+  background-color: gray;
+  border-radius: 8px;
+  color: white;
+}
+
 #peep-blurb {
   #root {
     min-width: 16em;
@@ -13,12 +22,7 @@
 
   #unread {
     float: right;
-    display: inline-block;
-    padding: 2px 6px;
-    margin-top: -3px;
-    background-color: gray;
-    border-radius: 8px;
-    color: white;
+    .unreadBubble;
   }
 }
 
@@ -32,6 +36,35 @@
   #root {
     background-color: #ffffff;
     padding: 8px;
+  }
+}
+
+#conv-blurb {
+  #root {
+    position: relative;
+    margin: 6px;
+    border: 1px solid gray;
+    border-radius: 4px;
+    background-color: #fcfcfc;
+    padding: 0.5em;
+  }
+  #mainBox {
+    display: inline-block;
+  }
+  #metaBox {
+    float: right;
+  }
+
+  #participants {
+    display: block;
+    margin-bottom: 0.5em;
+  }
+  #firstMessageText {
+    display: block;
+    font-style: italic;
+  }
+  #numUnread {
+    .unreadBubble;
   }
 }
 
