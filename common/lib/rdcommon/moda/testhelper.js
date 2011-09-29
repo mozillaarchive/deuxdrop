@@ -153,13 +153,19 @@ var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
  *  the dictionary `obj` whose values are set to `value`.
  */
 function markListIntoObj(list, obj, value) {
+  var counter = 0;
   for (var i = 0; i < list.length; i++) {
     var name = list[i];
     if (obj.hasOwnProperty(name))
       throw new Error("list already has '" + name + "' in it");
-    obj[name] = value;
+    if (value === MARK_COUNTER)
+      obj[name] = counter++;
+    else
+      obj[name] = value;
   }
 }
+
+const MARK_COUNTER = {};
 
 /**
  * Assists in generating delta-expectation representations related to persistent
@@ -201,13 +207,37 @@ var DeltaHelper = exports.DeltaHelper = {
       return a.name.localeCompare(b.name);
     },
     any: function(a, b) {
-      return a.any - b.any;
+      var delta = b.any - a.any;
+      if (delta)
+        return delta;
+      if (a.rootKey < b.rootKey)
+        return -1;
+      else if (a.rootKey > b.rootKey)
+        return 1;
+      else
+        return 0;
     },
     recip: function(a, b) {
-      return a.recip - b.recip;
+      var delta = b.recip - a.recip;
+      if (delta)
+        return delta;
+      if (a.rootKey < b.rootKey)
+        return -1;
+      else if (a.rootKey > b.rootKey)
+        return 1;
+      else
+        return 0;
     },
     write: function(a, b) {
-      return a.write - b.write;
+      var delta = b.write - a.write;
+      if (delta)
+        return delta;
+      if (a.rootKey < b.rootKey)
+        return -1;
+      else if (a.rootKey > b.rootKey)
+        return 1;
+      else
+        return 0;
     },
   },
 
@@ -239,7 +269,7 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
 
     var keys = lqt._reqInfos.map(this._REQINFO_KEYFUNC);
-    markListIntoObj(keys, delta.state, null);
+    markListIntoObj(keys, delta.state, MARK_COUNTER);
     markListIntoObj(keys, delta.postAnno, 1);
 
     return delta;
@@ -252,7 +282,7 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
 
     markListIntoObj(lqt._reqInfos.map(this._REQINFO_KEYFUNC),
-                    delta.state, null);
+                    delta.state, MARK_COUNTER);
     delta.postAnno[this._REQINFO_KEYFUNC(reqInfo)] = 1;
 
     return delta;
@@ -267,7 +297,7 @@ var DeltaHelper = exports.DeltaHelper = {
     var delta = this.makeOrReuseDelta(lqt);
 
     var rootKeys = testClients.map(this._TESTCLIENT_QUERY_KEYFUNC);
-    markListIntoObj(rootKeys, delta.state, null);
+    markListIntoObj(rootKeys, delta.state, MARK_COUNTER);
     markListIntoObj(rootKeys, delta.postAnno, 1);
 
     return delta;
@@ -283,7 +313,7 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._sorter = this._PEEP_QUERY_BY_TO_CMPFUNC[queryBy];
     cinfos.sort(lqt._sorter);
     var rootKeys = cinfos.map(this._PEEP_QUERY_KEYFUNC);
-    markListIntoObj(rootKeys, delta.state, null);
+    markListIntoObj(rootKeys, delta.state, MARK_COUNTER);
     markListIntoObj(rootKeys, delta.postAnno, 1);
 
     return delta;
@@ -308,7 +338,8 @@ var DeltaHelper = exports.DeltaHelper = {
     cinfos.sort(lqt._sorter);
 
     // - generate state
-    markListIntoObj(cinfos.map(this._PEEP_QUERY_KEYFUNC), delta.state, null);
+    markListIntoObj(cinfos.map(this._PEEP_QUERY_KEYFUNC), delta.state,
+                    MARK_COUNTER);
 
     // - postAnno update for the inserted dude.
     delta.postAnno[this._PEEP_QUERY_KEYFUNC(newCinfo)] = 1;
@@ -330,15 +361,13 @@ var DeltaHelper = exports.DeltaHelper = {
       return null;
 
     var delta = this.makeOrReuseDelta(lqt);
-    // mark the moving guy in the pre
-    if (moved)
-      delta.preAnno[modifiedCinfo.rootKey] = 0;
+    // nb: we previously tried to mark moving people, but this seems like it
+    //  it is better accomplished as a high level post-processing pass because
+    //  it is very easy for a series of moves to occur which net out to the
+    //  original state.
     // fill in the new order
     var rootKeys = cinfos.map(this._PEEP_QUERY_KEYFUNC);
-    markListIntoObj(rootKeys, delta.state, null);
-    // mark the moving guy in the post too
-    if (moved)
-      delta.postAnno[modifiedCinfo.rootKey] = 0;
+    markListIntoObj(rootKeys, delta.state, MARK_COUNTER);
 
     return delta;
   },
@@ -357,12 +386,12 @@ var DeltaHelper = exports.DeltaHelper = {
     lqt._sorter = function(a, b) {
       var va = a.peepSeqsByName[cinfo.name][queryBy],
           vb = b.peepSeqsByName[cinfo.name][queryBy];
-      return va - vb;
+      return vb - va;
     };
     lqt._convs.sort(lqt._sorter);
 
     var convIds = lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC);
-    markListIntoObj(convIds, delta.state, null);
+    markListIntoObj(convIds, delta.state, MARK_COUNTER);
     markListIntoObj(convIds, delta.postAnno, 1);
 
     return delta;
@@ -412,33 +441,34 @@ var DeltaHelper = exports.DeltaHelper = {
 
     var delta = this.makeOrReuseDelta(lqt);
     markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
-                    delta.state, null);
+                    delta.state, MARK_COUNTER);
     var convId = this._PEEPCONV_QUERY_KEYFUNC(convInfo);
-    if (moved) {
-      if (!added)
-        delta.preAnno[convId] = 0;
-      delta.postAnno[convId] = added ? 1 : 0;
-    }
+    // we used to generate moves; no longer.
+    if (added)
+      delta.postAnno[convId] = 1;
     return delta;
   },
 
   convMsgsDelta_base: function(lqt, seenMsgs) {
     var delta = this.makeOrReuseDelta(lqt);
-    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state,
+                    MARK_COUNTER);
     markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.postAnno, 1);
     return delta;
   },
 
   convMsgsDelta_added: function(lqt, seenMsgs, addedMsgs) {
     var delta = this.makeOrReuseDelta(lqt);
-    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state,
+                    MARK_COUNTER);
     markListIntoObj(addedMsgs.map(this._THINGMSG_TEXTFUNC), delta.postAnno, 1);
     return delta;
   },
 
   convMsgsDelta_nop: function(lqt, seenMsgs) {
     var delta = this.makeOrReuseDelta(lqt);
-    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state, null);
+    markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state,
+                    MARK_COUNTER);
     return delta;
   },
 };
@@ -724,10 +754,9 @@ var TestModaActorMixins = {
     // put our actor into 'set' expectations mode for this step since the
     //  query ordering is proving to be intractable to mirror and we don't
     //  really care.
-    if (this._dynPendingQueries.length === 0) {
-      this.RT.reportActiveActorThisStep(this);
-      this.expectUseSetMatching();
-    }
+    this.RT.reportActiveActorThisStep(this);
+    this.expectUseSetMatching();
+
     this._dynPendingQueries.push(lqt);
     this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
   },
@@ -985,7 +1014,12 @@ var TestModaActorMixins = {
     for (var iAdded = 0; iAdded < addedItems.length; iAdded++) {
       // (this is dealing with the moda 'user' visible representations)
       rootKey = keymapper(addedItems[iAdded]);
-      delta.postAnno[rootKey] = 1;
+      // if it was removed this cycle, we now know it's a move; remove the
+      //  preAnno and don't add a postAnno.
+      if (delta.preAnno.hasOwnProperty(rootKey))
+        delete delta.preAnno[rootKey];
+      else
+        delta.postAnno[rootKey] = 1;
     }
 
     // (state population happens during the completed notification)
@@ -1026,9 +1060,10 @@ var TestModaActorMixins = {
     }
 
     // - revised state
+    var counter = 0;
     for (var i = 0; i < liveSet.items.length; i++) {
       rootKey = keymapper(liveSet.items[i]);
-      delta.state[rootKey] = null;
+      delta.state[rootKey] = counter++;
     }
 
     this._logger.queryCompleted(liveSet.data.__name, delta);

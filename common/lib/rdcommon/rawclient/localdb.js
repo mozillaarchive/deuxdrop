@@ -747,16 +747,20 @@ LocalStore.prototype = {
 
     // - per-peep (maybe recip)/any involvement for the recipients
     for (var iRecip = 0; iRecip < recipRootKeys.length; iRecip++) {
-      var rootKey = recipRootKeys[iRecip];
+      var rootKey = recipRootKeys[iRecip],
+          recipIsOurUser = (rootKey === this._keyring.rootPublicKey);
+
       // - boost any involvement
-      peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '', rootKey, timestamp]);
+      if (!recipIsOurUser)
+        peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '', rootKey, timestamp]);
 
       convUpdates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, rootKey,
                     convId, timestamp]);
       // - boost recip involvement
       if (authorIsOurUser) {
-        peepMaxes.push([$lss.IDX_PEEP_RECIP_INVOLVEMENT, '',
-                        rootKey, timestamp]);
+        if (!recipIsOurUser)
+          peepMaxes.push([$lss.IDX_PEEP_RECIP_INVOLVEMENT, '',
+                          rootKey, timestamp]);
 
         convUpdates.push([$lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT, rootKey,
                       convId, timestamp]);
@@ -1120,19 +1124,15 @@ LocalStore.prototype = {
         idx = $lss.IDX_PEEP_CONTACT_NAME;
         scanFunc = 'scanStringIndex';
         scanDir = 1;
-        queryHandle.cmpFunc = this._cmpfunc_peepContactName;
         break;
       case 'any':
         idx = $lss.IDX_PEEP_ANY_INVOLVEMENT;
-        queryHandle.cmpFunc = this._cmpfunc_peepAnyInvolvement;
         break;
       case 'recip':
         idx = $lss.IDX_PEEP_RECIP_INVOLVEMENT;
-        queryHandle.cmpFunc = this._cmpfunc_peepRecipInvolvement;
         break;
       case 'write':
         idx = $lss.IDX_PEEP_WRITE_INVOLVEMENT;
-        queryHandle.cmpFunc = this._cmpfunc_peepWriteInvolvement;
         break;
       default:
         throw new Error("Unsupported ordering: " + queryHandle.queryDef.by);
@@ -1157,15 +1157,25 @@ LocalStore.prototype = {
     if (idx === 'alphabet') {
       queryHandle.cmpFunc = function(aClientData, bClientData) {
         var aVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam),
-            bVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam);
-        return aVal.localCompare(bVal);
+            bVal = assertGetIndexValue(bClientData.indexValues, idx, indexParam);
+        return aVal.localeCompare(bVal);
       };
     }
     else {
       queryHandle.cmpFunc = function(aClientData, bClientData) {
         var aVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam),
-            bVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam);
-        return aVal - bVal;
+            bVal = assertGetIndexValue(bClientData.indexValues, idx, indexParam);
+
+        // make this a deterministic sort by using the fullName to break ties
+        var delta = bVal - aVal;
+        if (delta)
+          return delta;
+        if (aClientData.fullName < bClientData.fullName)
+          return -1;
+        else if (aClientData.fullName > bClientData.fullName)
+          return 1;
+        else
+          return 0;
       };
     }
 
