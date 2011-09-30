@@ -849,6 +849,7 @@ var TestModaActorMixins = {
       convAuthIndices.any = tMsg.data.seq;
 
       // - peep notifications
+      // a change definitely occurred if they are joining the conv
       self._notifyPeepChanged(authorInfo, joineeInfo === authorInfo);
 
       var iPart, pinfo;
@@ -862,6 +863,7 @@ var TestModaActorMixins = {
         if (authorInfo === ourInfo)
           pinfo.recip = Math.max(pinfo.recip, tMsg.data.seq);
         pinfo.any = Math.max(pinfo.any, tMsg.data.seq);
+        // a change definitely occurred if they are joining the conv
         self._notifyPeepChanged(pinfo, pinfo === joineeInfo);
       }
 
@@ -896,9 +898,6 @@ var TestModaActorMixins = {
           joineeName = tMsg.data.who.__name,
           joineeInfo = this._contactMetaInfoByName[joineeName];
       convInfo.peepSeqsByName[joineeName] = {};
-
-      // - dep notifications for the joinee's already involved convs
-      this._notifyDepConvMsgs(joineeInfo, joineeInfo.involvedConvs);
 
       joineeInfo.involvedConvs.push(convInfo);
       convInfo.participantInfos.push(joineeInfo);
@@ -1028,12 +1027,19 @@ var TestModaActorMixins = {
     //this._logger.queryUpdateSplice(liveSet.data.__name, deltaRep);
   },
 
-  onCompleted: function(liveSet) {
+  onCompleted: function(liveSet, modifiedDeps) {
     var lqt = liveSet.data, delta, rootKey;
     if (!lqt._pendingDelta)
       delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
     else
       delta = lqt._pendingDelta;
+
+    var depMap = modifiedDeps.length ? {} : null;
+    for (var iDep = 0; iDep < modifiedDeps.length; iDep++) {
+      var depRep = modifiedDeps[iDep];
+      depMap[this._remapLocalToFullName(depRep.__namespace,
+                                        depRep._localName)] = true;
+    }
 
     var keymapper, self = this;
     if (liveSet._ns === 'convmsgs') {
@@ -1066,7 +1072,7 @@ var TestModaActorMixins = {
       delta.state[rootKey] = counter++;
     }
 
-    this._logger.queryCompleted(liveSet.data.__name, delta);
+    this._logger.queryCompleted(liveSet.data.__name, delta, depMap);
     lqt._pendingDelta = null;
   },
 
@@ -1715,7 +1721,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       signupResult: {err: true},
 
       // - do_query* helpers (does not cover servers right now)
-      queryCompleted: { name: true, keys: true },
+      queryCompleted: { name: true, state: true, depMap: false },
 
       // - query contents detailed results checkers (delta rep is very terse)
       convBlurbCheck: { blurbRep: true },

@@ -76,6 +76,8 @@ function PeepBlurb(_bridge, _localName, ourPoco, selfPoco,
   this._pinned = pinned;
 }
 PeepBlurb.prototype = {
+  __namespace: 'peeps',
+
   // -- getters exist so writes loudly fail
   get isContact() {
     return this.ourPoco !== null;
@@ -171,6 +173,8 @@ function ConversationBlurb(_bridge, _localName, participants,
   this._numUnread = numUnread;
 }
 ConversationBlurb.prototype = {
+  __namespace: 'convblurbs',
+
   get pinned() {
     return this._pinned;
   },
@@ -263,10 +267,10 @@ LiveOrderedSet.prototype = {
   /**
    * Invoked after every update pass completes.
    */
-  _notifyCompleted: function() {
+  _notifyCompleted: function(modifiedDeps) {
     this.completed = true;
     if (this._listener && this._listener.onCompleted)
-      this._listener.onCompleted(this);
+      this._listener.onCompleted(this, modifiedDeps);
   },
 
   /**
@@ -304,6 +308,7 @@ function ServerInfo(_localName, url, displayName) {
   this.displayName = displayName;
 }
 ServerInfo.prototype = {
+  __namespace: 'servers',
 };
 
 /**
@@ -393,6 +398,8 @@ function ConnectRequest(_bridge, localName, peep, serverInfo, theirPocoForUs,
   this.messageText = messageText;
 }
 ConnectRequest.prototype = {
+  __namespace: 'connreqs',
+
   acceptConnectRequest: function(ourPocoForThem) {
     this._bridge.connectToPeep(this.peep, ourPocoForThem);
   },
@@ -412,6 +419,7 @@ function ErrorRep(errorId, errorParam, firstReported, lastReported, count,
   this.permanent = permanent;
 }
 ErrorRep.prototype = {
+  __namespace: 'errors',
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -600,6 +608,12 @@ ModaBridge.prototype = {
     //  so we don't care about tracking them independently.
     var i, key, attr, values, val, dataMap, curRep, delta;
 
+    // Track the modified dependent objects by throwing them all in a list
+    //  (`modifiedDeps`).  Have the processing loops figure out if they are
+    //  dependencies or not, and set `useModifiedDeps` to `modifiedDeps` if
+    //  they are dependent so it can check the value and push if so.
+    var modifiedDeps = [], useModifiedDeps = null;
+
     // -- Servers
     if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
       values = msg.dataMap[NS_SERVERS];
@@ -630,6 +644,7 @@ ModaBridge.prototype = {
     if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
       values = msg.dataDelta[NS_PEEPS];
       dataMap = liveset._dataByNS[NS_PEEPS];
+      useModifiedDeps = (liveset._ns === NS_PEEPS) ? null : modifiedDeps;
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
@@ -642,6 +657,8 @@ ModaBridge.prototype = {
               break;
           }
         }
+        if (useModifiedDeps)
+          useModifiedDeps.push(curRep);
       }
     }
 
@@ -661,6 +678,7 @@ ModaBridge.prototype = {
     if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
       values = msg.dataDelta[NS_CONVBLURBS];
       dataMap = liveset._dataByNS[NS_CONVBLURBS];
+      useModifiedDeps = (liveset._ns === NS_CONVBLURBS) ? null : modifiedDeps;
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
@@ -686,6 +704,8 @@ ModaBridge.prototype = {
               break;
           }
         }
+        if (useModifiedDeps)
+          useModifiedDeps.push(curRep);
       }
     }
 
@@ -717,6 +737,7 @@ ModaBridge.prototype = {
     if (msg.dataDelta.hasOwnProperty(NS_ERRORS)) {
       values = msg.dataDelta[NS_ERRORS];
       dataMap = liveset._dataByNS[NS_ERRORS];
+      useModifiedDeps = (liveset._ns === NS_ERRORS) ? null : modifiedDeps;
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
@@ -725,6 +746,9 @@ ModaBridge.prototype = {
 
         curRep.lastReported = new Date(delta.lastReported);
         curRep.reportedCount = delta.reportedCount;
+
+        if (useModifiedDeps)
+          useModifiedDeps.push(curRep);
       }
     }
 
@@ -796,7 +820,7 @@ ModaBridge.prototype = {
                                  objItems);
       }
     }
-    liveset._notifyCompleted();
+    liveset._notifyCompleted(modifiedDeps);
   },
 
   /**
