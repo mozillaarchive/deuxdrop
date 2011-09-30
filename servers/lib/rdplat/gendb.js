@@ -94,7 +94,7 @@ function unboxPersisted(val) {
   }
 }
 
-function RedisDbConn(connInfo, nsprefix, _logger) {
+function RedisDbConn(connInfo, nsprefix, _logger, dbNum) {
   this._conn = $redis.createClient(connInfo.port, connInfo.host);
   if (connInfo.password)
     this._conn.auth(connInfo.password);
@@ -103,7 +103,11 @@ function RedisDbConn(connInfo, nsprefix, _logger) {
   this._conn.on('error', this._onError.bind(this));
   this._conn.on('end', this._onClosed.bind(this));
 
+  this._conn.select(dbNum);
+
   this._log = LOGFAB.gendbConn(this, _logger, [nsprefix]);
+
+  this._dbNum = dbNum;
 
   this._prefix = nsprefix;
 }
@@ -119,12 +123,15 @@ RedisDbConn.prototype = {
 
   _onReady: function() {
     this._log.connected();
+    this._conn.select(this._dbNum);
   },
   _onError: function(err) {
     this._log.dbErr(err);
+    this._conn.select(this._dbNum);
   },
   _onClosed: function() {
     this._log.closed();
+    this._conn.select(this._dbNum);
   },
 
   defineSchema: function(schema) {
@@ -680,8 +687,7 @@ const TEST_DB_OFFSET = 16;
  */
 exports.makeProductionDBConnection = function(uniqueName, host, port, _logger) {
   var conn = new RedisDbConn({host: host, port: port}, uniqueName,
-                             _logger);
-  conn._conn.select(1);
+                             _logger, 1);
   return conn;
 };
 
@@ -736,8 +742,7 @@ exports.closeProductionDBConnection = function(conn) {
  */
 exports.makeTestDBConnection = function(uniqueName, _logger) {
   var conn = new RedisDbConn({host: '127.0.0.1', port: 6379}, uniqueName,
-                             _logger);
-  conn._conn.select(2); // TEST_DB_OFFSET + process.pid);
+                             _logger, 2);
   conn._conn.flushdb();
   return conn;
 };
