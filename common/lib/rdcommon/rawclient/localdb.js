@@ -1253,9 +1253,28 @@ LocalStore.prototype = {
                       peepRootKey, now]);
 
     // -- generate the notification
+    // Generate a modified notification because the peep could already be
+    //  known to our logic.  If we get better about issuing removals for
+    //  peeps exposed via the 'connect requests' and 'make friends' mechanisms,
+    //  we can go back to adding, because then the peep really should not
+    //  exist at that point.  Keeping the add code around for now to that end.
+    /*
     this._notif.namespaceItemAdded(
       NS_PEEPS, peepRootKey, cells, mutatedCells, indexValues,
       this._convertPeepToBothReps.bind(this, cells, mutatedCells));
+    */
+    this._notif.namespaceItemModified(
+      NS_PEEPS, peepRootKey, cells, mutatedCells, indexValues,
+      this._convertPeepToBothReps.bind(this, cells, mutatedCells),
+      function updatePeepRep(clientData, queryHandle, frontDataDelta) {
+        // we must must must update the oident.
+        var signedOident = mutatedCells['d:oident'];
+        clientData.data.oident = signedOident;
+        var ourPoco =
+          $pubident.peekOtherPersonIdentNOVERIFY(signedOident).localPoco;
+
+        frontDataDelta.ourPoco = ourPoco;
+      });
   },
 
   _notifyPeepConvDeltas: function(authorRootKey, recipRootKeys,

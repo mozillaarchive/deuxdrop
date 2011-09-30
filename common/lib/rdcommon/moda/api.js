@@ -655,6 +655,9 @@ ModaBridge.prototype = {
             case 'numConvs':
               curRep._numConvs = delta.numConvs;
               break;
+            case 'ourPoco':
+              curRep.ourPoco = delta.ourPoco;
+              break;
           }
         }
         if (useModifiedDeps)

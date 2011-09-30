@@ -1,2 +1,4 @@
 Quick list of known bugs that have not been uplifted to issues:
+
+Quick list of fixed bugs that have not had a test introduced to verify their fix:
 - need to update reused peep data's oident slot when contact completion occurs.
