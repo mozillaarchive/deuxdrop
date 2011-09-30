@@ -26,6 +26,18 @@
   }
 }
 
+#me-blurb {
+  #root {
+    min-width: 16em;
+    display: relative;
+    padding: 3px 0px;
+  }
+
+  #name {
+    font-weight: bold;
+  }
+}
+
 #peep-inline {
   #root {
     display: inline-block;
@@ -69,6 +81,15 @@
 }
 
 #human-message {
+  #root {
+    margin-bottom: 1em;
+  }
+
+  #author {
+    display: block;
+    font-weight: bold;
+  }
+
   #date {
     display: block;
     color: gray;
@@ -76,6 +97,15 @@
   }
 }
 #join-message {
+  #root {
+    margin-bottom: 1em;
+  }
+
+  #date {
+    display: block;
+    color: gray;
+    font-size: 80%;
+  }
   #joiner, #joinee {
     display: inline-block;
   }

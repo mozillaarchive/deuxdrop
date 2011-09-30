@@ -120,6 +120,21 @@ wy.defineWidget({
   },
 });
 
+wy.defineWidget({
+  name: 'me-blurb',
+  constraint: {
+    type: 'peep-blurb',
+    obj: { numUnread: undefined },
+  },
+  focus: wy.focus.item,
+  structure: {
+    name: "Me",
+  },
+  impl: {
+  },
+});
+
+
 ty.defineWidget({
   name: 'requests-tab',
   constraint: {
@@ -395,6 +410,10 @@ ty.defineWidget({
     },
     convBlurbs: {
       command: function(convBlurbBinding) {
+        // XXX totally evil hack to normalize...
+        while (convBlurbBinding.__cssClassBaseName !==
+               "moda--tab-common--conv-blurb--")
+          convBlurbBinding = convBlurbBinding.__parentBinding;
         var liveSet = this.vs.liveSet,
             convBlurb = convBlurbBinding.obj;
         liveSet.boostRefCount();
