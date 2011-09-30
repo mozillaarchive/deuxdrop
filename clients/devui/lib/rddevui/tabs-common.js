@@ -329,7 +329,7 @@ wy.defineWidget({
     gimmeConvArgs: function() {
       return {
         peeps: this.obj.peeps,
-        text: this.messageText_element.textContent,
+        text: this.messageText_element.value,
       };
     },
   },
@@ -426,7 +426,7 @@ wy.defineWidget({
     mainBox: {
       participants: wy.widgetFlow({ type: 'peep-inline' }, 'participants',
                                   { separator: ', ' }),
-      firstMessageText: wy.bind(['firstMessage', 'messageText']),
+      firstMessageText: wy.bind(['firstMessage', 'text']),
     },
     metaBox: {
       numUnread: wy.bind('numUnreadMessages'),
