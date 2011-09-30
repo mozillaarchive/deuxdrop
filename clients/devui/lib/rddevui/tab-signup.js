@@ -102,7 +102,7 @@ ty.defineWidget({
     // notification the signup completed
     onCompleted: function(err) {
       var serverInfo = this.signupServerInfo;
-      if (err) {
+      if (err !== null) {
         this.errMsg_element.textContent = "" + err;
       }
       else {

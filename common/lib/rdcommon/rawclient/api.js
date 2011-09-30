@@ -723,7 +723,7 @@ RawClientAPI.prototype = {
       }
       else {
         self._log.signupChallenged();
-        humanReason = "serverChallenge";
+        humanReason = why;
       }
 
       self._signupConn = false;
