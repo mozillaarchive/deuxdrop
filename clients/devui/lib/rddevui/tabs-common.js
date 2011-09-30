@@ -393,6 +393,18 @@ ty.defineWidget({
         }, true);
       }
     },
+    convBlurbs: {
+      command: function(convBlurbBinding) {
+        var liveSet = this.vs.liveSet,
+            convBlurb = convBlurbBinding.obj;
+        liveSet.boostRefCount();
+        this.emit_openTab({
+          kind: 'conversation',
+          name: "Conv: " + convBlurb.firstMessage.text.substring(0, 30),
+          convBlurb: convBlurb,
+        }, true);
+      },
+    },
   }
 });
 
@@ -443,6 +455,10 @@ ty.defineWidget({
   focus: wy.focus.container.vertical('messages'),
   structure: {
     messages: wy.vertList({type: 'message'}),
+    addMessageBlock: {
+      newMessageText: wy.textarea(),
+      btnSend: wy.button("Send message"),
+    },
   },
   impl: {
     postInit: function() {
@@ -452,7 +468,49 @@ ty.defineWidget({
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(msgsSet);
       this.messages_set(vs);
     },
+  },
+  events: {
+    btnSend: {
+      command: function() {
+        var text = this.newMessageText_element.value;
+        if (text) {
+          this.obj.convBlurb.replyToConversation({
+            text: text,
+          });
+
+          this.newMesageText_element.value = '';
+        }
+      },
+    },
   }
+});
+
+wy.defineWidget({
+  name: 'human-message',
+  constraint: {
+    type: 'message',
+    obj: { type: 'message' },
+  },
+  structure: {
+    date: wy.bind('receivedAt'),
+    author: wy.widget({ type: 'peep-inline' }, 'author'),
+    text: wy.bind('text'),
+  },
+});
+
+wy.defineWidget({
+  name: 'join-message',
+  constraint: {
+    type: 'message',
+    obj: { type: 'join' },
+  },
+  structure: {
+    date: wy.bind('receivedAt'),
+    joiner: wy.widget({ type: 'peep-blurb' }, 'inviter'),
+    label0: " invited ",
+    joinee: wy.widget({ type: 'peep-blurb' }, 'invitee'),
+    label1: " to join the conversation.",
+  },
 });
 
 ty.defineWidget({

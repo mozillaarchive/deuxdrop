@@ -68,6 +68,19 @@
   }
 }
 
+#human-message {
+  #date {
+    display: block;
+    color: gray;
+    font-size: 80%;
+  }
+}
+#join-message {
+  #joiner, #joinee {
+    display: inline-block;
+  }
+}
+
 #author-contact-request-tab {
   #root {
     padding: 2em;
