@@ -465,12 +465,15 @@ ModaBackside.prototype = {
 
     var self = this;
     when(this._rawClient.signupUsingServerSelfIdent(serverSelfIdentBlob),
-      function resolved() {
+      // the signup process converts rejections to resolutions, so 'err' may
+      //  vary here.
+      function resolved(err) {
         self.send({
           type: 'signupResult',
-          err: null,
+          err: err,
         });
       },
+      // XXX and this is sorta not needed unless one of those handlers throws.
       function rejected(err) {
         self.send({
           type: 'signupResult',

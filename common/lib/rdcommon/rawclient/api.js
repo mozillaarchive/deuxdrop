@@ -695,10 +695,12 @@ RawClientAPI.prototype = {
     var self = this;
     // Use the promise to clear our reference, but otherwise just re-provide it
     //  to our caller.
-    return $Q.when(this._signupConn.promise, function(val) {
+    return $Q.when(this._signupConn.promise, function success(val) {
       if (val === true) {
         self._log.signedUp();
       }
+      // XXX this path should never be taken, not sure why I wrote it this
+      //  way; this should likely just get removed
       else if ($Q.isRejection(val)) {
         if (val.valueOf().reason === false)
           self._log.signupFailure();
@@ -711,6 +713,23 @@ RawClientAPI.prototype = {
 
       if (self._accountListener)
         self._accountListener.accountChanged(self);
+
+      return null;
+    }, function failure(why) {
+      var humanReason;
+      if (why === false) {
+        self._log.signupFailure();
+        humanReason = "serverCommunicationFailure";
+      }
+      else {
+        self._log.signupChallenged();
+        humanReason = "serverChallenge";
+      }
+
+      self._signupConn = false;
+      self._log.signup_end();
+
+      return humanReason;
     });
   },
 
