@@ -71,6 +71,18 @@ const when = $Q.when;
 
 const LOGFAB = exports.LOGFAB = $_logdef.LOGFAB;
 
+/**
+ * Redis is having some issues with our binary keys it would seem.
+ */
+function makeBinStringSafe(binString) {
+  var buf = new Buffer(binString, 'binary');
+  return buf.toString('base64');
+}
+function dangerifySafedBinString(utf8String) {
+  var buf = new Buffer(utf8String, 'base64');
+  return buf.toString('binary');
+}
+
 function boxPersisted(val) {
   switch (typeof(val)) {
     case "object":
@@ -160,6 +172,7 @@ RedisDbConn.prototype = {
   getRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.getRowCell(tableName, rowId, columnName);
+    rowId = makeBinStringSafe(rowId);
     this._conn.hget(this._prefix + ':' + tableName + ':' + rowId, columnName,
                      function(err, result) {
       if (err)
@@ -194,6 +207,7 @@ RedisDbConn.prototype = {
   getRow: function(tableName, rowId, columnFamilies) {
     var deferred = $Q.defer();
     this._log.getRow(tableName, rowId, columnFamilies);
+    rowId = makeBinStringSafe(rowId);
     this._conn.hgetall(this._prefix + ':' + tableName + ':' + rowId,
                        function(err, result) {
       if (err) {
@@ -217,6 +231,7 @@ RedisDbConn.prototype = {
       ocells[key] = boxPersisted(cells[key]);
     }
     this._log.putCells(tableName, rowId, cells);
+    rowId = makeBinStringSafe(rowId);
     this._conn.hmset(this._prefix + ':' + tableName + ':' + rowId, ocells,
                      function(err, replies) {
       if (err)
@@ -230,6 +245,7 @@ RedisDbConn.prototype = {
   deleteRow: function(tableName, rowId) {
     var deferred = $Q.defer();
     this._log.deleteRow(tableName, rowId);
+    rowId = makeBinStringSafe(rowId);
     this._conn.del(this._prefix + ':' + tableName + ':' + rowId,
                      function(err, result) {
       if (err)
@@ -243,6 +259,7 @@ RedisDbConn.prototype = {
   deleteRowCell: function(tableName, rowId, columnName) {
     var deferred = $Q.defer();
     this._log.deleteRowCell(tableName, rowId, columnName);
+    rowId = makeBinStringSafe(rowId);
     this._conn.hdel(this._prefix + ':' + tableName + ':' + rowId, columnName,
                      function(err, result) {
       if (err)
@@ -270,6 +287,7 @@ RedisDbConn.prototype = {
   incrementCell: function(tableName, rowId, columnName, delta) {
     var deferred = $Q.defer();
     this._log.incrementCell(tableName, rowId, columnName, delta);
+    rowId = makeBinStringSafe(rowId);
     this._conn.hincrby(this._prefix + ':' + tableName + ':' + rowId,
                        columnName, delta, function(err, result) {
       if (err)
@@ -382,6 +400,7 @@ RedisDbConn.prototype = {
     var minValStr = (lowValue == null) ? '-inf' : lowValue,
         maxValStr = (highValue == null) ? '+inf' : highValue;
     this._log.scanIndex(tableName, indexName, indexParam, maxValStr, minValStr);
+    indexParam = makeBinStringSafe(indexParam);
     var keyName =
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam;
     this._conn[(desiredDir === -1) ? 'zrevrangebyscore' : 'zrangebyscore'](
@@ -394,6 +413,7 @@ RedisDbConn.prototype = {
       }
       else {
         for (var i = 1; i < results.length; i += 2) {
+          results[i - 1] = dangerifySafedBinString(results[i - 1]);
           results[i] = parseInt(results[i]);
         }
         deferred.resolve(results);
@@ -411,6 +431,8 @@ RedisDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
+    indexParam = makeBinStringSafe(indexParam);
+    objectName = makeBinStringSafe(objectName);
     this._conn.zadd(
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
       newValue, objectName, function(err, result) {
@@ -441,6 +463,8 @@ RedisDbConn.prototype = {
           objectName = update[2], newValue = update[3];
       this._log.updateIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
+      indexParam = makeBinStringSafe(indexParam);
+      objectName = makeBinStringSafe(objectName);
       multi.zadd(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
         newValue, objectName);
@@ -463,6 +487,8 @@ RedisDbConn.prototype = {
     var deferred = $Q.defer(), self = this;
     this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                  objectName, newValue);
+    indexParam = makeBinStringSafe(indexParam);
+    objectName = makeBinStringSafe(objectName);
     var keyName =
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam;
     this._conn.zscore(keyName, objectName, function(err, result) {
@@ -500,6 +526,8 @@ RedisDbConn.prototype = {
           objectName = maxdate[2], newValue = maxdate[3];
       this._log.maximizeIndexValue(tableName, indexName, indexParam,
                                    objectName, newValue);
+      indexParam = makeBinStringSafe(indexParam);
+      objectName = makeBinStringSafe(objectName);
       var keyName =
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam;
       keyNames.push(keyName);
@@ -517,7 +545,8 @@ RedisDbConn.prototype = {
         if (rawResult == null ||
             (curVal = parseInt(rawResult)) < maxdate[3]) {
           updatesRequired++;
-          multiSet.zadd(keyNames[iMaxdate], maxdate[3], maxdate[2]);
+          multiSet.zadd(keyNames[iMaxdate], maxdate[3],
+                        makeBinStringSafe(maxdate[2]));
         }
         // we need to update the memory rep if the db is bigger
         else {
@@ -550,6 +579,8 @@ RedisDbConn.prototype = {
     var deferred = $Q.defer();
     this._log.updateIndexValue(tableName, indexName, indexParam,
                                objectName, newValue);
+    indexParam = makeBinStringSafe(indexParam);
+    objectName = makeBinStringSafe(objectName);
     this._conn.hset(
       this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
       objectName, newValue, function(err, result) {
@@ -565,6 +596,7 @@ RedisDbConn.prototype = {
     const dir = desiredDir;
     var deferred = $Q.defer();
     this._log.scanIndex(tableName, indexName, indexParam);
+    indexParam = makeBinStringSafe(indexParam);
     this._conn.hgetall(
         this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
         function(err, results) {
@@ -574,7 +606,7 @@ RedisDbConn.prototype = {
       else {
         var sortie = [];
         for (var key in results) {
-          sortie.push({obj: key, val: results[key]});
+          sortie.push({obj: dangerifySafedBinString(key), val: results[key]});
         }
         sortie.sort(function(a, b) {
           return dir * a.val.localeCompare(b.val);
@@ -596,6 +628,7 @@ RedisDbConn.prototype = {
   queueAppend: function(tableName, queueName, values) {
     var multi = this._conn.multi();
     this._log.queueAppend(tableName, queueName, values);
+    queueName = makeBinStringSafe(queueName);
     for (var i = 0; i < values.length; i++) {
       multi.rpush(this._prefix + ':' + tableName + ':' + queueName,
                   JSON.stringify(values[i]));
@@ -613,6 +646,7 @@ RedisDbConn.prototype = {
   queuePeek: function(tableName, queueName, count) {
     var deferred = $Q.defer();
     this._log.queuePeek(tableName, queueName, count);
+    queueName = makeBinStringSafe(queueName);
     this._conn.lrange(this._prefix + ':' + tableName + ':' + queueName,
                       0, count - 1, function(err, multibulk) {
       if (err)
@@ -626,6 +660,7 @@ RedisDbConn.prototype = {
   queueConsume: function(tableName, queueName, count) {
     var deferred = $Q.defer();
     this._log.queueConsume(tableName, queueName, count);
+    queueName = makeBinStringSafe(queueName);
     this._conn.ltrim(this._prefix + ':' + tableName + ':' + queueName,
                      count, -1, function(err, status) {
       if (err)
@@ -646,6 +681,7 @@ RedisDbConn.prototype = {
     var deferred = $Q.defer();
     var multi = this._conn.multi();
     this._log.queueConsumeAndPeek(tableName, queueName, consumeCount, peekCount);
+    queueName = makeBinStringSafe(queueName);
     multi.ltrim(this._prefix + ':' + tableName + ':' + queueName,
                 consumeCount, -1);
     multi.lrange(this._prefix + ':' + tableName + ':' + queueName,
