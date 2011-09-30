@@ -104,6 +104,7 @@ ty.defineWidget({
       var serverInfo = this.signupServerInfo;
       if (err !== null) {
         this.errMsg_element.textContent = "" + err;
+        this.FOCUS.updateFocusRing();
       }
       else {
         var successTabObj = {
