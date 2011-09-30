@@ -449,6 +449,14 @@ var DeltaHelper = exports.DeltaHelper = {
     return delta;
   },
 
+  /** Generate state only for dep notification. */
+  peepConvsDelta_nop: function(lqt) {
+    var delta = this.makeOrReuseDelta(lqt);
+    markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
+                    delta.state, MARK_COUNTER);
+    return delta;
+  },
+
   convMsgsDelta_base: function(lqt, seenMsgs) {
     var delta = this.makeOrReuseDelta(lqt);
     markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state,
@@ -465,6 +473,7 @@ var DeltaHelper = exports.DeltaHelper = {
     return delta;
   },
 
+  /** Generate state only for dep notification. */
   convMsgsDelta_nop: function(lqt, seenMsgs) {
     var delta = this.makeOrReuseDelta(lqt);
     markListIntoObj(seenMsgs.map(this._THINGMSG_TEXTFUNC), delta.state,
@@ -624,7 +633,7 @@ var TestModaActorMixins = {
     // -- dependent (indirect) queries
     // queries that know about this peep for dependency reasons will also
     //  receive a notification
-    this._notifyDepConvMsgs(cinfo, cinfo.involvedConvs);
+    this._notifyDepConvQueries(cinfo, cinfo.involvedConvs);
 
     // -- direct queries
     // ignore changes about our own peep for direct queries.
@@ -712,16 +721,26 @@ var TestModaActorMixins = {
   },
 
   /**
-   * Generate dependent notifications about conversations.
+   * Generate dependent notifications about affected 'convblurbs' and 'convmsgs'
+   *  queries given a list of affected conversations.
+   *
+   * @args[
+   *   @param[source @oneof[DynamicContactInfo]]
+   *   @param[@listof[DynamicConvInfo]]{
+   *     The conversations the source is involved in and for which
+   *     notifications should be generated.
+   *   }
+   * ]
    */
-  _notifyDepConvMsgs: function(source, touchesConvInfos) {
-    var queries = this._dynamicConvMsgsQueries, iQuery, lqt;
-
+  _notifyDepConvQueries: function(source, touchesConvInfos) {
+    // map the dynamic conversation info to the tConv reps
     var tConvs = [];
     for (var i = 0; i < touchesConvInfos.length; i++) {
       tConvs.push(touchesConvInfos[i].tConv);
     }
 
+    // - convmsgs queries
+    var queries = this._dynamicConvMsgsQueries, iQuery, lqt;
     for (iQuery = 0; iQuery < queries.length; iQuery++) {
       lqt = queries[iQuery];
 
@@ -735,6 +754,21 @@ var TestModaActorMixins = {
           seenMsgs = backlog.slice(0, convInfo.highestMsgSeen);
       var deltaRep = DeltaHelper.convMsgsDelta_nop(lqt, seenMsgs);
       this._ensureExpectedQuery(lqt);
+    }
+
+    // - convblurbs queries
+    queries = this._dynamicPeepConvQueries;
+    for (iQuery = 0; iQuery < queries.length; iQuery++) {
+      lqt = queries[iQuery];
+
+      // find if the query currently includes any of `touchesConvInfos`
+      if (lqt._convs.some(function(x) {
+                            return touchesConvInfos.indexOf(x) !== -1;
+                          })) {
+        // it does, give it a dependent dep.
+        DeltaHelper.peepConvsDelta_nop(lqt);
+        this._ensureExpectedQuery(lqt);
+      }
     }
   },
 
