@@ -1,2 +1,13 @@
 .git/
 *~
+arbpl/server/
+arbpl/client/deps/
+jstut/data/
+jstut/web/
+jstut/tests/
+jstut/lib-jetpack/
+wmsy/data/
+wmsy/examples/
+wmsy/lib-jetpack/
+wmsy/lib-requirejs/
+wmsy/tests/
