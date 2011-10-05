@@ -194,7 +194,7 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'accept-request' },
   },
-  focus: wy.focus.container.vertical('btnAccept'),
+  focus: wy.focus.container.vertical('pocoEditor', 'btnAccept'),
   emit: ['closeTab'],
   structure: {
     overviewBlurb: [
@@ -332,6 +332,7 @@ wy.defineWidget({
           if (success)
             self.peeps_slice.mutateSplice(self.obj.peeps.length, 0,
                                           peepToAdd);
+          self.FOCUS.updateFocusRing();
         });
       }
     },
@@ -471,7 +472,7 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'conversation' },
   },
-  focus: wy.focus.container.vertical('messages'),
+  focus: wy.focus.container.vertical('messages', 'newMessageText', 'btnSend'),
   structure: {
     messages: wy.vertList({type: 'message'}),
     addMessageBlock: {
