@@ -1,29 +1,36 @@
 #!/bin/bash
+#
+# Copy the required files into data/web that live elsewhere in our source tree.
+#  We use rsync to be able to avoid copying .git subtrees, but it also should
+#  generally increase performance.
+#
+# Do an "rm -rf data/web" if you want to clean up our byproducts.  We can't
+#  pass "--delete --delete-excluded" on the rsync command line right now since
+#  we need to do a few copying passes.
+
+# --delete --delete-excluded
+CPCMD="rsync -av --exclude-from .acfx-exclude"
 
 ## Copy over UI used by the content part of the addon.
-rm -rf data/web
-mkdir data/web
-mkdir data/web/deps
-mkdir data/web/firefox
+mkdir -p data/web
+mkdir -p data/web/deps
+mkdir -p data/web/firefox
 
-mkdir data/web/deps/rdctests
+mkdir -p data/web/deps/rdctests
 
 ## Source Tree Location => jetpack 'data' location
 
 # clients/deps        => web/deps
-cp -r ../deps data/web
 # clients/firefox     => web/firefox
-cp -r ../firefox data/web
-# common/lib/rdcommon => web/deps/rdcommon
-cp -r ../../common/lib/rdcommon data/web/deps
-
 # clients/devui       => web/devui
-cp -r ../devui data/web
 # clients/logui       => web/logui
-cp -r ../logui data/web
+$CPCMD ../deps ../firefox ../devui ../logui data/web
+
+# common/lib/rdcommon => web/deps/rdcommon
+$CPCMD ../../common/lib/rdcommon data/web/deps
 
 # common/test         => web/deps/rdctests
-cp -r ../../common/test/*.js data/web/deps/rdctests
+$CPCMD ../../common/test/*.js data/web/deps/rdctests
 
 ## Run jetpack
 cfx "$@"
