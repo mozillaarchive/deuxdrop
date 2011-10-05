@@ -52,10 +52,8 @@ comment out this check:
 
 This will allow the extension to work on mobile Firefox.
 
-## How to build
+## How to build / run
 
-* ./copyweb.sh
-* cfx xpi
-
-The copyweb.sh takes the UI that can be served from a web server and includes
-it in the add-on.
+* Source "bin/activate" from the addon-sdk (aka Jetpack)
+* Use the "acfx" script to do what you would normally do with "cfx", except
+  you will need to specify the path.  ex: "./acfx run", "./acfx xpi", etc.
