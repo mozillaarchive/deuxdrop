@@ -1203,14 +1203,16 @@ LocalStore.prototype = {
     var ourPoco = signedOident ?
       $pubident.peekOtherPersonIdentNOVERIFY(signedOident).localPoco : null;
 
-    var selfPoco =
-      $pubident.peekPersonSelfIdentNOVERIFY(cells['d:sident']).poco;
+    var selfIdentPayload =
+      $pubident.peekPersonSelfIdentNOVERIFY(cells['d:sident']);
     return {
       ourPoco: ourPoco,
-      selfPoco: selfPoco,
+      selfPoco: selfIdentPayload.poco,
       numUnread: cells['d:nunread'],
       numConvs: cells['d:nconvs'],
       pinned: false,
+      isMe:
+        selfIdentPayload.root.rootSignPubKey === this._pubring.rootPublicKey,
     };
   },
 
@@ -1232,6 +1234,8 @@ LocalStore.prototype = {
       numUnread: 0,
       numConvs: 0,
       pinned: false,
+      isMe:
+        selfIdentPayload.root.rootSignPubKey === this._pubring.rootPublicKey,
     };
   },
 

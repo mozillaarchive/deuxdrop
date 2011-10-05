@@ -66,7 +66,7 @@ const NS_PEEPS = 'peeps',
  *  the user, meta-data our user has annotated them with (ex: pinned).
  */
 function PeepBlurb(_bridge, _localName, ourPoco, selfPoco,
-                   numUnread, numConvs, pinned) {
+                   numUnread, numConvs, pinned, isMe) {
   this._bridge = _bridge;
   this._localName = _localName;
   this.ourPoco = ourPoco;
@@ -74,6 +74,7 @@ function PeepBlurb(_bridge, _localName, ourPoco, selfPoco,
   this._numUnread = numUnread;
   this._numConvs = numConvs;
   this._pinned = pinned;
+  this._isMe = isMe;
 }
 PeepBlurb.prototype = {
   __namespace: 'peeps',
@@ -81,6 +82,10 @@ PeepBlurb.prototype = {
   // -- getters exist so writes loudly fail
   get isContact() {
     return this.ourPoco !== null;
+  },
+
+  get isMe() {
+    return this._isMe;
   },
 
   get pinned() {
@@ -846,7 +851,8 @@ ModaBridge.prototype = {
    */
   _transformPeepBlurb: function(localName, data, /* unused */ liveset) {
     return new PeepBlurb(this, localName, data.ourPoco, data.selfPoco,
-                         data.numUnread, data.numConvs, data.pinned);
+                         data.numUnread, data.numConvs, data.pinned,
+                         data.isMe);
   },
 
   /**

@@ -124,7 +124,7 @@ wy.defineWidget({
   name: 'me-blurb',
   constraint: {
     type: 'peep-blurb',
-    obj: { numUnread: undefined },
+    obj: { isMe: true },
   },
   focus: wy.focus.item,
   structure: {
