@@ -1,7 +1,10 @@
 .git/
 *~
 arbpl/server/
-arbpl/client/deps/
+# we could exclude arbpl/client/deps/ entirely but for its d3.js
+arbpl/client/deps/jstut/
+arbpl/client/deps/requirejs/
+arbpl/client/deps/wmsy/
 jstut/data/
 jstut/web/
 jstut/tests/
