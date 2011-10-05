@@ -51,6 +51,23 @@
   }
 }
 
+
+#conv-compose {
+  #peepBlock {
+    margin-bottom: 1em;
+  }
+  #peepsLabel {
+    font-weight: bold;
+  }
+  #peeps {
+    margin-right: 0.5em;
+  }
+
+  #messageText {
+    width: 60em;
+  }
+}
+
 #conv-blurb {
   #root {
     position: relative;
@@ -77,6 +94,12 @@
   }
   #numUnread {
     .unreadBubble;
+  }
+}
+
+#conversation-tab {
+  #newMessageText {
+    width: 60em;
   }
 }
 
@@ -108,6 +131,7 @@
   }
   #joiner, #joinee {
     display: inline-block;
+    margin: 0 0.5em;
   }
 }
 

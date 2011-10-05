@@ -498,7 +498,7 @@ ty.defineWidget({
             text: text,
           });
 
-          this.newMesageText_element.value = '';
+          this.newMessageText_element.value = '';
         }
       },
     },
@@ -511,6 +511,7 @@ wy.defineWidget({
     type: 'message',
     obj: { type: 'message' },
   },
+  focus: wy.focus.container.vertical('author'),
   structure: {
     date: wy.bind('receivedAt'),
     author: wy.widget({ type: 'peep-inline' }, 'author'),
@@ -524,6 +525,7 @@ wy.defineWidget({
     type: 'message',
     obj: { type: 'join' },
   },
+  focus: wy.focus.container.horizontal('joiner', 'joinee'),
   structure: {
     date: wy.bind('receivedAt'),
     joiner: wy.widget({ type: 'peep-blurb' }, 'inviter'),
