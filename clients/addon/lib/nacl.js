@@ -80,6 +80,9 @@ switch (runtime.OS) {
       throw new Error('32-bit OS X not supported right now.');
     platLibName = 'libnacl-x86_64.dylib';
     break;
+  case 'Android':
+    platLibName = 'libnacl-arm.so';
+    break;
   default:
     throw new Error('No native library for platform: ' + runtime.OS);
 }
