@@ -293,6 +293,9 @@ function normalizeConfigPath(path) {
 exports.cmdCreateConfig = function createConfig(configDir, opts) {
   configDir = normalizeConfigPath(configDir);
 
+  if (opts.announcePort === 0)
+    opts.announcePort = opts.listenPort;
+
   // -- explode if the directory already exists
   if ($path.existsSync(configDir))
     throw new Error("configuration directory '" + configDir +
@@ -312,11 +315,12 @@ exports.cmdCreateConfig = function createConfig(configDir, opts) {
     meta: {
       displayName: opts.humanName,
     },
-    url: 'ws://' + opts.dnsName + ':' + opts.listenPort + '/',
+    url: 'ws://' + opts.dnsName + ':' + opts.announcePort + '/',
   };
 
   var signedSelfIdent =
     $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
+
 
   var serializedConfig = {
     keyring: keyring.data,
@@ -327,6 +331,7 @@ exports.cmdCreateConfig = function createConfig(configDir, opts) {
     dbPrefix: opts.dbPrefix,
     listenIP: opts.listenIP,
     listenPort: opts.listenPort,
+    announcePort: opts.announcePort,
   };
 
   // - persist

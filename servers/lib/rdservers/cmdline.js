@@ -204,6 +204,12 @@ var OPT_LISTEN_PORT = {
   required: true,
   help: "The port the server should listen on.",
 };
+var OPT_ANNOUNCE_PORT = {
+  string: "--announce-port=PORT",
+  default: 0,
+  help: "The port the server should claim to be listening on " +
+    "(may differ from the listen port due to iptables rules, etc.)",
+};
 
 parser.command('define-server')
   .help("Define a server configuration to run.")
@@ -217,6 +223,7 @@ parser.command('define-server')
     humanName: OPT_HUMAN_NAME,
     listenIP: OPT_LISTEN_IP,
     listenPort: OPT_LISTEN_PORT,
+    announcePort: OPT_ANNOUNCE_PORT,
   })
   .callback(function(options) {
     require(['rdservers/configurer'], function($configurer) {
