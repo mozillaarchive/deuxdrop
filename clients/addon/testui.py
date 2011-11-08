@@ -35,18 +35,21 @@ def _announceStep(stepName):
 
 def kill_existing_selenium_server():
     _announceStep('Killing existing selenium server if present')
-    subprocess.call("pkill -f server-standalone.*\\.jar")
+    subprocess.call("pkill -f server-standalone.*\\.jar", shell=True)
 
 def create_xpi():
     _announceStep('Creating XPI')
     subprocess.call("./acfx xpi", shell=True)
 
 def create_template_profile():
+    global OUR_PROFILE
     _announceStep('Creating Firefox profile')
     OUR_PROFILE = mozrunner.FirefoxProfile(addons=[XPI_PATH])
+    print 'Profile created at', OUR_PROFILE.profile
 
 def nuke_template_profile():
     OUR_PROFILE.cleanup()
+    pass
 
 def download_selenium_server_jar_if_needed():
     if not os.path.exists(SELENIUM_JAR_PATH):
@@ -60,21 +63,25 @@ def download_selenium_server_jar_if_needed():
         sys.exit(1)
 
 def spawn_our_selenium_server():
+    global SELENIUM_POPE
     _announceStep('Spawning selenium server')
-    args = ['java',
+    args = ['/usr/bin/java',
             '-jar', SELENIUM_JAR_PATH,
             '-firefoxProfileTemplate', OUR_PROFILE.profile,
             ]
-        
-    SELENIUM_POPE = mozrunner.run_command(' '.join(args))
+    
+    print 'Invoking:', args
+    SELENIUM_POPE = mozrunner.run_command(args)
 
 def kill_our_selenium_server():
     _announceStep('Killing selenium server')
     SELENIUM_POPE.kill()
 
 def run_ui_tests():
-    subprocess.call([SERVER_CMDLINE_SCRIPT, 'testui'])
-
+    _announceStep('Running UI tests')
+    os.chdir(os.path.dirname(SERVER_CMDLINE_SCRIPT))
+    subprocess.call(['./' + os.path.basename(SERVER_CMDLINE_SCRIPT), 'testui'])
+    
 
 def main():
     kill_existing_selenium_server()
@@ -87,3 +94,7 @@ def main():
     finally:
         nuke_template_profile()
         kill_our_selenium_server()
+
+
+if __name__ == '__main__':
+    main()

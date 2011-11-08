@@ -105,7 +105,7 @@ require(
       rdstests: "servers/test",
       rdctests: "common/test",
 
-      rdutests: "",
+      rdutests: "clients/test",
       // this should theoretically be a parameterized path
       rduidriver: "clients/testdrivers/firefox/lib/rduidriver",
     },
@@ -316,8 +316,13 @@ var OPT_SPECIFIC_TEST = {
   help: "(optional: The require name of a specific test to run)",
 };
 
-function commonTestRun(pathMap) {
+function commonTestRun(pathMap, options) {
   applyGlobalOptions(options);
+
+  process.on('exit', function(code) {
+    debugger;
+    console.log("EXIT EVENT", code);
+  });
 
   // -- specific test
   if (options.specificTest) {
@@ -338,7 +343,7 @@ function commonTestRun(pathMap) {
     deathClock(90 * 1000, true);
     require(['rdcommon/testdriver'],
              function($driver) {
-      when($driver.runTestsFromDirectories(testPrefixToPathMap,
+      when($driver.runTestsFromDirectories(pathMap,
                                            ErrorTrapper),
         function() {
           process.exit(0);
@@ -353,11 +358,6 @@ parser.command('test')
     specificTest: OPT_SPECIFIC_TEST,
   })
   .callback(function(options) {
-    process.on('exit', function(code) {
-      debugger;
-      console.log("EXIT EVENT", code);
-    });
-
     // Ideally we could slurp this from requirejs... and maybe we can, but for
     //  now...
     var testPrefixToPathMap = {
@@ -373,14 +373,10 @@ parser.command('testui')
     specificTest: OPT_SPECIFIC_TEST,
   })
   .callback(function(options) {
-
-
     var testPrefixToPathMap = {
-      'rdstests/': '../../servers/test',
-      'rdctests/': '../../common/test',
+      'rdutests/': '../../clients/test',
     };
     commonTestRun(testPrefixToPathMap, options);
-
   });
 
 // We need to do our own argv slicing to compensate for RequireJS' r.js
