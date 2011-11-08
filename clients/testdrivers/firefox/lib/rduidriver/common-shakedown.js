@@ -62,6 +62,7 @@ define(
     'rdcommon/testcontext',
     'rdservers/testhelper',
     'rdcommon/moda/testhelper',
+    'rdcommon/moda/uitesthelper',
     'module',
     'exports'
   ],
@@ -69,18 +70,20 @@ define(
     $tc,
     $th_rdservers,
     $th_moda,
+    $th_ui,
     $module,
     exports
   ) {
 
 var TD = exports.TD = $tc.defineTestsFor($module, null,
-  [$th_rdservers.TESTHELPER, $th_moda.TESTHELPER], ['app']);
+  [$th_rdservers.TESTHELPER, $th_moda.TESTHELPER, $th_ui.TESTHELPER],
+  ['app']);
 
 TD.commonCase('moda basics', function(T) {
   T.group('setup');
 
   // only A needs to use moda for our tests.
-  var ui_a = T.actor('testUI', 'A', {ui: 'dev'}),
+  var ui_a = T.actor('testUI', 'A', {}),
       client_b = T.actor('testClient', 'B'),
       client_c = T.actor('testClient', 'C');
   var serverOpts = {roles: ['auth', 'signup', 'drop', 'sender', 'store',

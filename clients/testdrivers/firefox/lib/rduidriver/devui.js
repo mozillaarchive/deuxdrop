@@ -44,13 +44,44 @@
 
 define(
   [
-    './webdriver',
     'exports'
   ],
   function(
-    $webdriver,
     exports
   ) {
+
+/**
+ * Derive the wmsy CSS class name for the given element.
+ */
+function dwc(domain, moduleId, widgetName, elemName) {
+  return domain + '--' + moduleId + '--' + widgetName + '--' + elemName;
+}
+
+const
+  // tab framework
+  clsTabHeaderLabel = dwc('tabs', 'tabs', 'tab-header', 'label'),
+  clsTabHeaderClose = dwc('tabs', 'tabs', 'tab-header', 'close'),
+  // specific tab widget roots
+  clsTabSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'root'),
+  clsTabAcceptRequest = dwc('tabs', 'tab-common', 'accept-request-tab', 'root'),
+  // signup tab
+  clsSignupSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'btnSignup'),
+  // home tab buttons
+  clsHomeMakeFriends = dwc('tabs', 'tab-home', 'home-tab', 'btnMakeFriends'),
+  clsHomeFriendRequests = dwc('tabs', 'tab-home', 'home-tab',
+                              'btnFriendRequests'),
+  clsHomeListFriends = dwc('tabs', 'tab-home', 'home-tab', 'btnListFriends'),
+  clsHomeCompose = dwc('tabs', 'tab-home', 'home-tab', 'btnCompose'),
+  // connection requests
+  clsConnReqRoot = dwc('moda', 'tab-common', 'conn-request', 'root'),
+  // peeps
+  clsPeepBlurbName = dwc('moda', 'tab-common', 'peep-blurb', 'name'),
+  // poco editing
+  clsPocoEditName = dwc('moda', 'tab-signup', 'poco-editor', 'displayName'),
+
+  blah;
+
+const UI_URL = 'about:dddev';
 
 /**
  * Tab-wise, our approach is that:
@@ -66,11 +97,39 @@ define(
  *  has changed.  We could also use wmsy's id namespace support to do something
  *  clever along these lines, but we don't expect all UIs to use wmsy, so we
  *  don't.
+ *
+ * @args[
+ *   @param[webdriver WebDriver]{
+ *     The webdriver instance to use; we are responsible for opening the UI's
+ *     tab.
+ *   }
+ * ]
  */
-function DevUIDriver() {
-  this._activeTab = 'signup';
+function DevUIDriver(wdloggest) {
+  this._d = wdloggest;
+
+  this._activeTab = null;
 }
 DevUIDriver.prototype = {
+  startUI: function() {
+
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Helpers
+  _assertGetTab: function(tabClass) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Signup Mode
+
+  act_signup: function() {
+
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Steady-state usage
+
   showPage_possibleFriends: function() {
     // go to the root tab
     // hit the list possible friends button
@@ -110,6 +169,8 @@ DevUIDriver.prototype = {
 
     // hit send
   },
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 }); // end define

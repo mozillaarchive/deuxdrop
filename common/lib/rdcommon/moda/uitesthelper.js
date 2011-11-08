@@ -41,20 +41,38 @@
  *  actual client entirely exists out-of-process, we do maintain a dummied
  *  out 'testClient' stand-in that provides naming and generation/receipt of
  *  notifications to maintain the system state bookkeeping.
+ *
+ * ## Selenium Server ##
+ *
+ * Currently, we just require that you already have a selenium server running
+ *  on localhost.  We provide a shell script to help out with the required
+ *  mechanics of:
+ * - Causing an XPI for our extension to be created.
+ * - Telling the selenium server to include the extension in its dynamically
+ *    created profiles.
+ *
  **/
 
-define(
-  [
-    'exports'
-  ],
-  function(
-    exports
-  ) {
+define(function(require, exports, $module) {
+
+var $Q = require('q'),
+    when = $Q.when;
+
+var $testdata = require('rdcommon/testdatafab');
+
+var $log = require('rdcommon/log');
+
+
+var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 
 var TestUIActorMixins = {
+  __constructor: function(self, opts) {
+    // - create a faux testClient for identification/hookup purposes.
+
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Setup
-
   /**
    * Run the signup process to completion for the given server.
    */
@@ -140,6 +158,18 @@ var TestUIActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+};
+
+exports.TESTHELPER = {
+  // we leave it to the testClient TESTHELPER to handle most stuff, leaving us
+  //  to just worry about moda.
+  LOGFAB_DEPS: [LOGFAB,
+    $moda_backside.LOGFAB, $ls_tasks.LOGFAB,
+  ],
+
+  actorMixins: {
+    testModa: TestModaActorMixins,
+  },
 };
 
 }); // end define

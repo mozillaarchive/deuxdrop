@@ -104,6 +104,10 @@ require(
       rdcommon: "common/lib/rdcommon",
       rdstests: "servers/test",
       rdctests: "common/test",
+
+      rdutests: "",
+      // this should theoretically be a parameterized path
+      rduidriver: "clients/testdrivers/firefox/lib/rduidriver",
     },
     catchError: {
       define: true,
@@ -306,14 +310,47 @@ parser.command('echo-server')
     });
   });
 
+var OPT_SPECIFIC_TEST = {
+  position: 1,
+  default: null,
+  help: "(optional: The require name of a specific test to run)",
+};
+
+function commonTestRun(pathMap) {
+  applyGlobalOptions(options);
+
+  // -- specific test
+  if (options.specificTest) {
+    deathClock(20 * 1000, true);
+    require(['rdcommon/testdriver'],
+             function($driver) {
+      when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
+                                      SUPER_DEBUG),
+        function() {
+          // pass or fail, we want to exit normally; only the death clock
+          //  should result in a non-zero exit.
+          process.exit(0);
+        });
+    });
+  }
+  // -- scan for tests (which uses child processes to invoke specific tests)
+  else {
+    deathClock(90 * 1000, true);
+    require(['rdcommon/testdriver'],
+             function($driver) {
+      when($driver.runTestsFromDirectories(testPrefixToPathMap,
+                                           ErrorTrapper),
+        function() {
+          process.exit(0);
+        });
+    });
+  }
+}
+
 parser.command('test')
   .help("Run tests!")
   .opts({
-    specificTest: {
-      position: 1,
-      default: null,
-      help: "(optional: The require name of a specific test to run)",
-    },
+    specificTest: OPT_SPECIFIC_TEST,
   })
   .callback(function(options) {
     process.on('exit', function(code) {
@@ -321,41 +358,29 @@ parser.command('test')
       console.log("EXIT EVENT", code);
     });
 
-    applyGlobalOptions(options);
-
     // Ideally we could slurp this from requirejs... and maybe we can, but for
     //  now...
     var testPrefixToPathMap = {
       'rdstests/': '../../servers/test',
       'rdctests/': '../../common/test',
     };
-    // -- specific test
-    if (options.specificTest) {
-      deathClock(20 * 1000, true);
-      require(['rdcommon/testdriver'],
-               function($driver) {
-        when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
-                                        SUPER_DEBUG),
-          function() {
-//console.error("  !! performing exit");
-            // pass or fail, we want to exit normally; only the death clock
-            //  should result in a non-zero exit.
-            process.exit(0);
-          });
-      });
-    }
-    // -- scan for tests (which uses child processes to invoke specific tests)
-    else {
-      deathClock(90 * 1000, true);
-      require(['rdcommon/testdriver'],
-               function($driver) {
-        when($driver.runTestsFromDirectories(testPrefixToPathMap,
-                                             ErrorTrapper),
-          function() {
-            process.exit(0);
-          });
-      });
-    }
+    commonTestRun(testPrefixToPathMap, options);
+  });
+
+parser.command('testui')
+  .help("Run UI tests for the development UI")
+  .opts({
+    specificTest: OPT_SPECIFIC_TEST,
+  })
+  .callback(function(options) {
+
+
+    var testPrefixToPathMap = {
+      'rdstests/': '../../servers/test',
+      'rdctests/': '../../common/test',
+    };
+    commonTestRun(testPrefixToPathMap, options);
+
   });
 
 // We need to do our own argv slicing to compensate for RequireJS' r.js
