@@ -80,8 +80,10 @@ ty.defineWidget({
       eiLabel: "browserid goes here.",
     },
     serverListBlock: {
-      siLabel: "Pick a server to use:",
+      siLabel: "Pick a known server to use:",
       servers: wy.vertList({type: 'server'}),
+      saLabel: "Or type in the domain name of a server (DANGER! MITM-able!):",
+      otherServer: wy.text(),
     },
     buttonBar: {
       btnSignup: wy.button("Signup"),
@@ -135,16 +137,50 @@ ty.defineWidget({
         this.btnSignup_element.disabled = false;
       },
     },
+    otherServer: {
+      // use this to
+      command: function() {
+        if (this.selectedServerBinding)
+          this.selectedServerBinding.domNode.removeAttribute("selected");
+        this.selectedServerBinding = null;
+
+        this.btnSignup_element.disabled = false;
+      },
+    },
     btnSignup: {
       command: function() {
-        var self = this,
-            serverInfo = this.signupServerInfo = this.selectedServerBinding.obj;
+        var self = this;
 
         // er, should we be using emit/receive on this?  having it transparently
         //  update something out of our context?
         this.obj.userAccount.updatePersonalInfo(
           this.userPoco_element.binding.gimmePoco());
-        this.obj.userAccount.signupWithServer(serverInfo, this);
+
+        if (this.selectedServerBinding) {
+          var serverInfo = this.signupServerInfo =
+            this.selectedServerBinding.obj;
+          this.obj.userAccount.signupWithServer(serverInfo, this);
+        }
+        else {
+          var serverDomain = this.otherServer_element.value;
+          if (serverDomain) {
+            this.obj.userAccount.insecurelyGetServerSelfIdentUsingDomainName(
+              serverDomain, function(serverInfo) {
+                if (!serverInfo) {
+                  // XXX l10n
+                  self.errMsg_element.textContent =
+                    "No server info available for: '" + serverDomain + "'";
+                  return;
+                }
+                self.signupServerInfo = serverInfo;
+                self.obj.userAccount.signupServerInfo(serverInfo, self);
+              });
+          }
+          else {
+            // XXX l10n
+            this.errMsg_element.textContent = "No server selected / entered!";
+          }
+        }
       },
     }
   },

@@ -44,9 +44,11 @@
 
 define(
   [
+    'rdcommon/log',
     'exports'
   ],
   function(
+    $log,
     exports
   ) {
 
@@ -59,12 +61,14 @@ function dwc(domain, moduleId, widgetName, elemName) {
 
 const
   // tab framework
+  clsTabHeaderRoot = dwc('tabs', 'tabs', 'tab-header', 'root'),
   clsTabHeaderLabel = dwc('tabs', 'tabs', 'tab-header', 'label'),
   clsTabHeaderClose = dwc('tabs', 'tabs', 'tab-header', 'close'),
   // specific tab widget roots
   clsTabSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'root'),
   clsTabAcceptRequest = dwc('tabs', 'tab-common', 'accept-request-tab', 'root'),
   // signup tab
+  clsSignupOtherServer = dwc('tabs', 'tab-signup', 'signup-tab', 'otherServer'),
   clsSignupSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'btnSignup'),
   // home tab buttons
   clsHomeMakeFriends = dwc('tabs', 'tab-home', 'home-tab', 'btnMakeFriends'),
@@ -105,30 +109,76 @@ const UI_URL = 'about:dddev';
  *   }
  * ]
  */
-function DevUIDriver(wdloggest) {
+function DevUIDriver(client, wdloggest) {
   this._d = wdloggest;
 
   this._activeTab = null;
+
+  this._eHomeTabLabel = this._eMakeFriendsBtn = this._eShowPeepsBtn =
+    this._eShowConnectRequestsBtn = this._eComposeBtn = null;
 }
 DevUIDriver.prototype = {
   startUI: function() {
+    this._d.navigate(UI_URL);
 
+    this._d.waitForModa('whoami');
+    this._checkTabDelta({signup: 1, errors: 1}, "signup");
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Helpers
+
+
+  /**
+   * Retrieve the current set of tabs
+   */
+  _grabTabState: function() {
+    var self = this;
+    when(
+      this._d.frobElementsByClass(clsTabHeaderRoot, null, [
+                                    [clsTabHeaderLabel, 'text'],
+                                    [null, 'attr', 'selected'],
+                                    [null, 'attr', 'wantsAttention'],
+                                  ]),
+      function(results) {
+      });
+  },
   _assertGetTab: function(tabClass) {
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Signup Mode
 
-  act_signup: function() {
+  act_signup: function(server) {
+    var eSignupTab = null; // XXX magic up the tab reference
 
+    // - name ourselves
+    var eName = this._d.findElement({className: clsPeepBlurbName}, eSignupTab);
+    this._d.typeInTextBox(eName, client.__name);
+
+    // - select the server to use
+    var eOtherServer = this._d.findElement({className: clsSignupOtherServer},
+                                           eSignupTab);
+
+    var eSignupButton = this._d.findElement({className: clsSignupSignup},
+                                            eSignupTab);
+
+    // - trigger signup
+    this._d.click(eSignupButton);
+    // - wait for signup to complete
+    this._d.waitForModa('signupResult');
+    // the signup tab should have gone away...
+    // the signed-up tab should have shown up in the background...
+    // the home tab should have shown up, focused
+    this._checkTabDelta({signup: -1, "signed-up": 1, home: 1}, 'home');
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Steady-state usage
+
+  _hookupHomeTab: function() {
+
+  },
 
   showPage_possibleFriends: function() {
     // go to the root tab

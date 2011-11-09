@@ -41,7 +41,11 @@
  *
  * Our features/functionality:
  * - WebDriver API calls and their promise responses decorated into log
- *    entries.
+ *    entries.  We generate events when the promise completes instead of async
+ *    jobs because we don't know when the actual dispatch takes place, and the
+ *    ordering would get weird.
+ * - WebElements passed-through, but you have to use them as opaque handles
+ *    because we need to make the calls for you.
  * - (Eventually) the ability to automatically take screenshots before and after
  *    actions, providing annotation metadata about the location the action was
  *    taken.  (ex: if we are clicking a button, we include the location of the
@@ -51,17 +55,87 @@
 
 define(
   [
+    'q',
+    'rdcommon/log',
     './webdriver',
     'exports'
   ],
   function(
+    $Q,
+    $log,
     $webdriver,
     exports
   ) {
 
-function LoggestWebDriver() {
+// nb: the Webdriver when, not Q's when.
+const when = webdriver.promise.when;
+
+function LoggestWebDriver(name, T, _logger) {
+  this._T = T;
+
+  this._actor = T.actor('loggestWebDriver', name, null, this);
+  this._log = LOGFAB.loggestWebDriver(this, _logger, name);
+
+  this._builder = new $webdriver.Builder();
+  this._builder.withCapabilities({
+    browserName: 'firefox',
+    platform: 'ANY',
+    version: '',
+    javascriptEnabled: true,
+  });
+  this._driver = this._builder.build();
+
+  var self = this;
+  this._boundGenericErrHandler = function(err) {
+    self._log.unexpectedBadness(err);
+  };
 }
 LoggestWebDriver.prototype = {
+
+  navigate: function(url) {
+    this._actor.expect_navigate(url);
+    var self = this;
+    this._driver.get(url).then(
+      function() { self._log.navigate(url); },
+      this._boundGenericErrHandler);
+  },
+
+  findElement: function(whatHow, optContext) {
+  },
+
+  findElements: function(whatHow, optContext) {
+  },
+
+  /**
+   * Helper method to extract a bunch of data from the DOM in a single go.
+   *  This is intended to handle cases where we have N items being presented
+   *  and we want to retrieve multiple pieces of data from each item.  Although
+   *  we could accomplish that with the webdriver API, the number of round
+   *  trips could get high and the DOM traversals could get expensive.  So
+   *  we abstract it here, which is important/useful because we generate JS
+   *  and ship it across the wire.
+   *
+   * @args[
+   *   @param[className]{
+   *     The CSS class name to search for.
+   *   }
+   *   @param[context WebElement]
+   *   @param[valueClassNames @listof[
+   *     @list[
+   *       @param[descendentClassName @oneof[null String]]{
+   *         If the root node is to be used, null.  If a descendent node
+   *         should be queried, its class name.
+   *       }
+   *       @param[cmd @oneof["text" "attr"]]
+   *       @param[attrName #:optional String]
+   *     ]
+   *   ]]
+   * ]
+   */
+  frobElementsByClass: function(className, context, valueClassNames) {
+
+  },
+
   /**
    * Type inside a text box; specially called out because this does not merit
    *  an additional screenshot.
@@ -69,5 +143,23 @@ LoggestWebDriver.prototype = {
   typeInTextBox: function() {
   },
 };
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  loggestWebDriver: {
+    // we are a client/server client, even if we are smart for one
+    type: $log.TEST_SYNTHETIC_ACTOR,
+    subtype: $log.CLIENT,
+
+    events: {
+      navigate: {url: true},
+    },
+    TEST_ONLY_events: {
+    },
+
+    errors: {
+      unexpectedBadness: {err: $log.EXCEPTION},
+    },
+  },
+});
 
 }); // end define

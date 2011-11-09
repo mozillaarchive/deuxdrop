@@ -42,14 +42,17 @@
  *  out 'testClient' stand-in that provides naming and generation/receipt of
  *  notifications to maintain the system state bookkeeping.
  *
+ * ## Extracting Client Identity Information ##
+ *
+ * For realism purposes, we let the client create its own identity information.
+ *  Because our test framework wants this information, as part of the initial
+ *  client spin-up process, we inject
+ *
  * ## Selenium Server ##
  *
  * Currently, we just require that you already have a selenium server running
- *  on localhost.  We provide a shell script to help out with the required
- *  mechanics of:
- * - Causing an XPI for our extension to be created.
- * - Telling the selenium server to include the extension in its dynamically
- *    created profiles.
+ *  on localhost and configured to spawn a firefox instance with our xpi
+ *  installed.  We provide the "testui.py" script in clients/addon to this end.
  *
  **/
 
@@ -58,17 +61,19 @@ define(function(require, exports, $module) {
 var $Q = require('q'),
     when = $Q.when;
 
-var $testdata = require('rdcommon/testdatafab');
+var $testdata = require('rdcommon/testdatafab'),
+    $log = require('rdcommon/log');
 
-var $log = require('rdcommon/log');
-
+var $devui_driver = require('rduidriver/devui');
 
 var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 
 var TestUIActorMixins = {
   __constructor: function(self, opts) {
     // - create a faux testClient for identification/hookup purposes.
+    self.T.convenienceSetup(self, 'creates webdriver', function() {
 
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////

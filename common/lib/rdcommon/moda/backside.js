@@ -418,6 +418,8 @@ ModaBackside.prototype = {
       type: 'whoAmI',
       poco: this._rawClient.getPoco(),
       server: serverInfo,
+      selfIdentBlob: this._rawClient.getSelfIdentBlob(),
+      clientPublicKey: this._rawClient
     });
   },
 

@@ -593,6 +593,14 @@ RawClientAPI.prototype = {
     return this._poco;
   },
 
+  getSelfIdentBlob: function() {
+    return this._selfIdentBlob;
+  },
+
+  getClientPublicKey: function() {
+    return this._keyring.getPublicKeyFor('client', 'connBox');
+  },
+
   updatePoco: function(newPoco) {
     this._poco = newPoco;
     this._regenerateSelfIdent();

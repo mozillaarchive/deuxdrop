@@ -284,6 +284,9 @@ LiveOrderedSet.prototype = {
    *  It would probably be better to support some type of clone() operation,
    *  possibly for a specific item to slice on it, but let's revisit that when
    *  we figure out the multiplicity/listener stuff a bit more.
+   *
+   * XXX XXX There is a plan on the mailing list for how to deal with this; I
+   *  need to implement it.
    */
   boostRefCount: function() {
     this._refCount++;
@@ -333,6 +336,16 @@ function OurUserAccount(_bridge, poco, usingServer) {
   this._bridge = _bridge;
   this.poco = poco;
   this.usingServer = usingServer;
+  /**
+   * The crypto self-ident blob for the user.  This is being introduced to
+   *  allow the selenium webdriver-based testing framework to extract the
+   *  public keys of the user in a reasonably clean fashion.
+   */
+  this.selfIdentBlob = null;
+  /**
+   * The public key for this client.  Also being introduced for unit tests.
+   */
+  this.clientPublicKey = null;
 
   /**
    * Callers who have invoked `whoAmI` but not gotten an onCompleted callback
@@ -342,10 +355,16 @@ function OurUserAccount(_bridge, poco, usingServer) {
   this._signupListener = null;
 }
 OurUserAccount.prototype = {
+  /**
+   * Has the user configured their identity at all/enough?
+   */
   get havePersonalInfo() {
     return this.poco && !!this.poco.displayName;
   },
 
+  /**
+   * Does the user have an established account with a server?
+   */
   get haveServerAccount() {
     return !!this.usingServer;
   },
@@ -357,6 +376,10 @@ OurUserAccount.prototype = {
     this._bridge._send('updatePoco', null, newPoco);
   },
 
+  /**
+   * Speculative call to let the UI provide a BrowserID attestation or other
+   *  third-party attestation of the user's identity.
+   */
   provideProofOfIdentity: function(identityType, proofOrigin, proof) {
   },
 
@@ -364,7 +387,8 @@ OurUserAccount.prototype = {
     (insecureServerInfoListeners[domain] ||
      (insecureServerInfoListeners[domain] = [])).push(listener);
 
-    this._bridge._send('insecurelyGetServerSelfIdentUsingDomainName', null, domain);
+    this._bridge._send('insecurelyGetServerSelfIdentUsingDomainName', null,
+                       domain);
   },
 
   signupWithServer: function(serverInfo, signupListener) {
@@ -542,6 +566,8 @@ ModaBridge.prototype = {
   _receiveWhoAmI: function(msg) {
     // update the representation
     this._ourUser.poco = msg.poco;
+    this._ourUser.selfIdentBlob = msg.selfIdentBlob;
+    this._ourUser.clientPublicKey = msg.clientPublicKey;
     this._ourUser.usingServer = this._transformServerInfo(null, msg.server);
 
     // notify listeners
@@ -951,8 +977,9 @@ ModaBridge.prototype = {
   // Data Queries
 
   /**
-   * Get info on the user. If the user does not exist, the callback will
-   * be given a null answer.
+   * Asynchronously retrieve information about our user.  The callback will be
+   *  invoked when the update is received.
+   *
    * @args[
    *   @param[listener @dict[
    *     @key[onComplete Function]{
