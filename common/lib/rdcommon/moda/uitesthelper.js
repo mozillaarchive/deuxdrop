@@ -54,6 +54,23 @@
  *  on localhost and configured to spawn a firefox instance with our xpi
  *  installed.  We provide the "testui.py" script in clients/addon to this end.
  *
+ * ## Reduced Test Steps ##
+ *
+ * Our control over a true-UI client is limited to its UI and when the mailstore
+ *  tells it things.  This accordingly reduces both the internal events we
+ *  can listen for and the number of test steps that we need to create.  (In
+ *  many cases the main reason we create additional test steps, including taking
+ *  the effort to suspend messages in transit to that end, is to try and make
+ *  the test steps comprehensible to humans by keeping the number of things
+ *  going on low.)
+ *
+ * The following changes in test steps are made:
+ * - Communication between the moda bridge and the moda backside is no longer
+ *   trapped, eliminating a step.  (We could transparently hoook the messages
+ *   if we need to.)
+ * - The step when a mailstore delivers a message to its testClient is
+ *   greatly simplified because we only see the transmission of the message
+ *   by the mailstore and then the UI result.
  **/
 
 define(function(require, exports, $module) {
@@ -64,15 +81,22 @@ var $Q = require('q'),
 var $testdata = require('rdcommon/testdatafab'),
     $log = require('rdcommon/log');
 
-var $devui_driver = require('rduidriver/devui');
+var $wdloggest = require('rduidriver/wdloggest'),
+    $devui_driver = require('rduidriver/devui');
 
 var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 
 var TestUIActorMixins = {
   __constructor: function(self, opts) {
     // - create a faux testClient for identification/hookup purposes.
-    self.T.convenienceSetup(self, 'creates webdriver', function() {
+    self.client = {
+    };
 
+    self.T.convenienceSetup(self, 'creates webdriver', function() {
+      self._lwd = new $wdloggest.LoggestWebDriver(
+                    self.client.__name, self.T, self._log);
+      self._uid = new $devui_driver.DevUIDriver(self.T, self.client,
+                                                self._lwd, self._log);
     });
   },
 
@@ -81,13 +105,15 @@ var TestUIActorMixins = {
   /**
    * Run the signup process to completion for the given server.
    */
-  setup_useServer: function() {
+  setup_useServer: function(server) {
+    this._uid.act_signup(server);
   },
 
   /**
    * Force the UI to connect to its server.
    */
   setup_connect: function() {
+    this._uid.act_connect();
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -96,8 +122,18 @@ var TestUIActorMixins = {
   /**
    * Bring up the list of possible friends, noting that this UI page is a
    *  temporary stopgap with privacy concerns.
+   *
+   * @args[
+   *   @param[otherClients @listof[TestClient]]{
+   *     The expected list of friendable things.  No part of the test
+   *     infrastructure automatically derives this right now...
+   *   }
+   * ]
    */
-  do_showPossibleFriends: function() {
+  do_showPossibleFriends: function(otherClients) {
+    var self = this;
+    self._uid.showPage_possibleFriends();
+    self._uid.verify_possibleFriends(otherClients);
   },
 
   /**
@@ -107,12 +143,18 @@ var TestUIActorMixins = {
    *  completes the connection process from that page.
    */
   do_connectToPeep: function(otherClient, interesting) {
+    var self = this;
+    self._uid.act_issueConnectRequest(otherClient);
   },
 
   /**
    * Bring up the list of unhandled, received connection requests.
    */
   do_showConnectRequests: function() {
+    var self = this;
+    self._uid.showPage_connectRequests();
+    // XXX moda rep knows connect requests...
+    self._uid.verify_connectRequests();
   },
 
   /**
@@ -120,6 +162,8 @@ var TestUIActorMixins = {
    *  be used when do_showConnectRequests is in effect.
    */
   do_approveConnectRequest: function(otherClient) {
+    var self = this;
+    self._uid.act_approveConnectRequest(otherClient);
   },
 
   /**
@@ -127,6 +171,10 @@ var TestUIActorMixins = {
    *  peeps are listed.
    */
   do_showPeeps: function() {
+    var self = this;
+    self._uid.showPage_peeps();
+    // XXX moda knows peeps
+    self._uid.verify_peeps();
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -137,6 +185,19 @@ var TestUIActorMixins = {
    *  given client.
    */
   do_showPeepConversations: function(otherClient) {
+    var self = this;
+    self._uid.showPage_peepConversations(otherClient);
+    // XXX moda knows conversations
+    self._uid.verify_conversations();
+  },
+
+  /**
+   * Display a conversation that is already visible thanks to a call to
+   *  `do_showPeepConversations`.
+   */
+  do_openPeepConversation: function(tConv) {
+    var self = this;
+
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -147,6 +208,7 @@ var TestUIActorMixins = {
    *  the UI how it does this.
    */
   do_createConversation: function(tConv, tMsg, recipients) {
+    var self = this;
   },
 
   /**

@@ -92,6 +92,7 @@ function LoggestWebDriver(name, T, _logger) {
     self._log.unexpectedBadness(err);
   };
 }
+exports.LoggestWebDriver = LoggestWebDriver;
 LoggestWebDriver.prototype = {
 
   navigate: function(url) {
@@ -102,37 +103,52 @@ LoggestWebDriver.prototype = {
       this._boundGenericErrHandler);
   },
 
-  findElement: function(whatHow, optContext) {
-  },
-
-  findElements: function(whatHow, optContext) {
-  },
-
   /**
    * The JS to execute remotely in the context of the driven page; used by
-   *  `frobElementsByClass`.
+   *  `frobElements`.
    */
-  _rjs_frobElementsByClass: function(className, context, grabData) {
-    if (!context)
-      context = document;
-    var results = [];
+  _rjs_frobElements: function(rootContext, rootGrabData) {
+    if (!rootContext)
+      rootContext = document;
+    if (Array.isArray(rootContext)) {
+      var curNode = rootContext[0];
+      for (var i = 1; i < rootContext.length; i++) {
+        curNode = curNode.getElementsByClassName[rootContext[i]][0];
+      }
+    }
 
-    var kidRoots = context.getElementsByClassName(className);
-    for (var iKidRoot = 0; iKidRoot < kidRoots.length; iKidRoot++) {
-      var kidRoot = kidRoots[iKidRoot];
+    function frobRoots(context, grabData) {
+      var localResults = [];
+      var kidRoots = grabData.roots ?
+                       context.getElementsByClassName(grabData.roots) :
+                       [context];
+      for (var iKidRoot = 0; iKidRoot < kidRoots.length; iKidRoot++) {
+        var kidRoot = kidRoots[iKidRoot];
 
-      var kidResult = [kidRoot];
+        var kidResult = [kidRoot];
+        frobData(kidRoot, grabData.data, kidResult);
+        localResults.push(kidResult);
+      }
+      return localResults;
+    }
+    function frobData(rootNode, grabData, localResults) {
       for (var iGrab = 0; iGrab < grabData.length; iGrab++) {
-        var grabCmd = grabData[iGrab],
-            subClass = grabCmd[0], subNode;
+        var grabCmd = grabData[iGrab];
+
+        if (!Array.isArray(grabCmd)) {
+          localResults.push(frobRoots(rootNode, grabCmd));
+          continue;
+        }
+
+        var subClass = grabCmd[0], subNode;
         if (subClass === null) {
-          subNode = kidRoot;
+          subNode = rootNode;
         }
         else {
-          var nestedSubs = kidRoot.getElementsByClassName(subClass);
+          var nestedSubs = rootNode.getElementsByClassName(subClass);
           if (nestedSubs.length !== 1) {
             // there should only be one sub-node with the given class, provide
-            //  a null result and go to the next sub-ndoe...
+            //  a null result and go to the next sub-node...
             kidResult.push(null);
             continue;
           }
@@ -157,13 +173,20 @@ LoggestWebDriver.prototype = {
             }
             kidResult.push(valish);
             break;
+          case 'frob':
+            kidresult.push(frobRoots(subNode, grabCmd[2]));
+            break;
+          default:
+            kidresult.push('BADCOMMAND');
+            break;
         }
       }
-
-      results.push(kidResult);
+      return localResults;
     }
-
-    return results;
+    if (Array.isArray())
+      return frobData(rootContext, rootGrabData, []);
+    else
+      return frobRoots(rootContext, grabData);
   },
 
   /**
@@ -183,15 +206,18 @@ LoggestWebDriver.prototype = {
    *    just use the root node.  The second item is the command, and any
    *    additional items are arguments to that command.
    *
-   * @args[
-   *   @param[className]{
-   *     The CSS class name to search for.
-   *   }
-   *   @param[context @oneof[null WebElement]]{
-   *     If null, use the document as the context, otherwise look for nodes
-   *     under the provided WebElement.
-   *   }
-   *   @param[grabData @listof[
+   * @typedef[FrobExtractKids @dict[
+   *   @key[roots @oneof[
+   *     @case[null]
+   *     @case["css class name" String]
+   *   ]]
+   *   @key[data FrobExtractData]
+   * ]]
+   * @typedef[FrobExtractData @listof[@oneof[
+   *   @case[FrobExtractKids]
+   *   @case[FrobExtractCmd]
+   * ]]]
+   * @typedef[FrobExtractCmd
    *     @list[
    *       @param[descendentClassName @oneof[null String]]{
    *         If the root node is to be used, null.  If a descendent node
@@ -216,7 +242,13 @@ LoggestWebDriver.prototype = {
    *       ]]
    *       @param[attrName #:optional String]
    *     ]
-   *   ]]
+   * ]
+   * @args[
+   *   @param[context @oneof[null WebElement]]{
+   *     If null, use the document as the context, otherwise look for nodes
+   *     under the provided WebElement.
+   *   }
+   *   @param[grabData @oneof[FrobExtractKids FrobExtractData]]
    * ]
    * @return[@promise[@listof[@list[
    *   @param[element WebElement]{
@@ -227,11 +259,11 @@ LoggestWebDriver.prototype = {
    *   }
    * ]]]]
    */
-  frobElementsByClass: function(className, context, grabData) {
+  frobElements: function(context, grabData) {
     var deferred = $Q.defer(), self = this;
     this._actor.expect_frob(className);
-    WDwhen(this._driver.executeScript(this._rjs_frobElementsByClass,
-                                      className, context, grabData),
+    WDwhen(this._driver.executeScript(this._rjs_frobElements,
+                                      context, grabData),
       function(results) {
         self._log.frob(className, results);
         deferred.resolve(results);

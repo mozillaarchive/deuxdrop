@@ -71,8 +71,6 @@ const
   clsTabHeaderClose = dwc('tabs', 'tabs', 'tab-header', 'close'),
   // specific tab widget roots
   clsTabHome = dwc('tabs', 'tab-home', 'home-tab', 'root'),
-  clsTabSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'root'),
-  clsTabAcceptRequest = dwc('tabs', 'tab-common', 'accept-request-tab', 'root'),
   // signup tab
   clsSignupOtherServer = dwc('tabs', 'tab-signup', 'signup-tab', 'otherServer'),
   clsSignupSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'btnSignup'),
@@ -93,6 +91,7 @@ const
   // peeps
   clsPeepBlurb = dwc('moda', 'tab-common', 'peep-blurb', 'root'),
   clsPeepBlurbName = dwc('moda', 'tab-common', 'peep-blurb', 'name'),
+  clsPeepInlineRoot = dwc('moda', 'tab-common', 'peep-inline', 'root'),
   clsPeepInlineName = dwc('moda', 'tab-common', 'peep-inline', 'name'),
   // poco editing
   clsPocoEditName = dwc('moda', 'tab-signup', 'poco-editor', 'displayName'),
@@ -100,21 +99,36 @@ const
   clsConvBlurb = dwc('moda', 'tab-common', 'conv-blurb', 'root'),
   clsConvBlurbText = dwc('moda', 'tab-common', 'conv-blurb',
                          'firstMessageText'),
+  // compose
+  clsComposePeepsList = dwc('moda', 'tab-common', 'conv-compose', 'peeps'),
+  clsComposeAddPeep = dwc('moda', 'tab-common', 'conv-compose', 'btnAddPeep'),
+  clsComposeText = dwc('moda', 'tab-common', 'conv-compose', 'messageText'),
+  clsComposeSend = dwc('tabs', 'tab-common', 'conv-compose-tab', 'btnSend'),
+  clsPeepPopPeeps = dwc('moda', 'tab-common', 'peep-selector-popup', 'peeps'),
 
   blah;
 
 const UI_URL = 'about:dddev';
 
 /**
- * `frobElementsByClass` grabData definition for our retrieval of the tabbed UI's
+ * `frobElements` grabData definition for our retrieval of the tabbed UI's
  *  state.
  */
 const TABFROB_DEF = [
-  [clsTabHeaderLabel, 'text'],
-  [null, 'jsprop', 'binding', 'obj', 'kind'],
-  [null, 'attr', 'selected'],
-  [null, 'attr', 'wantsAttention'],
-  [clsTabHeaderClose, 'node'],
+  {
+    roots: clsTabHeaderRoot,
+    data: [
+      [clsTabHeaderLabel, 'text'],
+      [null, 'jsprop', 'binding', 'obj', 'kind'],
+      [null, 'attr', 'selected'],
+      [null, 'attr', 'wantsAttention'],
+      [clsTabHeaderClose, 'node'],
+    ],
+  },
+  {
+    roots: clsTab,
+    kids: [],
+  }
 ];
 const TF_node = 0, TF_label = 1, TF_kind = 2, TF_selected = 3, TF_attention = 4,
       TF_close = 5;
@@ -163,6 +177,7 @@ function DevUIDriver(T, client, wdloggest, _logger) {
   this._eMakeFriendsBtn = this._eShowPeepsBtn =
     this._eShowConnectRequestsBtn = this._eComposeBtn = null;
 }
+exports.DevUIDriver = DevUIDriver;
 DevUIDriver.prototype = {
   startUI: function() {
     this._d.navigate(UI_URL);
@@ -219,18 +234,23 @@ DevUIDriver.prototype = {
     this._actor.expect_tabState(deltaRep, currentTab);
 
     when(
-      this._d.frobElementsByClass(clsTabHeaderRoot, null, TABFROB_DEF),
-      function(frobbedTabs) {
+      this._d.frobElements(null, TABFROB_DEF),
+      function(frobbed) {
         var actualCurrentTab = null,
             deltaRep = { preAnno: {}, state: {}, postAnno: {} },
-            realTabKinds = [];
-        for (var iTab = 0; iTab < frobbedTabs.length; iTab++) {
-          var tabData = frobbedTabs[iTab],
+            realTabKinds = [],
+            tabHeaders = frobbed[0], tabBodies = frobbed[1];
+        for (var iTab = 0; iTab < tabHeaders.length; iTab++) {
+          var tabData = tabHeaders[iTab],
               tabKind = tabData[TF_kind];
           if (tabData[TF_selected])
             actualCurrentTab = self._activeTab = tabKind;
           realTabKinds.push(tabKind);
-          this._currentTabData[tabKind] = tabData;
+          this._currentTabData[tabKind] = {
+            headerNode: tabData[TF_node],
+            closeNode: tabData[TF_close],
+            tabNode: tabBodies[iTab][0],
+          };
         }
 
         self._log.tabState(deltaRep, actualCurrentTab);
@@ -243,7 +263,7 @@ DevUIDriver.prototype = {
    * XXX speculative
    */
   _switchTab: function(tabKind) {
-    this._d.click(this._currentTabData[tabKind][TF_node]);
+    this._d.click(this._currentTabData[tabKind].headerNode);
   },
 
   /**
@@ -254,7 +274,7 @@ DevUIDriver.prototype = {
   _closeTab: function(tabKind) {
     if (tabKind === undefined)
       tabKind = this._activeTab;
-    this._d.click(this._currentTabData[tabKind][TF_close]);
+    this._d.click(this._currentTabData[tabKind].closeNode);
   },
 
   _nukeTabSpawnNewViaHomeTab: function(btnName, tabName) {
@@ -283,11 +303,14 @@ DevUIDriver.prototype = {
 
     // - grab
     when(
-      this._d.frobElementsByClass(
-        clsPeepBlurb, this._currentTabData[tabKind][TF_node],
-        [
-          [clsPeepBlurbName, 'text'],
-        ]),
+      this._d.frobElements(
+        this._currentTabData[tabKind].tabNode,
+        {
+          roots: clsPeepBlurb,
+          data: [
+            [clsPeepBlurbName, 'text'],
+          ]
+        }),
       function gotFrobbedPeepData(results) {
         var actualNames = {},
             allPeepBlurbData = self._peepBlurbData = {};
@@ -303,10 +326,21 @@ DevUIDriver.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Hacky magic moda things
+
+  /**
+   * Force us to connect to the server by marshaling JS code to call the moda
+   *  connect function.
+   */
+  act_connect: function() {
+    // XXX actually connect
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Signup Mode
 
   act_signup: function(server) {
-    var eSignupTab = this._currentTabData['signup'][TF_node];
+    var eSignupTab = this._currentTabData['signup'].tabNode;
 
     // - name ourselves
     this._d.typeInTextBox({ className: clsPeepBlurbName },
@@ -338,11 +372,16 @@ DevUIDriver.prototype = {
 
   _hookupHomeTab: function() {
     var self = this;
-    when(this._d.frobElementsByClass(clsTabHome, null, [
-           [clsHomeMakeFriends, 'node'],
-           [clsHomeFriendRequests, 'node'],
-           [clsHomeListFriends, 'node'],
-           [clsHomeCompose, 'node']]),
+    when(
+      this._d.frobElements(this._currentTabData['home'].tabNode, {
+        roots: clsTabHome,
+        data: [
+          [clsHomeMakeFriends, 'node'],
+          [clsHomeFriendRequests, 'node'],
+          [clsHomeListFriends, 'node'],
+          [clsHomeCompose, 'node']
+        ]
+      }),
       function(results) {
         var homeTabData = results[0];
         self._eMakeFriendsBtn = homeTabData[1];
@@ -372,7 +411,7 @@ DevUIDriver.prototype = {
 
     // click the send request
     this._d.click({ className: clsAuthorConnSend },
-                  this._currentTabData['author-contact-request']);
+                  this._currentTabData['author-contact-request'].tabNode);
 
     // tab goes away
     this._checkTabDelta({ 'author-contact-request': -1 },
@@ -410,19 +449,29 @@ DevUIDriver.prototype = {
 
     // - actual
     when(
-      this._d.frobElementsByClass(
-        clssConnReqRoot, this._currentTabData['requests'][TF_node],
-        [
-          [clsConnReqName, 'text'],
-          [clsConnReqMessage, 'text'],
-        ]
+      this._d.frobElements(
+        this._currentTabData['requests'].tabNode,
+        {
+          roots: clssConnReqRoot,
+          data: [
+            // XXX we don't actually check the involved peeps right now
+            {
+              roots: clsPeepInlineRoot,
+              data: [
+                [clsPeepInlineName, 'text'],
+              ],
+            },
+            [clsConnReqName, 'text'],
+            [clsConnReqMessage, 'text'],
+          ]
+        }
       ),
       function(results) {
         var actualNamesAndMesages = {},
             allConnReqData = self._connReqData = {};
         for (var iReq = 0; iReq < results.length; iReq++) {
-          var requesterName = results[iReq][1],
-              requestMessage = results[iReq][2];
+          var requesterName = results[iReq][2],
+              requestMessage = results[iReq][3];
           actualNamesAndMesages[requesterName] = requestMessage;
           allConnReqData[requesterName] = results[iReq];
         }
@@ -442,7 +491,7 @@ DevUIDriver.prototype = {
 
     // confirm the connection
     this._d.click({ className: clsAcceptConnAccept },
-                  this._currentTabData['accept-request'][TF_node]);
+                  this._currentTabData['accept-request'].tabNode);
 
     // tab goes away!
     this._checkTabDelta({ 'accept-request': -1 },
@@ -480,11 +529,15 @@ DevUIDriver.prototype = {
 
     // - actual
     when(
-      this._d.frobElementsByClass(
-        clsConvBlurb, this._currentTabData['conversation'][TF_node],
-        [
-          clsConvBlurbText, 'text',
-        ]),
+      this._d.frobElements(
+        this._currentTabData['conversation'].tabNode,
+        {
+          roots: clsConvBlurb,
+          data: [
+            [clsConvBlurbText, 'text'],
+          ]
+        }
+      ),
       function(results) {
         var actualFirstMessages = {};
         for (var iConv = 0; iConv < results.length; iConv++) {
@@ -494,26 +547,95 @@ DevUIDriver.prototype = {
       });
   },
 
+  act_showConversation: function() {
+    // XXX implement
+  },
+
+  act_replyToConversation: function() {
+    // XXX implement
+  },
+
+  act_inviteToConversation: function() {
+    // XXX implement
+  },
+
   /**
    * Create a conversation from the home tab.  The alternative would be to
    *  create a conversation from a peep conversation list where we automatically
    *  add that peep to the list of invited peeps.
    */
-  act_createConversation: function(recipClients) {
+  act_createConversation: function(recipClients, messageText) {
+    var self = this;
+
     // hit the create a conversation button
     this._nukeTabSpawnNewViaHomeTab(this._eComposeBtn, 'conv-compose');
 
     // - add the peep(s)
+    function findAndClickPeepInPopup(client) {
+      when(
+        self._d.frobElements(
+          [self._currentTabData['conv-compose'].tabNode, clsPeepPopPeeps],
+          {
+            roots: clsPeepBlurb,
+            data: [
+              [clsPeepBlurbName, 'text'],
+            ],
+          }),
+        function(frobbed) {
+          for (var iPeep = 0; iPeep < frobbed.length; iPeep++) {
+            if (frobbed[iPeep][1] === client.__name) {
+              self._d.click(frobbed[iPeep][0]);
+              return;
+            }
+          }
+        });
+    }
+
+    function verifyPeepInComposeList(client) {
+      when(
+        self._d.frobElements(
+          [self._currentTabData['conv-compose'].tabNode, clsComposePeepsList],
+          {
+            roots: clsPeepInlineRoot,
+            data: [
+              [clsPeepInlineName, 'text'],
+            ],
+          }),
+        function(frobbed) {
+          for (var iPeep = 0; iPeep < frobbed.length; iPeep++) {
+            if (frobbed[iPeep][1] === client.__name) {
+              return;
+            }
+          }
+          self._log.peepNotAdded(client.__name);
+        });
+    }
+
     for (var iRecip = 0; iRecip < recipClients.length; iRecip++) {
-      // hit add
-      // locate the peep in the list
+      var recip = recipClients[iRecip];
+      // hit add to show the popup of people we can add
+      this._d.click({ className: clsComposeAddPeep });
       // click the peep
+      findAndClickPeepInPopup(recip);
       // verify the peep showed up
+      verifyPeepInComposeList(recip);
     }
 
     // - type in the message
+    this._d.typeInTextBox({ className: clsComposeText },
+                          messageText,
+                          this._currentTabData['conv-compose'].tabNode);
 
     // - hit send
+    this._d.click({ className: clsComposeSend },
+                  this._currentTabData['conv-compose'].tabNode);
+
+    // - make sure the tab goes away
+    this._checkTabDelta({ 'conv-compose': -1 }, 'home');
+
+    // (we expect the caller to bring up the list of converations themselves
+    //  subsequent to this and verify the list of conversations includes the
+    //  new conversation.)
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -535,6 +657,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
 
     errors: {
+      peepNotAdded: { name: false },
     },
   },
 });

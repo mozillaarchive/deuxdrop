@@ -107,7 +107,7 @@ TD.commonCase('moda basics', function(T) {
 
   T.group("A requests B");
   // list/find peeps
-  ui_a.do_showPossibleFriends();
+  ui_a.do_showPossibleFriends([client_b, client_c]);
   // connect process, return to list/find
   ui_a.do_connectToPeep(client_b);
   // switch to our list of peeps so we can see them appear
