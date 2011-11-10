@@ -726,6 +726,7 @@ var TestClientActorMixins = {
       id: convCreationInfo.convId,
       seq: this.RT.testDomainSeq++,
       backlog: backlog,
+      firstMessage: tMsg,
       // XXX this is identical across all participants, but this is pretty
       //  sketchy for us to be extracting and storing.
       convMeta: convCreationInfo.convMeta,

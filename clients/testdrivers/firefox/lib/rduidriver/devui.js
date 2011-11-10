@@ -44,13 +44,18 @@
 
 define(
   [
+    'q',
     'rdcommon/log',
+    'module',
     'exports'
   ],
   function(
+    $Q,
     $log,
+    $module,
     exports
   ) {
+const when = $Q.when;
 
 /**
  * Derive the wmsy CSS class name for the given element.
@@ -65,6 +70,7 @@ const
   clsTabHeaderLabel = dwc('tabs', 'tabs', 'tab-header', 'label'),
   clsTabHeaderClose = dwc('tabs', 'tabs', 'tab-header', 'close'),
   // specific tab widget roots
+  clsTabHome = dwc('tabs', 'tab-home', 'home-tab', 'root'),
   clsTabSignup = dwc('tabs', 'tab-signup', 'signup-tab', 'root'),
   clsTabAcceptRequest = dwc('tabs', 'tab-common', 'accept-request-tab', 'root'),
   // signup tab
@@ -78,14 +84,45 @@ const
   clsHomeCompose = dwc('tabs', 'tab-home', 'home-tab', 'btnCompose'),
   // connection requests
   clsConnReqRoot = dwc('moda', 'tab-common', 'conn-request', 'root'),
+  clsConnReqName = dwc('moda', 'tab-common', 'conn-request', 'peep'),
+  clsConnReqMessage = dwc('moda', 'tab-common', 'conn-request', 'messageText'),
+  clsAcceptConnAccept = dwc('tabs', 'tab-common', 'accept-request-tab',
+                            'btnAccept'),
+  clsAuthorConnSend = dwc('moda', 'tab-common', 'author-contact-request-tab',
+                          'btnSend'),
   // peeps
+  clsPeepBlurb = dwc('moda', 'tab-common', 'peep-blurb', 'root'),
   clsPeepBlurbName = dwc('moda', 'tab-common', 'peep-blurb', 'name'),
+  clsPeepInlineName = dwc('moda', 'tab-common', 'peep-inline', 'name'),
   // poco editing
   clsPocoEditName = dwc('moda', 'tab-signup', 'poco-editor', 'displayName'),
+  // conversations
+  clsConvBlurb = dwc('moda', 'tab-common', 'conv-blurb', 'root'),
+  clsConvBlurbText = dwc('moda', 'tab-common', 'conv-blurb',
+                         'firstMessageText'),
 
   blah;
 
 const UI_URL = 'about:dddev';
+
+/**
+ * `frobElementsByClass` grabData definition for our retrieval of the tabbed UI's
+ *  state.
+ */
+const TABFROB_DEF = [
+  [clsTabHeaderLabel, 'text'],
+  [null, 'jsprop', 'binding', 'obj', 'kind'],
+  [null, 'attr', 'selected'],
+  [null, 'attr', 'wantsAttention'],
+  [clsTabHeaderClose, 'node'],
+];
+const TF_node = 0, TF_label = 1, TF_kind = 2, TF_selected = 3, TF_attention = 4,
+      TF_close = 5;
+
+const MODA_NOTIF_GLOBAL_HOOKUP =
+  'var callback = arguments[arguments.length - 1]; ' +
+  'window.__modaEventTestThunk = function(eventType) {' +
+  ' if (eventType === "$EVENT$") callback(); };';
 
 /**
  * Tab-wise, our approach is that:
@@ -109,12 +146,21 @@ const UI_URL = 'about:dddev';
  *   }
  * ]
  */
-function DevUIDriver(client, wdloggest) {
+function DevUIDriver(T, client, wdloggest, _logger) {
   this._d = wdloggest;
 
   this._activeTab = null;
+  this._currentTabFrob = [];
+  this._currentTabKinds = [];
+  this._currentTabData = {};
 
-  this._eHomeTabLabel = this._eMakeFriendsBtn = this._eShowPeepsBtn =
+  this._peepBlurbData = {};
+  this._connReqData = {};
+
+  this._actor = T.actor('devUIDriver', client.__name, null, this);
+  this._log = LOGFAB.devUIDriver(this, _logger, client.__name);
+
+  this._eMakeFriendsBtn = this._eShowPeepsBtn =
     this._eShowConnectRequestsBtn = this._eComposeBtn = null;
 }
 DevUIDriver.prototype = {
@@ -128,99 +174,369 @@ DevUIDriver.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Helpers
 
+  _waitForModa: function(expectedEvent) {
+    this._d.waitForRemoteCallback(
+      MODA_NOTIF_GLOBAL_HOOKUP.replace('$EVENT$', expectedEvent));
+  },
 
   /**
-   * Retrieve the current set of tabs
+   * Retrieve the current set of tabs and check it against our previous known
+   *  state and the expected set of changes to that state.
    */
-  _grabTabState: function() {
-    var self = this;
+  _checkTabDelta: function(tabDelta, currentTab) {
+    var self = this, deltaRep = {preAnno: {}, state: {}, postAnno: {}};
+
+    // - mark removed tabs, apply expected deltas
+    var idxTab, tabKind, tabKinds = this._currentTabKinds.concat();
+    for (tabKind in tabDelta) {
+      var change = tabDelta[tabKind];
+      // tab closed
+      if (change === -1) {
+        deltaRep.preAnno[tabKind] = -1;
+        idxTab = tabKinds.indexOf(tabKind);
+        tabKinds.splice(idxTab, 1);
+      }
+      // tab added
+      else {
+        deltaRep.postAnno[tabKind] = 1;
+        // insert at the beggining
+        if (change === null) {
+          tabKinds.splice(0, 0, tabKind);
+        }
+        // insert after existing tab kind...
+        else {
+          idxTab = tabKinds.indexOf(change);
+          tabKinds.splice(idxTab + 1, 0, tabKind);
+        }
+      }
+    }
+
+    // - generate new tab state, expectation
+    for (idxTab = 0; idxTab < tabKinds.length; idxTab++) {
+      tabKind = tabKinds[idxTab];
+      deltaRep.state[tabKind] = idxTab;
+    }
+    this._actor.expect_tabState(deltaRep, currentTab);
+
     when(
-      this._d.frobElementsByClass(clsTabHeaderRoot, null, [
-                                    [clsTabHeaderLabel, 'text'],
-                                    [null, 'attr', 'selected'],
-                                    [null, 'attr', 'wantsAttention'],
-                                  ]),
-      function(results) {
+      this._d.frobElementsByClass(clsTabHeaderRoot, null, TABFROB_DEF),
+      function(frobbedTabs) {
+        var actualCurrentTab = null,
+            deltaRep = { preAnno: {}, state: {}, postAnno: {} },
+            realTabKinds = [];
+        for (var iTab = 0; iTab < frobbedTabs.length; iTab++) {
+          var tabData = frobbedTabs[iTab],
+              tabKind = tabData[TF_kind];
+          if (tabData[TF_selected])
+            actualCurrentTab = self._activeTab = tabKind;
+          realTabKinds.push(tabKind);
+          this._currentTabData[tabKind] = tabData;
+        }
+
+        self._log.tabState(deltaRep, actualCurrentTab);
       });
   },
-  _assertGetTab: function(tabClass) {
+
+  /**
+   * Explicitly switch tabs, leaving the tab we were on around.
+   *
+   * XXX speculative
+   */
+  _switchTab: function(tabKind) {
+    this._d.click(this._currentTabData[tabKind][TF_node]);
+  },
+
+  /**
+   * Explicitly close a tab by clicking its close button.
+   *
+   * Does nothing screenshot-wise, as we do not expect this to be interesting.
+   */
+  _closeTab: function(tabKind) {
+    if (tabKind === undefined)
+      tabKind = this._activeTab;
+    this._d.click(this._currentTabData[tabKind][TF_close]);
+  },
+
+  _nukeTabSpawnNewViaHomeTab: function(btnName, tabName) {
+    // go to the root tab via close
+    if (this._activeTab !== 'home')
+      this._closeTab();
+    // hit the button to spawn the new tab
+    this._d.click(btnName);
+    // wait for the tab to populate
+    this._waitForModa('query');
+    // check the tab is there, etc.
+    var tabDelta = {};
+    tabDelta[this._activeTab] = -1;
+    tabDelta['requests'] = 'home';
+    this._checkTabDelta(tabDelta, tabName);
+  },
+
+  _verifyPeepBlurbsOnTab: function(tabKind, otherClients) {
+    var self = this;
+    // - expectation
+    var expectedNames = {};
+    for (var iClient = 0; iClient < otherClients.length; iClient++) {
+      expectedNames[otherClients[iClient]] = null;
+    }
+    this._actor.expect_visiblePeeps(expectedNames);
+
+    // - grab
+    when(
+      this._d.frobElementsByClass(
+        clsPeepBlurb, this._currentTabData[tabKind][TF_node],
+        [
+          [clsPeepBlurbName, 'text'],
+        ]),
+      function gotFrobbedPeepData(results) {
+        var actualNames = {},
+            allPeepBlurbData = self._peepBlurbData = {};
+        for (var iPeep = 0; iPeep < results.length; iPeep++) {
+          var peepData = results[iPeep],
+              peepName = peepData[1];
+          actualNames[peepName] = null;
+          allPeepBlurbData[peepName] = peepdata;
+        }
+        self._log.visiblePeeps(actualNames);
+      }
+    );
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Signup Mode
 
   act_signup: function(server) {
-    var eSignupTab = null; // XXX magic up the tab reference
+    var eSignupTab = this._currentTabData['signup'][TF_node];
 
     // - name ourselves
-    var eName = this._d.findElement({className: clsPeepBlurbName}, eSignupTab);
-    this._d.typeInTextBox(eName, client.__name);
+    this._d.typeInTextBox({ className: clsPeepBlurbName },
+                          client.__name,
+                          eSignupTab);
 
     // - select the server to use
-    var eOtherServer = this._d.findElement({className: clsSignupOtherServer},
-                                           eSignupTab);
-
-    var eSignupButton = this._d.findElement({className: clsSignupSignup},
-                                            eSignupTab);
+    var domainNameWithPort = server.__url.slice(5, -1);
+    this._d.typeInTextBox({ className: clsSignupOtherServer },
+                          domainNameWithPort,
+                          eSignupTab);
 
     // - trigger signup
-    this._d.click(eSignupButton);
+    this._d.click({ className: clsSignupSignup }, eSignupTab);
     // - wait for signup to complete
     this._d.waitForModa('signupResult');
     // the signup tab should have gone away...
     // the signed-up tab should have shown up in the background...
     // the home tab should have shown up, focused
-    this._checkTabDelta({signup: -1, "signed-up": 1, home: 1}, 'home');
+    this._checkTabDelta({ "signed-up": 'signup', home: 'signed-up',
+                          signup: -1 },
+                        'home');
+
+    this._hookupHomeTab();
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Steady-state usage
 
   _hookupHomeTab: function() {
-
+    var self = this;
+    when(this._d.frobElementsByClass(clsTabHome, null, [
+           [clsHomeMakeFriends, 'node'],
+           [clsHomeFriendRequests, 'node'],
+           [clsHomeListFriends, 'node'],
+           [clsHomeCompose, 'node']]),
+      function(results) {
+        var homeTabData = results[0];
+        self._eMakeFriendsBtn = homeTabData[1];
+        self._eShowConnectRequestsBtn = homeTabData[2];
+        self._eShowPeepsBtn = homeTabData[3];
+        self._eComposeBtn = homeTabData[4];
+      });
   },
 
   showPage_possibleFriends: function() {
-    // go to the root tab
-    // hit the list possible friends button
-    // wait for the tab to show up
+    this._nukeTabSpawnNewViaHomeTab(this._eMakeFriendsBtn, 'make-friends');
+  },
+
+  verify_possibleFriends: function(otherClients) {
+    this._verifyPeepBlurbsOnTab('make-friends', otherClients);
+  },
+
+  act_issueConnectRequest: function(otherClient) {
+    // (we assume that a verify was issued on the listed peeps already)
+
+    // click on the peep blurb
+    this._d.click(this._peepBlurbData[otherClient.__name][0]);
+
+    // tab comes up
+    this._checkTabDelta({ 'author-contact-request': 'make-friends' },
+                        'author-contact-request');
+
+    // click the send request
+    this._d.click({ className: clsAuthorConnSend },
+                  this._currentTabData['author-contact-request']);
+
+    // tab goes away
+    this._checkTabDelta({ 'author-contact-request': -1 },
+                        'make-friends');
   },
 
   showPage_peeps: function() {
+    this._nukeTabSpawnNewViaHomeTab(this._eShowPeepsBtn, 'peeps');
+  },
+
+  /**
+   * Verify all provided clients are present *in no particular order*.
+   */
+  verify_peeps: function(otherClients) {
+    this._verifyPeepBlurbsOnTab('peeps', otherClients);
   },
 
   showPage_connectRequests: function() {
+    this._nukeTabSpawnNewViaHomeTab(this._eMakeFriendsBtn, 'requests');
   },
 
-  showPage_peepConversations: function() {
+  /**
+   * Verify all connection requests are present *in no particular order*.
+   */
+  verify_connectRequests: function(connReqTuples) {
+    var self = this;
+    // - expectation
+    var expectedNamesAndMessages = {};
+    for (var iReq = 0; iReq < connReqTuples.length; iReq++) {
+      var requesterName = connReqTuples[iReq][0],
+          requestMessage = connReqTuples[iReq][1];
+      expectedNamesAndMessages[requesterName] = requestMessage;
+    }
+    this._actor.expect_visibleConnReqs(expectedNamesAndMessages);
+
+    // - actual
+    when(
+      this._d.frobElementsByClass(
+        clssConnReqRoot, this._currentTabData['requests'][TF_node],
+        [
+          [clsConnReqName, 'text'],
+          [clsConnReqMessage, 'text'],
+        ]
+      ),
+      function(results) {
+        var actualNamesAndMesages = {},
+            allConnReqData = self._connReqData = {};
+        for (var iReq = 0; iReq < results.length; iReq++) {
+          var requesterName = results[iReq][1],
+              requestMessage = results[iReq][2];
+          actualNamesAndMesages[requesterName] = requestMessage;
+          allConnReqData[requesterName] = results[iReq];
+        }
+        self._log.visibleConnReqs(actualNamesAndMesages);
+      });
   },
 
+  act_approveConnectRequest: function(otherClient) {
+    // (we assume that a verify was issued on the conn reqs already)
 
-  act_approveConnectRequest: function() {
-    // locate the connect request
-    // click on it
+    // click on the connection request
+    this._d.click(this._connReqData[otherClient.__name][0]);
 
-    // this should pop up a new tab with details
+    // this should pop up a new tab with details immediately (no queries)
+    this._checkTabDelta({ 'accept-request': 'requests' },
+                        'accept-request');
 
     // confirm the connection
+    this._d.click({ className: clsAcceptConnAccept },
+                  this._currentTabData['accept-request'][TF_node]);
+
+    // tab goes away!
+    this._checkTabDelta({ 'accept-request': -1 },
+                        'requests');
   },
 
-  act_createConversation: function() {
-    // go to the root tab
+
+  showPage_peepConversations: function(otherClient) {
+    // (we assume that we are already on the 'peeps' tab/list)
+
+    // click on the peep blurb
+    this._d.click(this._peepBlurbData[otherClient.__name][0]);
+
+    // the conversations tab should come up and populate
+    this._waitForModa('query');
+
+    // kill the peeps tab
+    this._closeTab('peeps');
+
+    // verify tab status
+    this._checkTabDelta({ conversation: 'peeps', peeps: -1 },
+                        'conversation');
+  },
+
+  /**
+   * Verify all conversations are present *in no particular order*.
+   */
+  verify_conversations: function(tConvs) {
+    var self = this, expectedFirstMessages = {};
+    // - expectation
+    for (var iConv = 0; iConv < tConvs.length; iConv++) {
+      expectedFirstMessages[tConvs[iConv].data.firstMessage.data.text] = null;
+    }
+    this._actor.expect_visibleConvs(expectedFirstMessages);
+
+    // - actual
+    when(
+      this._d.frobElementsByClass(
+        clsConvBlurb, this._currentTabData['conversation'][TF_node],
+        [
+          clsConvBlurbText, 'text',
+        ]),
+      function(results) {
+        var actualFirstMessages = {};
+        for (var iConv = 0; iConv < results.length; iConv++) {
+          actualFirstMessages[results[iConv][1]] = null;
+        }
+        self._log.visibleConvs(actualFirstMessages);
+      });
+  },
+
+  /**
+   * Create a conversation from the home tab.  The alternative would be to
+   *  create a conversation from a peep conversation list where we automatically
+   *  add that peep to the list of invited peeps.
+   */
+  act_createConversation: function(recipClients) {
     // hit the create a conversation button
+    this._nukeTabSpawnNewViaHomeTab(this._eComposeBtn, 'conv-compose');
 
     // - add the peep(s)
-    // hit add
-    // locate the peep in the list
-    // click the peep
-    // verify the peep showed up
+    for (var iRecip = 0; iRecip < recipClients.length; iRecip++) {
+      // hit add
+      // locate the peep in the list
+      // click the peep
+      // verify the peep showed up
+    }
 
-    // type in the message
+    // - type in the message
 
-    // hit send
+    // - hit send
   },
 
   //////////////////////////////////////////////////////////////////////////////
 };
+
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  devUIDriver: {
+    // we are a client/server client, even if we are smart for one
+    type: $log.TEST_SYNTHETIC_ACTOR,
+    subtype: $log.CLIENT,
+
+    events: {
+      tabDelta: { state: true, activeTab: true },
+      visiblePeeps: { names: true },
+      visibleConnReqs: { namesAndMessages: true },
+      visibleConvs: { firstMessages: true },
+    },
+    TEST_ONLY_events: {
+    },
+
+    errors: {
+    },
+  },
+});
 
 }); // end define

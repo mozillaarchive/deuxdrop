@@ -57,6 +57,13 @@ define(function (require) {
       //console.log('moda-content-message: ' + JSON.stringify(evt.data));
       var data = JSON.parse(evt.data);
       bridge._receive(data);
+
+      // -- WebDriver UI tester support
+      // To be event driven about changes to the UI, we provide for the
+      //  UI tester to be able to know when moda has heard something new and
+      //  processed it.
+      if (window.__modaEventTestThunk)
+        window.__modaEventTestThunk(data.type);
     }, false);
 
   return bridge;

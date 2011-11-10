@@ -1472,13 +1472,7 @@ var TestModaActorMixins = {
    */
   _grabConvBlurbFromQueryUsingConvThing: function(lqt, tConv) {
     var backlog = tConv.data.backlog, blurbs = lqt._liveset.items,
-        firstMessageText;
-    for (var iMsg = 0; iMsg < backlog.length; iMsg++) {
-      if (backlog[iMsg].data.type === 'message') {
-        firstMessageText = backlog[iMsg].data.text;
-        break;
-      }
-    }
+        firstMessageText = tConv.data.firstMessage.data.text;
     for (var iBlurb = 0; iBlurb < blurbs.length; iBlurb++) {
       if (blurbs[iBlurb].firstMessage.text === firstMessageText)
         return blurbs[iBlurb];

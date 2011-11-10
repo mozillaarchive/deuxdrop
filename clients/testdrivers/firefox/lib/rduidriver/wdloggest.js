@@ -58,17 +58,19 @@ define(
     'q',
     'rdcommon/log',
     './webdriver',
+    'module',
     'exports'
   ],
   function(
     $Q,
     $log,
     $webdriver,
+    $module,
     exports
   ) {
 
 // nb: the Webdriver when, not Q's when.
-const when = webdriver.promise.when;
+const WDwhen = webdriver.promise.when;
 
 function LoggestWebDriver(name, T, _logger) {
   this._T = T;
@@ -107,6 +109,64 @@ LoggestWebDriver.prototype = {
   },
 
   /**
+   * The JS to execute remotely in the context of the driven page; used by
+   *  `frobElementsByClass`.
+   */
+  _rjs_frobElementsByClass: function(className, context, grabData) {
+    if (!context)
+      context = document;
+    var results = [];
+
+    var kidRoots = context.getElementsByClassName(className);
+    for (var iKidRoot = 0; iKidRoot < kidRoots.length; iKidRoot++) {
+      var kidRoot = kidRoots[iKidRoot];
+
+      var kidResult = [kidRoot];
+      for (var iGrab = 0; iGrab < grabData.length; iGrab++) {
+        var grabCmd = grabData[iGrab],
+            subClass = grabCmd[0], subNode;
+        if (subClass === null) {
+          subNode = kidRoot;
+        }
+        else {
+          var nestedSubs = kidRoot.getElementsByClassName(subClass);
+          if (nestedSubs.length !== 1) {
+            // there should only be one sub-node with the given class, provide
+            //  a null result and go to the next sub-ndoe...
+            kidResult.push(null);
+            continue;
+          }
+          subNode = nestedSubs[0];
+        }
+        switch (grabCmd[1]) {
+          case 'node':
+            kidResult.push(subNode);
+            break;
+          case 'text':
+            kidResult.push(subNode.textContent);
+            break;
+          case 'attr':
+            kidResult.push(subNode.getAttribute(grabCmd[2]));
+            break;
+          case 'jsprop':
+            var valish = subNode;
+            for (var iProp = 2; iProp < grabCmd.length; iProp++) {
+              if (valish == null)
+                break;
+              valish = valish[grabCmd[iProp]];
+            }
+            kidResult.push(valish);
+            break;
+        }
+      }
+
+      results.push(kidResult);
+    }
+
+    return results;
+  },
+
+  /**
    * Helper method to extract a bunch of data from the DOM in a single go.
    *  This is intended to handle cases where we have N items being presented
    *  and we want to retrieve multiple pieces of data from each item.  Although
@@ -115,32 +175,104 @@ LoggestWebDriver.prototype = {
    *  we abstract it here, which is important/useful because we generate JS
    *  and ship it across the wire.
    *
+   * The frob process works like this:
+   * - Find all elements under `context` with the given class name.
+   * - Process the list of data to grab in `grabData` for each node.  The
+   *    first item names the className to use to find the single descendent
+   *    with that class to use for data retrieval; or, if null is provided, we
+   *    just use the root node.  The second item is the command, and any
+   *    additional items are arguments to that command.
+   *
    * @args[
    *   @param[className]{
    *     The CSS class name to search for.
    *   }
-   *   @param[context WebElement]
-   *   @param[valueClassNames @listof[
+   *   @param[context @oneof[null WebElement]]{
+   *     If null, use the document as the context, otherwise look for nodes
+   *     under the provided WebElement.
+   *   }
+   *   @param[grabData @listof[
    *     @list[
    *       @param[descendentClassName @oneof[null String]]{
    *         If the root node is to be used, null.  If a descendent node
    *         should be queried, its class name.
    *       }
-   *       @param[cmd @oneof["text" "attr"]]
+   *       @param[cmd @oneof[
+   *         @case["node"]{
+   *           Retrieve the node itself, returned as a WebElement.
+   *         }
+   *         @case["text"]{
+   *           Retrieve the textContent of the node.
+   *         }
+   *         @case["attr"]{
+   *           Retrieve the value of an attribute on the node, where the
+   *           attribute is named by the next item in the list.
+   *         }
+   *         @case["jsprop"]{
+   *           Retrieve the value of a JS property on the node, where the
+   *           property traversal is named by the subsequent items in the
+   *           list.
+   *         }
+   *       ]]
    *       @param[attrName #:optional String]
    *     ]
    *   ]]
    * ]
+   * @return[@promise[@listof[@list[
+   *   @param[element WebElement]{
+   *     An element located by `className` under `context`.
+   *   }
+   *   @rest[Object]{
+   *     The result values from grabData.
+   *   }
+   * ]]]]
    */
-  frobElementsByClass: function(className, context, valueClassNames) {
+  frobElementsByClass: function(className, context, grabData) {
+    var deferred = $Q.defer(), self = this;
+    this._actor.expect_frob(className);
+    WDwhen(this._driver.executeScript(this._rjs_frobElementsByClass,
+                                      className, context, grabData),
+      function(results) {
+        self._log.frob(className, results);
+        deferred.resolve(results);
+      },
+      this._boundGenericErrHandler);
+    return deferred.promise;
+  },
 
+  waitForRemoteCallback: function(jsSnippet, logValue) {
+    var self = this;
+    this._actor.expect_remoteCallback(logValue);
+    WDwhen(this._driver.executeAsyncScript(jsSnippet),
+      function() {
+        self._log.remoteCallback(logValue);
+      },
+      this._boundGenericErrHandler);
+  },
+
+  click: function(what, context) {
+    var self = this;
+    this._actor.expect_click();
+    if (!(what instanceof $webdriver.WebElement))
+      what = (context || this.driver).findElement(what);
+    WDwhen(what.click(), function() {
+        self._log.click();
+      },
+      this._boundGenericErrHandler);
   },
 
   /**
-   * Type inside a text box; specially called out because this does not merit
-   *  an additional screenshot.
+   * Type inside a text box.
    */
-  typeInTextBox: function() {
+  typeInTextBox: function(textbox, textToType, context) {
+    var self = this;
+    this._actor.expect_type(textToType);
+    if (!(textbox instanceof $webdriver.WebElement))
+      textbox = (context || this.driver).findElement(textbox);
+    WDwhen(textbox.sendKeys(textToType), function() {
+        self._log.type(textToType);
+      },
+      this._boundGenericErrHandler);
   },
 };
 
@@ -152,12 +284,17 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
     events: {
       navigate: {url: true},
+      click: {},
+      type: {text: true},
+
+      frob: {queryClass: true, results: false},
+      remoteCallback: {event: true},
     },
     TEST_ONLY_events: {
     },
 
     errors: {
-      unexpectedBadness: {err: $log.EXCEPTION},
+      unexpectedBadness: { err: $log.EXCEPTION },
     },
   },
 });

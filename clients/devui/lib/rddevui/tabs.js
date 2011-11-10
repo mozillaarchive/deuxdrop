@@ -139,6 +139,8 @@ wy.defineWidget({
       headerNode.setAttribute("selected", "true");
       headerNode.removeAttribute("wantsAttention");
       // for automatically selected tabs this is needed, idempotent for others
+      // XXX actually, it seems like we would want to transfer focus *into* the
+      //  tab if possible...
       headerNode.binding.focus();
 
       panelNode = this.panels_element.children[index];
