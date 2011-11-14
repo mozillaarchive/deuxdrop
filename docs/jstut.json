@@ -2,8 +2,9 @@
   "?WHA?": "This file defines metadata about deuxdrop for the jstut doc tool",
   "?BUT?": "package.json has other semantics, even its presence means stuff",
   "us": {
+    "name": "deuxdrop",
     "root": "../",
-    "packages": {
+    "mappings": {
       "rdservers": "servers/lib/rdservers",
       "rdcommon": "common/lib/rdcommon"
     }
