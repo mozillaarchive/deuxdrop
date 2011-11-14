@@ -32,10 +32,6 @@ _note: make sure you checked us out with `git clone --recursive`.  If not, do
 
     cd servers
 
-**waf** is needed for building the [nacl](https://github.com/asutherland/nacl) library
-
-    wget http://waf.googlecode.com/files/waf-1.6.6 && mv waf-1.6.6 node_modules/nacl/nacl/waf && chmod 755 node_modules/nacl/nacl/waf
-
 _note: make sure you have [npm](https://github.com/isaacs/npm) and [node.js](https://github.com/joyent/node) installed, see [instructsions](https://github.com/mozilla/deuxdrop/wiki/Install-Instructions)_
 
     npm install
