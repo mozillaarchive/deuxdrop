@@ -71,6 +71,15 @@
  * - The step when a mailstore delivers a message to its testClient is
  *   greatly simplified because we only see the transmission of the message
  *   by the mailstore and then the UI result.
+ *
+ * ## Future Potential ##
+ *
+ * We could force the loggers in the UI instance into full-logging mode and
+ *  extract the information at the end of every test step if needed.  It is
+ *  within our power to extend the expectation mechanism all the way into
+ *  the innards of the 'daemon client' so we could run full unit test logic,
+ *  but we avoid doing that because that we would like to be able to do some
+ *  realistic performance timing in this mode of testing.
  **/
 
 define(function(require, exports, $module) {
@@ -82,38 +91,184 @@ var $testdata = require('rdcommon/testdatafab'),
     $log = require('rdcommon/log');
 
 var $wdloggest = require('rduidriver/wdloggest'),
-    $devui_driver = require('rduidriver/devui');
+    $devui_driver = require('rduidriver/devui'),
+    $th_servers = require('rdservers/testhelper'),
+    $th_moda = require('moda/testhelper');
+
+var TestClientActorMixins = $th_servers.TestClientActorMixins,
+    TestModaActorMixins = $th_moda.TestModaActorMixins;
+
+var $pubring = require('rdcommon/crypto/pubring');
 
 var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
+
+/**
+ * Expect *only the server side* authconn bit of an authenticated connection
+ *  because we are talking about the UI and we can't see what's happening
+ *  inside the client (as things are currently implemented).
+ */
+function expectAuthconnFromTo(source, target, endpoint) {
+  // nothing to do in self case.
+  if (source === target)
+    return;
+  var eServerConn = target.T.actor('serverConn',
+                                 target.__name + ' ' + endpoint, null,
+                                 target);
+  target.RT.reportActiveActorThisStep(eServerConn);
+  eServerConn.expectOnly__die();
+};
+
+function DummyTestClient(owningUiTester, name, RT, T) {
+  this.uiTester = owningUiTester;
+  // - actor bits
+  this.__name = name;
+  this.RT = RT;
+  this.T = T;
+
+  // - testClient bits
+  this._connected = false;
+  this._usingServer = null;
+  this._modaActors = [];
+
+  this._allClones = [this];
+
+  this._staticModaActors = [];
+  // we leave this null because we should not be writing to or reading from
+  //  this; it's a hack to make it easier for testClient generation of
+  //  converastion actions.
+  this._peepsByName = null;
+
+  this._staticConnReqReceived = {};
+
+  this._eServerConn = null;
+
+  // - testModa representation bits
+  this._dynamicContacts = [];
+  this._dynamicContactInfos = [];
+  this._contactMetaInfoByName = {};
+  this._dynamicConvInfos = [];
+  this._convInfoByName = {};
+  this._dynConnReqInfos = [];
+}
+DummyTestClient.prototype = {
+  //////////////////////////////////////////////////////////////////////////////
+  // Parameterized Step Support
+
+  _parameterizedsteps: TestClientActorMixins._parameterizedsteps,
+  _T_allClientsStep: TestClientActorMixins._T_allClientsStep,
+  _T_connectedClientsStep: TestClientActorMixins._T_connectedClientsStep,
+  _T_otherClientsStep: TestClientActorMixins._T_otherClientsStep,
+  _dohelp_closesConnReqLoop: TestClientActorMixins._dohelp_closesConnReqLoop,
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Notifications from testClient
+
+  __receiveConnectRequest: TestModaActorMixins.__receiveConnectRequest,
+  __addingContact: TestModaActorMixins.__addingContact,
+  __receiveConvWelcome: TestModaActorMixins.__receiveConvWelcome,
+  __updatePhaseComplete: TestModaActorMixins.__updatePhaseComplete,
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Live-UI checking logic
+
+  _notifyConnectRequest: function(reqInfo) {
+    if (this.uiTester.canSee_connectRequests())
+      this.uiTester._verifyConnectRequests();
+  },
+  _notifyPeepAdded: function(newCinfo) {
+    if (this.uiTester.canSee_peeps())
+      this.uiTester._verifyPeeps();
+  },
+  _notifyPeepChanged: function(cinfo, knownChange) {
+    if (this.uiTester.canSee_peeps())
+      this.uiTester._verifyPeeps();
+  },
+  _notifyPeepConvTimestampsChanged: function(cinfo, convIndicies, convInfo,
+                                             joinOccurred) {
+  },
+  _notifyConvGainedMessages: function(convInfo) {
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Contacts
+
+  _recip_expect_openContactRequest: function(senderClient, messageText) {
+    // update our moda-ish rep
+    this.__receiveConnectRequest(senderClient, messageText);
+  },
+  _recip_expect_closeContactRequest: function(otherClient) {
+    this.__addingContact(otherClient);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+};
+
 
 var TestUIActorMixins = {
   __constructor: function(self, opts) {
     // - create a faux testClient for identification/hookup purposes.
-    self.client = {
-    };
+    self.client = new DummyTestClient(self, self.__name, self.RT, self.T);
 
+    // - spawn ui instance and attach
     self.T.convenienceSetup(self, 'creates webdriver', function() {
       self._lwd = new $wdloggest.LoggestWebDriver(
                     self.client.__name, self.T, self._log);
       self._uid = new $devui_driver.DevUIDriver(self.T, self.client,
                                                 self._lwd, self._log);
+      when(self._uid.startUI(),
+        function(identityInfo) {
+          var pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                          identityInfo.selfIdentBlob);
+
+          self.client.rootPublicKey = pubring.rootPublicKey;
+          self.client.tellBoxKey =
+            pubring.getPublicKeyFor('messaging', 'tellBox');
+
+          self.T.ownedThing(self, 'key', self.__name + ' root',
+                            pubring.rootPublicKey);
+          self.T.ownedThing(self, 'key', self.__name + ' longterm',
+                            pubring.allLongtermSigningKeys[0]);
+          self.T.ownedThing(self, 'key', self.__name + ' tell',
+                            sef.client.tellBoxKey);
+
+          self.T.ownedThing(self, 'key', self.__name + ' client',
+                            identityInfo.clientPublicKey);
+        });
     });
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Setup
+
   /**
    * Run the signup process to completion for the given server.
    */
   setup_useServer: function(server) {
-    this._uid.act_signup(server);
+    var self = this;
+    this.client._usingServer = server;
+    this.T.convenienceSetup(self, 'creates account with', server._eServer,
+                            function() {
+      // expect the signup connection in the server
+      expectAuthconnFromTo(self, server, 'signup.deuxdrop');
+      // trigger the signup on the client and wait for the client to claim
+      //  the signup process completed
+      self._uid.act_signup(server);
+    });
   },
 
   /**
    * Force the UI to connect to its server.
    */
   setup_connect: function() {
-    this._uid.act_connect();
+    var self = this;
+    this.client._connected = true;
+    this.T.convenienceSetup(self, 'connects to server',
+                            this.client._usingServer._eServer, function() {
+      // expect the server side of the mailstore connection establishment
+      self._usingServer._expect_mailstoreConnection(self.client);
+      // trigger the connect, wait for the UI to report connection success
+      self._uid.act_connect();
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -132,8 +287,10 @@ var TestUIActorMixins = {
    */
   do_showPossibleFriends: function(otherClients) {
     var self = this;
-    self._uid.showPage_possibleFriends();
-    self._uid.verify_possibleFriends(otherClients);
+    this.T.action('show possible friends', function() {
+      self._uid.showPage_possibleFriends();
+      self._uid.verify_possibleFriends(otherClients);
+    });
   },
 
   /**
@@ -143,8 +300,17 @@ var TestUIActorMixins = {
    *  completes the connection process from that page.
    */
   do_connectToPeep: function(otherClient, interesting) {
-    var self = this;
-    self._uid.act_issueConnectRequest(otherClient);
+    var messageText = fakeDataMaker.makeSubject(), self = this,
+        closesLoop = this.client._dohelp_closesConnReqLoop(otherClient);
+    this.T.action(this, 'request contact of', otherClient, function() {
+      self._uid.act_issueConnectRequest(otherClient);
+    });
+
+  },
+
+  _verifyConnectRequests: function() {
+    // XXX moda rep knows connect requests...
+    self._uid.verify_connectRequests();
   },
 
   /**
@@ -153,8 +319,7 @@ var TestUIActorMixins = {
   do_showConnectRequests: function() {
     var self = this;
     self._uid.showPage_connectRequests();
-    // XXX moda rep knows connect requests...
-    self._uid.verify_connectRequests();
+    self._verifyConnectRequests();
   },
 
   /**
@@ -166,6 +331,11 @@ var TestUIActorMixins = {
     self._uid.act_approveConnectRequest(otherClient);
   },
 
+  _verifyPeeps: function() {
+    // XXX moda knows peeps
+    self._uid.verify_peeps();
+  },
+
   /**
    * Bring up the list of connected contacts and verify that all our connected
    *  peeps are listed.
@@ -173,8 +343,7 @@ var TestUIActorMixins = {
   do_showPeeps: function() {
     var self = this;
     self._uid.showPage_peeps();
-    // XXX moda knows peeps
-    self._uid.verify_peeps();
+    self._verifyPeeps();
   },
 
   //////////////////////////////////////////////////////////////////////////////

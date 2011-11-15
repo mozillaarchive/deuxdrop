@@ -90,6 +90,10 @@ PersonPubring.prototype = {
     return this.data.transitServerPublicKey;
   },
 
+  get allLongtermSigningKeys() {
+    return this.data.longtermKeys;
+  },
+
   /**
    * Assert that the longterm signing public key was valid for this person at
    *  the given timestamp, throwing an exception if the key is either unknown

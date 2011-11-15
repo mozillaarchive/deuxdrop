@@ -111,7 +111,7 @@ function expectAuthconnFromTo(source, target, endpoint) {
 };
 
 
-var TestClientActorMixins = {
+var TestClientActorMixins = exports.TestClientActorMixins = {
   /**
    * Automatically create an identity; a client is not much use without one.
    *  (In the future we may look at the argument bundle provided to the actor
@@ -209,6 +209,10 @@ var TestClientActorMixins = {
                                                                   self._db,
                                                                   self._logger);
 
+        // copy out so we don't need to directly access; for UI tester benefit
+        self.rootPublicKey = self._rawClient.rootPublicKey;
+        self.tellBoxKey = self._rawClient.tellBoxKey;
+
         // - bind names to our public keys (so the logs are less gibberish)
         self.T.ownedThing(self, 'key', self.__name + ' root',
                           self._rawClient.rootPublicKey);
@@ -227,7 +231,12 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Helpers: Multiple Client
 
-  _parameterizedSteps: function(stepMethod, stepArgs, paramInstances) {
+  /**
+   * Generate a test step once for every instance in `paramInstances`.  This is
+   *  used by `_T_allClientsStep`, `_T_connectedClientsStep`, and
+   *  `_T_otherClientsStep` to generate test steps for the appropriate clients.
+   */
+  _parameterizedsteps: function(stepMethod, stepArgs, paramInstances) {
     // scan and find the '*PARAM*' index
     var iArg;
     for (iArg = 0; iArg < stepArgs.length; iArg++) {
@@ -341,27 +350,22 @@ var TestClientActorMixins = {
    *  deviceCheckin to complete including all replica data to be received.
    */
   connect: function() {
+    // - client half
     // create the actors for our mailstore connections and report them pending
     this._eClientConn = this.T.actor('clientConn', this.__name + ' mailstore',
                                      null, this);
-    this._eServerConn = this.T.actor('serverConn',
-                                     this._usingServer.__name + ' mailstore ' +
-                                       this.__name,
-                                     null, this._usingServer);
     // (pending, but not active; they don't want/need expectations)
     this.RT.reportPendingActor(this._eClientConn);
-    this.RT.reportPendingActor(this._eServerConn);
-
     this.RT.reportActiveActorThisStep(this._eRawClient);
-    this.RT.reportActiveActorThisStep(this._usingServer._eServer);
 
     this._eRawClient.expect_connecting();
     this._eRawClient.expect_connected();
     this._eRawClient.expect_replicaCaughtUp();
 
-    this._usingServer._eServer.expect_request('mailstore.deuxdrop');
-    this._usingServer._eServer.expect_endpointConn('mailstore.deuxdrop');
+    // - server half (broken out for ui test)
+    this._usingServer._expect_mailstoreConnection(this);
 
+    // - connect!
     this._rawClient.connect();
   },
 
@@ -482,19 +486,20 @@ var TestClientActorMixins = {
     other._T_connectedClientsStep(other._usingServer,
         'delivers contact request to', '*PARAM*',
         function(paramClient) {
-      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
-      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
-      paramClient._eLocalStore.expect_contactRequest(
-        self._rawClient.tellBoxKey);
-      paramClient._eRawClient.expect_replicaCaughtUp();
-
-      paramClient._dynamicNotifyModaActors('receiveConnectRequest', self,
-                                           messageText);
-
+      paramClient._recip_expect_openContactRequest(self, messageText);
       other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
   },
 
+  _recip_expect_openContactRequest: function(senderClient, messageText) {
+    this.RT.reportActiveActorThisStep(this._eLocalStore);
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eLocalStore.expect_contactRequest(senderClient.tellBoxKey);
+    this._eRawClient.expect_replicaCaughtUp();
+
+    this._dynamicNotifyModaActors('receiveConnectRequest', self,
+                                  messageText);
+  },
 
   /**
    * Initiate a contact request where we know the other client has already
@@ -509,14 +514,7 @@ var TestClientActorMixins = {
     this._T_connectedClientsStep(self._usingServer,
         'delivers contact addition replica block to', '*PARAM*',
         function(paramClient) {
-      other.RT.reportActiveActorThisStep(paramClient._eLocalStore);
-      other.RT.reportActiveActorThisStep(paramClient._eRawClient);
-      paramClient._eLocalStore.expect_replicaCmd('addContact',
-                                                 other._rawClient.rootPublicKey);
-      paramClient._eRawClient.expect_replicaCaughtUp();
-
-      paramClient._dynamicNotifyModaActors('addingContact', other);
-
+      paramClient._recip_expect_closeContactRequest(other);
       self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
     // - release to sender, their drop, mailstore. hold replica.
@@ -533,17 +531,20 @@ var TestClientActorMixins = {
     // - release replica, boring.
     other._T_connectedClientsStep(other._usingServer,
         'delivers contact request to', '*PARAM*', function(paramClient) {
-      other.RT.reportActiveActorThisStep(paramClient._eLocalStore);
-      other.RT.reportActiveActorThisStep(paramClient._eRawClient);
-      paramClient._eLocalStore.expect_replicaCmd('addContact',
-                                                 other._rawClient.rootPublicKey);
-      paramClient._eRawClient.expect_replicaCaughtUp();
-
-      paramClient._dynamicNotifyModaActors('addingContact', self);
-
+      paramClient._recip_expect_closeContactRequest(self);
       other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
 
+  },
+
+  _recip_expect_closeContactRequest: function(otherClient) {
+    this.RT.reportActiveActorThisStep(this._eLocalStore);
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this._eLocalStore.expect_replicaCmd('addContact',
+                                        otherClient.rootPublicKey);
+    this._eRawClient.expect_replicaCaughtUp();
+
+    this._dynamicNotifyModaActors('addingContact', otherClient);
   },
 
   expectReplicaUpdate: function() {
@@ -1072,6 +1073,15 @@ var TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
 };
 
+
+/**
+ * testServer testing helper.  Originally, much of the expectations about the
+ *  server were generated as part of the testClient logic, but now much of that
+ *  has been refactored onto us so that the UI tests can generate server
+ *  expectations without generating client expectations.  An effort has been
+ *  made to keep the methods similarly named and ordered so a two-column view of
+ *  this file should be usable.
+ */
 var TestServerActorMixins = {
   __constructor: function(self, opts) {
     // clobber the list of servers so that our unit tests only know about
@@ -1178,6 +1188,30 @@ var TestServerActorMixins = {
         self._logger.clientAuthorizationCheck(clientKey, val);
       });
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Mailstore Connection
+
+  /**
+   * The server side of expecting a client mailstore connection.  Automatically
+   *  called by the client's `connect` method; broken out for the UI test
+   *  helper which does not want the client half of this.
+   */
+  _expect_mailstoreConnection: function(client) {
+    client._eServerConn = this.T.actor('serverConn',
+                            this.__name + ' mailstore ' + client.__name,
+                            null, this);
+    this.RT.reportPendingActor(client._eServerConn);
+    this.RT.reportActiveActorThisStep(this._eServer);
+
+    this._eServer.expect_request('mailstore.deuxdrop');
+    this._eServer.expect_endpointConn('mailstore.deuxdrop');
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Contacts
+
+
 
   //////////////////////////////////////////////////////////////////////////////
   // Holding: mailsender

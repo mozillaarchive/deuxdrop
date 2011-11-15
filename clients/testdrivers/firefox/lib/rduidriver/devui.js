@@ -69,6 +69,9 @@ const
   clsTabHeaderRoot = dwc('tabs', 'tabs', 'tab-header', 'root'),
   clsTabHeaderLabel = dwc('tabs', 'tabs', 'tab-header', 'label'),
   clsTabHeaderClose = dwc('tabs', 'tabs', 'tab-header', 'close'),
+  // (although tabs are their own widget types, they still get branded with the
+  //  -item directive of their containing widget.  woo!)
+  clsTabPanels = dwc('tabs', 'tabs', 'tabbox', 'panels-item'),
   // specific tab widget roots
   clsTabHome = dwc('tabs', 'tab-home', 'home-tab', 'root'),
   // signup tab
@@ -99,6 +102,13 @@ const
   clsConvBlurb = dwc('moda', 'tab-common', 'conv-blurb', 'root'),
   clsConvBlurbText = dwc('moda', 'tab-common', 'conv-blurb',
                          'firstMessageText'),
+  // single conversation
+  clsConvReplyText = dwc('tabs', 'tab-common', 'conversation-tab',
+                         'newMessageText'),
+  clsConvReplySend = dwc('tabs', 'tab-common', 'conversation-tab', 'btnSend'),
+  clsMsgHuman = dwc('moda', 'tab-common', 'human-message', 'root'),
+  clsMsgHumanText = dwc('moda', 'tab-common', 'text'),
+
   // compose
   clsComposePeepsList = dwc('moda', 'tab-common', 'conv-compose', 'peeps'),
   clsComposeAddPeep = dwc('moda', 'tab-common', 'conv-compose', 'btnAddPeep'),
@@ -126,7 +136,7 @@ const TABFROB_DEF = [
     ],
   },
   {
-    roots: clsTab,
+    roots: clsTabPanels,
     kids: [],
   }
 ];
@@ -137,6 +147,13 @@ const MODA_NOTIF_GLOBAL_HOOKUP =
   'var callback = arguments[arguments.length - 1]; ' +
   'window.__modaEventTestThunk = function(eventType) {' +
   ' if (eventType === "$EVENT$") callback(); };';
+
+const MODA_CONNECT_WAIT =
+  'var callback = arguments[arguments.length - 1]; ' +
+  'window.__modaEventTestThunk = function(eventType, payload) {' +
+  ' if (eventType === "connectionStatus" && payload.status === "connected")' +
+  '  callback(); };' +
+  'Moda.connect();';
 
 /**
  * Tab-wise, our approach is that:
@@ -170,6 +187,7 @@ function DevUIDriver(T, client, wdloggest, _logger) {
 
   this._peepBlurbData = {};
   this._connReqData = {};
+  this._convBlurbDataByFirstMessage = {};
 
   this._actor = T.actor('devUIDriver', client.__name, null, this);
   this._log = LOGFAB.devUIDriver(this, _logger, client.__name);
@@ -179,11 +197,25 @@ function DevUIDriver(T, client, wdloggest, _logger) {
 }
 exports.DevUIDriver = DevUIDriver;
 DevUIDriver.prototype = {
+  /**
+   * Start up the user interface, returning a promise that provides the identity
+   *  data from the client.
+   *
+   * @return[@promise[@dict[
+   *   @key[selfIdentBlob]
+   *   @key[clientPublicKey]
+   * ]]]
+   */
   startUI: function() {
     this._d.navigate(UI_URL);
 
     this._d.waitForModa('whoami');
     this._checkTabDelta({signup: 1, errors: 1}, "signup");
+
+    return this._d.stealJSData('identity info', {
+      selfIdentBlob: ['Moda', '_ourUser', 'selfIdentBlob'],
+      clientPublicKey: ['Moda', '_ourUser', 'clientPublicKey'],
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -330,10 +362,10 @@ DevUIDriver.prototype = {
 
   /**
    * Force us to connect to the server by marshaling JS code to call the moda
-   *  connect function.
+   *  connect function and waiting for the status to change.
    */
   act_connect: function() {
-    // XXX actually connect
+    this._d.waitForRemoteCallback(MODA_CONNECT_WAIT, "Moda.connect()");
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -422,6 +454,10 @@ DevUIDriver.prototype = {
     this._nukeTabSpawnNewViaHomeTab(this._eShowPeepsBtn, 'peeps');
   },
 
+  canSee_peeps: function() {
+    return this._activeTab === 'peeps';
+  },
+
   /**
    * Verify all provided clients are present *in no particular order*.
    */
@@ -431,6 +467,10 @@ DevUIDriver.prototype = {
 
   showPage_connectRequests: function() {
     this._nukeTabSpawnNewViaHomeTab(this._eMakeFriendsBtn, 'requests');
+  },
+
+  canSee_connectRequests: function() {
+    return this._activeTab === 'requests';
   },
 
   /**
@@ -512,8 +552,8 @@ DevUIDriver.prototype = {
     this._closeTab('peeps');
 
     // verify tab status
-    this._checkTabDelta({ conversation: 'peeps', peeps: -1 },
-                        'conversation');
+    this._checkTabDelta({ 'conv-blurbs': 'peeps', peeps: -1 },
+                        'conv-blurbs');
   },
 
   /**
@@ -530,7 +570,7 @@ DevUIDriver.prototype = {
     // - actual
     when(
       this._d.frobElements(
-        this._currentTabData['conversation'].tabNode,
+        this._currentTabData['conv-blurb'].tabNode,
         {
           roots: clsConvBlurb,
           data: [
@@ -539,24 +579,91 @@ DevUIDriver.prototype = {
         }
       ),
       function(results) {
-        var actualFirstMessages = {};
+        var actualFirstMessages = {},
+            blurbData = self._convBlurbDataByFirstMessage = {};
         for (var iConv = 0; iConv < results.length; iConv++) {
-          actualFirstMessages[results[iConv][1]] = null;
+          var firstMessageText = results[iConv][1];
+          actualFirstMessages[firstMessageText] = null;
+          blurbData[firstMessageText] = results[iConv][0];
         }
         self._log.visibleConvs(actualFirstMessages);
       });
   },
 
-  act_showConversation: function() {
-    // XXX implement
+  act_showConversation: function(convInfo) {
+    // (we assume that we are already on a page listing conversations and
+    //  that verify_conversations has been invoked).
+
+    var firstMessageText = convInfo.tConv.firstMessage.text;
+    // click on the conversation
+    this._d.click(this._convBlurbDataByFirstMessage[firstMessageText]);
+    // wait for the query to populate
+    this._waitForModa('query');
+    // kill the conv blurbs tab (only one open thing at a time)
+    this._closeTab('conv-blurbs');
+    // verify tab state
+    this._checkTabDelta({ conversation: 'conv-blurbs', 'conv-blurbs': -1 },
+                        'conversation');
   },
 
-  act_replyToConversation: function() {
-    // XXX implement
+  /**
+   * Verify that the display of a single conversation is correct, checking
+   *  against the client-local moda state estimation because a tConv rep does
+   *  not know what a client should and should not have received.
+   */
+  verify_singleConversation: function(convInfo, waitForUpdate) {
+    if (waitForUpdate)
+      this._waitForModa('query');
+
+    // nb: we only pay attention to the 'human' messages right now and ignore
+    //  the join messages.
+    // XXX deal with the join messages too
+    var expectedMessages = [], backlog = convInfo.tConv.data.convInfo,
+        self = this;
+    for (var iMsg = 0; iMsg <= convInfo.highestMsgSeen; iMsg++) {
+      var msgData = backlog[iMsg].data;
+      if (msgData.type === 'message') {
+        expectedMessages.push({
+          author: msgData.author.__name,
+          text: msgData.text
+        });
+      }
+    }
+    this._actor.expect_visibleMsgs(expectedMessages);
+
+    when(
+      this._d.frobElements(
+        this._currentTabData['conversation'].tabNode,
+        {
+          roots: clsMsgHuman,
+          data: [
+            [clsPeepInlineName, 'text'],
+            [clsMsgHumanText, 'text'],
+          ],
+        }),
+      function(results) {
+        var actualMessages = [];
+        for (var iUiMsg = 0; iUiMsg < results.length; iUiMsg++) {
+          var uiMsg = results[iUiMsg];
+          actualMessages.push({
+            author: uiMsg[1],
+            text: uiMsg[2],
+          });
+        }
+        self._log.visibleMsgs(actualMessages);
+      });
+  },
+
+  act_replyToConversation: function(messageText) {
+    this._d.typeInTextBox({ className: clsConvReplyText },
+                          messageText,
+                          this._currentTabData['conversation'].tabNode);
+    this._d.send({ className: clsConvReplySend },
+                 this._currentTabData['converation']);
   },
 
   act_inviteToConversation: function() {
-    // XXX implement
+    // XXX implement in GUI, then implement here...
   },
 
   /**
@@ -652,6 +759,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       visiblePeeps: { names: true },
       visibleConnReqs: { namesAndMessages: true },
       visibleConvs: { firstMessages: true },
+      visibleMsgs: { messages: true },
     },
     TEST_ONLY_events: {
     },

@@ -63,7 +63,7 @@ define(function (require) {
       //  UI tester to be able to know when moda has heard something new and
       //  processed it.
       if (window.__modaEventTestThunk)
-        window.__modaEventTestThunk(data.type);
+        window.__modaEventTestThunk(data.type, data);
     }, false);
 
   return bridge;

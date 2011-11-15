@@ -57,7 +57,7 @@ define(
   [
     'q',
     'rdcommon/log',
-    './webdriver',
+    'webdriver',
     'module',
     'exports'
   ],
@@ -70,7 +70,7 @@ define(
   ) {
 
 // nb: the Webdriver when, not Q's when.
-const WDwhen = webdriver.promise.when;
+const WDwhen = $webdriver.promise.when;
 
 function LoggestWebDriver(name, T, _logger) {
   this._T = T;
@@ -272,6 +272,16 @@ LoggestWebDriver.prototype = {
     return deferred.promise;
   },
 
+  remoteExec: function(jsSnippet, logValue) {
+    var self = this;
+    this._actor.expect_remoteExec(logValue);
+    WDwhen(this._driver.executeScript(jsSnippet),
+      function() {
+        self._log.remoteExec(logValue);
+      },
+      this._boundGenericErrHandler);
+  },
+
   waitForRemoteCallback: function(jsSnippet, logValue) {
     var self = this;
     this._actor.expect_remoteCallback(logValue);
@@ -280,6 +290,39 @@ LoggestWebDriver.prototype = {
         self._log.remoteCallback(logValue);
       },
       this._boundGenericErrHandler);
+  },
+
+  /**
+   * Remote JS to execute for `stealJSData` on the client.
+   */
+  _rjs_stealData: function(what) {
+    var results = {};
+    for (var outKey in what) {
+      var traversal = what[outKey];
+      var val = window;
+      for (var i = 0; i < traversal.length; i++) {
+        if (val == null)
+          break;
+        val = val[traversal[i]];
+      }
+      results[outKey] = val;
+    }
+    return results;
+  },
+
+  /**
+   * Grab data accessible from the global 'window' namespace on the client.
+   */
+  stealJSData: function(logValue, what) {
+    var deferred = $Q.defer(), self = this;
+    this._actor.expect_stealJSData(logValue);
+    WDwhen(this._driver.executeScript(this._rjs_stealData, what),
+      function(results) {
+        self._log.stealJSData(logValue, results);
+        deferred.resolve(results);
+      },
+      this._boundGenericErrHandler);
+    return deferred.promise;
   },
 
   click: function(what, context) {
@@ -320,7 +363,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       type: {text: true},
 
       frob: {queryClass: true, results: false},
+      remoteExec: {event: true},
       remoteCallback: {event: true},
+      stealJSData: {why: true, data: false},
     },
     TEST_ONLY_events: {
     },
