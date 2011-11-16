@@ -242,7 +242,9 @@ var ConvInviteTask = exports.ConvInviteTask = taskMaster.defineTask({
           attestPayload.creatorSelfIdent);
 
       // - reconstruct the overview convMeta
-      var convMeta = {
+      // ugly: we are saving convMeta off for a unit test to extract from our
+      //  dessicated corpse.
+      var convMeta = this.convMeta = {
         id: inviteEnv.convId,
         transitServerKey: inviteEnv.transitServerKey,
         envelopeSharedSecretKey: inviteEnv.envelopeSharedSecretKey,

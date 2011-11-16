@@ -146,6 +146,19 @@
  *
  * }
  *
+ * @typedef[ActorLifecycleNotifFunc @func[
+ *   @args[
+ *     @param[event @oneof["attach" "dead"]]
+ *     @param[instance Object]{
+ *       The instance associated with the logger.
+ *     }
+ *     @param[logger Logger]
+ *   ]
+ * ]]{
+ *   Notification function to be invoked when an actor gets attached to its
+ *   matching logger.
+ * }
+ *
  * == Original Brainstorming ==
  *  + Unit Test Understanding
  *    - Want to know what the participants are and the high-level messages that
@@ -412,9 +425,13 @@ var TestLogProtoBase = {
   __die: function() {
     this._died = $microtime.now();
     var testActor = this._actor;
-    if (testActor && testActor._expectDeath) {
-      testActor._expectDeath = false;
-      testActor.__loggerFired();
+    if (testActor) {
+      if (testActor._expectDeath) {
+        testActor._expectDeath = false;
+        testActor.__loggerFired();
+      }
+      if (testActor._lifecycleListener)
+        testActor._lifecycleListener.call(null, 'dead', this.__instance, this);
     }
   },
 };
@@ -433,6 +450,30 @@ var TestActorProtoBase = {
       parentUniqueName: this._parentUniqueName,
       loggerUniqueName: this._logger ? this._logger._uniqueName : null,
     };
+  },
+
+  /**
+   * Invoked to attach a logger to an instance; exists to provide the
+   *  possibility to generate a notification event.
+   */
+  __attachToLogger: function(logger) {
+    logger._actor = this;
+    this._logger = logger;
+    if (this._lifecycleListener)
+      this._lifecycleListener.call(null, 'attach', logger.__instance, logger);
+  },
+
+  /**
+   * Invoke a notification function when this actor gets attached to its
+   *  matching logger.  This function should be invoked as soon as possible
+   *  after the creation of the actor.
+   *
+   * @args[
+   *   @param[func ActorLifecycleNotifFunc]
+   * ]
+   */
+  attachLifecycleListener: function(func) {
+    this._lifecycleListener = func;
   },
 
   /**
@@ -1295,6 +1336,7 @@ LoggestClassMaker.prototype = {
       this._unorderedSetMode = false;
       this._activeForTestStep = false;
       this._iEntry = this._iExpectation = 0;
+      this._lifecycleListener = null;
     };
     testActorCon.prototype = this.testActorProto;
     this.moduleFab._actorCons[this.name] = testActorCon;

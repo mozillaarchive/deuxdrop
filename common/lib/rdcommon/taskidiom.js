@@ -316,6 +316,8 @@ TaskMaster.prototype = {
       //  providing a naming description that gets passed through to the logging
       //  layer and a function that can extract the name from the arg payload.
       var name = null;
+      // (create the logger *after* the args are bound so that tricky test logic
+      //  that gets an event when the actor gets attached can see them.)
       this.log = logfab[loggerName](this, _logger, name);
 
       this.__iNextStep = 0;

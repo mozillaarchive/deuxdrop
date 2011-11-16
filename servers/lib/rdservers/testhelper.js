@@ -183,8 +183,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       // - create our self-corresponding logger the manual way
       // (we deferred until this point so we could nest in the hierarchy
       //  in a traditional fashion.)
-      self._logger = LOGFAB.testClient(self, null, self.__name);
-      self._logger._actor = self;
+      self.__attachToLogger(LOGFAB.testClient(self, null, self.__name));
 
       self._db = $gendb.makeTestDBConnection(self.__name, self._logger);
 
@@ -687,7 +686,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     this._expdo_createConversation_fanout_onwards(tConv);
   },
 
-  // helper for do_startConversation and the moda variant
+  // helper for do_startConversation and the moda variant, but not the ui test
   _expect_createConversation_createPrep: function() {
     var eServer = this._usingServer;
     this._eRawClient.expect_allActionsProcessed();
@@ -695,7 +694,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     eServer.expectPSMessageToUsFrom(this);
   },
 
-  // helper for do_startConversation and the moda variant
+  // helper for do_startConversation, the moda variant, the ui test variant
   _expect_createConversation_rawclient_to_server: function(convCreationInfo,
                                                            messageText,
                                                            youAndMeBoth,
@@ -739,14 +738,16 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
   },
 
   // helper for do_startConversation and the moda variant
-  _expdo_createConversation_fanout_onwards: function(tConv) {
+  _expdo_createConversation_fanout_onwards: function(tConv,
+                                                     createConvSnipeFunc) {
     var eServer = this._usingServer;
     // - the maildrop processes it
     var self = this;
     this.T.action(this._usingServer,
         'maildrop processes the new conversation, generating welcome messages',
         function() {
-      tConv.sdata.fanoutServer.expectServerTaskToRun('createConversation');
+      tConv.sdata.fanoutServer.expectServerTaskToRun('createConversation',
+                                                     createConvSnipeFunc);
 
       // expect one welcome message per participant (which we will hold)
       for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
@@ -784,7 +785,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
 
     this._expdo_replyToConversation_fanout_onwards(tConv, tNewMsg);
   },
-  // helper for do_replyToConversationWith and the moda variant
+  // helper for do_replyToConversationWith and the moda variant, not ui test
   _expect_replyToConversation_replyPrep: function(tConv, tNewMsg) {
     this._eRawClient.expect_allActionsProcessed();
     this._usingServer.holdAllMailSenderMessages();
@@ -991,25 +992,38 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     self._T_connectedClientsStep(self._usingServer,
         'delivers conversation welcome message to', '*PARAM*',
         function(paramClient) {
-      self.RT.reportActiveActorThisStep(paramClient._eRawClient);
-      self.RT.reportActiveActorThisStep(paramClient._eLocalStore);
-      var els = paramClient._eLocalStore;
-
-      els.expect_newConversation(tConv.data.id); // (unreported 'welcome')
-
-      for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
-        var tMsg = tConv.data.backlog[iMsg];
-        paramClient.expectLocalStoreTaskToRun(
-          self._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
-        els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
-      }
-      paramClient._eRawClient.expect_replicaCaughtUp();
+      paramClient._recip_expect_convWelcome(tConv, isInitial);
 
       paramClient._dynamicNotifyModaActors('receiveConvWelcome', tConv);
       paramClient._dynamicNotifyModaActors('updatePhaseComplete');
 
       self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
+  },
+
+  // used by testClient, moda helper, but not ui test (overridden)
+  _recip_expect_convWelcome: function(tConv, isInitial) {
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+    this.RT.reportActiveActorThisStep(this._eLocalStore);
+    var els = this._eLocalStore;
+
+    // it's possible tConv lacks a convMeta structure if it was created by a
+    //  ui tester; steal it from the processing task if so.
+    this.expectLocalStoreTaskToRun('convInvite', function sniper(event, task) {
+        if (event !== 'dead')
+          return;
+        if (!tConv.data.convMeta)
+          tConv.data.convMeta = task.convMeta;
+      });
+    els.expect_newConversation(tConv.data.id); // (unreported 'welcome')
+
+    for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
+      var tMsg = tConv.data.backlog[iMsg];
+      this.expectLocalStoreTaskToRun(
+        this._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
+      els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
+    }
+    this._eRawClient.expect_replicaCaughtUp();
   },
 
   _MSG_TYPE_TO_LOCAL_STORE_TASK: {
@@ -1064,9 +1078,19 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // General Expectations
 
-  expectLocalStoreTaskToRun: function(taskName) {
+  /**
+   * Expect a task with the given name to run on this client.
+   *
+   * @args[
+   *   @param[taskName String]
+   *   @param[snipeFunction #:optional ActorAttachNotifFunc]
+   * ]
+   */
+  expectLocalStoreTaskToRun: function(taskName, snipeFunction) {
     var eTask = this.T.actor(taskName, [this.__name], null, this);
     this.RT.reportActiveActorThisStep(eTask);
+    if (snipeFunction)
+      eTask.attachLifecycleListener(snipeFunction);
     eTask.expectOnly__die();
   },
 
@@ -1101,8 +1125,7 @@ var TestServerActorMixins = {
                             self._eDb, 'established',
                             function() {
       // - create our synthetic logger...
-      self._logger = LOGFAB.testServer(self, null, self.__name);
-      self._logger._actor = self;
+      self.__attachToLogger(LOGFAB.testServer(self, null, self.__name));
 
       // - create our identity
       rootKeyring = $keyring.createNewServerRootKeyring();
@@ -1388,9 +1411,11 @@ var TestServerActorMixins = {
   // General Expectations
 
   // XXX this needs more thought about who to attribute it to
-  expectServerTaskToRun: function(taskName) {
+  expectServerTaskToRun: function(taskName, snipeFunction) {
     var eTask = this.T.actor(taskName, [this.__name], null, this);
     this.RT.reportActiveActorThisStep(eTask);
+    if (snipeFunction)
+      eTask.attachLifecycleListener(snipeFunction);
     eTask.expectOnly__die();
   },
 

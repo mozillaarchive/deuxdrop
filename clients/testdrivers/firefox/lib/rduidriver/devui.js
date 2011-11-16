@@ -476,14 +476,14 @@ DevUIDriver.prototype = {
   /**
    * Verify all connection requests are present *in no particular order*.
    */
-  verify_connectRequests: function(connReqTuples) {
+  verify_connectRequests: function(connReqInfos) {
     var self = this;
     // - expectation
     var expectedNamesAndMessages = {};
-    for (var iReq = 0; iReq < connReqTuples.length; iReq++) {
-      var requesterName = connReqTuples[iReq][0],
-          requestMessage = connReqTuples[iReq][1];
-      expectedNamesAndMessages[requesterName] = requestMessage;
+    for (var iReq = 0; iReq < connReqInfos.length; iReq++) {
+      var connReqInfo = connReqInfos[iReq];
+      expectedNamesAndMessages[connReqInfo.testClient.__name] =
+        connReqInfo.messageText;
     }
     this._actor.expect_visibleConnReqs(expectedNamesAndMessages);
 
@@ -559,10 +559,11 @@ DevUIDriver.prototype = {
   /**
    * Verify all conversations are present *in no particular order*.
    */
-  verify_conversations: function(tConvs) {
+  verify_conversations: function(convInfos) {
     var self = this, expectedFirstMessages = {};
     // - expectation
-    for (var iConv = 0; iConv < tConvs.length; iConv++) {
+    for (var iConv = 0; iConv < convInfos.length; iConv++) {
+      var convInfo = convInfos[iConv], tConv = convInfo.tConv;
       expectedFirstMessages[tConvs[iConv].data.firstMessage.data.text] = null;
     }
     this._actor.expect_visibleConvs(expectedFirstMessages);

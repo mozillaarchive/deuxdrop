@@ -139,8 +139,7 @@ TestRuntimeContext.prototype = {
     if (this._pendingActorsByLoggerType.hasOwnProperty(type) &&
         this._pendingActorsByLoggerType[type].length) {
       var actor = this._pendingActorsByLoggerType[type].shift();
-      logger._actor = actor;
-      actor._logger = logger;
+      actor.__attachToLogger(logger);
       // There is no need to generate a fake __loggerFired notification because
       //  the logger is brand new and cannot have any entries at this point.
     }

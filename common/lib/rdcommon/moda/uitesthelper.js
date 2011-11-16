@@ -72,6 +72,35 @@
  *   greatly simplified because we only see the transmission of the message
  *   by the mailstore and then the UI result.
  *
+ * ## Fiddly Bits ##
+ *
+ * We run into a new testing complication here in terms of getting at the keys
+ *  and nonces created as part of the conversation creation.  For testClient
+ *  we have the results available to us directly from our call.  For moda our
+ *  testwrapper that we use to break up steps also exposes the result of a
+ *  call to us (with some collusion on the moda backside).
+ *
+ * There are basically two types of information we need from the creation info:
+ * - Naming info for our 'thing' representations, allowing us to alias the
+ *    nonces and keys as well as generate expectations against them.
+ * - Full participant `ConvMeta` representation info for the raw testClient
+ *    testers.
+ *
+ * The options for getting the required data are:
+ * - Have the selenium driver also open a privileged URL that we allow to
+ *    extract the data, but without letting the Moda Bridge API be able to
+ *    do the same thing, so that we don't give the UI page any dangerous
+ *    privileges it wouldn't otherwise need.
+ * - For the `ConvMeta` data, have any testClient recipients provide the data
+ *    when they get invited to the conversation.  If none are added, the data
+ *    will never be needed.
+ * - Extract the naming information out of the `CreateConversationTask` on the
+ *    fanout server.  Use the actor hookup to be able to steal things out of
+ *    the instance.
+ *
+ * We are using a combination of the 2nd and 3rd options.  The privileged URL
+ *  adds a test-only moving part we don't really need or want at this time.
+ *
  * ## Future Potential ##
  *
  * We could force the loggers in the UI instance into full-logging mode and
@@ -128,7 +157,8 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   // - testClient bits
   this._connected = false;
   this._usingServer = null;
-  this._modaActors = [];
+  // we want the moda notifications
+  this._modaActors = [this];
 
   this._allClones = [this];
 
@@ -161,6 +191,21 @@ DummyTestClient.prototype = {
   _dohelp_closesConnReqLoop: TestClientActorMixins._dohelp_closesConnReqLoop,
 
   //////////////////////////////////////////////////////////////////////////////
+  // testClient helper methods relevant to us
+
+  _dynamicNotifyModaActors: TestClientActorMixins._dynamicNotifyModaActors,
+
+  _expect_createConversation_rawclient_to_server:
+    TestClientActorMixins._expect_createConversation_rawclient_to_server,
+  _expdo_createConversation_fanout_onwards:
+    TestClientActorMixins._expdo_createConversation_fanout_onwards,
+
+  _expect_replyToConversation_rawclient_to_server:
+    TestClientActorMixins._expect_replyToConversation_rawclient_to_server,
+  _expdo_replyToConversation_fanout_onwards:
+    TestClientActorMixins._expdo_replyToConversation_fanout_onwards,
+
+  //////////////////////////////////////////////////////////////////////////////
   // Notifications from testClient
 
   __receiveConnectRequest: TestModaActorMixins.__receiveConnectRequest,
@@ -185,8 +230,11 @@ DummyTestClient.prototype = {
   },
   _notifyPeepConvTimestampsChanged: function(cinfo, convIndicies, convInfo,
                                              joinOccurred) {
+    // XXX we don't care about ordering changes right now
   },
   _notifyConvGainedMessages: function(convInfo) {
+    if (this.uiTester.canSee_conversation(convInfo))
+      this.uiTester._verifyConversation(convInfo);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -199,6 +247,11 @@ DummyTestClient.prototype = {
   _recip_expect_closeContactRequest: function(otherClient) {
     this.__addingContact(otherClient);
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversations
+
+  _recip_expect_convWelcome: function() {}
 
   //////////////////////////////////////////////////////////////////////////////
 };
@@ -309,8 +362,7 @@ var TestUIActorMixins = {
   },
 
   _verifyConnectRequests: function() {
-    // XXX moda rep knows connect requests...
-    self._uid.verify_connectRequests();
+    this._uid.verify_connectRequests(this._dynConnReqInfos);
   },
 
   /**
@@ -318,8 +370,10 @@ var TestUIActorMixins = {
    */
   do_showConnectRequests: function() {
     var self = this;
-    self._uid.showPage_connectRequests();
-    self._verifyConnectRequests();
+    this.T.action(this, 'shows connect requests', function() {
+      self._uid.showPage_connectRequests();
+      self._verifyConnectRequests();
+    });
   },
 
   /**
@@ -328,12 +382,14 @@ var TestUIActorMixins = {
    */
   do_approveConnectRequest: function(otherClient) {
     var self = this;
-    self._uid.act_approveConnectRequest(otherClient);
+    this.T.action(this, 'approves connect request from', otherClient,
+                  function() {
+      self._uid.act_approveConnectRequest(otherClient);
+    });
   },
 
   _verifyPeeps: function() {
-    // XXX moda knows peeps
-    self._uid.verify_peeps();
+    this._uid.verify_peeps(self._dynamicContacts);
   },
 
   /**
@@ -342,8 +398,10 @@ var TestUIActorMixins = {
    */
   do_showPeeps: function() {
     var self = this;
-    self._uid.showPage_peeps();
-    self._verifyPeeps();
+    this.T.action(this, 'show peeps', function() {
+      self._uid.showPage_peeps();
+      self._verifyPeeps();
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -355,9 +413,15 @@ var TestUIActorMixins = {
    */
   do_showPeepConversations: function(otherClient) {
     var self = this;
-    self._uid.showPage_peepConversations(otherClient);
-    // XXX moda knows conversations
-    self._uid.verify_conversations();
+    this.T.action(this, 'show conversations with', otherClient, function() {
+      var cinfo = self._contactMetaInfoByName[otherClient.__name];
+      self._uid.showPage_peepConversations(otherClient);
+      self._uid.verify_conversations(cinfo.involvedConvs);
+    });
+  },
+
+  _verifySingleConversation: function(convInfo, waitForUpdate) {
+    this._uid.verify_singleConversation(convInfo, waitForUpdate);
   },
 
   /**
@@ -366,7 +430,11 @@ var TestUIActorMixins = {
    */
   do_openPeepConversation: function(tConv) {
     var self = this;
-
+    this.T.action(this, 'open conversation', tConv, function() {
+      var convInfo = self._convInfoByName[tConv.__name];
+      self._uid.act_showConversation(convInfo);
+      self._verifySingleConversation(convInfo);
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -375,9 +443,62 @@ var TestUIActorMixins = {
   /**
    * Create a conversation with the given set of initial recipients.  It's up to
    *  the UI how it does this.
+   *
    */
-  do_createConversation: function(tConv, tMsg, recipients) {
-    var self = this;
+  do_createConversation: function(tConv, tNewMsg, recipClients) {
+    var self = this, messageText,
+        youAndMeBoth = [self.client].concat(recipClients);
+    tConv.sdata = {
+      participants: youAndMeBoth.concat(),
+      fanoutServer: this.client._usingServer,
+    };
+
+    this.T.action(this, 'creates conversation', function() {
+      // - server expectation and hold fanout processing
+      var eServer = self.client._usingServer;
+      eServer.holdAllMailSenderMessages();
+      eServer.expectPSMessageToUsFrom(self.client);
+
+      // - create the conversation
+      messageText = fakeDataMaker.makeSubject();
+      // create fake conversation creation info; we'll fix things up when the
+      //  fanout server gets to process this conversation.
+      var fakeConvCreationInfo = {
+        convId: null,
+        msgNonce: null,
+        convMeta: null,
+        joinNonces: youAndMeBoth.map(function() { return null; }),
+      };
+      self.client._expect_createConversation_rawclient_to_server(
+                    tConv, tNewMsg, fakeConvCreationInfo, messageText);
+
+      self._uid.act_createConversation(recipClients, messageText);
+    });
+    // and here we provide a function that gets a peek at the contents of the
+    //  `CreateConversationTask`'s instance at creation time to grab all the
+    //  data about the conversation out that we need for the test except the
+    //  `ConvMeta` data potentially needed by `testClient` instances.  If a
+    //  `testClient` instance is in the loop, it will handle that itself;
+    //  see
+    this.client._expdo_createConversation_fanout_onwards(tConv,
+      function(event, task) {
+        if (event !== 'attach')
+          return;
+
+        tConv.digitalName = tConv.data.id = task.innerEnvelope.convId;
+
+        var convPayload = task.innerEnvelope.payload,
+            addPayloads = convPayload.addPayloads;
+        for (var iAdd = 0; iAdd < addPayloads.length; iAdd++) {
+          var addPayload = addPayloads[iAdd];
+          // we are (correctly) assuming that the order exactly matches here
+          //  between youAndMeBoth and the joins lines up exactly.
+          var tJoin = tConv.data.backlog[iAdd];
+          tJoin.digitalName = addPayload.attestationNonce;
+        }
+
+        tNewMsg.digitalName = convPayload.msgNonce;
+      });
   },
 
   /**
@@ -385,12 +506,36 @@ var TestUIActorMixins = {
    *  use an affordance on the conversation display.
    */
   do_replyToConversationWith: function(tConv, tNewMsg) {
+    var self = this, messageText;
+    this.T.action(this, 'replies to conversation', function() {
+      messageText = fakeDataMaker.makeSubject();
+
+      var eServer = self.client._usingServer;
+      eServer.holdAllMailSenderMessages();
+      eServer.expectPSMessageToServerFrom(tConv.sdata.fanoutServer,
+                                          self.client);
+
+      // provide a fake nonce, fix it up with a snipe
+      self.client._expect_replyToConversation_rawclient_to_server(
+        tConv, tNewMsg, {msgNonce: null}, messageText);
+
+      self._uid.act_replyToConversation(messageText);
+    });
+    // snipe the message nonce out when the fanout server gets things
+    this.client._expdo_replyToConversation_fanout_onwards(tConv, tNewMsg,
+      function(event, task) {
+        if (event !== 'attach')
+          return;
+
+        tNewMsg.digitalName = task.outerEnvelope.nonce;
+      });
   },
 
   /**
    * Invite a client to the existing and currently displayed conversation.
    */
   do_inviteToConversation: function(invitedClient, tConv) {
+    // XXX this is not a thing that can happen yet; fix the UI, etc.
   },
 
   //////////////////////////////////////////////////////////////////////////////
