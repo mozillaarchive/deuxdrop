@@ -316,7 +316,7 @@ var OPT_SPECIFIC_TEST = {
   help: "(optional: The require name of a specific test to run)",
 };
 
-function commonTestRun(pathMap, options) {
+function commonTestRun(pathMap, runOptions, options) {
   applyGlobalOptions(options);
 
   process.on('exit', function(code) {
@@ -326,7 +326,7 @@ function commonTestRun(pathMap, options) {
 
   // -- specific test
   if (options.specificTest) {
-    deathClock(20 * 1000, true);
+    deathClock(runOptions.maxTestDurationMS, true);
     require(['rdcommon/testdriver'],
              function($driver) {
       when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
@@ -340,10 +340,10 @@ function commonTestRun(pathMap, options) {
   }
   // -- scan for tests (which uses child processes to invoke specific tests)
   else {
-    deathClock(90 * 1000, true);
+    deathClock(runOptions.maxTotalDurationMS, true);
     require(['rdcommon/testdriver'],
              function($driver) {
-      when($driver.runTestsFromDirectories(pathMap,
+      when($driver.runTestsFromDirectories(pathMap, runOptions,
                                            ErrorTrapper),
         function() {
           process.exit(0);
@@ -364,7 +364,11 @@ parser.command('test')
       'rdstests/': '../../servers/test',
       'rdctests/': '../../common/test',
     };
-    commonTestRun(testPrefixToPathMap, options);
+    var runOptions = {
+      maxTestDurationMS: 20 * 1000,
+      maxTotalDurationMS: 90 * 1000,
+    };
+    commonTestRun(testPrefixToPathMap, runOptions, options);
   });
 
 parser.command('testui')
@@ -376,7 +380,11 @@ parser.command('testui')
     var testPrefixToPathMap = {
       'rdutests/': '../../clients/test',
     };
-    commonTestRun(testPrefixToPathMap, options);
+    var runOptions = {
+      maxTestDurationMS: 90 * 1000,
+      maxTotalDurationMS: 180 * 1000,
+    };
+    commonTestRun(testPrefixToPathMap, runOptions, options);
   });
 
 // We need to do our own argv slicing to compensate for RequireJS' r.js

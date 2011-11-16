@@ -177,7 +177,10 @@ const MODA_CONNECT_WAIT =
  *   }
  * ]
  */
-function DevUIDriver(T, client, wdloggest, _logger) {
+function DevUIDriver(RT, T, client, wdloggest, _logger) {
+  this.RT = RT;
+  this.T = T;
+
   this._d = wdloggest;
 
   this._activeTab = null;
@@ -191,6 +194,7 @@ function DevUIDriver(T, client, wdloggest, _logger) {
 
   this._actor = T.actor('devUIDriver', client.__name, null, this);
   this._log = LOGFAB.devUIDriver(this, _logger, client.__name);
+  this._actor.__attachToLogger(this._log);
 
   this._eMakeFriendsBtn = this._eShowPeepsBtn =
     this._eShowConnectRequestsBtn = this._eComposeBtn = null;
@@ -209,7 +213,7 @@ DevUIDriver.prototype = {
   startUI: function() {
     this._d.navigate(UI_URL);
 
-    this._d.waitForModa('whoami');
+    this._waitForModa('whoami');
     this._checkTabDelta({signup: 1, errors: 1}, "signup");
 
     return this._d.stealJSData('identity info', {
@@ -263,6 +267,7 @@ DevUIDriver.prototype = {
       tabKind = tabKinds[idxTab];
       deltaRep.state[tabKind] = idxTab;
     }
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_tabState(deltaRep, currentTab);
 
     when(
@@ -331,6 +336,7 @@ DevUIDriver.prototype = {
     for (var iClient = 0; iClient < otherClients.length; iClient++) {
       expectedNames[otherClients[iClient]] = null;
     }
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_visiblePeeps(expectedNames);
 
     // - grab
@@ -388,7 +394,7 @@ DevUIDriver.prototype = {
     // - trigger signup
     this._d.click({ className: clsSignupSignup }, eSignupTab);
     // - wait for signup to complete
-    this._d.waitForModa('signupResult');
+    this._waitForModa('signupResult');
     // the signup tab should have gone away...
     // the signed-up tab should have shown up in the background...
     // the home tab should have shown up, focused
@@ -485,6 +491,7 @@ DevUIDriver.prototype = {
       expectedNamesAndMessages[connReqInfo.testClient.__name] =
         connReqInfo.messageText;
     }
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_visibleConnReqs(expectedNamesAndMessages);
 
     // - actual
@@ -566,6 +573,7 @@ DevUIDriver.prototype = {
       var convInfo = convInfos[iConv], tConv = convInfo.tConv;
       expectedFirstMessages[tConvs[iConv].data.firstMessage.data.text] = null;
     }
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_visibleConvs(expectedFirstMessages);
 
     // - actual
@@ -630,6 +638,7 @@ DevUIDriver.prototype = {
         });
       }
     }
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_visibleMsgs(expectedMessages);
 
     when(
@@ -756,7 +765,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.CLIENT,
 
     events: {
-      tabDelta: { state: true, activeTab: true },
+      tabState: { state: true, activeTab: true },
       visiblePeeps: { names: true },
       visibleConnReqs: { namesAndMessages: true },
       visibleConvs: { firstMessages: true },

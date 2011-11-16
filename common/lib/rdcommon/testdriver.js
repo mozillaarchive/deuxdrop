@@ -170,8 +170,6 @@ TestRuntimeContext.prototype = {
   },
 };
 
-var STEP_TIMEOUT_MS = 1000;
-
 /**
  * Consolidates the logic to run tests.
  */
@@ -283,7 +281,7 @@ TestDefinerRunner.prototype = {
         step.log.result('fail');
         deferred.resolve(false);
         deferred = null;
-      }, STEP_TIMEOUT_MS);
+      }, step.timeoutMS);
       // -- promise resolution/rejection handler
       if (this._superDebug)
         console.log("waiting on", promises.length, "promises");
@@ -672,6 +670,15 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
 };
 
 /**
+ * How much padding time do we need to give a subprocess to ensure that it has
+ *  time for its own internal death-clock to fire so that it can dump its
+ *  failure data to us?  The padding needs to cover the startup time through
+ *  the initialization of the death clock, plus the time to serialize and dump
+ *  the failure data.
+ */
+const SUBPROC_TEST_PADDING_MS = 3 * 1000;
+
+/**
  * Run the given test in a subprocess by invoking our command-line handler
  *  again but giving it a specific test, thereby avoiding system destroying
  *  fork-bombs.
@@ -681,7 +688,7 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
  *  we do buffer the output of the sub-tests so there is no chance for
  *  interleaving.
  */
-function runTestInSubProcess(testModuleName) {
+function runTestInSubProcess(testModuleName, runOptions) {
   console.error(":: running", testModuleName, "in subprocess");
   var deferred = $Q.defer();
 
@@ -690,8 +697,7 @@ function runTestInSubProcess(testModuleName) {
               'test', testModuleName];
   var cmd = args.join(' ');
   var opts = {
-    // deathClock + 5sec.
-    timeout: 1000 * 25,
+    timeout: runOptions.maxTestDurationMS + SUBPROC_TEST_PADDING_MS,
     // logs should ideally be much smaller, but they deserve their space
     maxBuffer: 10 * 1024 * 1024,
   };
@@ -713,8 +719,9 @@ function runTestInSubProcess(testModuleName) {
  *  test in succession.  In the future, this may operate by forking a new node
  *  runtime, but for now, everything runs in the same process.
  */
-function MultiTestFileRunner(moduleNames, errorTrapper) {
+function MultiTestFileRunner(moduleNames, runOptions, errorTrapper) {
   this._moduleNames = moduleNames;
+  this._runOptions = runOptions;
   this._iNextModule = 0;
   this._errorTrapper = errorTrapper;
 }
@@ -734,7 +741,7 @@ MultiTestFileRunner.prototype = {
       var testModuleName = self._moduleNames[self._iNextModule++];
 
       // - have a subprocess run the file
-      when(runTestInSubProcess(testModuleName), runNextFile);
+      when(runTestInSubProcess(testModuleName, self._runOptions), runNextFile);
     }
 
     runNextFile();
@@ -753,7 +760,8 @@ const RE_TEST = /^(.+)\.js$/;
  * XXX this should ideally be migrated to a cross-platform API like jstut's
  *  unifile abstraction or something more universally adopted.
  */
-exports.runTestsFromDirectories = function(namespacePathMap, errorTrapper) {
+exports.runTestsFromDirectories = function(namespacePathMap, runOptions,
+                                           errorTrapper) {
   var testModules = [];
   for (var namespacePrefix in namespacePathMap) {
     var path = namespacePathMap[namespacePrefix];
@@ -767,7 +775,8 @@ exports.runTestsFromDirectories = function(namespacePathMap, errorTrapper) {
     }
   }
 
-  var multiRunner = new MultiTestFileRunner(testModules, errorTrapper);
+  var multiRunner = new MultiTestFileRunner(testModules, runOptions,
+                                            errorTrapper);
   return multiRunner.runAll();
 };
 

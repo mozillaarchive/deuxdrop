@@ -236,7 +236,7 @@ TD.commonCase('moda basics', function(T) {
   // this results in a different notification chain from a's perspective
   T.group('B starts new conversation between A, B');
   var tConv3 = T.thing('conversation', 'conv3'),
-      tConv3_msg1 = T.thing('message', 'c1:1:b');
+      tConv3_msg1 = T.thing('message', 'c3:1:b');
   client_b.do_startConversation(tConv3, tConv3_msg1, [client_a]);
 
   // - conversation loading without use

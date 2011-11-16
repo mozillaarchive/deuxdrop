@@ -122,7 +122,7 @@ var $testdata = require('rdcommon/testdatafab'),
 var $wdloggest = require('rduidriver/wdloggest'),
     $devui_driver = require('rduidriver/devui'),
     $th_servers = require('rdservers/testhelper'),
-    $th_moda = require('moda/testhelper');
+    $th_moda = require('rdcommon/moda/testhelper');
 
 var TestClientActorMixins = $th_servers.TestClientActorMixins,
     TestModaActorMixins = $th_moda.TestModaActorMixins;
@@ -181,10 +181,14 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._dynConnReqInfos = [];
 }
 DummyTestClient.prototype = {
+  toString: function() {
+    return '[DummyTestClient ' + this.__name + ']';
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Parameterized Step Support
 
-  _parameterizedsteps: TestClientActorMixins._parameterizedsteps,
+  _parameterizedSteps: TestClientActorMixins._parameterizedSteps,
   _T_allClientsStep: TestClientActorMixins._T_allClientsStep,
   _T_connectedClientsStep: TestClientActorMixins._T_connectedClientsStep,
   _T_otherClientsStep: TestClientActorMixins._T_otherClientsStep,
@@ -204,6 +208,9 @@ DummyTestClient.prototype = {
     TestClientActorMixins._expect_replyToConversation_rawclient_to_server,
   _expdo_replyToConversation_fanout_onwards:
     TestClientActorMixins._expdo_replyToConversation_fanout_onwards,
+
+  do_expectConvWelcome:
+    TestClientActorMixins.do_expectConvWelcome,
 
   //////////////////////////////////////////////////////////////////////////////
   // Notifications from testClient
@@ -263,10 +270,12 @@ var TestUIActorMixins = {
     self.client = new DummyTestClient(self, self.__name, self.RT, self.T);
 
     // - spawn ui instance and attach
-    self.T.convenienceSetup(self, 'creates webdriver', function() {
+    var bigStep =self.T.convenienceSetup(self, 'creates webdriver', function() {
+      self.__attachToLogger(LOGFAB.testUI(self, null, self.__name));
+
       self._lwd = new $wdloggest.LoggestWebDriver(
-                    self.client.__name, self.T, self._log);
-      self._uid = new $devui_driver.DevUIDriver(self.T, self.client,
+                    self.client.__name, self.RT, self.T, self._log);
+      self._uid = new $devui_driver.DevUIDriver(self.RT, self.T, self.client,
                                                 self._lwd, self._log);
       when(self._uid.startUI(),
         function(identityInfo) {
@@ -288,6 +297,8 @@ var TestUIActorMixins = {
                             identityInfo.clientPublicKey);
         });
     });
+    // unfortunately, firefox can take some time to start up.
+    bigStep.timeoutMS = 10000;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -541,15 +552,30 @@ var TestUIActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
 };
 
+var LOGFAB = exports.LOGFAB = $log.register($module, {
+  testUI: {
+    // we are a client/server client, even if we are smart for one
+    type: $log.TEST_SYNTHETIC_ACTOR,
+    subtype: $log.CLIENT,
+    topBilling: true,
+
+    events: {
+    },
+    TEST_ONLY_events: {
+    },
+  },
+});
+
+
 exports.TESTHELPER = {
-  // we leave it to the testClient TESTHELPER to handle most stuff, leaving us
-  //  to just worry about moda.
+  // we should always be used with th_rdservers and th_moda, so we only need
+  //  to cover the ui driver bits
   LOGFAB_DEPS: [LOGFAB,
-    $moda_backside.LOGFAB, $ls_tasks.LOGFAB,
+    $devui_driver.LOGFAB, $wdloggest.LOGFAB,
   ],
 
   actorMixins: {
-    testModa: TestModaActorMixins,
+    testUI: TestUIActorMixins,
   },
 };
 

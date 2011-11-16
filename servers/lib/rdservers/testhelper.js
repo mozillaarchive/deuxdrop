@@ -235,7 +235,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
    *  used by `_T_allClientsStep`, `_T_connectedClientsStep`, and
    *  `_T_otherClientsStep` to generate test steps for the appropriate clients.
    */
-  _parameterizedsteps: function(stepMethod, stepArgs, paramInstances) {
+  _parameterizedSteps: function(stepMethod, stepArgs, paramInstances) {
     // scan and find the '*PARAM*' index
     var iArg;
     for (iArg = 0; iArg < stepArgs.length; iArg++) {

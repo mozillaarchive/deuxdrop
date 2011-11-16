@@ -63,6 +63,9 @@ def download_selenium_server_jar_if_needed():
         sys.exit(1)
 
 def spawn_our_selenium_server():
+    '''
+    Spawn the selenium server and wait for it to become active before returning.
+    '''
     global SELENIUM_POPE
     _announceStep('Spawning selenium server')
     args = ['/usr/bin/java',
@@ -72,6 +75,13 @@ def spawn_our_selenium_server():
     
     print 'Invoking:', args
     SELENIUM_POPE = mozrunner.run_command(args)
+
+    # wait for the port to be listened on
+    # (we could alternatively listen for the INFO line that says this, but
+    #  then we would need to use .communicate() to keep the pipes drained
+    #  instead of just letting selenium reuse our stdout/stderr)
+    while subprocess.call('netstat -lnt | grep :4444', shell=True):
+        pass
 
 def kill_our_selenium_server():
     _announceStep('Killing selenium server')
@@ -85,9 +95,9 @@ def run_ui_tests():
 
 def main():
     kill_existing_selenium_server()
+    download_selenium_server_jar_if_needed()
     create_xpi()
     create_template_profile()
-    download_selenium_server_jar_if_needed()
     spawn_our_selenium_server()
     try:
         run_ui_tests()

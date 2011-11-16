@@ -92,6 +92,7 @@ TD.commonCase('moda basics', function(T) {
       server_y = T.actor('testServer', 'Y', serverOpts),
       server_z = T.actor('testServer', 'Z', serverOpts);
 
+  // -- setup
   T.group("signup A");
   ui_a.setup_useServer(server_x);
   T.group("setup headless B, C");
@@ -104,7 +105,7 @@ TD.commonCase('moda basics', function(T) {
   client_b.setup_connect();
   client_c.setup_connect();
 
-
+  // -- friending
   T.group("A requests B");
   // list/find peeps
   ui_a.do_showPossibleFriends([client_b, client_c]);
@@ -132,15 +133,21 @@ TD.commonCase('moda basics', function(T) {
   ui_a.do_approveConnectRequest(client_c);
 
 
+  // -- conversations
+  var tConv1 = T.thing('conversation', 'conv1'),
+      tConv1_msg1 = T.thing('message', 'c1:1:a');
+
   T.group("A starts conversation with B");
   ui_a.do_createConversation(tConv1, tConv1_msg1, [client_b]);
 
 
+  var tConv2 = T.thing('conversation', 'conv2'),
+      tConv2_msg1 = T.thing('message', 'c2:1:c');
   T.group("C starts conversation with A");
   // be looking at the conversations involving C
   ui_a.do_showPeepConversations(client_c);
   // have C create the conversation
-  client_c.do_startConversation(tConv3, tConv3_msg1, [client_a]);
+  client_c.do_startConversation(tConv2, tConv2_msg1, [ui_a.client]);
 });
 
 }); // end define

@@ -487,7 +487,7 @@ var DeltaHelper = exports.DeltaHelper = {
  *  a desktop client UI that implements multiple tabs, each with their own
  *  moda bridge, then there should be multiple actor instances.
  */
-var TestModaActorMixins = {
+var TestModaActorMixins = exports.TestModaActorMixins = {
   __constructor: function(self, opts) {
     if (!opts.client)
       throw new Error("Moda actors must be associated with a client!");

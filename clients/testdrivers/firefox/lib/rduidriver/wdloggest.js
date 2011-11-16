@@ -72,11 +72,18 @@ define(
 // nb: the Webdriver when, not Q's when.
 const WDwhen = $webdriver.promise.when;
 
-function LoggestWebDriver(name, T, _logger) {
-  this._T = T;
+const DEFAULT_SERVER_URL = 'http://localhost:4444/wd/hub';
+
+function LoggestWebDriver(name, RT, T, _logger) {
+  this.RT = RT;
+  this.T = T;
 
   this._actor = T.actor('loggestWebDriver', name, null, this);
   this._log = LOGFAB.loggestWebDriver(this, _logger, name);
+  this._actor.__attachToLogger(this._log);
+
+  $webdriver.process.setEnv(
+    $webdriver.Builder.SERVER_URL_ENV, DEFAULT_SERVER_URL);
 
   this._builder = new $webdriver.Builder();
   this._builder.withCapabilities({
@@ -96,10 +103,15 @@ exports.LoggestWebDriver = LoggestWebDriver;
 LoggestWebDriver.prototype = {
 
   navigate: function(url) {
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_navigate(url);
     var self = this;
     this._driver.get(url).then(
-      function() { self._log.navigate(url); },
+      function(what) {
+        if (what)
+          self._log.navigateProblem(what);
+        self._log.navigate(url);
+      },
       this._boundGenericErrHandler);
   },
 
@@ -261,11 +273,12 @@ LoggestWebDriver.prototype = {
    */
   frobElements: function(context, grabData) {
     var deferred = $Q.defer(), self = this;
-    this._actor.expect_frob(className);
+    this.RT.reportActiveActorThisStep(this._actor);
+    this._actor.expect_frob();
     WDwhen(this._driver.executeScript(this._rjs_frobElements,
                                       context, grabData),
       function(results) {
-        self._log.frob(className, results);
+        self._log.frob(results);
         deferred.resolve(results);
       },
       this._boundGenericErrHandler);
@@ -274,6 +287,7 @@ LoggestWebDriver.prototype = {
 
   remoteExec: function(jsSnippet, logValue) {
     var self = this;
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_remoteExec(logValue);
     WDwhen(this._driver.executeScript(jsSnippet),
       function() {
@@ -284,6 +298,7 @@ LoggestWebDriver.prototype = {
 
   waitForRemoteCallback: function(jsSnippet, logValue) {
     var self = this;
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_remoteCallback(logValue);
     WDwhen(this._driver.executeAsyncScript(jsSnippet),
       function() {
@@ -315,6 +330,7 @@ LoggestWebDriver.prototype = {
    */
   stealJSData: function(logValue, what) {
     var deferred = $Q.defer(), self = this;
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_stealJSData(logValue);
     WDwhen(this._driver.executeScript(this._rjs_stealData, what),
       function(results) {
@@ -327,6 +343,7 @@ LoggestWebDriver.prototype = {
 
   click: function(what, context) {
     var self = this;
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_click();
     if (!(what instanceof $webdriver.WebElement))
       what = (context || this.driver).findElement(what);
@@ -341,6 +358,7 @@ LoggestWebDriver.prototype = {
    */
   typeInTextBox: function(textbox, textToType, context) {
     var self = this;
+    this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_type(textToType);
     if (!(textbox instanceof $webdriver.WebElement))
       textbox = (context || this.driver).findElement(textbox);
@@ -362,7 +380,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       click: {},
       type: {text: true},
 
-      frob: {queryClass: true, results: false},
+      frob: {results: false},
       remoteExec: {event: true},
       remoteCallback: {event: true},
       stealJSData: {why: true, data: false},
@@ -371,6 +389,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
 
     errors: {
+      navigateProblem: { msg: false },
       unexpectedBadness: { err: $log.EXCEPTION },
     },
   },
