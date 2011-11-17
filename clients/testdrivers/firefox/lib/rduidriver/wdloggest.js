@@ -96,6 +96,7 @@ function LoggestWebDriver(name, RT, T, _logger) {
     platform: 'ANY',
     version: '',
     javascriptEnabled: true,
+    firefox_binary: this.RT.envOptions.firefoxBinary,
     // At the time of this writing, -firefoxProfileTemplate isn't actually
     //  hooked up to the webdriver logic in selenium, and the
     //  "webdriver.firefox.profile" logic is simply broken.  But if it worked,

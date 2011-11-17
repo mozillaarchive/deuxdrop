@@ -7,6 +7,11 @@
 #
 # Pre-reqs:
 # - Have sourced Jetpack's bin/activate script in your shell.
+# 
+# Pre-reqs we will tell you about when you run us:
+# - Have 'selenium-server-standalone.jar' in this directory
+# - Have a symlink 'firefox-binary-symlink' in this directory that points at
+#    the version of firefox to use.
 #
 # Steps:
 # - Kill any existing selenium server.
@@ -26,6 +31,8 @@ SELENIUM_POPE = None
 XPI_PATH = 'deuxdrop.xpi'
 OUR_PROFILE = None
 ZIPPED_PROFILE = None
+FIREFOX_BINARY_PATH = None
+FF_SYMLINK_NAME = 'firefox-binary-symlink'
 SELENIUM_JAR_PATH = 'selenium-server-standalone.jar'
 
 SERVER_CMDLINE_SCRIPT = '../../servers/cmdline'
@@ -79,6 +86,8 @@ def download_selenium_server_jar_if_needed():
         print 'You need to download selenium-server-standalone.jar'
         print ' from somewhere and make sure it is named like that.'
         print '***'
+        print 'try:'
+        print 'curl -o selenium-server-standalone.jar "http://code.google.com/p/selenium/downloads/detail?name=selenium-server-standalone-2.12.0.jar&can=2&q="'
         sys.exit(1)
 
 def spawn_our_selenium_server():
@@ -87,7 +96,7 @@ def spawn_our_selenium_server():
     '''
     global SELENIUM_POPE
     _announceStep('Spawning selenium server')
-    args = [#'/usr/bin/strace', '-e', 'trace=open,stat,process', '-f',
+    args = ['/usr/bin/strace', '-e', 'trace=open,stat,process', '-f',
             '/usr/bin/java',
             '-jar', SELENIUM_JAR_PATH,
             # this must have been for old-school selenium...
@@ -110,12 +119,23 @@ def kill_our_selenium_server():
     _announceStep('Killing selenium server')
     SELENIUM_POPE.kill()
 
+def figure_firefox_path():
+    global FIREFOX_BINARY_PATH
+    _announceStep('Figuring out what Firefox to use')
+    if (not os.path.islink(FF_SYMLINK_NAME) or
+            not os.path.exists(FF_SYMLINK_NAME)):
+        print 'You need a symlink called:', FF_SYMLINK_NAME
+        print 'It needs to point at a firefox binary.'
+        sys.exit(2)
+    FIREFOX_BINARY_PATH = os.path.abspath(os.path.realpath(FF_SYMLINK_NAME))
+
 def run_ui_tests():
     _announceStep('Running UI tests')
     os.chdir(os.path.dirname(SERVER_CMDLINE_SCRIPT))
     sys.stdout.flush()
     subprocess.call(['./' + os.path.basename(SERVER_CMDLINE_SCRIPT), 'testui',
-                     '--zipped-profile=%s' % (ZIPPED_PROFILE,)])
+                     '--zipped-profile=' + ZIPPED_PROFILE,
+                     '--firefox-binary=' + FIREFOX_BINARY_PATH])
     
 
 def main():
@@ -124,6 +144,7 @@ def main():
     create_xpi()
     create_template_profile()
     spawn_our_selenium_server()
+    figure_firefox_path()
     try:
         run_ui_tests()
     finally:

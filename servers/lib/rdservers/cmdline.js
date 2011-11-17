@@ -385,6 +385,11 @@ parser.command('testui')
       required: true,
       help: 'PATH to the zipped firefox profile to use as a template',
     },
+    firefoxBinary: {
+      string: '--firefox-binary=PATH',
+      required: true,
+      help: 'PATH to the firefox binary to use',
+    },
   })
   .callback(function(options) {
     var testPrefixToPathMap = {
@@ -394,9 +399,11 @@ parser.command('testui')
       testMode: 'testui',
       maxTestDurationMS: 90 * 1000,
       maxTotalDurationMS: 180 * 1000,
-      relayArgs: ['--zipped-profile=' + options.zippedProfile],
+      relayArgs: ['--zipped-profile=' + options.zippedProfile,
+                  '--firefox-binary=' + options.firefoxBinary],
       exposeToTest: {
         zippedProfile: options.zippedProfile,
+        firefoxBinary: options.firefoxBinary,
       },
     };
     commonTestRun(testPrefixToPathMap, runOptions, options);
