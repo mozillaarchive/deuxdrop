@@ -18,13 +18,14 @@
 # - Invoke our node server 'cmdline' driver with 'uitest' to actually run the
 #    unit tests with UI test magic enabled and using UI test directories, etc.
 
-import os, os.path, subprocess
+import os, os.path, subprocess, sys, time
 import mozrunner
 
 SELENIUM_POPE = None
 
 XPI_PATH = 'deuxdrop.xpi'
 OUR_PROFILE = None
+ZIPPED_PROFILE = None
 SELENIUM_JAR_PATH = 'selenium-server-standalone.jar'
 
 SERVER_CMDLINE_SCRIPT = '../../servers/cmdline'
@@ -35,17 +36,35 @@ def _announceStep(stepName):
 
 def kill_existing_selenium_server():
     _announceStep('Killing existing selenium server if present')
+    sys.stdout.flush()
     subprocess.call("pkill -f server-standalone.*\\.jar", shell=True)
 
 def create_xpi():
     _announceStep('Creating XPI')
+    sys.stdout.flush()
     subprocess.call("./acfx xpi", shell=True)
 
 def create_template_profile():
-    global OUR_PROFILE
+    '''
+    Create a profile directory containing our XPI using mozrunner, then zip
+    it up.  We need to create a zip file because the webdriver remote protocol
+    can accept a "firefox_profile" capability payload attribute which is a
+    zipped profile and doesn't like any other mechanism.
+
+    Instead of using mozrunner, we could try and use the webdriver pythong
+    binding which has its own profile building and serialization logic.  For
+    now, we're just going to kick off zip manually and stick it in a file.
+    All solutions are equally troublesome, but at least we don't need to add
+    the python bindings as a dependency for now.
+    '''
+    global OUR_PROFILE, ZIPPED_PROFILE
     _announceStep('Creating Firefox profile')
+    sys.stdout.flush()
     OUR_PROFILE = mozrunner.FirefoxProfile(addons=[XPI_PATH])
     print 'Profile created at', OUR_PROFILE.profile
+    subprocess.call('cd %s; zip -r profile.zipped *' % (OUR_PROFILE.profile,),
+                    shell=True)
+    ZIPPED_PROFILE = os.path.join(OUR_PROFILE.profile, 'profile.zipped')
 
 def nuke_template_profile():
     OUR_PROFILE.cleanup()
@@ -68,20 +87,24 @@ def spawn_our_selenium_server():
     '''
     global SELENIUM_POPE
     _announceStep('Spawning selenium server')
-    args = ['/usr/bin/java',
+    args = [#'/usr/bin/strace', '-e', 'trace=open,stat,process', '-f',
+            '/usr/bin/java',
             '-jar', SELENIUM_JAR_PATH,
-            '-firefoxProfileTemplate', OUR_PROFILE.profile,
+            # this must have been for old-school selenium...
+            #'-firefoxProfileTemplate', OUR_PROFILE.profile,
             ]
     
     print 'Invoking:', args
+    sys.stdout.flush()
     SELENIUM_POPE = mozrunner.run_command(args)
 
     # wait for the port to be listened on
     # (we could alternatively listen for the INFO line that says this, but
     #  then we would need to use .communicate() to keep the pipes drained
     #  instead of just letting selenium reuse our stdout/stderr)
+    sys.stdout.flush()
     while subprocess.call('netstat -lnt | grep :4444', shell=True):
-        pass
+        time.sleep(0.05)
 
 def kill_our_selenium_server():
     _announceStep('Killing selenium server')
@@ -90,7 +113,9 @@ def kill_our_selenium_server():
 def run_ui_tests():
     _announceStep('Running UI tests')
     os.chdir(os.path.dirname(SERVER_CMDLINE_SCRIPT))
-    subprocess.call(['./' + os.path.basename(SERVER_CMDLINE_SCRIPT), 'testui'])
+    sys.stdout.flush()
+    subprocess.call(['./' + os.path.basename(SERVER_CMDLINE_SCRIPT), 'testui',
+                     '--zipped-profile=%s' % (ZIPPED_PROFILE,)])
     
 
 def main():
@@ -102,8 +127,9 @@ def main():
     try:
         run_ui_tests()
     finally:
-        nuke_template_profile()
-        kill_our_selenium_server()
+        #nuke_template_profile()
+        #kill_our_selenium_server()
+        pass
 
 
 if __name__ == '__main__':

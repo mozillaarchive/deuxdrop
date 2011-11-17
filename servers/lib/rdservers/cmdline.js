@@ -329,8 +329,9 @@ function commonTestRun(pathMap, runOptions, options) {
     deathClock(runOptions.maxTestDurationMS, true);
     require(['rdcommon/testdriver'],
              function($driver) {
-      when($driver.runTestsFromModule(options.specificTest, ErrorTrapper,
-                                      SUPER_DEBUG),
+      when($driver.runTestsFromModule(options.specificTest,
+                                      runOptions.exposeToTest,
+                                      ErrorTrapper, SUPER_DEBUG),
         function() {
           // pass or fail, we want to exit normally; only the death clock
           //  should result in a non-zero exit.
@@ -365,8 +366,12 @@ parser.command('test')
       'rdctests/': '../../common/test',
     };
     var runOptions = {
+      testmode: 'test',
       maxTestDurationMS: 20 * 1000,
       maxTotalDurationMS: 90 * 1000,
+      relayArgs: [],
+      exposeToTest: {
+      },
     };
     commonTestRun(testPrefixToPathMap, runOptions, options);
   });
@@ -375,14 +380,24 @@ parser.command('testui')
   .help("Run UI tests for the development UI")
   .opts({
     specificTest: OPT_SPECIFIC_TEST,
+    zippedProfile: {
+      string: '--zipped-profile=PATH',
+      required: true,
+      help: 'PATH to the zipped firefox profile to use as a template',
+    },
   })
   .callback(function(options) {
     var testPrefixToPathMap = {
       'rdutests/': '../../clients/test',
     };
     var runOptions = {
+      testMode: 'testui',
       maxTestDurationMS: 90 * 1000,
       maxTotalDurationMS: 180 * 1000,
+      relayArgs: ['--zipped-profile=' + options.zippedProfile],
+      exposeToTest: {
+        zippedProfile: options.zippedProfile,
+      },
     };
     commonTestRun(testPrefixToPathMap, runOptions, options);
   });

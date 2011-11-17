@@ -62,9 +62,10 @@ var when = $Q.when;
  * The runtime context interacts with the log fab subsystem to indicate that we
  *  are in a testing mode and to associate actors with loggers.
  */
-function TestRuntimeContext() {
+function TestRuntimeContext(envOptions) {
   this._loggerStack = [];
   this._pendingActorsByLoggerType = {};
+  this.envOptions = envOptions || {};
 
   /**
    * Strictly increasing value for use in tests that want a relative time
@@ -173,11 +174,11 @@ TestRuntimeContext.prototype = {
 /**
  * Consolidates the logic to run tests.
  */
-function TestDefinerRunner(testDefiner, superDebug) {
+function TestDefinerRunner(testDefiner, superDebug, exposeToTestOptions) {
   if (!testDefiner)
     throw new Error("No test definer provided!");
   this._testDefiner = testDefiner;
-  this._runtimeContext = new TestRuntimeContext();
+  this._runtimeContext = new TestRuntimeContext(exposeToTestOptions);
   this._superDebug = Boolean(superDebug);
 
   this._logBadThingsToLogger = null;
@@ -610,6 +611,7 @@ function reportTestModuleRequireFailures(testModuleName, moduleName,
  * @return[success Boolean]
  */
 exports.runTestsFromModule = function runTestsFromModule(testModuleName,
+                                                         exposeToTestOptions,
                                                          ErrorTrapper,
                                                          superDebug) {
   var deferred = $Q.defer();
@@ -663,7 +665,7 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
     }
 
     // now that it is loaded, run it
-    runner = new TestDefinerRunner(tmod.TD, superDebug);
+    runner = new TestDefinerRunner(tmod.TD, superDebug, exposeToTestOptions);
     when(runner.runAll(ErrorTrapper), itAllGood, itAllGood);
   });
   return deferred.promise;
@@ -694,7 +696,7 @@ function runTestInSubProcess(testModuleName, runOptions) {
 
   // we are assuming/requiring the same working path of servers/lib
   var args = [process.execPath, 'r.js', 'rdservers/cmdline.js',
-              'test', testModuleName];
+              runOptions.testMode, testModuleName].concat(runOptions.relayArgs);
   var cmd = args.join(' ');
   var opts = {
     timeout: runOptions.maxTestDurationMS + SUBPROC_TEST_PADDING_MS,

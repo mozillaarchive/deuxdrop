@@ -56,6 +56,7 @@
 define(
   [
     'q',
+    'fs',
     'rdcommon/log',
     'webdriver',
     'module',
@@ -63,6 +64,7 @@ define(
   ],
   function(
     $Q,
+    $fs,
     $log,
     $webdriver,
     $module,
@@ -85,12 +87,24 @@ function LoggestWebDriver(name, RT, T, _logger) {
   $webdriver.process.setEnv(
     $webdriver.Builder.SERVER_URL_ENV, DEFAULT_SERVER_URL);
 
+  var zippedProfilePath = this.RT.envOptions.zippedProfile;
+  this._log.usingProfile(zippedProfilePath);
+
   this._builder = new $webdriver.Builder();
   this._builder.withCapabilities({
     browserName: 'firefox',
     platform: 'ANY',
     version: '',
     javascriptEnabled: true,
+    // At the time of this writing, -firefoxProfileTemplate isn't actually
+    //  hooked up to the webdriver logic in selenium, and the
+    //  "webdriver.firefox.profile" logic is simply broken.  But if it worked,
+    //  it would name a profile in the .ini file.
+    // So what we do is use the support for sending a zipped profile across
+    //  the wire.  To save ourselves lots of headaches, we depend on our caller
+    //  to create such a zipped file and provide us the path to it so we can
+    //  read it.
+    firefox_profile: $fs.readFileSync(zippedProfilePath, 'base64'),
   });
   this._driver = this._builder.build();
 
@@ -107,9 +121,7 @@ LoggestWebDriver.prototype = {
     this._actor.expect_navigate(url);
     var self = this;
     this._driver.get(url).then(
-      function(what) {
-        if (what)
-          self._log.navigateProblem(what);
+      function() {
         self._log.navigate(url);
       },
       this._boundGenericErrHandler);
@@ -376,6 +388,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     subtype: $log.CLIENT,
 
     events: {
+      usingProfile: {path: false},
+
       navigate: {url: true},
       click: {},
       type: {text: true},
@@ -389,7 +403,6 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
 
     errors: {
-      navigateProblem: { msg: false },
       unexpectedBadness: { err: $log.EXCEPTION },
     },
   },
