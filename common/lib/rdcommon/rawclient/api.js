@@ -626,11 +626,11 @@ RawClientAPI.prototype = {
     request.onreadystatechange = function(evt) {
       if (request.readyState == 4) {
         if (request.status == 200) {
-          self._log.insecurelyGetServerSelfIdentUsingDomainNameSuccess();
           var json = JSON.parse(request.responseText);
+          self._log.insecurelyGetServerSelfIdentUsingDomainName(json);
           deferred.resolve(json);
         } else {
-          self._log.insecurelyGetServerSelfIdentUsingDomainNameFailure();
+          self._log.problemFetchingServerSelfIdent();
           deferred.resolve(null);
         }
       }
@@ -1373,12 +1373,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       signup: {},
     },
     TEST_ONLY_events: {
-      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {selfIdent: true},
+      insecurelyGetServerSelfIdentUsingDomainName: {selfIdent: true},
     },
     events: {
       signedUp: {},
       signupChallenged: {},
-      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {},
+      insecurelyGetServerSelfIdentUsingDomainName: {},
 
       connecting: {},
       connected: {},
@@ -1389,7 +1389,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     },
     errors: {
       signupFailure: {},
-      insecurelyGetServerSelfIdentUsingDomainNameFailure: {},
+      problemFetchingServerSelfIdent: {},
       replicaBlockProcessingFailure: {err: $log.EXCEPTION, msg: false},
     },
   }
