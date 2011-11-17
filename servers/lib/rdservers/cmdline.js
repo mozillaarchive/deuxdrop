@@ -366,7 +366,7 @@ parser.command('test')
       'rdctests/': '../../common/test',
     };
     var runOptions = {
-      testmode: 'test',
+      testMode: 'test',
       maxTestDurationMS: 20 * 1000,
       maxTotalDurationMS: 90 * 1000,
       relayArgs: [],
