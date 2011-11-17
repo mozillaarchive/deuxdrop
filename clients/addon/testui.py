@@ -96,7 +96,7 @@ def spawn_our_selenium_server():
     '''
     global SELENIUM_POPE
     _announceStep('Spawning selenium server')
-    args = ['/usr/bin/strace', '-e', 'trace=open,stat,process', '-f',
+    args = [#'/usr/bin/strace', '-e', 'trace=open,stat,process', '-f',
             '/usr/bin/java',
             '-jar', SELENIUM_JAR_PATH,
             # this must have been for old-school selenium...
