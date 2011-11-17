@@ -1555,7 +1555,8 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    *  connect cases it is.
    */
   do_connectToPeep: function(usingPeepQuery, other, interesting) {
-    var self = this, messageText = fakeDataMaker.makeSubject(),
+    var self = this,
+        messageText = 'Friend Me Because... ' + fakeDataMaker.makeSubject(),
         closesLoop = this._testClient._dohelp_closesConnReqLoop(other);
     this.T.action('moda sends connectToPeep to', this._eBackside,
                   function() {

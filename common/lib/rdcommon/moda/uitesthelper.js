@@ -364,8 +364,9 @@ var TestUIActorMixins = {
    *  completes the connection process from that page.
    */
   do_connectToPeep: function(otherClient, interesting) {
-    var messageText = fakeDataMaker.makeSubject(), self = this,
-        closesLoop = this.client._dohelp_closesConnReqLoop(otherClient);
+    var messageText = 'Friend Me Because... ' + fakeDataMaker.makeSubject(),
+        closesLoop = this.client._dohelp_closesConnReqLoop(otherClient),
+        self = this;
     this.T.action(this, 'request contact of', otherClient, function() {
       self._uid.act_issueConnectRequest(otherClient);
     });

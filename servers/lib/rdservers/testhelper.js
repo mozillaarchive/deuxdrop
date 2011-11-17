@@ -397,7 +397,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
    *  if we already should have seen a contact request
    */
   do_requestContact: function(other, interesting) {
-    var messageText = fakeDataMaker.makeSubject();
+    var messageText = 'Friend Me Because... ' + fakeDataMaker.makeSubject();
 
     this._expdo_contactRequest_issue(other, messageText, interesting);
     this._expdo_contactRequest_everything_else(other, messageText, interesting);
@@ -496,7 +496,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     this._eLocalStore.expect_contactRequest(senderClient.tellBoxKey);
     this._eRawClient.expect_replicaCaughtUp();
 
-    this._dynamicNotifyModaActors('receiveConnectRequest', self,
+    this._dynamicNotifyModaActors('receiveConnectRequest', senderClient,
                                   messageText);
   },
 
@@ -552,22 +552,23 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
   },
 
   assertInsecureFetchedSelfIdent: function(server) {
-    var domain = server._server.address.address + ':' + server._server.address.port,
+    var domain = server._server.address.address + ':' +
+                   server._server.address.port,
         selfIdent = server._server._endpoints['signup.deuxdrop']
                     .serverConfig.selfIdentBlob;
 
     this.RT.reportActiveActorThisStep(this);
     this.RT.reportActiveActorThisStep(this._eRawClient);
 
-    this._eRawClient.expect_insecurelyGetServerSelfIdentUsingDomainNameSuccess(
+    this._eRawClient.expect_insecurelyGetServerSelfIdentUsingDomainName(
       selfIdent);
 
-    this.expect_insecurelyGetServerSelfIdentUsingDomainNameSuccess(selfIdent);
+    this.expect_insecurelyGetServerSelfIdentUsingDomainName(selfIdent);
 
     var self = this;
     when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
       function (obj) {
-        self._logger.insecurelyGetServerSelfIdentUsingDomainNameSuccess(
+        self._logger.insecurelyGetServerSelfIdentUsingDomainName(
           obj.selfIdent);
       }
     );
@@ -1442,11 +1443,11 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       // - hold-related
       replicaBlockNotifiedOnServer: {},
 
-      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {}
+      insecurelyGetServerSelfIdentUsingDomainName: {}
     },
     TEST_ONLY_events: {
       replicaBlockNotifiedOnServer: {block: false},
-      insecurelyGetServerSelfIdentUsingDomainNameSuccess: {selfIdent: true}
+      insecurelyGetServerSelfIdentUsingDomainName: {selfIdent: true}
     },
   },
   testServer: {
