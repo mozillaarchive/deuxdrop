@@ -1,2 +1,4 @@
 deuxdrop.xpi
 selenium-server-standalone.jar
+data/nacl-native-libs
+firefox-binary-symlink

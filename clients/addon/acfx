@@ -32,6 +32,9 @@ $CPCMD ../../common/lib/rdcommon data/web/deps
 # common/test         => web/deps/rdctests
 $CPCMD ../../common/test/*.js data/web/deps/rdctests
 
+# clients/addon/lib/nacl-native-libs => data/nacl-native-libs
+$CPCMD lib/nacl-native-libs data
+
 # To run tests, you may want to also provide the following args.  This is
 # possibly moot, but I am deleting the files that contained this info, so let's
 # keep it around somewhere for now...

@@ -53,7 +53,8 @@
  *  wrapping at least ignores the results.
  **/
 
-let $unload = require("unload"), $url = require("url");
+let $unload = require("unload"), $url = require("url"),
+    $self = require("self");
 
 let {Cc, Cu, Ci} = require("chrome");
 let $ctypes_ns = {};
@@ -86,9 +87,9 @@ switch (runtime.OS) {
   default:
     throw new Error('No native library for platform: ' + runtime.OS);
 }
-// we get this trick from jetpackintray, a nicely short way to map.
-let path = $url.toFilename($url.URL("nacl-native-libs/" + platLibName,
-                                    __url__).toString());
+// NOTE: the libs now get packaged in the data sub-tree!
+let path = $url.toFilename(
+             $self.data.url("nacl-native-libs/" + platLibName).toString());
 
 let NACL = $ctypes.open(path);
 
