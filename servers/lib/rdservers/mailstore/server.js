@@ -355,7 +355,7 @@ ClientServicingConnection.prototype = {
       // ignore servers that have "development" in the displayName or lack
       //  a valid meta
       if (!serverIdentPayload.meta || !serverIdentPayload.meta.displayName ||
-          /development/.test(serverIdentPayload.meta.displayName))
+          /development/i.test(serverIdentPayload.meta.displayName))
         continue;
 
       useServerIdents.push(serverIdentPayload);

@@ -879,22 +879,10 @@ LocalStore.prototype = {
     var serverClientData = this._notif.reuseIfAlreadyKnown(
                              queryHandle, NS_SERVERS,
                              serverIdent.rootPublicKey);
-    if (!serverClientData) {
-      localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
-      serverClientData = {
-        localName: localName,
-        fullName: serverIdent.rootPublicKey,
-        count: 1,
-        data: selfIdentPayload.transitServerIdent,
-        indexValues: null,
-        deps: null,
-      };
-      queryHandle.membersByLocal[NS_SERVERS][localName] = serverClientData;
-      queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
-        serverClientData;
-      queryHandle.dataMap[NS_SERVERS][localName] =
-        this._transformServerIdent(serverIdent);
-    }
+    if (!serverClientData)
+      serverClientData = this._convertServerInfo(
+                           queryHandle, serverIdent,
+                           selfIdentPayload.transferServerIdent);
     clientData.deps.push(serverClientData);
 
     return {
@@ -904,6 +892,26 @@ LocalStore.prototype = {
       receivedAt: reqRep.receivedAt,
       messageText: reqRep.messageText,
     };
+  },
+
+  _convertServerInfo: function(queryHandle, serverIdent,
+                               serverIdentBlob) {
+    var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
+    var serverClientData = {
+      localName: localName,
+      fullName: serverIdent.rootPublicKey,
+      count: 1,
+      data: serverIdentBlob,
+      indexValues: null,
+      deps: null,
+    };
+    queryHandle.membersByLocal[NS_SERVERS][localName] = serverClientData;
+    queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
+      serverClientData;
+    queryHandle.dataMap[NS_SERVERS][localName] =
+      this._transformServerIdent(serverIdent);
+
+    return serverClientData;
   },
 
   /**

@@ -66,7 +66,8 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'signup' },
   },
-  focus: wy.focus.container.vertical('userPoco', 'servers', 'btnSignup'),
+  focus: wy.focus.container.vertical('userPoco', 'servers', 'otherServer',
+                                     'btnSignup'),
   emit: ['openTab', 'closeTab'],
   structure: {
     errBlock: {
@@ -99,6 +100,8 @@ ty.defineWidget({
 
       this.selectedServerBinding = null;
       this.btnSignup_element.disabled = true;
+
+      this.otherServerQuery = null;
     },
 
     // notification the signup completed
@@ -125,6 +128,11 @@ ty.defineWidget({
         this.emit_closeTab(this.obj);
       }
     },
+
+    destroy: function() {
+      if (this.otherServerQuery)
+        this.otherServerQuery.close();
+    },
   },
   events: {
     servers: {
@@ -149,7 +157,7 @@ ty.defineWidget({
     },
     btnSignup: {
       command: function() {
-        var self = this;
+        var self = this, moda = this.__context.moda;
 
         // er, should we be using emit/receive on this?  having it transparently
         //  update something out of our context?
@@ -164,16 +172,23 @@ ty.defineWidget({
         else {
           var serverDomain = this.otherServer_element.value;
           if (serverDomain) {
-            this.obj.userAccount.insecurelyGetServerSelfIdentUsingDomainName(
-              serverDomain, function(serverInfo) {
-                if (!serverInfo) {
-                  // XXX l10n
-                  self.errMsg_element.textContent =
-                    "No server info available for: '" + serverDomain + "'";
-                  return;
-                }
-                self.signupServerInfo = serverInfo;
-                self.obj.userAccount.signupServerInfo(serverInfo, self);
+            if (this.otherServerQuery)
+              this.otherServerQuery.close();
+            this.otherServerQuery =
+              moda.insecurelyQueryServerUsingDomainName(serverDomain, {
+                onSplice: function() {},
+                onCompleted: function() {
+                  var serverInfo = self.otherServerQuery.items ?
+                                     self.otherServerQuery.items[0] : null;
+                  if (!serverInfo) {
+                    // XXX l10n
+                    self.errMsg_element.textContent =
+                      "No server info available for: '" + serverDomain + "'";
+                    return;
+                  }
+                  self.signupServerInfo = serverInfo;
+                  self.obj.userAccount.signupWithServer(serverInfo, self);
+                },
               });
           }
           else {

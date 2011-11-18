@@ -320,11 +320,6 @@ ServerInfo.prototype = {
 };
 
 /**
- * Stores listeners for getting serverInfo from unknown servers.
- */
-var insecureServerInfoListeners = {};
-
-/**
  * Represents the account information for the human being using this messaging
  *  system.  Provides the current portable contacts schema identifying the user
  *  to others and a means to change it.  Provides information on the account
@@ -381,14 +376,6 @@ OurUserAccount.prototype = {
    *  third-party attestation of the user's identity.
    */
   provideProofOfIdentity: function(identityType, proofOrigin, proof) {
-  },
-
-  insecurelyGetServerSelfIdentUsingDomainName: function (domain, listener) {
-    (insecureServerInfoListeners[domain] ||
-     (insecureServerInfoListeners[domain] = [])).push(listener);
-
-    this._bridge._send('insecurelyGetServerSelfIdentUsingDomainName', null,
-                       domain);
   },
 
   signupWithServer: function(serverInfo, signupListener) {
@@ -533,8 +520,6 @@ ModaBridge.prototype = {
     switch (msg.type) {
       case 'whoAmI':
         return this._receiveWhoAmI(msg);
-      case 'insecurelyGetServerSelfIdentUsingDomainName':
-        return this._receiveInsecureServerSelfIdent(msg);
       case 'signupResult':
         return this._receiveSignupResult(msg);
       case 'query':
@@ -575,23 +560,6 @@ ModaBridge.prototype = {
       this._ourUser._pendingListeners[i].onCompleted(this._ourUser);
     }
     this._ourUser._pendingListeners = [];
-  },
-
-  _receiveInsecureServerSelfIdent: function(msg) {
-    // Get listeners related to the domain queried, and set up
-    // serverInfo for the server.
-    var listeners = insecureServerInfoListeners[msg.domain],
-        server = msg.server,
-        serverInfo = server ?
-                     this._transformServerInfo(server.localName, server) : null;
-
-    // clean up listener object
-    delete insecureServerInfoListeners[msg.domain];
-
-    // notify listeners
-    for (var i = 0; i < listeners.length; i++) {
-      listeners[i](serverInfo);
-    }
   },
 
   _receiveSignupResult: function(msg) {
@@ -998,6 +966,9 @@ ModaBridge.prototype = {
     return this._ourUser;
   },
 
+  /**
+   * Ask for a list of well-know/trusted servers we can sign up with.
+   */
   queryServers: function(listener, data) {
     var handle = this._nextHandle++;
     var query = {};
@@ -1006,6 +977,17 @@ ModaBridge.prototype = {
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryServers', handle, query);
+    return liveset;
+  },
+
+  insecurelyQueryServerUsingDomainName: function(domain, listener, data) {
+    var handle = this._nextHandle++;
+    var query = { domain: domain };
+    var liveset = new LiveOrderedSet(this, handle, NS_SERVERS, query, listener,
+                                     data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('insecureServerDomainQuery', handle, query);
     return liveset;
   },
 

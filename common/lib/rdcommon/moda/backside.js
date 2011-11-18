@@ -307,22 +307,9 @@ ModaBackside.prototype = {
 
       var clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_SERVERS,
                                                        serverIdent.rootPublicKey);
-      if (!clientData) {
-        var localName = "" + (this._querySource.nextUniqueIdAlloc++);
-        clientData = {
-          localName: localName,
-          fullName: serverIdent.rootPublicKey,
-          count: 1,
-          data: serverIdentBlob,
-          indexValues: null,
-          deps: null,
-        };
-        queryHandle.membersByLocal[NS_SERVERS][localName] = clientData;
-        queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
-          clientData;
-        queryHandle.dataMap[NS_SERVERS][localName] =
-          this._store._transformServerIdent(serverIdent);
-      }
+      if (!clientData)
+        clientData = this._store._convertServerInfo(
+                       queryHandle, serverIdent, serverIdentBlob);
       viewItems.push(clientData.localName);
       clientDataItems.push(clientData);
     }
@@ -427,8 +414,16 @@ ModaBackside.prototype = {
     this._rawClient.updatePoco(newPoco);
   },
 
-  _cmd_insecurelyGetServerSelfIdentUsingDomainName: function(ignored, domain) {
-    when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(domain),
+  _cmd_insecureServerDomainQuery: function(bridgeQueryName, query) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_SERVERS, query),
+        viewItems = [],
+        clientDataItems = queryHandle.items = [], self = this;
+    queryHandle.splices.push({ index: 0, howMany: 0, items: viewItems });
+
+    when(this._rawClient.insecurelyGetServerSelfIdentUsingDomainName(
+           query.domain),
       function (selfIdentInfo) {
         var serverInfo = null;
 
@@ -436,27 +431,20 @@ ModaBackside.prototype = {
           var serverIdentBlob = selfIdentInfo.selfIdent;
           var serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
 
-          // TODO: should this be integrated into the query list of servers?
-          serverInfo = {
-            localName: "" + (this._querySource.nextUniqueIdAlloc++),
-            fullName: serverIdent.rootPublicKey,
-            count: 1,
-            data: serverIdentBlob,
-            indexValues: null,
-            deps: null
-          };
+          var clientData = self._store._convertServerInfo(
+                             queryHandle, serverIdent, serverIdentBlob);
+          viewItems.push(clientData.localName);
+          clientDataItems.push(clientData);
         }
 
-        this.send({
-          type: 'insecurelyGetServerSelfIdentUsingDomainName',
-          domain: domain,
-          server: serverInfo
-        });
-      }.bind(this)
+        // no dep analysis is required, just the one server
+        self._notif.sendQueryResults(queryHandle);
+      },
+      function rejected(err) {
+        // return an empty result set to convey errors. sorta jerky.
+        self._notif.sendQueryResults(queryHandle);
+      }
     );
-  },
-
-  _cmd_signupDangerouslyUsingDomainName: function() {
   },
 
   _cmd_signup: function(_ignored, serverLocalName) {

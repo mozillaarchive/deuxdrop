@@ -610,9 +610,22 @@ RawClientAPI.prototype = {
   // Server Signup
 
   /**
-   * Retrieve a server's self-ident using via its domain name in a completely
-   *  insecure fashion.  See `signupDangerouslyUsingDomainName` for the broad
-   *  strokes on why this is a horrible idea.
+   * Connect to the server and ask it for its self-ident.
+   *  While this admittedly is a pretty bad idea, it's not as bad as it seems
+   *  since in order for them to maintain a useful man-in-the-middle attack
+   *  where the system looks like it is operating successfully while they can
+   *  see everything, they need to:
+   *
+   * - Consistently intercept and respond to the client's requests to talk to
+   *    the faux-server.  (Assuming we do error reporting correctly that we
+   *    notice when our connections end up talking to the wrong server...)
+   *
+   * - Be the sole source for all key/identity information for the user.
+   *
+   * Better ideas where we can leverage existing crypto trust-chains that the
+   *  user/device may already have include depending on the HTTPS/CA system or
+   *  DNSSEC.  Mo better ideas include not using this method at all and instead
+   *  using mobile-device to mobile-device chat to provide the self-ident.
    */
   insecurelyGetServerSelfIdentUsingDomainName: function(domain) {
     // Fetch the well-known location for the selfIdent
@@ -638,30 +651,6 @@ RawClientAPI.prototype = {
     request.send(null);
 
     return deferred.promise;
-  },
-
-  /**
-   * Connect to the server and ask it for its self-ident, then go from there.
-   *  While this admittedly is a pretty bad idea, it's not as bad as it seems
-   *  since in order for them to maintain a useful man-in-the-middle attack
-   *  where the system looks like it is operating successfully while they can
-   *  see everything, they need to:
-   *
-   * - Consistently intercept and respond to the client's requests to talk to
-   *    the faux-server.  (Assuming we do error reporting correctly that we
-   *    notice when our connections end up talking to the wrong server...)
-   *
-   * - Be the sole source for all key/identity information for the user.
-   *
-   * Better ideas where we can leverage existing crypto trust-chains that the
-   *  user/device may already have include depending on the HTTPS/CA system or
-   *  DNSSEC.  Mo better ideas include not using this method at all and instead
-   *  using mobile-device to mobile-device chat to provide the self-ident.
-   *
-   * @return[Promise]
-   */
-  signupDangerouslyUsingDomainName: function() {
-    throw new Error("not actually implemented right now");
   },
 
   /**
