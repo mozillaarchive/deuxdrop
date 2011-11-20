@@ -406,7 +406,7 @@ ModaBackside.prototype = {
       poco: this._rawClient.getPoco(),
       server: serverInfo,
       selfIdentBlob: this._rawClient.getSelfIdentBlob(),
-      clientPublicKey: this._rawClient
+      clientPublicKey: this._rawClient.clientPublicKey,
     });
   },
 

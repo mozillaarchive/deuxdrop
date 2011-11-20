@@ -76,6 +76,12 @@ const WDwhen = $webdriver.promise.when;
 
 const DEFAULT_SERVER_URL = 'http://localhost:4444/wd/hub';
 
+/**
+ * How long before the WebDriver (running in Firefox) should assume the script
+ *  is hosed and it should give up.
+ */
+const ASYNC_SCRIPT_TIMEOUT_MS = 600;
+
 function LoggestWebDriver(name, RT, T, _logger) {
   this.RT = RT;
   this.T = T;
@@ -126,6 +132,7 @@ LoggestWebDriver.prototype = {
         self._log.navigate(url);
       },
       this._boundGenericErrHandler);
+    this._driver.manage().timeouts().setScriptTimeout(ASYNC_SCRIPT_TIMEOUT_MS);
   },
 
   /**
@@ -138,7 +145,7 @@ LoggestWebDriver.prototype = {
     if (Array.isArray(rootContext)) {
       var curNode = rootContext[0];
       for (var i = 1; i < rootContext.length; i++) {
-        curNode = curNode.getElementsByClassName[rootContext[i]][0];
+        curNode = curNode.getElementsByClassName(rootContext[i])[0];
       }
     }
 
@@ -174,20 +181,20 @@ LoggestWebDriver.prototype = {
           if (nestedSubs.length !== 1) {
             // there should only be one sub-node with the given class, provide
             //  a null result and go to the next sub-node...
-            kidResult.push(null);
+            localResults.push(null);
             continue;
           }
           subNode = nestedSubs[0];
         }
         switch (grabCmd[1]) {
           case 'node':
-            kidResult.push(subNode);
+            localResults.push(subNode);
             break;
           case 'text':
-            kidResult.push(subNode.textContent);
+            localResults.push(subNode.textContent);
             break;
           case 'attr':
-            kidResult.push(subNode.getAttribute(grabCmd[2]));
+            localResults.push(subNode.getAttribute(grabCmd[2]));
             break;
           case 'jsprop':
             var valish = subNode;
@@ -196,7 +203,7 @@ LoggestWebDriver.prototype = {
                 break;
               valish = valish[grabCmd[iProp]];
             }
-            kidResult.push(valish);
+            localResults.push(valish);
             break;
           case 'frob':
             kidresult.push(frobRoots(subNode, grabCmd[2]));
@@ -208,10 +215,10 @@ LoggestWebDriver.prototype = {
       }
       return localResults;
     }
-    if (Array.isArray())
+    if (Array.isArray(rootGrabData))
       return frobData(rootContext, rootGrabData, []);
     else
-      return frobRoots(rootContext, grabData);
+      return frobRoots(rootContext, rootGrabData);
   },
 
   /**
@@ -309,15 +316,19 @@ LoggestWebDriver.prototype = {
       this._boundGenericErrHandler);
   },
 
-  waitForRemoteCallback: function(jsSnippet, logValue) {
+  waitForRemoteCallback: function(jsSnippet, args, logValue) {
+    var deferred = $Q.defer();
     var self = this;
     this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_remoteCallback(logValue);
-    WDwhen(this._driver.executeAsyncScript(jsSnippet),
-      function() {
+    var fullArgs = [jsSnippet].concat(args);
+    WDwhen(this._driver.executeAsyncScript.apply(this._driver, fullArgs),
+      function(callbackValue) {
         self._log.remoteCallback(logValue);
+        deferred.resolve(callbackValue);
       },
       this._boundGenericErrHandler);
+    return deferred.promise;
   },
 
   /**
@@ -358,7 +369,7 @@ LoggestWebDriver.prototype = {
     var self = this;
     this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_click();
-    if (!(what instanceof $webdriver.WebElement))
+    if (!$webdriver.WebElement.isPrototypeOf(what))
       what = (context || this.driver).findElement(what);
     WDwhen(what.click(), function() {
         self._log.click();
@@ -373,7 +384,7 @@ LoggestWebDriver.prototype = {
     var self = this;
     this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_type(textToType);
-    if (!(textbox instanceof $webdriver.WebElement))
+    if (!$webdriver.WebElement.isPrototypeOf(textbox))
       textbox = (context || this.driver).findElement(textbox);
     WDwhen(textbox.sendKeys(textToType), function() {
         self._log.type(textToType);

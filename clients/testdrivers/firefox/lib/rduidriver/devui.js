@@ -137,20 +137,25 @@ const TABFROB_DEF = [
   },
   {
     roots: clsTabPanels,
-    kids: [],
+    data: [],
   }
 ];
 const TF_node = 0, TF_label = 1, TF_kind = 2, TF_selected = 3, TF_attention = 4,
       TF_close = 5;
 
-const MODA_NOTIF_GLOBAL_HOOKUP =
+const MODA_INITIAL_STARTUP_CHECK =
   'var callback = arguments[arguments.length - 1]; ' +
-  'window.__modaEventTestThunk = function(eventType) {' +
-  ' if (eventType === "$EVENT$") callback(); };';
+  'if (document.hasOwnProperty("__moda") && ' +
+      'document.__moda._ourUser !== null) {' +
+  ' callback(); ' +
+  '} else {' +
+  ' document.__modaEventTestThunk = function(eventType) {' +
+  '  if (eventType === "whoami") callback(); };' +
+  '}';
 
 const MODA_CONNECT_WAIT =
   'var callback = arguments[arguments.length - 1]; ' +
-  'window.__modaEventTestThunk = function(eventType, payload) {' +
+  'document.__modaEventTestThunk = function(eventType, payload) {' +
   ' if (eventType === "connectionStatus" && payload.status === "connected")' +
   '  callback(); };' +
   'Moda.connect();';
@@ -163,12 +168,16 @@ const MODA_CONNECT_WAIT =
  *    until we explicitly move to a new page (or back to the root).
  *
  * The bits of our test where we are waiting for something to happen use an
- *  event-driven mechanism supported by built-in moda functionality.
- *  Specifically, moda will call a list of callbacks after receiving events
- *  across its bridge.  We use this to only check DOM state when something
- *  has changed.  We could also use wmsy's id namespace support to do something
- *  clever along these lines, but we don't expect all UIs to use wmsy, so we
- *  don't.
+ *  event-driven notification mechanism supported by moda and found in
+ *  `modality.js`.  Because the tester and the moda client daemon both
+ *  operate asynchronously from the UI content page and we currently issue the
+ *  calls to generate the event before we generate our wait, there is an
+ *  inherent race between our command to wait and the completion of the thing
+ *  we are waiting for.  (If we issued our waits before we triggered the event,
+ *  this would not be a concern, but that's a whole additional set of round
+ *  trips we don't need.)  To this end, once we activate moda's test
+ *  functionality,
+ *
  *
  * @args[
  *   @param[webdriver WebDriver]{
@@ -198,9 +207,65 @@ function DevUIDriver(RT, T, client, wdloggest, _logger) {
 
   this._eMakeFriendsBtn = this._eShowPeepsBtn =
     this._eShowConnectRequestsBtn = this._eComposeBtn = null;
+
+  this._lastSeenModaEventNum = 0;
 }
 exports.DevUIDriver = DevUIDriver;
 DevUIDriver.prototype = {
+  /**
+   * Code to remotely execute to hook us into moda enough to generate limited
+   *  awareness of messages from the client daemon to the moda UI.  The really
+   *  nice thing about this hookup is that it can run before any moda code has
+   *  loaded and it will be okay.
+   */
+  _rjs_bindModaTestHelper: function() {
+    var lastEventNum = 0,
+        eventLastHappenedMap = {},
+        activeWaitEvent = null,
+        activeWaitCallback = null,
+        timeBase = Date.now();
+    window.LOGGY = [];
+    window.__modaCallAfterEvent = function(eventName, fromEventNum, callback) {
+      if (eventLastHappenedMap.hasOwnProperty(eventName)) {
+        if (eventLastHappenedMap[eventName] > fromEventNum) {
+          window.LOGGY.push(["!! firing on", eventName, fromEventNum,
+                             Date.now() - timeBase]);
+          callback(lastEventNum);
+          return;
+        }
+      }
+
+      activeWaitEvent = eventName;
+      activeWaitCallback = callback;
+      window.LOGGY.push([":: waiting for", eventName, fromEventNum,
+                         Date.now() - timeBase]);
+    };
+
+    window.addEventListener('moda-daemon-to-ui', function (evt) {
+      var data = JSON.parse(evt.data);
+
+      eventLastHappenedMap[data.type] = ++lastEventNum;
+
+      if (data.type === activeWaitEvent) {
+        window.LOGGY.push([":! waited and got", data.type, lastEventNum,
+                           Date.now() - timeBase]);
+        activeWaitCallback();
+        activeWaitEvent = null;
+        activeWaitCallback = null;
+        return;
+      }
+      window.LOGGY.push(["track", data.type, lastEventNum,
+                         Date.now() - timeBase]);
+
+      // -- WebDriver UI tester support
+      // To be event driven about changes to the UI, we provide for the
+      //  UI tester to be able to know when moda has heard something new and
+      //  processed it.
+      if (document.__modaEventTestThunk)
+        document.__modaEventTestThunk(data.type, data);
+    });
+  },
+
   /**
    * Start up the user interface, returning a promise that provides the identity
    *  data from the client.
@@ -213,12 +278,14 @@ DevUIDriver.prototype = {
   startUI: function() {
     this._d.navigate(UI_URL);
 
-    this._waitForModa('whoami');
-    this._checkTabDelta({signup: 1, errors: 1}, "signup");
+    this._d.remoteExec(this._rjs_bindModaTestHelper, 'bindModaTestHelper');
+
+    this._d.waitForRemoteCallback(MODA_INITIAL_STARTUP_CHECK, [], 'startupCheck');
+    this._checkTabDelta({signup: 1, errors: "signup"}, "signup");
 
     return this._d.stealJSData('identity info', {
-      selfIdentBlob: ['Moda', '_ourUser', 'selfIdentBlob'],
-      clientPublicKey: ['Moda', '_ourUser', 'clientPublicKey'],
+      selfIdentBlob: ['document', '__moda', '_ourUser', 'selfIdentBlob'],
+      clientPublicKey: ['document', '__moda', '_ourUser', 'clientPublicKey'],
     });
   },
 
@@ -226,8 +293,14 @@ DevUIDriver.prototype = {
   // Helpers
 
   _waitForModa: function(expectedEvent) {
-    this._d.waitForRemoteCallback(
-      MODA_NOTIF_GLOBAL_HOOKUP.replace('$EVENT$', expectedEvent));
+    var self = this;
+    when(this._d.waitForRemoteCallback(
+           '__modaCallAfterEvent(arguments[0], arguments[1], arguments[2]);',
+           [expectedEvent, this._lastSeenModaEventNum],
+           expectedEvent),
+      function(modaEventNum) {
+        self._lastSeenModaEventNum = modaEventNum;
+      });
   },
 
   /**
@@ -274,21 +347,33 @@ DevUIDriver.prototype = {
       this._d.frobElements(null, TABFROB_DEF),
       function(frobbed) {
         var actualCurrentTab = null,
+            oldTabKinds = self._currentTabKinds, newTabData = {},
             deltaRep = { preAnno: {}, state: {}, postAnno: {} },
             realTabKinds = [],
             tabHeaders = frobbed[0], tabBodies = frobbed[1];
         for (var iTab = 0; iTab < tabHeaders.length; iTab++) {
-          var tabData = tabHeaders[iTab],
-              tabKind = tabData[TF_kind];
-          if (tabData[TF_selected])
+          var tabMeta = tabHeaders[iTab],
+              tabKind = tabMeta[TF_kind];
+          if (tabMeta[TF_selected])
             actualCurrentTab = self._activeTab = tabKind;
           realTabKinds.push(tabKind);
-          this._currentTabData[tabKind] = {
-            headerNode: tabData[TF_node],
-            closeNode: tabData[TF_close],
+          newTabData[tabKind] = {
+            headerNode: tabMeta[TF_node],
+            closeNode: tabMeta[TF_close],
             tabNode: tabBodies[iTab][0],
           };
+          deltaRep.state[tabKind] = iTab;
+          if (oldTabKinds.indexOf(tabKind) === -1)
+            deltaRep.postAnno[tabKind] = 1;
         }
+        for (iTab = 0; iTab < oldTabKinds.length; iTab++) {
+          tabKind = oldTabKinds[iTab];
+          if (realTabKinds.indexOf(tabKind) === -1)
+            deltaRep.preAnno[tabKind] = -1;
+        }
+
+        self._currentTabData = newTabData;
+        self._currentTabKinds = realTabKinds;
 
         self._log.tabState(deltaRep, actualCurrentTab);
       });
@@ -371,22 +456,23 @@ DevUIDriver.prototype = {
    *  connect function and waiting for the status to change.
    */
   act_connect: function() {
-    this._d.waitForRemoteCallback(MODA_CONNECT_WAIT, "Moda.connect()");
+    this._d.waitForRemoteCallback(MODA_CONNECT_WAIT, [], "Moda.connect()");
   },
 
   //////////////////////////////////////////////////////////////////////////////
   // Signup Mode
 
-  act_signup: function(server) {
+  act_signup: function(server, usingName) {
     var eSignupTab = this._currentTabData['signup'].tabNode;
 
     // - name ourselves
-    this._d.typeInTextBox({ className: clsPeepBlurbName },
-                          client.__name,
+    this._d.typeInTextBox({ className: clsPocoEditName },
+                          usingName,
                           eSignupTab);
 
     // - select the server to use
     var domainNameWithPort = server.__url.slice(5, -1);
+    this._d.click({ className: clsSignupOtherServer }, eSignupTab);
     this._d.typeInTextBox({ className: clsSignupOtherServer },
                           domainNameWithPort,
                           eSignupTab);
@@ -411,7 +497,10 @@ DevUIDriver.prototype = {
   _hookupHomeTab: function() {
     var self = this;
     when(
-      this._d.frobElements(this._currentTabData['home'].tabNode, {
+      // _currentTabData is not actually populated with the home tab at this
+      //  point, so just do a top-level search for the tab rather than trying
+      //  to use the tabNode.
+      this._d.frobElements(null, {
         roots: clsTabHome,
         data: [
           [clsHomeMakeFriends, 'node'],

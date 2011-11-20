@@ -291,7 +291,7 @@ var TestUIActorMixins = {
           self.T.ownedThing(self, 'key', self.__name + ' longterm',
                             pubring.allLongtermSigningKeys[0]);
           self.T.ownedThing(self, 'key', self.__name + ' tell',
-                            sef.client.tellBoxKey);
+                            self.client.tellBoxKey);
 
           self.T.ownedThing(self, 'key', self.__name + ' client',
                             identityInfo.clientPublicKey);
@@ -316,7 +316,7 @@ var TestUIActorMixins = {
       expectAuthconnFromTo(self, server, 'signup.deuxdrop');
       // trigger the signup on the client and wait for the client to claim
       //  the signup process completed
-      self._uid.act_signup(server);
+      self._uid.act_signup(server, self.__name);
     });
   },
 

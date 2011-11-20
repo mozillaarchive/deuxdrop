@@ -40,7 +40,8 @@
 define(function (require) {
 
   var api = require('rdcommon/moda/api'),
-      bridge = new api.ModaBridge();
+      // we expose __moda for testing support
+      bridge = document.__moda = new api.ModaBridge();
 
   // The hookup, using the custom event hack for jetpack,
   // updating to latest repo of jetpack may allow for going back
@@ -53,17 +54,12 @@ define(function (require) {
   };
 
   // Listen for messages from the client daemon
+  // NOTE: if changing this mechanism, you need to update the `devui.js`
+  //  test helper that also listens for the event for testing purposes.
   window.addEventListener('moda-daemon-to-ui', function (evt) {
       //console.log('moda-content-message: ' + JSON.stringify(evt.data));
       var data = JSON.parse(evt.data);
       bridge._receive(data);
-
-      // -- WebDriver UI tester support
-      // To be event driven about changes to the UI, we provide for the
-      //  UI tester to be able to know when moda has heard something new and
-      //  processed it.
-      if (window.__modaEventTestThunk)
-        window.__modaEventTestThunk(data.type, data);
     }, false);
 
   return bridge;

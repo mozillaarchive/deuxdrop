@@ -148,7 +148,7 @@ def main():
     try:
         run_ui_tests()
     finally:
-        #nuke_template_profile()
+        nuke_template_profile()
         #kill_our_selenium_server()
         pass
 
