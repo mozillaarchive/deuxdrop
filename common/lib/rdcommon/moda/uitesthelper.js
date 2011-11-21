@@ -329,7 +329,7 @@ var TestUIActorMixins = {
     this.T.convenienceSetup(self, 'connects to server',
                             this.client._usingServer._eServer, function() {
       // expect the server side of the mailstore connection establishment
-      self._usingServer._expect_mailstoreConnection(self.client);
+      self.client._usingServer._expect_mailstoreConnection(self.client);
       // trigger the connect, wait for the UI to report connection success
       self._uid.act_connect();
     });
@@ -351,8 +351,10 @@ var TestUIActorMixins = {
    */
   do_showPossibleFriends: function(otherClients) {
     var self = this;
-    this.T.action('show possible friends', function() {
+    this.T.action('show possible friends page', function() {
       self._uid.showPage_possibleFriends();
+    });
+    this.T.check('verify possible friends', function() {
       self._uid.verify_possibleFriends(otherClients);
     });
   },
@@ -382,8 +384,10 @@ var TestUIActorMixins = {
    */
   do_showConnectRequests: function() {
     var self = this;
-    this.T.action(this, 'shows connect requests', function() {
+    this.T.action(this, 'shows connect requests page', function() {
       self._uid.showPage_connectRequests();
+    });
+    this.T.check(this, 'verify connect requests', function() {
       self._verifyConnectRequests();
     });
   },
@@ -410,8 +414,10 @@ var TestUIActorMixins = {
    */
   do_showPeeps: function() {
     var self = this;
-    this.T.action(this, 'show peeps', function() {
+    this.T.action(this, 'show peeps page', function() {
       self._uid.showPage_peeps();
+    });
+    this.T.check(this, 'verify peeps page', function() {
       self._verifyPeeps();
     });
   },
@@ -424,10 +430,12 @@ var TestUIActorMixins = {
    *  given client.
    */
   do_showPeepConversations: function(otherClient) {
-    var self = this;
+    var self = this, cinfo;
     this.T.action(this, 'show conversations with', otherClient, function() {
-      var cinfo = self._contactMetaInfoByName[otherClient.__name];
+      cinfo = self._contactMetaInfoByName[otherClient.__name];
       self._uid.showPage_peepConversations(otherClient);
+    });
+    this.T.check(this, 'verify conversations with', otherClient, function() {
       self._uid.verify_conversations(cinfo.involvedConvs);
     });
   },
@@ -441,10 +449,12 @@ var TestUIActorMixins = {
    *  `do_showPeepConversations`.
    */
   do_openPeepConversation: function(tConv) {
-    var self = this;
+    var self = this, convInfo;
     this.T.action(this, 'open conversation', tConv, function() {
-      var convInfo = self._convInfoByName[tConv.__name];
+      convInfo = self._convInfoByName[tConv.__name];
       self._uid.act_showConversation(convInfo);
+    });
+    this.T.check(this, 'verify conversation', tConv, function() {
       self._verifySingleConversation(convInfo);
     });
   },

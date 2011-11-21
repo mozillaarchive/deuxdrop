@@ -369,8 +369,10 @@ LoggestWebDriver.prototype = {
     var self = this;
     this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_click();
-    if (!$webdriver.WebElement.isPrototypeOf(what))
-      what = (context || this.driver).findElement(what);
+    // the webdriver 'goog' exporting screws up instanceof, isPrototypeOf,
+    //  everything.  let's just check for a "then" being present...
+    if (!("then" in what))
+      what = (context || this._driver).findElement(what);
     WDwhen(what.click(), function() {
         self._log.click();
       },
@@ -384,8 +386,9 @@ LoggestWebDriver.prototype = {
     var self = this;
     this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_type(textToType);
-    if (!$webdriver.WebElement.isPrototypeOf(textbox))
-      textbox = (context || this.driver).findElement(textbox);
+    // ugly WEbElement detection, see `click`.
+    if (!("then" in textbox))
+      textbox = (context || this._driver).findElement(textbox);
     WDwhen(textbox.sendKeys(textToType), function() {
         self._log.type(textToType);
       },

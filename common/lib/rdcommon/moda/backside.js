@@ -182,6 +182,14 @@ ModaBackside.prototype = {
     return rval;
   },
 
+  _cmd_connect: function() {
+    this._rawClient.connect();
+  },
+
+  _cmd_disconnect: function() {
+    this._rawClient.disconnect();
+  },
+
   _cmd_connectToPeep: function(_ignored, payload) {
     var clientData = this._notif.mapLocalNameToClientData(
                        this._querySource, NS_PEEPS, payload.peepLocalName);

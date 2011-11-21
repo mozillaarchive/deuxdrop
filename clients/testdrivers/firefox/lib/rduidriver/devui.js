@@ -158,7 +158,7 @@ const MODA_CONNECT_WAIT =
   'document.__modaEventTestThunk = function(eventType, payload) {' +
   ' if (eventType === "connectionStatus" && payload.status === "connected")' +
   '  callback(); };' +
-  'Moda.connect();';
+  'document.__moda.connect();';
 
 /**
  * Tab-wise, our approach is that:
@@ -252,7 +252,6 @@ DevUIDriver.prototype = {
         activeWaitCallback();
         activeWaitEvent = null;
         activeWaitCallback = null;
-        return;
       }
       window.LOGGY.push(["track", data.type, lastEventNum,
                          Date.now() - timeBase]);
@@ -399,12 +398,17 @@ DevUIDriver.prototype = {
     this._d.click(this._currentTabData[tabKind].closeNode);
   },
 
-  _nukeTabSpawnNewViaHomeTab: function(btnName, tabName) {
+  /**
+   * Kill the current tab, open a tab by clicking a button on the home page,
+   *  wait for that page's query to complete, then make sure the new tab of
+   *  the right type showed up and is active.
+   */
+  _nukeTabSpawnNewViaHomeTab: function(btnElement, tabName) {
     // go to the root tab via close
     if (this._activeTab !== 'home')
       this._closeTab();
     // hit the button to spawn the new tab
-    this._d.click(btnName);
+    this._d.click(btnElement);
     // wait for the tab to populate
     this._waitForModa('query');
     // check the tab is there, etc.

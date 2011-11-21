@@ -1093,6 +1093,23 @@ ModaBridge.prototype = {
   // Actions
 
   /**
+   * Explicitly request that we connect to the server and automatically attempt
+   *  to reconnect if the connection drops.
+   */
+  connect: function() {
+    this._send('connect', null, null);
+  },
+
+  /**
+   * Explicitly request that we disconnect from the server.  Issuing new
+   *  requests that require us to talk to the server will implicitly cause us
+   *  to behave as if `connect` was called.
+   */
+  disconnect: function() {
+    this._send('disconnect', null, null);
+  },
+
+  /**
    * Connect to a peep we already know about somehow.  Likely sources include:
    *  conversation participant we did not invite, request, some kind of search
    *  mechanism that surfaces peeps somehow.
