@@ -704,7 +704,7 @@ DevUIDriver.prototype = {
     // - actual
     when(
       this._d.frobElements(
-        this._currentTabData['conv-blurb'].tabNode,
+        this._currentTabData['conv-blurbs'].tabNode,
         {
           roots: clsConvBlurb,
           data: [
