@@ -478,14 +478,16 @@ var TestUIActorMixins = {
    */
   do_approveConnectRequest: function(otherClient) {
     var self = this;
-    this.T.action(this, 'begin approveing connect request from', otherClient,
+    this.T.action(this, 'begin approving connect request from', otherClient,
                   function() {
       self._uid.act_beginApprovingConnectRequest(otherClient);
     });
-    this.T.action(this, 'finish approveing connect request from', otherClient,
+    this.T.action(this, 'finish approving connect request from', otherClient,
                   function() {
+      self.client._expect_contactRequest_prep(otherClient, true);
       self._uid.act_finishApprovingConnectRequest(otherClient);
     });
+    this.client._expdo_contactRequest_everything_else(otherClient, null);
   },
 
   _verifyPeeps: function(waitForUpdate) {
