@@ -330,7 +330,7 @@ function commonTestRun(pathMap, runOptions, options) {
     require(['rdcommon/testdriver'],
              function($driver) {
       when($driver.runTestsFromModule(options.specificTest,
-                                      runOptions.exposeToTest,
+                                      runOptions,
                                       ErrorTrapper, SUPER_DEBUG),
         function() {
           // pass or fail, we want to exit normally; only the death clock
@@ -367,6 +367,7 @@ parser.command('test')
     };
     var runOptions = {
       testMode: 'test',
+      defaultStepDuration: 1 * 1000,
       maxTestDurationMS: 20 * 1000,
       maxTotalDurationMS: 90 * 1000,
       relayArgs: [],
@@ -397,6 +398,8 @@ parser.command('testui')
     };
     var runOptions = {
       testMode: 'testui',
+      // UI traffic can add up, especially if there are multiple UI clients...
+      defaultStepDuration: 3 * 1000,
       maxTestDurationMS: 90 * 1000,
       maxTotalDurationMS: 180 * 1000,
       relayArgs: ['--zipped-profile=' + options.zippedProfile,

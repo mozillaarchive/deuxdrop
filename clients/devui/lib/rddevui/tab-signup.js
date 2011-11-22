@@ -99,7 +99,6 @@ ty.defineWidget({
       this.servers_set(vs);
 
       this.selectedServerBinding = null;
-      this.btnSignup_element.disabled = true;
 
       this.otherServerQuery = null;
     },
@@ -141,8 +140,6 @@ ty.defineWidget({
           this.selectedServerBinding.domNode.removeAttribute("selected");
         this.selectedServerBinding = serverBinding;
         this.selectedServerBinding.domNode.setAttribute("selected", "true");
-
-        this.btnSignup_element.disabled = false;
       },
     },
     otherServer: {
@@ -151,8 +148,6 @@ ty.defineWidget({
         if (this.selectedServerBinding)
           this.selectedServerBinding.domNode.removeAttribute("selected");
         this.selectedServerBinding = null;
-
-        this.btnSignup_element.disabled = false;
       },
     },
     btnSignup: {

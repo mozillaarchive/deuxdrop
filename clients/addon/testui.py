@@ -1,6 +1,7 @@
 #!/usr/bin/python
 #
-# Perform a UI test using Selenium.
+# Perform a UI test using Selenium, trying to run things inside a VNC shell if
+#  we've got one available.
 #
 # There is no particularly good reason this is a shell script rather than
 #  built-in to our test framework.
@@ -15,6 +16,7 @@
 #
 # Steps:
 # - Kill any existing selenium server.
+# - Create a VNC session if applicable
 # - Create an XPI for the jetpack. (./acfx xpi)
 # - Create a firefox profile with the XPI crammed in it (using profilehelper.py)
 #    (We rely on bin/activate having set PYTHONPATH so our script can get at
@@ -23,7 +25,7 @@
 # - Invoke our node server 'cmdline' driver with 'uitest' to actually run the
 #    unit tests with UI test magic enabled and using UI test directories, etc.
 
-import os, os.path, subprocess, sys, time
+import os, os.path, platform, subprocess, sys, time
 import mozrunner
 
 SELENIUM_POPE = None
@@ -35,11 +37,67 @@ FIREFOX_BINARY_PATH = None
 FF_SYMLINK_NAME = 'firefox-binary-symlink'
 SELENIUM_JAR_PATH = 'selenium-server-standalone.jar'
 
+VNC_SERVER_PATH = '/usr/bin/vncserver'
+VNC_PASSWD_PATH = '~/.vnc/passwd'
+
+# Should we leave the Firefox window up on the screen after the test completes?
+#  You would set this to True if the test is failing and you want to see what's
+#  going on, or otherwise just want to poke around.
+# Setting this to true automatically disables use of VNC.
+STAY_ALIVE = False
+#STAY_ALIVE = True
+
+USING_VNC_DISPLAY = ':99'
+#USING_VNC_DISPLAY = None
+
 SERVER_CMDLINE_SCRIPT = '../../servers/cmdline'
+
+# The environment to use for selenium, so we can poke the VNC display in
+USE_ENV = dict(os.environ)
 
 def _announceStep(stepName):
     print
     print '===', stepName, '==='
+
+def setup_vnc_if_using():
+    global USING_VNC_DISPLAY
+    if not USING_VNC_DISPLAY:
+        return
+
+    if STAY_ALIVE:
+        USING_VNC_DISPLAY = None
+        return
+
+    if not (platform.system() == 'Linux' and
+            os.path.isfile(VNC_SERVER_PATH) and
+            os.path.isfile(os.path.expanduser(VNC_PASSWD_PATH))):
+        USING_VNC_DISPLAY = None
+        return
+        
+    try:
+        subprocess.check_call([VNC_SERVER_PATH, USING_VNC_DISPLAY])
+    except subprocess.CalledProcessError, ex:
+        # Okay, so that display probably already exists.  We can either
+        # use it as-is or kill it.  I'm deciding we want to kill it
+        # since there might be other processes alive in there that
+        # want to make trouble for us.
+        subprocess.check_call([VNC_SERVER_PATH, '-kill', USING_VNC_DISPLAY])
+        # Now let's try again.  if this didn't work, let's just let
+        # the exception kill us.
+        subprocess.check_call([VNC_SERVER_PATH, USING_VNC_DISPLAY])
+    USE_ENV['DISPLAY'] = USING_VNC_DISPLAY
+    
+
+def nuke_vnc_if_using():
+    if not USING_VNC_DISPLAY:
+        return
+
+    try:
+        subprocess.check_call([VNC_SERVER_PATH,
+                               '-kill', USING_VNC_DISPLAY])
+    except Exception, ex:
+        print '!!! Exception during killing VNC server:', ex
+    
 
 def kill_existing_selenium_server():
     _announceStep('Killing existing selenium server if present')
@@ -105,7 +163,7 @@ def spawn_our_selenium_server():
     
     print 'Invoking:', args
     sys.stdout.flush()
-    SELENIUM_POPE = mozrunner.run_command(args)
+    SELENIUM_POPE = mozrunner.run_command(args, env=USE_ENV)
 
     # wait for the port to be listened on
     # (we could alternatively listen for the INFO line that says this, but
@@ -141,6 +199,7 @@ def run_ui_tests():
 def main():
     kill_existing_selenium_server()
     download_selenium_server_jar_if_needed()
+    setup_vnc_if_using()
     create_xpi()
     create_template_profile()
     spawn_our_selenium_server()
@@ -149,7 +208,9 @@ def main():
         run_ui_tests()
     finally:
         nuke_template_profile()
-        #kill_our_selenium_server()
+        if not STAY_ALIVE:
+            kill_our_selenium_server()
+        nuke_vnc_if_using()
         pass
 
 

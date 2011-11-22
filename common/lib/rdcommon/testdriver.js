@@ -59,6 +59,13 @@ define(
 var when = $Q.when;
 
 /**
+ * What should be the timeout for test steps where an explicit duration has
+ *  not been specified?  This can currently be clobbered by the test runner,
+ *  which is why it's not a constant.
+ */
+var DEFAULT_STEP_TIMEOUT_MS = $testcontext.STEP_TIMEOUT_MS;
+
+/**
  * The runtime context interacts with the log fab subsystem to indicate that we
  *  are in a testing mode and to associate actors with loggers.
  */
@@ -282,7 +289,7 @@ TestDefinerRunner.prototype = {
         step.log.result('fail');
         deferred.resolve(false);
         deferred = null;
-      }, step.timeoutMS);
+      }, step.timeoutMS || DEFAULT_STEP_TIMEOUT_MS);
       // -- promise resolution/rejection handler
       if (this._superDebug)
         console.log("waiting on", promises.length, "promises");
@@ -611,7 +618,7 @@ function reportTestModuleRequireFailures(testModuleName, moduleName,
  * @return[success Boolean]
  */
 exports.runTestsFromModule = function runTestsFromModule(testModuleName,
-                                                         exposeToTestOptions,
+                                                         runOptions,
                                                          ErrorTrapper,
                                                          superDebug) {
   var deferred = $Q.defer();
@@ -665,7 +672,9 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
     }
 
     // now that it is loaded, run it
-    runner = new TestDefinerRunner(tmod.TD, superDebug, exposeToTestOptions);
+    if (runOptions.hasOwnProperty('defaultStepDuration'))
+      DEFAULT_STEP_TIMEOUT_MS = runOptions.defaultStepDuration;
+    runner = new TestDefinerRunner(tmod.TD, superDebug, runOptions.exposeToTest);
     when(runner.runAll(ErrorTrapper), itAllGood, itAllGood);
   });
   return deferred.promise;

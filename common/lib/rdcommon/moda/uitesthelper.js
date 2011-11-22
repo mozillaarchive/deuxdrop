@@ -1,4 +1,4 @@
-/* ***** BEGIN LICENSE BLOCK *****
+/****** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -149,8 +149,11 @@ function expectAuthconnFromTo(source, target, endpoint) {
 
 function DummyTestClient(owningUiTester, name, RT, T) {
   this.uiTester = owningUiTester;
+
   // - actor bits
   this.__name = name;
+  // masqeurade as our owner for actor name-check purposes
+  this._uniqueName = owningUiTester._uniqueName;
   this.RT = RT;
   this.T = T;
 
@@ -162,7 +165,7 @@ function DummyTestClient(owningUiTester, name, RT, T) {
 
   this._allClones = [this];
 
-  this._staticModaActors = [];
+  this._staticModaActors = [this];
   // we leave this null because we should not be writing to or reading from
   //  this; it's a hack to make it easier for testClient generation of
   //  converastion actions.
@@ -173,17 +176,65 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._eServerConn = null;
 
   // - testModa representation bits
+  this._testClient = this; // hopefully just used for the client's name
+  // (moda helper instances get their own name, like mA while the client is A)
+
   this._dynamicContacts = [];
   this._dynamicContactInfos = [];
   this._contactMetaInfoByName = {};
   this._dynamicConvInfos = [];
   this._convInfoByName = {};
   this._dynConnReqInfos = [];
+  this._dynPendingConvMsgs = [];
+
+  // - testModa live queries that we never populate
+  // We don't use the ability to know about deltas; we just issue new full
+  //  checks every time.  So we can leave these empty, but iteration logic
+  //  really needs them to exist.
+  this._dynamicPeepQueries = [];
+  this._dynamicPeepConvQueries = [];
+  this._dynamicConvMsgsQueries = [];
+  this._dynPendingQueries = [];
+  this._dynamicConnReqQueries = [];
 }
 DummyTestClient.prototype = {
   toString: function() {
     return '[DummyTestClient ' + this.__name + ']';
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // moda fakeness hookups
+
+  createFakeSelfContactInfo: function() {
+    var nowSeq = this.RT.testDomainSeq;
+    this._contactMetaInfoByName[this.__name] = {
+      isUs: true,
+      rootKey: this.rootPublicKey,
+      name: this.__name,
+      involvedConvs: [],
+      any: nowSeq,
+      write: nowSeq,
+      recip: nowSeq,
+    };
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Pretend to be an actor
+  //
+  // So we can be name-checked by test steps.  We don't actually allow
+  //  expectations to be issued against us, so we always return success results.
+
+  __prepForTestStep: function() {},
+  __waitForExpectations: function() {
+    // yes, we are very happy!
+    return true;
+  },
+  __resetExpectations: function() {
+    // oh, so happy!
+    return true;
+  },
+  __failUnmetExpectations: function() {},
+
 
   //////////////////////////////////////////////////////////////////////////////
   // Parameterized Step Support
@@ -199,6 +250,15 @@ DummyTestClient.prototype = {
 
   _dynamicNotifyModaActors: TestClientActorMixins._dynamicNotifyModaActors,
 
+  _expect_contactRequest_prep:
+    TestClientActorMixins._expect_contactRequest_prep,
+  _expdo_openContactRequest:
+    TestClientActorMixins._expdo_openContactRequest,
+  _expdo_closeContactRequest:
+    TestClientActorMixins._expdo_closeContactRequest,
+  _expdo_contactRequest_everything_else:
+    TestClientActorMixins._expdo_contactRequest_everything_else,
+
   _expect_createConversation_rawclient_to_server:
     TestClientActorMixins._expect_createConversation_rawclient_to_server,
   _expdo_createConversation_fanout_onwards:
@@ -212,36 +272,40 @@ DummyTestClient.prototype = {
   do_expectConvWelcome:
     TestClientActorMixins.do_expectConvWelcome,
 
+  expectServerTaskToRunOnOwnersBehalf:
+    TestClientActorMixins.expectServerTaskToRunOnOwnersBehalf,
+
   //////////////////////////////////////////////////////////////////////////////
   // Notifications from testClient
 
   __receiveConnectRequest: TestModaActorMixins.__receiveConnectRequest,
   __addingContact: TestModaActorMixins.__addingContact,
   __receiveConvWelcome: TestModaActorMixins.__receiveConvWelcome,
+  __receiveConvMessage: TestModaActorMixins.__receiveConvMessage,
   __updatePhaseComplete: TestModaActorMixins.__updatePhaseComplete,
 
   //////////////////////////////////////////////////////////////////////////////
   // Live-UI checking logic
 
   _notifyConnectRequest: function(reqInfo) {
-    if (this.uiTester.canSee_connectRequests())
-      this.uiTester._verifyConnectRequests();
+    if (this.uiTester._uid.canSee_connectRequests())
+      this.uiTester._verifyConnectRequests(true);
   },
   _notifyPeepAdded: function(newCinfo) {
-    if (this.uiTester.canSee_peeps())
-      this.uiTester._verifyPeeps();
+    if (this.uiTester._uid.canSee_peeps())
+      this.uiTester._verifyPeeps(true);
   },
   _notifyPeepChanged: function(cinfo, knownChange) {
-    if (this.uiTester.canSee_peeps())
-      this.uiTester._verifyPeeps();
+    if (this.uiTester._uid.canSee_peeps())
+      this.uiTester._verifyPeeps(true);
   },
   _notifyPeepConvTimestampsChanged: function(cinfo, convIndicies, convInfo,
                                              joinOccurred) {
     // XXX we don't care about ordering changes right now
   },
   _notifyConvGainedMessages: function(convInfo) {
-    if (this.uiTester.canSee_conversation(convInfo))
-      this.uiTester._verifyConversation(convInfo);
+    if (this.uiTester._uid.canSee_conversation(convInfo))
+      this.uiTester._verifySingleConversation(convInfo, true);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -282,6 +346,7 @@ var TestUIActorMixins = {
           var pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
                           identityInfo.selfIdentBlob);
 
+          self.client.selfIdentBlob = identityInfo.selfIdentBlob;
           self.client.rootPublicKey = pubring.rootPublicKey;
           self.client.tellBoxKey =
             pubring.getPublicKeyFor('messaging', 'tellBox');
@@ -295,6 +360,9 @@ var TestUIActorMixins = {
 
           self.T.ownedThing(self, 'key', self.__name + ' client',
                             identityInfo.clientPublicKey);
+
+          // - finalize fake moda rep hookup
+          self.client.createFakeSelfContactInfo();
         });
     });
     // unfortunately, firefox can take some time to start up.
@@ -316,7 +384,11 @@ var TestUIActorMixins = {
       expectAuthconnFromTo(self, server, 'signup.deuxdrop');
       // trigger the signup on the client and wait for the client to claim
       //  the signup process completed
-      self._uid.act_signup(server, self.__name);
+      when(self._uid.act_signup(server, self.__name),
+           function(identityInfo) {
+        // the self ident blob has changed; we need to update it
+        self.client.selfIdentBlob = identityInfo.selfIdentBlob;
+      });
     });
   },
 
@@ -369,14 +441,22 @@ var TestUIActorMixins = {
     var messageText = 'Friend Me Because... ' + fakeDataMaker.makeSubject(),
         closesLoop = this.client._dohelp_closesConnReqLoop(otherClient),
         self = this;
-    this.T.action(this, 'request contact of', otherClient, function() {
-      self._uid.act_issueConnectRequest(otherClient);
-    });
 
+    this.T.action(this, 'begin requesting contact of', otherClient, function() {
+      self._uid.act_beginIssuingConnectRequest(otherClient);
+    });
+    this.T.action(this, 'finish requesting contact of', otherClient, function(){
+      self.client._expect_contactRequest_prep(otherClient, closesLoop);
+
+      self._uid.act_finishIssuingConnectRequest(otherClient);
+    });
+    this.client._expdo_contactRequest_everything_else(otherClient, messageText,
+                                                      interesting);
   },
 
-  _verifyConnectRequests: function() {
-    this._uid.verify_connectRequests(this._dynConnReqInfos);
+  _verifyConnectRequests: function(waitForUpdate) {
+    this._uid.verify_connectRequests(this.client._dynConnReqInfos,
+                                     waitForUpdate);
   },
 
   /**
@@ -398,14 +478,18 @@ var TestUIActorMixins = {
    */
   do_approveConnectRequest: function(otherClient) {
     var self = this;
-    this.T.action(this, 'approves connect request from', otherClient,
+    this.T.action(this, 'begin approveing connect request from', otherClient,
                   function() {
-      self._uid.act_approveConnectRequest(otherClient);
+      self._uid.act_beginApprovingConnectRequest(otherClient);
+    });
+    this.T.action(this, 'finish approveing connect request from', otherClient,
+                  function() {
+      self._uid.act_finishApprovingConnectRequest(otherClient);
     });
   },
 
-  _verifyPeeps: function() {
-    this._uid.verify_peeps(self._dynamicContacts);
+  _verifyPeeps: function(waitForUpdate) {
+    this._uid.verify_peeps(this.client._dynamicContacts, waitForUpdate);
   },
 
   /**
@@ -432,7 +516,7 @@ var TestUIActorMixins = {
   do_showPeepConversations: function(otherClient) {
     var self = this, cinfo;
     this.T.action(this, 'show conversations with', otherClient, function() {
-      cinfo = self._contactMetaInfoByName[otherClient.__name];
+      cinfo = self.client._contactMetaInfoByName[otherClient.__name];
       self._uid.showPage_peepConversations(otherClient);
     });
     this.T.check(this, 'verify conversations with', otherClient, function() {
@@ -475,6 +559,9 @@ var TestUIActorMixins = {
       fanoutServer: this.client._usingServer,
     };
 
+    this.T.action(this, 'brings up compose page', function() {
+      self._uid.showPage_compose();
+    });
     this.T.action(this, 'creates conversation', function() {
       // - server expectation and hold fanout processing
       var eServer = self.client._usingServer;
@@ -492,7 +579,8 @@ var TestUIActorMixins = {
         joinNonces: youAndMeBoth.map(function() { return null; }),
       };
       self.client._expect_createConversation_rawclient_to_server(
-                    tConv, tNewMsg, fakeConvCreationInfo, messageText);
+                    fakeConvCreationInfo, messageText, youAndMeBoth,
+                    tConv, tNewMsg);
 
       self._uid.act_createConversation(recipClients, messageText);
     });

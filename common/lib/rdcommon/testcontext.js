@@ -63,7 +63,8 @@ define(
     exports
   ) {
 
-const STEP_TIMEOUT_MS = 1000;
+const UNSPECIFIED_STEP_TIMEOUT_MS = exports.UNSPECIFIED_STEP_TIMEOUT_MS = null;
+const STEP_TIMEOUT_MS = exports.STEP_TIMEOUT_MS = 1000;
 
 /**
  * Data-record class for test steps; no built-in logic.
@@ -73,7 +74,7 @@ function TestStep(_log, kind, descBits, actors, testFunc, isBoring, groupName) {
   this.descBits = descBits;
   this.actors = actors;
   this.testFunc = testFunc;
-  this.timeoutMS = STEP_TIMEOUT_MS;
+  this.timeoutMS = UNSPECIFIED_STEP_TIMEOUT_MS;
 
   this.log = LOGFAB.testStep(this, _log, descBits);
   this.log.boring(isBoring);

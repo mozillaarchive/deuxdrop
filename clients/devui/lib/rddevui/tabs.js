@@ -81,11 +81,11 @@ wy.defineWidget({
 
       // - figure out where to insert the tab
       var index;
-      if (relTabObj === true)
+      if (relTabObj === undefined)
         index = this._selectedIndex + 1;
       else if (relTabObj)
         index = this.obj.tabs.indexOf(relTabObj) + 1;
-      else
+      else // (null)
         index = this.obj.tabs.length;
 
       // - perform the splice on the array

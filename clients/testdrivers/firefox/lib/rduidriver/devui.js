@@ -89,7 +89,7 @@ const
   clsConnReqMessage = dwc('moda', 'tab-common', 'conn-request', 'messageText'),
   clsAcceptConnAccept = dwc('tabs', 'tab-common', 'accept-request-tab',
                             'btnAccept'),
-  clsAuthorConnSend = dwc('moda', 'tab-common', 'author-contact-request-tab',
+  clsAuthorConnSend = dwc('tabs', 'tab-common', 'author-contact-request-tab',
                           'btnSend'),
   // peeps
   clsPeepBlurb = dwc('moda', 'tab-common', 'peep-blurb', 'root'),
@@ -150,7 +150,7 @@ const MODA_INITIAL_STARTUP_CHECK =
   ' callback(); ' +
   '} else {' +
   ' document.__modaEventTestThunk = function(eventType) {' +
-  '  if (eventType === "whoami") callback(); };' +
+  '  if (eventType === "whoAmI") callback(); };' +
   '}';
 
 const MODA_CONNECT_WAIT =
@@ -192,7 +192,17 @@ function DevUIDriver(RT, T, client, wdloggest, _logger) {
 
   this._d = wdloggest;
 
-  this._activeTab = null;
+  /**
+   * Kinda-sorta static active tab.  In practice, most of the invocations that
+   *  set and check this value are invoked inside of test steps, but because of
+   *  the asynchronous nature of the selenium actions, the truely active tab
+   *  won't change immediately, so we need something to track the intended
+   *  change that will happen.
+   */
+  this._staticActiveTab = null;
+  this._staticActiveTabPayload = null;
+
+  this._dynActiveTab = null;
   this._currentTabFrob = [];
   this._currentTabKinds = [];
   this._currentTabData = {};
@@ -354,7 +364,7 @@ DevUIDriver.prototype = {
           var tabMeta = tabHeaders[iTab],
               tabKind = tabMeta[TF_kind];
           if (tabMeta[TF_selected])
-            actualCurrentTab = self._activeTab = tabKind;
+            actualCurrentTab = self._dynActiveTab = tabKind;
           realTabKinds.push(tabKind);
           newTabData[tabKind] = {
             headerNode: tabMeta[TF_node],
@@ -376,6 +386,9 @@ DevUIDriver.prototype = {
 
         self._log.tabState(deltaRep, actualCurrentTab);
       });
+
+    // Update our expected quasi-static active tab.
+    this._staticActiveTab = currentTab;
   },
 
   /**
@@ -394,7 +407,7 @@ DevUIDriver.prototype = {
    */
   _closeTab: function(tabKind) {
     if (tabKind === undefined)
-      tabKind = this._activeTab;
+      tabKind = this._staticActiveTab;
     this._d.click(this._currentTabData[tabKind].closeNode);
   },
 
@@ -404,17 +417,18 @@ DevUIDriver.prototype = {
    *  the right type showed up and is active.
    */
   _nukeTabSpawnNewViaHomeTab: function(btnElement, tabName) {
+    var tabDelta = {};
     // go to the root tab via close
-    if (this._activeTab !== 'home')
+    if (this._staticActiveTab !== 'home') {
       this._closeTab();
+      tabDelta[this._dynActiveTab] = -1;
+    }
     // hit the button to spawn the new tab
     this._d.click(btnElement);
     // wait for the tab to populate
     this._waitForModa('query');
     // check the tab is there, etc.
-    var tabDelta = {};
-    tabDelta[this._activeTab] = -1;
-    tabDelta['requests'] = 'home';
+    tabDelta[tabName] = 'home';
     this._checkTabDelta(tabDelta, tabName);
   },
 
@@ -423,7 +437,7 @@ DevUIDriver.prototype = {
     // - expectation
     var expectedNames = {};
     for (var iClient = 0; iClient < otherClients.length; iClient++) {
-      expectedNames[otherClients[iClient]] = null;
+      expectedNames[otherClients[iClient].__name] = null;
     }
     this.RT.reportActiveActorThisStep(this._actor);
     this._actor.expect_visiblePeeps(expectedNames);
@@ -445,7 +459,7 @@ DevUIDriver.prototype = {
           var peepData = results[iPeep],
               peepName = peepData[1];
           actualNames[peepName] = null;
-          allPeepBlurbData[peepName] = peepdata;
+          allPeepBlurbData[peepName] = peepData;
         }
         self._log.visiblePeeps(actualNames);
       }
@@ -493,6 +507,16 @@ DevUIDriver.prototype = {
                         'home');
 
     this._hookupHomeTab();
+
+    // get _ourUser updated...
+    this._d.remoteExec('document.__moda.whoAmI();', 'whoAmI()');
+    this._waitForModa('whoAmI');
+
+    // steal its updated value
+    return this._d.stealJSData('identity info', {
+      selfIdentBlob: ['document', '__moda', '_ourUser', 'selfIdentBlob'],
+      clientPublicKey: ['document', '__moda', '_ourUser', 'clientPublicKey'],
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -526,11 +550,14 @@ DevUIDriver.prototype = {
     this._nukeTabSpawnNewViaHomeTab(this._eMakeFriendsBtn, 'make-friends');
   },
 
-  verify_possibleFriends: function(otherClients) {
+  verify_possibleFriends: function(otherClients, waitForUpdate) {
+    if (waitForUpdate)
+      this._waitForModa('query');
+
     this._verifyPeepBlurbsOnTab('make-friends', otherClients);
   },
 
-  act_issueConnectRequest: function(otherClient) {
+  act_beginIssuingConnectRequest: function(otherClient) {
     // (we assume that a verify was issued on the listed peeps already)
 
     // click on the peep blurb
@@ -539,7 +566,8 @@ DevUIDriver.prototype = {
     // tab comes up
     this._checkTabDelta({ 'author-contact-request': 'make-friends' },
                         'author-contact-request');
-
+  },
+  act_finishIssuingConnectRequest: function(otherClient) {
     // click the send request
     this._d.click({ className: clsAuthorConnSend },
                   this._currentTabData['author-contact-request'].tabNode);
@@ -554,28 +582,34 @@ DevUIDriver.prototype = {
   },
 
   canSee_peeps: function() {
-    return this._activeTab === 'peeps';
+    return this._staticActiveTab === 'peeps';
   },
 
   /**
    * Verify all provided clients are present *in no particular order*.
    */
-  verify_peeps: function(otherClients) {
+  verify_peeps: function(otherClients, waitForUpdate) {
+    if (waitForUpdate)
+      this._waitForModa('query');
+
     this._verifyPeepBlurbsOnTab('peeps', otherClients);
   },
 
   showPage_connectRequests: function() {
-    this._nukeTabSpawnNewViaHomeTab(this._eMakeFriendsBtn, 'requests');
+    this._nukeTabSpawnNewViaHomeTab(this._eShowConnectRequestsBtn, 'requests');
   },
 
   canSee_connectRequests: function() {
-    return this._activeTab === 'requests';
+    return this._staticActiveTab === 'requests';
   },
 
   /**
    * Verify all connection requests are present *in no particular order*.
    */
-  verify_connectRequests: function(connReqInfos) {
+  verify_connectRequests: function(connReqInfos, waitForUpdate) {
+    if (waitForUpdate)
+      this._waitForModa('query');
+
     var self = this;
     // - expectation
     var expectedNamesAndMessages = {};
@@ -592,15 +626,8 @@ DevUIDriver.prototype = {
       this._d.frobElements(
         this._currentTabData['requests'].tabNode,
         {
-          roots: clssConnReqRoot,
+          roots: clsConnReqRoot,
           data: [
-            // XXX we don't actually check the involved peeps right now
-            {
-              roots: clsPeepInlineRoot,
-              data: [
-                [clsPeepInlineName, 'text'],
-              ],
-            },
             [clsConnReqName, 'text'],
             [clsConnReqMessage, 'text'],
           ]
@@ -610,8 +637,8 @@ DevUIDriver.prototype = {
         var actualNamesAndMesages = {},
             allConnReqData = self._connReqData = {};
         for (var iReq = 0; iReq < results.length; iReq++) {
-          var requesterName = results[iReq][2],
-              requestMessage = results[iReq][3];
+          var requesterName = results[iReq][1],
+              requestMessage = results[iReq][2];
           actualNamesAndMesages[requesterName] = requestMessage;
           allConnReqData[requesterName] = results[iReq];
         }
@@ -619,7 +646,7 @@ DevUIDriver.prototype = {
       });
   },
 
-  act_approveConnectRequest: function(otherClient) {
+  act_beginApprovingConnectRequest: function(otherClient) {
     // (we assume that a verify was issued on the conn reqs already)
 
     // click on the connection request
@@ -628,7 +655,9 @@ DevUIDriver.prototype = {
     // this should pop up a new tab with details immediately (no queries)
     this._checkTabDelta({ 'accept-request': 'requests' },
                         'accept-request');
+  },
 
+  act_finishApprovingConnectRequest: function(otherClient) {
     // confirm the connection
     this._d.click({ className: clsAcceptConnAccept },
                   this._currentTabData['accept-request'].tabNode);
@@ -659,7 +688,10 @@ DevUIDriver.prototype = {
   /**
    * Verify all conversations are present *in no particular order*.
    */
-  verify_conversations: function(convInfos) {
+  verify_conversations: function(convInfos, waitForUpdate) {
+    if (waitForUpdate)
+      this._waitForModa('query');
+
     var self = this, expectedFirstMessages = {};
     // - expectation
     for (var iConv = 0; iConv < convInfos.length; iConv++) {
@@ -692,6 +724,11 @@ DevUIDriver.prototype = {
       });
   },
 
+  canSee_conversation: function(convInfo) {
+    return this._staticActiveTab === 'conversation' &&
+           this._staticActiveTabPayload === convInfo;
+  },
+
   act_showConversation: function(convInfo) {
     // (we assume that we are already on a page listing conversations and
     //  that verify_conversations has been invoked).
@@ -706,6 +743,7 @@ DevUIDriver.prototype = {
     // verify tab state
     this._checkTabDelta({ conversation: 'conv-blurbs', 'conv-blurbs': -1 },
                         'conversation');
+    this._staticActiveTabPayload = convInfo;
   },
 
   /**
@@ -769,22 +807,30 @@ DevUIDriver.prototype = {
     // XXX implement in GUI, then implement here...
   },
 
+  showPage_compose: function() {
+    // hit the create a conversation button
+    this._nukeTabSpawnNewViaHomeTab(this._eComposeBtn, 'conv-compose');
+  },
+
   /**
    * Create a conversation from the home tab.  The alternative would be to
    *  create a conversation from a peep conversation list where we automatically
    *  add that peep to the list of invited peeps.
    */
   act_createConversation: function(recipClients, messageText) {
+    // (We assume/require the compose page is already up as part of a separate
+    //  test step.  If we did it in here, it would be in the same step, and then
+    //  our tabNode reference below would break.  This is sortof a hack, but
+    //  I'm declaring it acceptable.)
     var self = this;
 
-    // hit the create a conversation button
-    this._nukeTabSpawnNewViaHomeTab(this._eComposeBtn, 'conv-compose');
+    var numPeepsLeftToAdd = recipClients.length;
 
     // - add the peep(s)
     function findAndClickPeepInPopup(client) {
       when(
         self._d.frobElements(
-          [self._currentTabData['conv-compose'].tabNode, clsPeepPopPeeps],
+          clsPeepPopPeeps,
           {
             roots: clsPeepBlurb,
             data: [
@@ -795,6 +841,7 @@ DevUIDriver.prototype = {
           for (var iPeep = 0; iPeep < frobbed.length; iPeep++) {
             if (frobbed[iPeep][1] === client.__name) {
               self._d.click(frobbed[iPeep][0]);
+              verifyPeepInComposeList(client);
               return;
             }
           }
@@ -814,6 +861,8 @@ DevUIDriver.prototype = {
         function(frobbed) {
           for (var iPeep = 0; iPeep < frobbed.length; iPeep++) {
             if (frobbed[iPeep][1] === client.__name) {
+              if (--numPeepsLeftToAdd === 0)
+                whenAllPeepsAdded();
               return;
             }
           }
@@ -827,21 +876,21 @@ DevUIDriver.prototype = {
       this._d.click({ className: clsComposeAddPeep });
       // click the peep
       findAndClickPeepInPopup(recip);
-      // verify the peep showed up
-      verifyPeepInComposeList(recip);
     }
 
-    // - type in the message
-    this._d.typeInTextBox({ className: clsComposeText },
-                          messageText,
-                          this._currentTabData['conv-compose'].tabNode);
+    function whenAllPeepsAdded() {
+      // - type in the message
+      self._d.typeInTextBox({ className: clsComposeText },
+                            messageText,
+                            self._currentTabData['conv-compose'].tabNode);
 
-    // - hit send
-    this._d.click({ className: clsComposeSend },
-                  this._currentTabData['conv-compose'].tabNode);
+      // - hit send
+      self._d.click({ className: clsComposeSend },
+                    self._currentTabData['conv-compose'].tabNode);
 
-    // - make sure the tab goes away
-    this._checkTabDelta({ 'conv-compose': -1 }, 'home');
+      // - make sure the tab goes away
+      self._checkTabDelta({ 'conv-compose': -1 }, 'home');
+    }
 
     // (we expect the caller to bring up the list of converations themselves
     //  subsequent to this and verify the list of conversations includes the
@@ -856,6 +905,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.CLIENT,
+    topBilling: false,
 
     events: {
       tabState: { state: true, activeTab: true },

@@ -144,6 +144,8 @@ TD.commonCase('moda basics', function(T) {
   var tConv2 = T.thing('conversation', 'conv2'),
       tConv2_msg1 = T.thing('message', 'c2:1:c');
   T.group("C starts conversation with A");
+  // find C so we can look at our page of conversations with them
+  ui_a.do_showPeeps();
   // be looking at the conversations involving C
   ui_a.do_showPeepConversations(client_c);
   // have C create the conversation

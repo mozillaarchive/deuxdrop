@@ -508,6 +508,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
     /** @listof[DynamicConnReqInfo] */
     self._dynConnReqInfos = [];
+    // convinfos queries awaiting a __updatePhaseComplete notification to occur
+    //  before generating their added messages expectations
+    self._dynPendingConvMsgs = [];
 
     self._dynamicPeepQueries = [];
     self._dynamicPeepConvQueries = [];
@@ -515,9 +518,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     self._dynamicConvMsgsQueries = [];
 
     self._dynPendingQueries = [];
-    // convinfos queries awaiting a __updatePhaseComplete notification to occur
-    //  before generating their added messages expectations
-    self._dynPendingConvMsgs = [];
 
     self._dynamicConnReqQueries = [];
 
@@ -1568,6 +1568,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     });
     this.T.action(this._eBackside, 'processes connectToPeep, invokes on',
                   this._testClient._eRawClient, function() {
+      self._testClient._eRawClient.expect_allActionsProcessed();
       self._testClient._expect_contactRequest_prep(other, closesLoop);
       self._testClient._expect_contactRequest_issued(other,
         self.releaseAndPeekAtModaCommand('connectToPeep'));

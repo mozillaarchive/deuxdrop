@@ -80,7 +80,7 @@ const DEFAULT_SERVER_URL = 'http://localhost:4444/wd/hub';
  * How long before the WebDriver (running in Firefox) should assume the script
  *  is hosed and it should give up.
  */
-const ASYNC_SCRIPT_TIMEOUT_MS = 600;
+const ASYNC_SCRIPT_TIMEOUT_MS = 1000;
 
 function LoggestWebDriver(name, RT, T, _logger) {
   this.RT = RT;
@@ -142,11 +142,14 @@ LoggestWebDriver.prototype = {
   _rjs_frobElements: function(rootContext, rootGrabData) {
     if (!rootContext)
       rootContext = document;
+    if (typeof(rootContext) === 'string')
+      rootContext = [document, rootContext];
     if (Array.isArray(rootContext)) {
       var curNode = rootContext[0];
       for (var i = 1; i < rootContext.length; i++) {
         curNode = curNode.getElementsByClassName(rootContext[i])[0];
       }
+      rootContext = curNode;
     }
 
     function frobRoots(context, grabData) {
@@ -401,6 +404,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     // we are a client/server client, even if we are smart for one
     type: $log.TEST_SYNTHETIC_ACTOR,
     subtype: $log.CLIENT,
+    topBilling: false,
 
     events: {
       usingProfile: {path: false},

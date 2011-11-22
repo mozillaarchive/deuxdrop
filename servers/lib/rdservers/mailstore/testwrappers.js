@@ -55,7 +55,7 @@ exports.storeConnWrap = $testwrapmaker.makeInstanceWrapper({
   implConstructor: $mailstore_server.ClientServicingConnection,
   holders: {
     heyAReplicaBlock: function(block) {
-      this.__wraplog.replicaBlockNotifiedOnServer(block);
+      this.__wraplog.replicaBlockNotifiedOnServer(this.__wrapargs.name, block);
       return 'only';
     },
   },

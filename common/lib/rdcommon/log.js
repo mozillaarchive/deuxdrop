@@ -440,7 +440,7 @@ const DIED_EVENTNAME = '(died)', DIED_EXP = [DIED_EVENTNAME];
 
 var TestActorProtoBase = {
   toString: function() {
-    return '[Actor]';
+    return '[Actor ' + this.__defName + ': ' + this.__name + ']';
   },
   toJSON: function() {
     return {

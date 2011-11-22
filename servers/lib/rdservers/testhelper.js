@@ -1,4 +1,4 @@
-/* ***** BEGIN LICENSE BLOCK *****
+/****** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -209,6 +209,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
                                                                   self._logger);
 
         // copy out so we don't need to directly access; for UI tester benefit
+        self.selfIdentBlob = self._rawClient._selfIdentBlob;
         self.rootPublicKey = self._rawClient.rootPublicKey;
         self.tellBoxKey = self._rawClient.tellBoxKey;
 
@@ -317,6 +318,8 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
 
     this._rawClient.signupUsingServerSelfIdent(
       this._usingServer.__signedSelfIdentBlob);
+    // update our self-ident
+    this.selfIdentBlob = this._rawClient._selfIdentBlob;
   },
 
   setup_useServer: function setup_useServer(server) {
@@ -416,8 +419,13 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     // - issue request, client through send, hold at sender
     var self = this,
         closesLoop = this._dohelp_closesConnReqLoop(other);
-    this.T.convenienceSetup(self._eRawClient, 'request contact of', other,
-                                   function() {
+    this.T.convenienceSetup(
+        self._eRawClient,
+        (closesLoop ? 'completes' : 'initiates') + ' request contact of', other,
+        function() {
+      // mark the local-store as active to make sure it generates no entries
+      self.RT.reportActiveActorThisStep(self._eLocalStore);
+      self._eRawClient.expect_allActionsProcessed();
       self._expect_contactRequest_prep(other, closesLoop);
 
       // initiate the connect process, save off the othident for test needs.
@@ -427,16 +435,13 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
 
       self._expect_contactRequest_issued(other,
         self._rawClient.connectToPeepUsingSelfIdent(
-          other._rawClient._selfIdentBlob, localPoco, messageText));
+          other.selfIdentBlob, localPoco, messageText));
     }).log.boring(!interesting);
   },
 
   _expect_contactRequest_prep: function(other, closesTheLoop) {
-    // mark the local-store as active to make sure it generates no entries
-    this.RT.reportActiveActorThisStep(this._eLocalStore);
     // the server should process this
-    this.expectServerTaskToRun('userOutgoingContactRequest');
-    this._eRawClient.expect_allActionsProcessed();
+    this.expectServerTaskToRunOnOwnersBehalf('userOutgoingContactRequest');
     // and let's expect and gate its request to the other user
     this._usingServer.holdAllMailSenderMessages();
     this._usingServer.expectContactRequestToServerUser(other._usingServer,
@@ -473,7 +478,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     // - release to sender, their drop, mailstore. hold replica.
     this.T.convenienceSetup(other._usingServer,
         'receives contact request for', other, 'from', self, function() {
-      other.expectServerTaskToRun('userIncomingContactRequest');
+      other.expectServerTaskToRunOnOwnersBehalf('userIncomingContactRequest');
 
       other._usingServer.holdAllReplicaBlocksForUser(other);
       other._usingServer.expectReplicaBlocksForUser(other, 1);
@@ -519,7 +524,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     // - release to sender, their drop, mailstore. hold replica.
     this.T.convenienceSetup(other._usingServer,
         'receives contact request for', other, 'from', self, function() {
-      other.expectServerTaskToRun('userIncomingContactRequest');
+      other.expectServerTaskToRunOnOwnersBehalf('userIncomingContactRequest');
 
       other._usingServer.holdAllReplicaBlocksForUser(other);
       other._usingServer.expectReplicaBlocksForUser(other, 1);
@@ -579,8 +584,8 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
    *  represented by the provided client.
    */
   assertClientHasContact: function(other) {
-    var userRootKey = this._rawClient.rootPublicKey,
-        otherRootKey = other._rawClient.rootPublicKey;
+    var userRootKey = this.rootPublicKey,
+        otherRootKey = other.rootPublicKey;
 
     var storeDb = this._rawClient.store._db;
     this.expect_localStoreContactCheck(userRootKey, otherRootKey, true);
@@ -885,7 +890,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     // -- author sender releases to invitee, fan-in processes, gated for resend
     this.T.action(this._usingServer, 'delivers join request to',
                   invitedTestClient._usingServer, function() {
-      invitedTestClient.expectServerTaskToRun('conversationJoin');
+      invitedTestClient.expectServerTaskToRunOnOwnersBehalf('conversationJoin');
 
       invitedTestClient._usingServer.holdAllMailSenderMessages();
       // they will send the joined message back to us
@@ -901,7 +906,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
                   'processes join and delivers joined notification to',
                   this._usingServer,
                   function() {
-      self.expectServerTaskToRun('conversationJoined');
+      self.expectServerTaskToRunOnOwnersBehalf('conversationJoined');
       self._usingServer.expectPSMessageToServerFrom(
         tConv.sdata.fanoutServer, self);
 
@@ -954,7 +959,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
   // Conversation Expectations
 
   // XXX this needs more thought about who to attribute it to
-  expectServerTaskToRun: function(taskName) {
+  expectServerTaskToRunOnOwnersBehalf: function(taskName) {
     var eTask = this.T.actor(taskName, [this.__name], null, this);
     this.RT.reportActiveActorThisStep(eTask);
     eTask.expectOnly__die();
@@ -979,7 +984,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       // we want to wait for the total completion of the task.
       // XXX when we start using queueing, this should change to
       //  userConvWelcome, or whatever wraps it instead of us.
-      self.expectServerTaskToRun(
+      self.expectServerTaskToRunOnOwnersBehalf(
         isInitial ? 'initialFanoutToUserMessage' : 'fanoutToUserMessage');
 
       self._usingServer.holdAllReplicaBlocksForUser(self);
@@ -1047,7 +1052,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     self.T.action(self._usingServer,
         'receives message for', self,
         'and the mailstore processes it.', function() {
-      self.expectServerTaskToRun('fanoutToUserMessage');
+      self.expectServerTaskToRunOnOwnersBehalf('fanoutToUserMessage');
 
       self._usingServer.holdAllReplicaBlocksForUser(self);
       // just the one message
@@ -1196,7 +1201,7 @@ var TestServerActorMixins = {
   },
 
   assertClientAuthorizationState: function(testClient, isAuthorized) {
-    var userRootKey = testClient._rawClient.rootPublicKey;
+    var userRootKey = testClient.rootPublicKey;
     this.expect_userAuthorizationCheck(userRootKey, isAuthorized);
     var clientKey = testClient._rawClient.clientPublicKey;
     this.expect_clientAuthorizationCheck(clientKey, isAuthorized);
@@ -1276,7 +1281,7 @@ var TestServerActorMixins = {
     this.RT.reportActiveActorThisStep(this);
     this.expect_sender_sendPersonEnvelopeToServer(
       this._config.keyring.boxingPublicKey,
-      testClient._rawClient.rootPublicKey);
+      testClient.rootPublicKey);
   },
 
   /**
@@ -1285,7 +1290,7 @@ var TestServerActorMixins = {
   releasePSMessageToUsFrom: function(testClient) {
     this._config.senderApi.__release_sendPersonEnvelopeToServer(
       this._config.keyring.boxingPublicKey,
-      testClient._rawClient.rootPublicKey);
+      testClient.rootPublicKey);
   },
 
   /**
@@ -1296,7 +1301,7 @@ var TestServerActorMixins = {
     this.RT.reportActiveActorThisStep(this);
     this.expect_sender_sendPersonEnvelopeToServer(
       testServer._config.keyring.boxingPublicKey,
-      testClient._rawClient.rootPublicKey);
+      testClient.rootPublicKey);
   },
   /**
    * Release a Person-to-Server message targeted at a given server from a
@@ -1307,7 +1312,7 @@ var TestServerActorMixins = {
 
     this._config.senderApi.__release_sendPersonEnvelopeToServer(
       testServer._config.keyring.boxingPublicKey,
-      testClient._rawClient.rootPublicKey);
+      testClient.rootPublicKey);
   },
 
   /**
@@ -1318,7 +1323,7 @@ var TestServerActorMixins = {
   expectSSMessageToServerUser: function(type, testServer, testClient) {
     this.RT.reportActiveActorThisStep(this);
     this.expect_sender_sendServerEnvelopeToServer(
-      type, testClient._rawClient.tellBoxKey,
+      type, testClient.tellBoxKey,
       testServer._config.keyring.boxingPublicKey);
   },
 
@@ -1331,21 +1336,21 @@ var TestServerActorMixins = {
     expectAuthconnFromTo(this, testServer, 'drop/deliver');
 
     this._config.senderApi.__release_sendServerEnvelopeToServer(
-      type, testClient._rawClient.tellBoxKey,
+      type, testClient.tellBoxKey,
       testServer._config.keyring.boxingPublicKey);
   },
 
   expectContactRequestToServerUser: function(testServer, testClient) {
     this.RT.reportActiveActorThisStep(this);
     this.expect_sender_sendContactEstablishmentMessage(
-      testClient._rawClient.tellBoxKey,
+      testClient.tellBoxKey,
       testServer._config.keyring.boxingPublicKey);
   },
   releaseContactRequestToServerUser: function(testServer, testClient) {
     expectAuthconnFromTo(this, testServer, 'drop/establish');
 
     this._config.senderApi.__release_sendContactEstablishmentMessage(
-      testClient._rawClient.tellBoxKey,
+      testClient.tellBoxKey,
       testServer._config.keyring.boxingPublicKey);
   },
 
@@ -1367,7 +1372,8 @@ var TestServerActorMixins = {
     var csc = testClient._eServerConn._logger.__instance.appConn;
     // wrap it for hold support if not already wrapped
     if (!("__hold_all" in csc))
-      $testwrap_mailstore.storeConnWrap(csc, testClient._logger);
+      $testwrap_mailstore.storeConnWrap(csc, this._logger,
+                                        { name: testClient.__name });
 
     csc.__hold_all(true);
   },
@@ -1384,7 +1390,7 @@ var TestServerActorMixins = {
       testClient.RT.reportActiveActorThisStep(cloneClient);
       var count = expectedCount;
       while (count--) {
-        cloneClient.expect_replicaBlockNotifiedOnServer();
+        this.expect_replicaBlockNotifiedOnServer(testClient.__name);
       }
     }
   },
@@ -1441,12 +1447,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                                present: true},
 
       // - hold-related
-      replicaBlockNotifiedOnServer: {},
-
       insecurelyGetServerSelfIdentUsingDomainName: {}
     },
     TEST_ONLY_events: {
-      replicaBlockNotifiedOnServer: {block: false},
       insecurelyGetServerSelfIdentUsingDomainName: {selfIdent: true}
     },
   },
@@ -1464,6 +1467,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
                            isAuthorized: true},
 
       // - hold-related
+      replicaBlockNotifiedOnServer: {user: true, block: false},
+
       sender_sendPersonEnvelopeToServer: {serverKey: 'key',
                                           userRootKey: 'key'},
       sender_sendServerEnvelopeToServer: {type: true, userTellKey: 'key',

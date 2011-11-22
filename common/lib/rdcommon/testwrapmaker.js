@@ -181,10 +181,11 @@ WrapMaker.prototype = {
     this.processWrapDef();
 
     var self = this;
-    return function(inst, useLogger) {
+    return function(inst, useLogger, args) {
       inst.__hpool_all = {};
       inst.__hen_all = false;
       inst.__wraplog = useLogger;
+      inst.__wrapargs = args;
       for (var key in protish) {
         inst[key] = protish[key];
       }
