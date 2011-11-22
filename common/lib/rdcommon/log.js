@@ -477,6 +477,42 @@ var TestActorProtoBase = {
   },
 
   /**
+   * Indicate that the caller is going to schedule some test events
+   *  asynchronously while the step is running, so we should make sure to
+   *  forbid our actor from resolving itself before a matching call to
+   *  `asyncEventsAllDoneDoResolve` is made.
+   */
+  asyncEventsAreComingDoNotResolve: function() {
+    if (!this._activeForTestStep)
+      throw new Error("Attempt to set expectations on an actor (" +
+                      this.__defName + ": " + this.__name + ") that is not " +
+                      "participating in this test step!");
+    if (this._resolved)
+      throw new Error("Attempt to add expectations when already resolved!");
+
+    // (sorta evil-hack)
+    // We can reuse the _expectDeath flag as a means to ensure that we don't
+    //  resolve the promise prematurely, although it's semantically suspect.
+    //  (And bad things will happen if the test logger does actually die...)
+    if (this._expectDeath)
+      throw new Error("death expectation incompatible with async events");
+    this._expectDeath = true;
+  },
+
+  /**
+   * Indiate that the caller is all done dynamically scheduling test events
+   *  while a test step is running, and that accordingly we can allow our
+   *  test actor to resolve its promise when all the events have completed.
+   */
+  asyncEventsAllDoneDoResolve: function() {
+    // stop saying we are expecting our death; new events will trigger
+    //  resolution
+    this._expectDeath = false;
+    // pretend something happened to potentially trigger things now.
+    this.__loggerFired();
+  },
+
+  /**
    * Indicate that the only expectation we have on this actor is that its
    *  logger will die during this step.
    */
@@ -488,6 +524,9 @@ var TestActorProtoBase = {
     if (this._resolved)
       throw new Error("Attempt to add expectations when already resolved!");
 
+    if (this._expectDeath)
+      throw new Error("Already expecting our death!  " +
+                      "Are you using asyncEventsAreComingDoNotResolve?");
     this._expectDeath = true;
   },
 
@@ -623,7 +662,9 @@ var TestActorProtoBase = {
       }
       // - generate success if we have used up our expectations
       else if ((this._iExpectation >= this._expectations.length) &&
-               this._deferred) {
+               this._deferred &&
+               (this._expectDeath ? (this._logger && this._logger._died)
+                                  : true)) {
         this._resolved = true;
         this._deferred.resolve();
       }

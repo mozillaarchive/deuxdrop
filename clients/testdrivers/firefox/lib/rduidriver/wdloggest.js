@@ -122,6 +122,25 @@ function LoggestWebDriver(name, RT, T, _logger) {
 }
 exports.LoggestWebDriver = LoggestWebDriver;
 LoggestWebDriver.prototype = {
+  /**
+   * Indicate that the caller is going to schedule some test events
+   *  asynchronously while the step is running, so we should make sure to
+   *  forbid our actor from resolving itself before a matching call to
+   *  `asyncEventsAllDoneDoResolve` is made.
+   */
+  asyncEventsAreComingDoNotResolve: function() {
+    this.RT.reportActiveActorThisStep(this._actor);
+    this._actor.asyncEventsAreComingDoNotResolve();
+  },
+
+  /**
+   * Indiate that the caller is all done dynamically scheduling test events
+   *  while a test step is running, and that accordingly we can allow our
+   *  test actor to resolve its promise when all the events have completed.
+   */
+  asyncEventsAllDoneDoResolve: function() {
+    this._actor.asyncEventsAllDoneDoResolve();
+  },
 
   navigate: function(url) {
     this.RT.reportActiveActorThisStep(this._actor);

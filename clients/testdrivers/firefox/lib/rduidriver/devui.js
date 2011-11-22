@@ -825,6 +825,7 @@ DevUIDriver.prototype = {
     var self = this;
 
     var numPeepsLeftToAdd = recipClients.length;
+    this._d.asyncEventsAreComingDoNotResolve();
 
     // - add the peep(s)
     function findAndClickPeepInPopup(client) {
@@ -890,6 +891,8 @@ DevUIDriver.prototype = {
 
       // - make sure the tab goes away
       self._checkTabDelta({ 'conv-compose': -1 }, 'home');
+
+      self._d.asyncEventsAllDoneDoResolve();
     }
 
     // (we expect the caller to bring up the list of converations themselves
