@@ -485,6 +485,9 @@ var TestActorProtoBase = {
       throw new Error("Attempt to set expectations on an actor (" +
                       this.__defName + ": " + this.__name + ") that is not " +
                       "participating in this test step!");
+    if (this._resolved)
+      throw new Error("Attempt to add expectations when already resolved!");
+
     this._expectDeath = true;
   },
 
@@ -530,8 +533,10 @@ var TestActorProtoBase = {
    */
   __waitForExpectations: function() {
     if ((this._iExpectation >= this._expectations.length) &&
-        (this._expectDeath ? (this._logger && this._logger._died) : true))
+        (this._expectDeath ? (this._logger && this._logger._died) : true)) {
+      this._resolved = true;
       return this._expectationsMetSoFar;
+    }
 
     if (!this._deferred)
       this._deferred = $Q.defer();
@@ -547,6 +552,7 @@ var TestActorProtoBase = {
     this._expectDeath = false;
     this._unorderedSetMode = false;
     this._deferred = null;
+    this._resolved = false;
     this._activeForTestStep = false;
     return expectationsWereMet;
   },
@@ -618,6 +624,7 @@ var TestActorProtoBase = {
       // - generate success if we have used up our expectations
       else if ((this._iExpectation >= this._expectations.length) &&
                this._deferred) {
+        this._resolved = true;
         this._deferred.resolve();
       }
       return;
@@ -675,6 +682,7 @@ var TestActorProtoBase = {
 
     if ((this._iExpectation >= this._expectations.length) && this._deferred &&
         (this._expectDeath ? (this._logger && this._logger._died) : true)) {
+      this._resolved = true;
       this._deferred.resolve();
     }
   },
@@ -879,6 +887,9 @@ LoggestClassMaker.prototype = {
         throw new Error("Attempt to set expectations on an actor (" +
                         this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
+      if (this._resolved)
+        throw new Error("Attempt to add expectations when already resolved!");
+
       this._expectations.push([name, val]);
       return this;
     };
@@ -980,6 +991,9 @@ LoggestClassMaker.prototype = {
         throw new Error("Attempt to set expectations on an actor (" +
                         this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
+      if (this._resolved)
+        throw new Error("Attempt to add expectations when already resolved!");
+
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION) {
@@ -1050,6 +1064,9 @@ LoggestClassMaker.prototype = {
         throw new Error("Attempt to set expectations on an actor (" +
                         this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
+      if (this._resolved)
+        throw new Error("Attempt to add expectations when already resolved!");
+
       var exp = [name_begin];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
@@ -1063,6 +1080,9 @@ LoggestClassMaker.prototype = {
         throw new Error("Attempt to set expectations on an actor (" +
                         this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
+      if (this._resolved)
+        throw new Error("Attempt to add expectations when already resolved!");
+
       var exp = [name_end];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
@@ -1208,6 +1228,9 @@ LoggestClassMaker.prototype = {
         throw new Error("Attempt to set expectations on an actor (" +
                         this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
+      if (this._resolved)
+        throw new Error("Attempt to add expectations when already resolved!");
+
       var exp = [name];
       for (var iArg = 0; iArg < arguments.length; iArg++) {
         if (useArgs[iArg])
@@ -1266,6 +1289,9 @@ LoggestClassMaker.prototype = {
         throw new Error("Attempt to set expectations on an actor (" +
                         this.__defName + ": " + this.__name + ") that is not " +
                         "participating in this test step!");
+      if (this._resolved)
+        throw new Error("Attempt to add expectations when already resolved!");
+
       var exp = [name];
       for (var iArg = 0; iArg < numArgs; iArg++) {
         if (useArgs[iArg] && useArgs[iArg] !== EXCEPTION)
