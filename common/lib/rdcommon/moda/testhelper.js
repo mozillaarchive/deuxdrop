@@ -987,22 +987,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
                                               localName);
   },
 
-  onItemsModified: function(items, liveSet) {
-    var lqt = liveSet.data, delta;
-    if (!lqt._pendingDelta)
-      delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
-    else
-      delta = lqt._pendingDelta;
-
-    for (var iModified = 0; iModified < items.length; iModified++) {
-      var rootKey = this._remapLocalToFullName(liveSet._ns,
-                                               items[iModified]._localName);
-      // don't overwrite a +1 with a zero, leave it +1
-      if (!delta.postAnno.hasOwnProperty(rootKey))
-        delta.postAnno[rootKey] = 0;
-    }
-  },
-
   onSplice: function(index, howMany, addedItems, liveSet) {
     var lqt = liveSet.data, delta;
     if (!lqt._pendingDelta)
@@ -1061,7 +1045,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     //this._logger.queryUpdateSplice(liveSet.data.__name, deltaRep);
   },
 
-  onCompleted: function(liveSet, modifiedDeps) {
+  onCompleted: function(liveSet, modifiedPrimaries, modifiedDeps) {
     var lqt = liveSet.data, delta, rootKey;
     if (!lqt._pendingDelta)
       delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
@@ -1305,7 +1289,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       }
 
       // - close the query
-      lqt._liveset.close();
+      lqt._liveset.destroy();
     });
   },
 
@@ -1543,6 +1527,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         onCompleted: function() {
           self._logger.whoAmI(me.poco,
                               me.usingServer && me.usingServer.url);
+          self._testClient.selfIdentBlob = me.selfIdentBlob;
         },
       });
     });
