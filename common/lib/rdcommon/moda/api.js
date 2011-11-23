@@ -59,15 +59,38 @@ const NS_PEEPS = 'peeps',
       NS_CONNREQS = 'connreqs',
       NS_ERRORS = 'errors';
 
+function itemOnImpl(event, listener) {
+  var map = this._eventMap;
+  if (!map)
+    map = this._eventMap = { change: null, remove: null, reorder: null };
+  // flag that we now have listeners on individual items
+  this._liveset._itemsHaveListeners = true;
+
+  // attempting to get fast shape hits here, likely ridiculous
+  switch(event) {
+    case 'change':
+      map.change = listener;
+      break;
+    case 'remove':
+      map.remove = listener;
+      break;
+    case 'reorder':
+      map.reorder = listener;
+      break;
+    default:
+      throw new Error("Unsupported event type: '" + event + "'");
+  }
+}
 
 /**
  * Provides summary information about the peep's activities as they relate to
  *  our user: # of unread messages from the user, # of conversations involving
  *  the user, meta-data our user has annotated them with (ex: pinned).
  */
-function PeepBlurb(_bridge, _localName, ourPoco, selfPoco,
+function PeepBlurb(_liveset, _localName, ourPoco, selfPoco,
                    numUnread, numConvs, pinned, isMe) {
-  this._bridge = _bridge;
+  this._eventMap = null;
+  this._liveset = _liveset;
   this._localName = _localName;
   this.ourPoco = ourPoco;
   this.selfPoco = selfPoco;
@@ -105,6 +128,8 @@ PeepBlurb.prototype = {
   get numUnreadAuthoredMessages() {
     return this._numUnread;
   },
+
+  on: itemOnImpl,
 };
 
 /**
@@ -166,9 +191,10 @@ HumanMessage.prototype = {
  * Conversation blurbs are always held by `LiveOrderedSets` which provide their
  *  notifications about changes in their attributes.
  */
-function ConversationBlurb(_bridge, _localName, participants,
+function ConversationBlurb(_liveset, _localName, participants,
                            pinned, numUnread) {
-  this._bridge = _bridge;
+  this._eventMap = null;
+  this._liveset = _liveset;
   this._localName = _localName;
   this.participants = participants;
   // the messages have a reference to us and so cannot be created yet
@@ -200,7 +226,7 @@ ConversationBlurb.prototype = {
     var msgData = {
       messageText: args.text,
     };
-    this._bridge._send('replyToConv', this._localName, msgData);
+    this._liveset._bridge._send('replyToConv', this._localName, msgData);
   },
 
   /**
@@ -218,12 +244,14 @@ ConversationBlurb.prototype = {
     if (!peep || !(peep instanceof PeepBlurb))
       throw new Error("You need to invite a PeepBlurb!");
     if (!peep.isContact)
-      throw new Error("You can only invite contactss!");
+        throw new Error("You can only invite contactss!");
     var invData = {
       peepName: peep._localName,
     };
-    this._bridge._send('inviteToConv', this._localName, invData);
+    this._liveset._bridge._send('inviteToConv', this._localName, invData);
   },
+
+  on: itemOnImpl,
 };
 
 /**
@@ -245,19 +273,11 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this.items = [];
   this.completed = false;
   this._listener = listener;
+  this._itemsHaveListeners = false;
+  this._eventMap = { add: null, remove: null, reorder: null };
   this.data = data;
-
-  this._refCount = 1;
 }
 LiveOrderedSet.prototype = {
-  /**
-   * Generate a notification that one or more of the already-present members
-   *  in the set of items has been modified.
-   */
-  _notifyItemsModified: function() {
-    // XXX do.
-  },
-
   /**
    * Generate a notification and perform the splice.  Note that the notification
    *  occurs *prior* to the splice since that is when the most information is
@@ -271,25 +291,73 @@ LiveOrderedSet.prototype = {
 
   /**
    * Invoked after every update pass completes.
+   *
+   * @args[
+   *   @param[modifiedPrimaries]{
+   *     The list of modified items that are part of the namespace this query
+   *     is on.  So if it's a peeps query, peeps end up in here.  If it was a
+   *     query on conversations, then the peeps would end up in `modifiedDeps`
+   *     instead.
+   *   }
+   *   @param[modifiedDeps]{
+   *     The list of modified items that are referenced by the items that are
+   *     part of the primary namespace.  For example, if a `PeepBlurb` is
+   *     named by a conversation query and it changes, it goes in this list.
+   *   }
+   * ]
    */
-  _notifyCompleted: function(modifiedDeps) {
+  _notifyCompleted: function(added, addedAtIndex, moved, movedToIndex, removed,
+                             modifiedPrimaries, modifiedDeps) {
+    var i, item;
+    if (this._eventMap.add && added.length) {
+      var addCall = this._eventMap.add;
+      for (i = 0; i < added.length; i++) {
+        addCall(added[i], addedAtIndex[i], this);
+      }
+    }
+    if (this._eventMap.reorder && moved.length) {
+      var moveCall = this._eventMap.reorder;
+      for (i = 0; i < moved.length; i++) {
+        moveCall(moved[i], movedToIndex[i], this);
+      }
+    }
+    if (this._eventMap.remove && removed.length) {
+      var removeCall = this._eventMap.remove;
+      for (i = 0; i < removed.length; i++) {
+        removeCall(removed[i], this);
+      }
+    }
+    if (this._itemsHaveListeners) {
+      var itemEvents;
+      for (i = 0; i < moved.length; i++) {
+        item = moved[i];
+        itemEvents = item._eventMap;
+        if (itemEvents && itemEvents.reorder)
+          itemEvents.reorder(item, movedToIndex[i], this);
+      }
+      for (i = 0; i < modifiedPrimaries.length; i++) {
+        item = modifiedPrimaries[i];
+        itemEvents = item._eventMap;
+        if (itemEvents && itemEvents.change)
+          itemEvents.change(item, this);
+      }
+      for (i = 0; i < modifiedDeps.length; i++) {
+        item = modifiedDeps[i];
+        itemEvents = item._eventMap;
+        if (itemEvents && itemEvents.change)
+          itemEvents.change(item, this);
+      }
+      for (i = 0; i < removed.length; i++) {
+        item = removed[i];
+        itemEvents = item._eventMap;
+        if (itemEvents && itemEvents.remove)
+          itemEvents.remove(item, this);
+      }
+    }
+
     this.completed = true;
     if (this._listener && this._listener.onCompleted)
-      this._listener.onCompleted(this, modifiedDeps);
-  },
-
-  /**
-   * XXX Hackish stop-gap to let callers share the set for the purposes of
-   *  keeping the items alive when handing things off to sub-dialogs, etc.
-   *  It would probably be better to support some type of clone() operation,
-   *  possibly for a specific item to slice on it, but let's revisit that when
-   *  we figure out the multiplicity/listener stuff a bit more.
-   *
-   * XXX XXX There is a plan on the mailing list for how to deal with this; I
-   *  need to implement it.
-   */
-  boostRefCount: function() {
-    this._refCount++;
+      this._listener.onCompleted(this, modifiedPrimaries, modifiedDeps);
   },
 
   /**
@@ -297,9 +365,8 @@ LiveOrderedSet.prototype = {
    *  Once this is invoked, the reference to the set and all of its contents
    *  should be dropped as they will no longer be valid or kept up-to-date.
    */
-  close: function() {
-    if (--this._refCount === 0)
-      this._bridge.killQuery(this);
+  destroy: function() {
+    this._bridge.killQuery(this);
   },
 };
 
@@ -403,9 +470,10 @@ OurUserAccount.prototype = {
  *  in the connect request but call us "the king's fool" when inviting us to
  *  join conversations.
  */
-function ConnectRequest(_bridge, localName, peep, serverInfo, theirPocoForUs,
+function ConnectRequest(_liveset, localName, peep, serverInfo, theirPocoForUs,
                         receivedAt, messageText) {
-  this._bridge = _bridge;
+  this._eventMap = null;
+  this._liveset = _liveset;
   this._localName = localName;
   this.peep = peep;
   this.peepServer = serverInfo;
@@ -417,7 +485,7 @@ ConnectRequest.prototype = {
   __namespace: 'connreqs',
 
   acceptConnectRequest: function(ourPocoForThem) {
-    this._bridge.connectToPeep(this.peep, ourPocoForThem);
+    this._liveset._bridge.connectToPeep(this.peep, ourPocoForThem);
   },
 };
 
@@ -495,11 +563,7 @@ ModaBridge.prototype = {
   // Internals
 
   _send: function(cmd, thisSideName, payload) {
-    // pass it through a JSON transformation and back to make sure we don't
-    //  accidentally transit objects.  (nb: I believe the JS engine can do
-    //  faster things with the pure object rep, but it still amounts to JSON.)
-    var str = JSON.stringify({cmd: cmd, name: thisSideName, payload: payload});
-    this._sendObjFunc(JSON.parse(str));
+    this._sendObjFunc({cmd: cmd, name: thisSideName, payload: payload});
   },
 
   /**
@@ -514,7 +578,7 @@ ModaBridge.prototype = {
   },
 
   /**
-   * Receive a message from the other side.  These are distinguished
+   * Receive a message from the other side.
    */
   _receive: function(msg) {
     switch (msg.type) {
@@ -607,11 +671,10 @@ ModaBridge.prototype = {
     //  so we don't care about tracking them independently.
     var i, key, attr, values, val, dataMap, curRep, delta;
 
-    // Track the modified dependent objects by throwing them all in a list
-    //  (`modifiedDeps`).  Have the processing loops figure out if they are
-    //  dependencies or not, and set `useModifiedDeps` to `modifiedDeps` if
-    //  they are dependent so it can check the value and push if so.
-    var modifiedDeps = [], useModifiedDeps = null;
+    // Track the modified objects be binned into either modified primary objects
+    //  or modified dependent objects.  This differentiation may only be
+    //  relevant to unit testing...
+    var modifiedPrimaries = [], modifiedDeps = [], useModified = null;
 
     // -- Servers
     if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
@@ -643,7 +706,8 @@ ModaBridge.prototype = {
     if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
       values = msg.dataDelta[NS_PEEPS];
       dataMap = liveset._dataByNS[NS_PEEPS];
-      useModifiedDeps = (liveset._ns === NS_PEEPS) ? null : modifiedDeps;
+      useModified = (liveset._ns === NS_PEEPS) ? modifiedPrimaries
+                                               : modifiedDeps;
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
@@ -659,8 +723,7 @@ ModaBridge.prototype = {
               break;
           }
         }
-        if (useModifiedDeps)
-          useModifiedDeps.push(curRep);
+        useModified.push(curRep);
       }
     }
 
@@ -680,7 +743,8 @@ ModaBridge.prototype = {
     if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
       values = msg.dataDelta[NS_CONVBLURBS];
       dataMap = liveset._dataByNS[NS_CONVBLURBS];
-      useModifiedDeps = (liveset._ns === NS_CONVBLURBS) ? null : modifiedDeps;
+      useModified = (liveset._ns === NS_CONVBLURBS) ? modifiedPrimaries
+                                                    : modifiedDeps;
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
@@ -706,8 +770,7 @@ ModaBridge.prototype = {
               break;
           }
         }
-        if (useModifiedDeps)
-          useModifiedDeps.push(curRep);
+        useModified.push(curRep);
       }
     }
 
@@ -739,7 +802,8 @@ ModaBridge.prototype = {
     if (msg.dataDelta.hasOwnProperty(NS_ERRORS)) {
       values = msg.dataDelta[NS_ERRORS];
       dataMap = liveset._dataByNS[NS_ERRORS];
-      useModifiedDeps = (liveset._ns === NS_ERRORS) ? null : modifiedDeps;
+      useModified = (liveset._ns === NS_ERRORS) ? modifiedPrimaries
+                                                : modifiedDeps;
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
@@ -749,12 +813,13 @@ ModaBridge.prototype = {
         curRep.lastReported = new Date(delta.lastReported);
         curRep.reportedCount = delta.reportedCount;
 
-        if (useModifiedDeps)
-          useModifiedDeps.push(curRep);
+        useModified.push(curRep);
       }
     }
 
     // --- Populate The Set = Apply Splices or Special Case.
+    var added = [], addedAtIndex = [], moved = [], movedToIndex = [],
+        removed = [];
 
     // -- Special Case: Conv Messages
     // Note: this is a less straightforward mapping because our query is
@@ -811,18 +876,54 @@ ModaBridge.prototype = {
       for (i = 0; i < msg.splices.length; i++) {
         dataMap = liveset._dataByNS[liveset._ns];
         var spliceInfo = msg.splices[i];
-        var objItems = [];
-        // this might be only a deletion
+        var objItems = [], objItem, addIdx, moveIdx, delIdx;
+        // - deletion
+        if (spliceInfo.howMany) {
+          for (var iDel = spliceInfo.index;
+               iDel < spliceInfo.index + spliceInfo.howMany;
+               iDel++) {
+            objItem = liveset.items[iDel];
+            if ((addIdx = added.indexOf(objItem)) !== -1) {
+              added.splice(addIdx, 1);
+              addedAtIndex.splice(addIdx, 1);
+            }
+            // has it already moved?  move it back to a deletion
+            else if ((moveIdx = moved.indexOf(objItem)) !== -1) {
+              moved.splice(moveIdx, 1);
+              movedToIndex.splice(moveIdx, 1);
+              removed.push(objItem);
+            }
+            // if it wasn't added in this update, then track it as a deletion
+            // (added and deleted in a single pass cancels out into nothing)
+            else {
+              removed.push(objItem);
+            }
+          }
+        }
+        // - (optional) addition or the latter half of a move
         if (spliceInfo.items) {
           for (var iName = 0; iName < spliceInfo.items.length; iName++) {
-            objItems.push(dataMap[spliceInfo.items[iName]]);
+            objItem = dataMap[spliceInfo.items[iName]];
+            objItems.push(objItem);
+            // turn a removal into a move...
+            if ((delIdx = removed.indexOf(objItem)) !== -1) {
+              removed.splice(delIdx, 1);
+              moved.push(objItem);
+              moved.push(iName + spliceInfo.index);
+            }
+            // otherwise it's an add.
+            else {
+              added.push(objItem);
+              addedAtIndex.push(iName + spliceInfo.index);
+            }
           }
         }
         liveset._notifyAndSplice(spliceInfo.index, spliceInfo.howMany,
                                  objItems);
       }
     }
-    liveset._notifyCompleted(modifiedDeps);
+    liveset._notifyCompleted(added, addedAtIndex, moved, movedToIndex, removed,
+                             modifiedPrimaries, modifiedDeps);
   },
 
   /**
@@ -843,8 +944,8 @@ ModaBridge.prototype = {
   /**
    * Create a `PeepBlurb` representation from the wire rep.
    */
-  _transformPeepBlurb: function(localName, data, /* unused */ liveset) {
-    return new PeepBlurb(this, localName, data.ourPoco, data.selfPoco,
+  _transformPeepBlurb: function(localName, data, liveset) {
+    return new PeepBlurb(liveset, localName, data.ourPoco, data.selfPoco,
                          data.numUnread, data.numConvs, data.pinned,
                          data.isMe);
   },
@@ -883,7 +984,7 @@ ModaBridge.prototype = {
       participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
     }
     var blurb = new ConversationBlurb(
-      this, localName, participants, wireConv.pinned, wireConv.numUnread
+      liveset, localName, participants, wireConv.pinned, wireConv.numUnread
     );
     blurb.firstMessage = wireConv.firstMessage &&
       this._transformMessage(wireConv.firstMessage, blurb, liveset);
@@ -912,7 +1013,7 @@ ModaBridge.prototype = {
   _transformConnectRequest: function(localName, wireRep, liveset) {
     var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
     var serverRep = liveset._dataByNS.servers[wireRep.serverLocalName];
-    return new ConnectRequest(this, localName, peepRep, serverRep,
+    return new ConnectRequest(liveset, localName, peepRep, serverRep,
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
   },
 

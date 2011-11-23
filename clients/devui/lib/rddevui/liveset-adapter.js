@@ -84,7 +84,7 @@ LiveSetListenerViewSliceAdapter.prototype = {
   },
 
   unlink: function() {
-    this.liveSet.close();
+    this.liveSet.destroy();
     // stop it referencing us
     // XXX the reference count bit is inconsistent with a single listener;
     //  we will likely need to address this.
