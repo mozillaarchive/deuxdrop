@@ -332,6 +332,7 @@ LocalStore.prototype = {
     var clientData = {
       localName: localName,
       fullName: convId,
+      ns: NS_CONVBLURBS,
       count: 1,
       data: null,
       indexValues: [],
@@ -613,6 +614,7 @@ LocalStore.prototype = {
     var clientData = {
       localName: localName,
       fullName: convId,
+      ns: NS_CONVMSGS,
       count: 1,
       // we don't need to maintain any data about the messages; only the blurb
       //  needs it because the blurb is what gets acted upon
@@ -858,6 +860,7 @@ LocalStore.prototype = {
       peepClientData = {
         localName: localName,
         fullName: fullName,
+        ns: NS_PEEPS,
         count: 1,
         data: null,
         indexValues: [],
@@ -900,6 +903,7 @@ LocalStore.prototype = {
     var serverClientData = {
       localName: localName,
       fullName: serverIdent.rootPublicKey,
+      ns: NS_SERVERS,
       count: 1,
       data: serverIdentBlob,
       indexValues: null,
@@ -955,6 +959,7 @@ LocalStore.prototype = {
             clientData = {
               localName: localName,
               fullName: fullName,
+              ns: NS_CONNREQS,
               count: 1,
               data: null,
               indexValues: [],
@@ -1383,6 +1388,7 @@ LocalStore.prototype = {
       clientData = {
         localName: localName,
         fullName: peepRootKey,
+        ns: NS_PEEPS,
         count: 1,
         data: null,
         indexValues: [],
@@ -1417,6 +1423,7 @@ LocalStore.prototype = {
     clientData = {
       localName: localName,
       fullName: peepRootKey,
+      ns: NS_PEEPS,
       count: 1,
       data: null,
       indexValues: [],

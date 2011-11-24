@@ -158,15 +158,15 @@ ty.defineWidget({
   events: {
     requests: {
       command: function(connReqBinding) {
-        var liveSet = this.vs.liveSet,
-            connReq = connReqBinding.obj;
-        // we need to keep the peep alive...
-        liveSet.boostRefCount();
+        var connReq = connReqBinding.obj,
+            clonedSet = this.vs.liveSet.cloneSlice([connReq]),
+            clonedReq = clonedSet.items[0];
+
         this.emit_openTab({
           kind: 'accept-request',
-          name: "Connect with " + connReq.peep.selfPoco.displayName,
-          liveSet: liveSet,
-          connReq: connReq,
+          name: "Connect with " + clonedReq.peep.selfPoco.displayName,
+          liveSet: clonedSet,
+          connReq: clonedReq,
         }, true);
 
       },
@@ -253,7 +253,7 @@ wy.defineWidget({
     postInitUpdate: function() {
       var filterOut = this.obj.filterOut, moda = this.__context.moda,
           self = this;
-
+      this.obj.peepsQuery = moda.queryPeeps({ by: this.obj.sortBy });
       var vsRaw = this.vsRaw = new LiveSetListenerViewSliceAdapter(
         this.obj.peepsQuery, {
           initialCompletion: function() {
@@ -321,13 +321,9 @@ wy.defineWidget({
     btnAddPeep: {
       command: function() {
         var self = this;
-        // since we are handing off a reference to our query, boost its reference
-        //  count.
-        this.obj.peepsQuery.boostRefCount();
         this.popup_addPeep({
           sortBy: 'alphabet',
           filterOut: this.obj.peeps,
-          peepsQuery: this.obj.peepsQuery,
         }, this, function(success, peepToAdd) {
           if (success)
             self.peeps_slice.mutateSplice(self.obj.peeps.length, 0,
@@ -339,8 +335,6 @@ wy.defineWidget({
   },
   impl: {
     postInit: function() {
-      var moda = this.__context.moda;
-      this.obj.peepsQuery = moda.queryPeeps({ by: 'any' });
     },
     gimmeConvArgs: function() {
       return {
@@ -415,12 +409,12 @@ ty.defineWidget({
         while (convBlurbBinding.__cssClassBaseName !==
                "moda--tab-common--conv-blurb--")
           convBlurbBinding = convBlurbBinding.__parentBinding;
-        var liveSet = this.vs.liveSet,
-            convBlurb = convBlurbBinding.obj;
-        liveSet.boostRefCount();
+        var clonedSet = this.vs.liveSet.cloneSlice([convBlurbBinding.obj]),
+            convBlurb = clonedSet.items[0];
         this.emit_openTab({
           kind: 'conversation',
           name: "Conv: " + convBlurb.firstMessage.text.substring(0, 30),
+          convLiveSet: clonedSet,
           convBlurb: convBlurb,
         }, true);
       },
@@ -488,6 +482,9 @@ ty.defineWidget({
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(msgsSet);
       this.messages_set(vs);
     },
+    destroy: function() {
+      this.obj.convLiveSet.destroy();
+    },
   },
   events: {
     btnSend: {
@@ -550,7 +547,9 @@ ty.defineWidget({
     postInit: function() {
       var moda = this.__context.moda;
 
+      console.log("issuing peep query");
       var peepsSet = moda.queryAllKnownServersForPeeps();
+      console.log("peep query issued");
       var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
       this.peeps_set(vs);
     },
@@ -558,14 +557,12 @@ ty.defineWidget({
   events: {
     peeps: {
       command: function(peepBinding) {
-        var liveSet = this.vs.liveSet,
-            peep = peepBinding.obj;
-        // we need to keep the peep alive...
-        liveSet.boostRefCount();
+        var clonedSet = this.vs.liveSet.cloneSlice([peepBinding.obj]),
+            peep = clonedSet.items[0];
         this.emit_openTab({
           kind: 'author-contact-request',
           name: "Connect with " + peep.selfPoco.displayName,
-          liveSet: liveSet,
+          liveSet: clonedSet,
           peep: peep,
           peepPoco: peep.selfPoco,
           message: '',

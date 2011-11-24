@@ -79,7 +79,7 @@ var TD = exports.TD = $tc.defineTestsFor($module, null,
   [$th_rdservers.TESTHELPER, $th_moda.TESTHELPER, $th_ui.TESTHELPER],
   ['app']);
 
-TD.commonCase('moda basics', function(T) {
+TD.commonCase('ui basics', function(T) {
   T.group('setup');
 
   // only A needs to use moda for our tests.

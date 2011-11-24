@@ -101,6 +101,20 @@ WebSocketConnShim.prototype = {
         return handler(fake);
       };
     }
+    else if (what === 'error') {
+      this.ws.onerror = function(e) {
+        var niceError = {
+          toString: function() {
+            // so, the "error" type is defined to be a simple type that's
+            //  basically useless.  Below, I'm trying to extract the contents
+            //  of the CloseEvent, which is indeed its own thing.
+            return e + ' (code: ' + e.code + ' reason: ' + e.reason +
+              ' wasClean: ' + e.wasClean + ')';
+          }
+        };
+        return handler(niceError);
+      };
+    }
     else {
       this.ws['on' + what] = handler;
     }

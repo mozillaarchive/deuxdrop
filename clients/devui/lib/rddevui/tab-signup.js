@@ -111,6 +111,7 @@ ty.defineWidget({
         this.FOCUS.updateFocusRing();
       }
       else {
+        console.log("success, doing things");
         var successTabObj = {
           kind: "signed-up",
           name: "Signed Up!",
@@ -125,12 +126,13 @@ ty.defineWidget({
         this.emit_openTab(homeTabObj, true, successTabObj);
 
         this.emit_closeTab(this.obj);
+        console.log("completed being successful!");
       }
     },
 
     destroy: function() {
       if (this.otherServerQuery)
-        this.otherServerQuery.close();
+        this.otherServerQuery.destroy();
     },
   },
   events: {
@@ -168,7 +170,7 @@ ty.defineWidget({
           var serverDomain = this.otherServer_element.value;
           if (serverDomain) {
             if (this.otherServerQuery)
-              this.otherServerQuery.close();
+              this.otherServerQuery.destroy();
             this.otherServerQuery =
               moda.insecurelyQueryServerUsingDomainName(serverDomain, {
                 onSplice: function() {},

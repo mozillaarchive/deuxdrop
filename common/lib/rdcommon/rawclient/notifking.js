@@ -76,6 +76,7 @@
  *   @key[fullName String]{
  *     The unique identifier for the object, usually the naming crypto key.
  *   }
+ *   @key[ns QueryNamespace]
  *   @key[count]{
  *     The reference count for this client data; when it hits zero, we can tell
  *     the `QuerySource` to forget about this datum.
@@ -111,7 +112,8 @@
  *     the list of deps and decrement their reference counts, possibly
  *     triggering them to hit zero and also need to convey a deletion to the QS.
  *     Cycles are avoided by a strong requirement that our data model not allow
- *     them.
+ *     them.  Note that when our reference count increases we do not touch the
+ *     reference counts of our dependencies.
  *   }
  * ]]
  *
@@ -712,6 +714,12 @@ NotificationKing.prototype = {
    *  structure's count, put it in the members table, and return it.  Returns
    *  null if the item was not yet known.
    *
+   * The reference counts of of the dependencies do not need to be touched,
+   *  they will be implicitly kept alive by the single count owned by our client
+   *  data structure.  However, the dependencies do need to be marked as known
+   *  via the `membersByLocal` and `membersByFull` maps so that they are still
+   *  reachable by this method under a population only built by this method.
+   *
    * @args[
    *   @param[writeQueryHandle QueryHandle]
    *   @param[namespace]
@@ -726,6 +734,20 @@ NotificationKing.prototype = {
       clientData = writeQueryHandle.membersByFull[namespace][fullId];
       clientData.count++;
       return clientData;
+    }
+
+    function fuseDepsIn(queryHandle, deps) {
+      for (var i = 0; i < deps.length; i++) {
+        var depData = deps[i];
+        // It's possible these next ops (and the recursive traversal) are
+        //  redundant, so we could potentially fast-bail.  Our dep graph is
+        //  likely to be small enough right now that the extra step would not
+        //  pay off.
+        queryHandle.membersByLocal[depData.ns][depData.localName] = depData;
+        queryHandle.membersByFull[depData.ns][depData.fullName] = depData;
+        if (depData.deps && depData.deps.length)
+          fuseDepsIn(queryHandle, depData.deps);
+      }
     }
 
     // scan other queries
@@ -745,6 +767,8 @@ NotificationKing.prototype = {
         // put a null in the data-map so the client knows to grab the value
         //  from its cache.
         writeQueryHandle.dataMap[namespace][clientData.localName] = null;
+        if (clientData.deps && clientData.deps.length)
+          fuseDepsIn(writeQueryHandle, clientData.deps);
         return clientData;
       }
     }
@@ -1002,6 +1026,7 @@ NotificationKing.prototype = {
           clientData = {
             localName: localName,
             fullName: fullName,
+            ns: namespace,
             count: 1,
             // gets filled in by clientDataPopulater
             data: null,
@@ -1140,6 +1165,7 @@ NotificationKing.prototype = {
             clientData = {
               localName: localName,
               fullName: fullName,
+              ns: namespace,
               count: 1,
               // gets filled in by clientDataPopulater
               data: null,

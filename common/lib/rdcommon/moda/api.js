@@ -101,6 +101,11 @@ function PeepBlurb(_liveset, _localName, ourPoco, selfPoco,
 }
 PeepBlurb.prototype = {
   __namespace: 'peeps',
+  __clone: function(liveset, cloneHelper) {
+    return new PeepBlurb(liveset, this._localName, this.ourPoco, this.selfPoco,
+                         this._numUread, this._numConvs, this._pinned,
+                         this._isMe);
+  },
 
   // -- getters exist so writes loudly fail
   get isContact() {
@@ -151,6 +156,11 @@ function JoinMessage(_owner, inviter, invitee, receivedAt) {
 }
 JoinMessage.prototype = {
   type: 'join',
+  __clone: function(owner, cloneHelper) {
+    return new JoinMessage(
+      owner, cloneHelper(this.inviter), cloneHelper(this.invitee),
+      this.receivedAt);
+  },
 };
 
 /**
@@ -177,6 +187,12 @@ function HumanMessage(_owner, author, composedAt, receivedAt, text) {
 }
 HumanMessage.prototype = {
   type: 'message',
+  __clone: function(owner, cloneHelper) {
+    return new HumanMessage(
+      owner, cloneHelper(this.author),
+      this.composedAt, this.receivedAt, this.text);
+  },
+
   markAsLastSeenMessage: function() {
   },
 
@@ -205,6 +221,17 @@ function ConversationBlurb(_liveset, _localName, participants,
 }
 ConversationBlurb.prototype = {
   __namespace: 'convblurbs',
+  __clone: function(liveset, cloneHelper) {
+    var clone = new ConversationBlurb(
+      liveset, this._localName, this.participants.map(cloneHelper),
+      this._pinned, this._numUnread);
+    if (this.firstMessage)
+      clone.firstMessage = this.firstMessage.__clone(clone, cloneHelper);
+    if (this.firstUnreadMessage)
+      clone.firstUnreadMessage = this.firstUnreadMessage.__clone(clone,
+                                                                 cloneHelper);
+    return clone;
+  },
 
   get pinned() {
     return this._pinned;
@@ -278,6 +305,61 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this.data = data;
 }
 LiveOrderedSet.prototype = {
+  /**
+   * Clone some subset of items in this set into a new `LiveOrderedSet`.  The
+   *  resulting set will only receive updates about the explicitly sliced items
+   *  and will not receive notifications about new items, reordered items, etc.
+   *  Because new clones of the items and all of their referenced objects will
+   *  be created, the user of the new set should acquire (new) references to
+   *  the (new) objects.
+   *
+   * This is an expert-only API because there is currently a race window as
+   *  implemented.  The cloned query will not be properly subscribed for updates
+   *  until the backside receives our notification about the clone.  From our
+   *  perspective, this means that everything the bridge hears about the source
+   *  query between the time this API call is invoked and the 'cloneQueryAck'
+   *  message is received will not be reflected in the cloned query.  This could
+   *  be addressed by applying all updates for the source query until the ack
+   *  is received (without throwing errors about missing things that were
+   *  likely filtered out), but that is deemed surplus to needs given current
+   *  levels of laziness.
+   */
+  cloneSlice: function(items, data) {
+    var cloneSet = new LiveOrderedSet(this._bridge, this._bridge._nextHandle++,
+                                      this._ns, 'CLONE', data),
+        cloneMap = cloneSet._dataByNS[this._ns];
+    this._bridge._handleMap[cloneSet._handle] = cloneSet;
+    this._bridge._sets.push(cloneSet);
+
+    function cloneHelper(item) {
+      var nsMap = cloneSet._dataByNS[item.__namespace],
+          localName = item._localName;
+      // if we already have a version specialized for this set, return it
+      if (nsMap.hasOwnProperty(localName))
+        return nsMap[localName];
+      // otherwise, we need to perform a clone and stash the result
+      return (nsMap[localName] = thing.__clone(cloneSet, cloneHelper));
+    }
+
+    var slicedLocalNames = [];
+    for (var i = 0; i < items.length; i++) {
+      var srcItem = items[i];
+      slicedLocalNames.push(srcItem._localName);
+
+      var clonedItem = srcItem.__clone(cloneSet, cloneHelper);
+      cloneSet.items.push(clonedItem);
+      cloneMap[clonedItem._localName] = clonedItem;
+    }
+
+    this._bridge._send(
+      'cloneQuery', cloneSet._handle,
+      {
+        ns: this._ns,
+        source: this._handle,
+        sliced: slicedLocalNames,
+      });
+  },
+
   /**
    * Generate a notification and perform the splice.  Note that the notification
    *  occurs *prior* to the splice since that is when the most information is
@@ -384,6 +466,9 @@ function ServerInfo(_localName, url, displayName) {
 }
 ServerInfo.prototype = {
   __namespace: 'servers',
+  __clone: function(liveset, cloneHelper) {
+    return new ServerInfo(this._localName, this.url, this.displayName);
+  },
 };
 
 /**
@@ -483,6 +568,12 @@ function ConnectRequest(_liveset, localName, peep, serverInfo, theirPocoForUs,
 }
 ConnectRequest.prototype = {
   __namespace: 'connreqs',
+  __clone: function(liveset, cloneHelper) {
+    return new ConnectRequest(
+      liveset, this._localName, cloneHelper(this.peep),
+      cloneHelper(this.peepServer), this.theirPocoForUs,
+      this.receivedAt, this.messageText);
+  },
 
   acceptConnectRequest: function(ourPocoForThem) {
     this._liveset._bridge.connectToPeep(this.peep, ourPocoForThem);
@@ -504,6 +595,11 @@ function ErrorRep(errorId, errorParam, firstReported, lastReported, count,
 }
 ErrorRep.prototype = {
   __namespace: 'errors',
+  __clone: function(liveset, cloneHelper) {
+    return new ErrorRep(this.errorId, this.errorParam, this.firstReported,
+                        this.lastReported, this.count, this.userActionRequired,
+                        this.permanent);
+  },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -591,6 +687,8 @@ ModaBridge.prototype = {
           throw new Error("Query '" + msg.handle + "' has died; " +
                           "check for loggest errors.");
         return this._receiveQueryUpdate(msg);
+      case 'cloneQueryAck':
+        return this._receiveCloneQueryAck(msg);
 
       case 'connectionStatus':
         this.connectionStatus = msg.status;
@@ -628,9 +726,20 @@ ModaBridge.prototype = {
 
   _receiveSignupResult: function(msg) {
     if (this._ourUser._signupListener) {
-      this._ourUser._signupListener.onCompleted(msg.err);
+      try {
+        this._ourUser._signupListener.onCompleted(msg.err);
+      }
+      catch(ex) {
+        console.error("Exception in signup completion handler:", ex);
+      }
       this._ourUser._signupListener = null;
     }
+  },
+
+  /**
+   *
+   */
+  _receiveCloneQueryAck: function(msg) {
   },
 
   /**
@@ -684,7 +793,7 @@ ModaBridge.prototype = {
         val = values[key];
         // null (in the non-delta case) means pull it from cache
         if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(NS_SERVERS, key);
+          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_SERVERS, key);
         else
           dataMap[key] = this._transformServerInfo(key, val);
       }
@@ -698,7 +807,7 @@ ModaBridge.prototype = {
         val = values[key];
         // null (in the non-delta case) means pull it from cache
         if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(NS_PEEPS, key);
+          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_PEEPS, key);
         else
           dataMap[key] = this._transformPeepBlurb(key, val, liveset);
       }
@@ -735,7 +844,7 @@ ModaBridge.prototype = {
         val = values[key];
         // null (in the non-delta case) means pull it from cache
         if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(NS_CONVBLURBS, key);
+          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONVBLURBS, key);
         else
           dataMap[key] = this._transformConvBlurb(key, val, liveset);
       }
@@ -781,7 +890,7 @@ ModaBridge.prototype = {
         val = values[key];
         // null (in the non-delta case) means pull it from cache
         if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(NS_CONNREQS, key);
+          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONNREQS, key);
         else
           dataMap[key] = this._transformConnectRequest(key, val, liveset);
       }
@@ -794,7 +903,7 @@ ModaBridge.prototype = {
         val = values[key];
         // null (in the non-delta case) means pull it from cache
         if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(NS_ERRORS, key);
+          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_ERRORS, key);
         else
           dataMap[key] = this._transformError(key, val, liveset);
       }
@@ -836,7 +945,8 @@ ModaBridge.prototype = {
           val = values[key];
           // null (in the non-delta case) means pull it from cache
           if (val === null)
-            dataMap[key] = this._cacheLookupOrExplode(NS_CONVMSGS, key);
+            dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONVMSGS,
+                                                      key);
           else
             dataMap[key] = this._transformConvMessages(liveset.blurb,
                                                        key, val, liveset);
@@ -927,15 +1037,39 @@ ModaBridge.prototype = {
   },
 
   /**
-   * Look up the associated representation that we know must exist somewhere.
+   * Look up the associated representation that we know must exist somewhere
+   *  and clone it into existence for the target `liveset`.
+   *
+   * This is intended to be used when the backside knows we already have
+   *  information on an object and it can avoid sending us duplicate data.
+   *  In such a case, the backside will only tell us about the primary object
+   *  and will not bother to send nulls across for dependent objects.
+   *
+   * @args[
+   *   @param[liveset LiveOrderedSet]{
+   *     The target liveset the object will be inserted into.  The caller
+   *     is responsible for taking this action.
+   *   }
+   * ]
    */
-  _cacheLookupOrExplode: function(ns, localName) {
+  _cacheLookupOrExplode: function(liveset, ns, localName) {
+    // helper to clone the given item
+    function cloneHelper(item) {
+      var nsMap = liveset._dataByNS[item.__namespace],
+          localName = item._localName;
+      // if we already have a version specialized for this set, return it
+      if (nsMap.hasOwnProperty(localName))
+        return nsMap[localName];
+      // otherwise, we need to perform a clone and stash the result
+      return (nsMap[localName] = item.__clone(liveset, cloneHelper));
+    }
+
     var sets = this._sets;
     for (var iSet = 0; iSet < sets.length; iSet++) {
       var lset = sets[iSet];
       var nsMap = lset._dataByNS[ns];
       if (nsMap.hasOwnProperty(localName))
-        return nsMap[localName];
+        return nsMap[localName].__clone(liveset, cloneHelper);
     }
     throw new Error("No such entry in namespace '" + ns + "' with name '" +
                     localName + "'");
