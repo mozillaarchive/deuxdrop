@@ -641,7 +641,7 @@ RawClientAPI.prototype = {
 
     request.open('GET', XXXX, true);
 
-XX?X? BROKEN: how to get the image data.
+//XX?X? BROKEN: how to get the image data.
 
     request.onreadystatechange = function(evt) {
       if (request.readyState == 4) {
