@@ -266,7 +266,14 @@ define(function (require) {
               me.updatePersonalInfo({
                 displayName: name
               });
-              me.provideProofOfIdentity('email', 'browserid', assertion);
+
+              me.provideProofOfIdentity({
+                type: 'email',
+                source: 'browserid',
+                assertion: assertion,
+                audience: location.hostname +
+                          (location.port ? ':' + location.port : '')
+              });
               cards.onNav('pickServer', {});
             } else {
               // Do not do anything. User stays on sign in screen.

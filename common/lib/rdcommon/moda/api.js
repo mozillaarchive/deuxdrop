@@ -529,7 +529,8 @@ OurUserAccount.prototype = {
    * Speculative call to let the UI provide a BrowserID attestation or other
    *  third-party attestation of the user's identity.
    */
-  provideProofOfIdentity: function(identityType, proofOrigin, proof) {
+  provideProofOfIdentity: function(proof) {
+    this._bridge._send('provideProofOfIdentity', proof);
   },
 
   signupWithServer: function(serverInfo, signupListener) {
