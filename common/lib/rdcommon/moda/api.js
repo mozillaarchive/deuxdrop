@@ -103,7 +103,7 @@ PeepBlurb.prototype = {
   __namespace: 'peeps',
   __clone: function(liveset, cloneHelper) {
     return new PeepBlurb(liveset, this._localName, this.ourPoco, this.selfPoco,
-                         this._numUread, this._numConvs, this._pinned,
+                         this._numUnread, this._numConvs, this._pinned,
                          this._isMe);
   },
 
@@ -338,7 +338,7 @@ LiveOrderedSet.prototype = {
       if (nsMap.hasOwnProperty(localName))
         return nsMap[localName];
       // otherwise, we need to perform a clone and stash the result
-      return (nsMap[localName] = thing.__clone(cloneSet, cloneHelper));
+      return (nsMap[localName] = item.__clone(cloneSet, cloneHelper));
     }
 
     var slicedLocalNames = [];
@@ -358,6 +358,8 @@ LiveOrderedSet.prototype = {
         source: this._handle,
         sliced: slicedLocalNames,
       });
+
+    return cloneSet;
   },
 
   /**
