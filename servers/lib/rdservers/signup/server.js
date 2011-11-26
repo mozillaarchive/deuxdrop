@@ -95,6 +95,7 @@ define(
     'rdcommon/taskidiom', 'rdcommon/taskerrors',
     'rdcommon/crypto/keyops',
     'rdcommon/identities/pubident',
+    'jwcrypto/jwcert', 'jwcrypto/vep', 'jwcrypto/jwt',
     'module',
     'exports'
   ],
@@ -103,6 +104,7 @@ define(
     $task, $taskerrors,
     $keyops,
     $pubident,
+    $jwc_jwcert, $jwc_vep, $jwc_jwt,
     $module,
     exports
   ) {
@@ -129,6 +131,15 @@ const CHALLENGE_NEVER = "never";
  *    legal account-manipulation framework.
  */
 const CHALLENGE_ALREADY_SIGNED_UP = "already-signed-up";
+/**
+ * The Browser ID assertion was no good.  This covers:
+ * - Totally gibberish.
+ * - Valid but does not match the e-mail address.
+ * - Valid but expired beyond what we are willing to accept.
+ */
+const CHALLENGE_INVALID_BROWSERID = 'bad-browserid-assertion';
+
+const CHALLENGE_SERVER_PROBLEM = 'server-problem-try-again-later';
 
 const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
 
@@ -144,6 +155,7 @@ const SIGNUP_TEMPORARY_INVOCATION = "auto:hackjob";
  */
 var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
   name: 'validateSignupRequest',
+  args: ['msg', 'clientPublicKey', 'serverConfig'],
   steps: {
     /**
      * Make sure the self-ident blob is self-consistent, especially that it
@@ -152,11 +164,11 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
     validateSelfIdent: function() {
       // - self-consistent
       this.personSelfIdentPayload = $pubident.assertGetPersonSelfIdent(
-                                      this.arg.msg.selfIdent, null); // (throws)
+                                      this.msg.selfIdent, null); // (throws)
       // - names us
       // Verify they are using our self-signed blob verbatim.
       if (this.personSelfIdentPayload.transitServerIdent !==
-          this.arg.serverConfig.selfIdentBlob)
+          this.serverConfig.selfIdentBlob)
         throw new $taskerrors.KeyMismatchError("transit server is not us");
 
       // - poco has a display name
@@ -168,7 +180,7 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
      *  of them.
      */
     validateClientAuth: function() {
-      var clientAuthBlobs = this.arg.msg.clientAuths;
+      var clientAuthBlobs = this.msg.clientAuths;
       if (!Array.isArray(clientAuthBlobs) || clientAuthBlobs.length === 0)
         throw new $taskerrors.MalformedPayloadError();
 
@@ -186,7 +198,7 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
                            clientAuthBlobs[iAuth], "client",
                            authorizedKeys);
         clientAuthsMap[clientAuth.authorizedKey] = clientAuthBlobs[iAuth];
-        if (clientAuth.authorizedKey === this.arg.clientPublicKey)
+        if (clientAuth.authorizedKey === this.clientPublicKey)
           foundClientWeAreTalkingTo = true;
       }
 
@@ -208,14 +220,15 @@ var ValidateSignupRequestTask = taskMaster.defineSoftFailureTask({
 
 var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
   name: 'processSignup',
+  args: ['msg', 'conn'],
   steps: {
     /**
      * Ensure the request is well-formed/legitimate.
      */
-    validateSignupRequest: function(arg) {
+    validateSignupRequest: function() {
       return new ValidateSignupRequestTask(
-        {msg: arg.msg, clientPublicKey: arg.conn.clientPublicKey,
-         serverConfig: arg.conn.serverConfig}, this.log);
+        {msg: this.msg, clientPublicKey: this.conn.clientPublicKey,
+         serverConfig: this.conn.serverConfig}, this.log);
     },
     /**
      * Convey permanent failure if the request was not valid.
@@ -232,7 +245,7 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
      * You can't signup if you are already signed up...
      */
     checkForExistingAccount: function() {
-      return this.arg.conn.serverConfig.authApi.serverCheckUserAccount(
+      return this.conn.serverConfig.authApi.serverCheckUserAccount(
                this.selfIdentPayload.root.rootSignPubKey);
     },
     verifyNoExistingAccount: function(hasAccount) {
@@ -248,14 +261,54 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
      *  logic.)
      */
     determineChallenges: function() {
-      // XXX everyone wins!
+      // in the future, this should come from the server config
+      this.challenges = ['none', 'browserid'];
     },
     /**
      * If a challenge response is included, verify it is one of the ones we
      *  are allowing; if it is not, tell the client what is allowed.
      */
     checkOrGenerateChallenge: function() {
-      // XXX everyone wins!
+      // you pass without proof if 'none' is in the list.
+      var passed = this.challenges.indexOf('none') !== -1, promises = [];
+      for (var because in this.msg.because) {
+        // ignore unsupported challenge types
+        if (this.challenges.indexOf(because) === -1)
+          continue;
+
+        var result = null;
+        switch (because) {
+          case 'browserid':
+            result = this.verifyBrowserId(this.msg.because[because]);
+            break;
+          case 'none':
+            break;
+          default:
+            throw new Error("Unimplemented but server supported challenge");
+            break;
+        }
+
+        if ($Q.isPromise(result))
+          promises.push(result);
+        else if (result)
+          return this.respondWithChallenge(problemo);
+      }
+
+      if (promises.length) {
+        var self = this;
+        return when($Q.all(promises),
+          function successish(results) {
+            for (var i = 0; i < results.length; i++) {
+              if (results[i])
+                return self.respondWithChallenge(results[i]);
+            }
+            return undefined;
+          },
+          function exthrown() {
+            // XXX logging/reporting of implementation failure
+            return self.respondWithChallenge(CHALLENGE_SERVER_PROBLEM);
+          });
+      }
     },
     doTheSignup: function() {
       var poco = this.selfIdentPayload.poco;
@@ -265,30 +318,96 @@ var ProcessSignupTask = taskMaster.defineEarlyReturnTask({
         displayName: poco.displayName,
       };
 
-      return this.arg.conn.serverConfig.authApi.serverCreateUserAccount(
+      return this.conn.serverConfig.authApi.serverCreateUserAccount(
         this.selfIdentPayload,
-        this.arg.msg.selfIdent,
+        this.msg.selfIdent,
         this.clientAuthsMap,
-        this.arg.msg.storeKeyring,
+        this.msg.storeKeyring,
         publicListInfo);
     },
     tellThemTheyAreSignedUp: function() {
-      this.arg.conn.writeMessage({
+      this.conn.writeMessage({
         type: 'signedUp',
       });
       // (end of the line; not an early return)
-      return this.arg.conn.close();
+      return this.conn.close();
     },
   },
   impl: {
     respondWithChallenge: function(challengeType) {
-      this.arg.conn.writeMessage({
+      this.conn.writeMessage({
         type: 'challenge',
         challenge: {
           mechanism: challengeType,
         },
       });
-      return this.earlyReturn(this.arg.conn.close());
+      return this.earlyReturn(this.conn.close());
+    },
+
+    validateClientOrigin: function(host) {
+      // right now, only things that look like jetpack extensions are cool,
+      //  which means, not a real domain name.  it would be nice if the
+      //  "resource://" got in there a bit.
+      if (host.indexOf('.') !== -1)
+        return false;
+      return true;
+    },
+
+    verifyBrowserId: function(assertion) {
+      if (!this.selfIdentPayload.poco.hasOwnProperty("emails") ||
+          (this.selfIdentPayload.poco.emails.length !== 1) ||
+          (typeof(this.selfIdentPayload.poco.emails[0]) !== 'string'))
+        return CHALLENGE_INVALID_BROWSERID;
+      var userClaimedEmail = this.selfIdentPayload.poco.email[0];
+
+      var bundle;
+      try {
+        bundle = $jwc_vep.unbundleCertsAndAssertion(assertion);
+      }
+      catch (ex) {
+        return CHALLENGE_INVALID_BROWSERID;
+      }
+
+      // eh, for now, let's require the user to be fast about the signup
+      //  process and use the true current time.  If there was user interaction
+      //  required after the browser id step, we might want to allow limited
+      //  backdating of our check.
+      var deferred = $Q.defer, self = this;
+      var validateAsOf = new Date();
+      $jwc_jwcert.JWCert.verifyChain(
+        bundle.certificates, validateAsOf,
+        function rootCB(issuer, next) {
+          // XXX either need to hardcode the browserid key or wait for them to
+          //  implement the dns fetch logic.  Probably the former is the best
+          //  stopgap.
+        },
+        function successCB(pk, principal) {
+          var tok = new jwt.JWT();
+          tok.parse(bundle.assertion);
+
+          // - validate audience
+          if (!self.validateClientOrigin(tok.audience)) {
+            deferred.resolve(CHALLENGE_INVALID_BROWSERID);
+            return;
+          }
+
+          if (principal.email !== userClaimedEmail) {
+            deferred.resolve(CHALLENGE_INVALID_BROWSERID);
+            return;
+          }
+
+          if (!tok.verify(pk)) {
+            deferred.resolve(CHALLENGE_INVALID_BROWSERID);
+            return;
+          }
+
+          deferred.resolve();
+        },
+        function errorCB(err) {
+          deferred.resolve(CHALLENGE_SERVER_PROBLEM);
+        }
+      );
+      return deferred.promise;
     },
   },
 });

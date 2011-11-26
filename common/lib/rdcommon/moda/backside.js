@@ -462,43 +462,7 @@ ModaBackside.prototype = {
   },
 
   _cmd_provideProofOfIdentity: function(_ignored, proof) {
-    var self = this,
-        rawClient = this._rawClient;
-
-    when(rawClient.provideProofOfIdentity(proof),
-      function(data){
-        if (proof.type === 'email') {
-          var email = data.email;
-
-          // Convert email into a an image. Use gravatar.
-          if (email) {
-            when(rawClient.fetchGravatarImageUrl(email),
-              function (dataUrl) {
-                // dataUrl is a string, data URI
-                self.updatePocoWithPartial({
-                  emails: [{
-                    value: email
-                  }],
-                  photos: [{
-                    value: dataUrl
-                  }]
-                });
-              }, function (err) {
-                // Just eat it, continue on.
-                self.updatePocoWithPartial({
-                  emails: [{
-                    value: email
-                  }]
-                });
-              }
-            );
-          }
-        }
-      },
-      function(err) {
-
-      }
-    );
+    this._rawClient.provideProofOfIdentity(proof);
   },
 
   _cmd_insecureServerDomainQuery: function(bridgeQueryName, query) {

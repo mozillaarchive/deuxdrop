@@ -81,6 +81,8 @@ define(
     './localdb',
     'xmlhttprequest',
     'timers',
+    'md5',
+    'rdplat/snafu',
     'module',
     'exports'
   ],
@@ -94,12 +96,13 @@ define(
     $localdb,
     $xmlhttprequest,
     $timers,
+    $md5,
+    $snafu,
     $module,
     exports
   ) {
-const when = $Q.when;
-const browserIdSignInUrl = 'https://browserid.org/verify';
-var xhr = $xmlhttprequest.XMLHttpRequest;
+const when = $Q.when,
+      xhr = $xmlhttprequest.XMLHttpRequest;
 
 const NS_ERRORS = 'errors';
 
@@ -108,10 +111,12 @@ const NS_ERRORS = 'errors';
  *  promise.
  */
 function ClientSignupConn(selfIdentBlob, clientAuthBlobs, storeKeyringPersisted,
+                          proof,
                           clientKeyring, serverPublicKey, serverUrl, _logger) {
   this._selfIdentBlob = selfIdentBlob;
   this._clientAuthBlobs = clientAuthBlobs;
   this._storeKeyringPersisted = storeKeyringPersisted;
+  this._proof = proof;
 
   this.conn = new $authconn.AuthClientConn(
                 this, clientKeyring, serverPublicKey,
@@ -160,8 +165,7 @@ ClientSignupConn.prototype = {
       selfIdent: this._selfIdentBlob,
       clientAuths: this._clientAuthBlobs,
       storeKeyring: this._storeKeyringPersisted,
-      because: {
-      },
+      because: this._proof,
     });
   },
 };
@@ -311,6 +315,16 @@ function RawClientAPI(persistedBlob, dbConn, isFirstRun, _logger) {
     this._transitServer = null;
   }
   this._poco = selfIdentPayload.poco;
+
+  this._signupProof = {};
+
+  /**
+   * A mechanism for the signup process to defer its initiation until all
+   *  the promises in the list have completed.  Namely, `provideProofOfIdentity`
+   *  can go fetch gravatars, and we want to make sure this completes before
+   *  signing up.
+   */
+  this._signupWaitForPromises = null;
 
   // -- create store
   this.store = new $localdb.LocalStore(dbConn, this._keyring, this._pubring,
@@ -609,48 +623,83 @@ RawClientAPI.prototype = {
   },
 
   provideProofOfIdentity: function(proof) {
-    var deferred = $Q.defer(),
-        self = this;
+    var self = this;
+
+    // -- Browser ID
+    // We unpack the assertion to get at the identity in the assertion so we can
+    //  include it in the PoCo.  The server will then validate the assertion and
+    //  ensure that the PoCo is consistent with the assertion.  Accordingly,
+    //  our parsing does not need to be perfect because if we are outwitted,
+    //  the server (which is using the BrowserID libs) will not be, and will
+    //  deny the signup.
+    // We also use this to trigger retrieval of the gravatar for inclusion into
+    //  the PoCo.
     if (proof.source === 'browserid') {
-      var request = new xhr();
+      // - note the proof for the signup step
+      // XXX XXX punting on providing the proof until the server is fully able
+      //  to validate
+      //this._proof['browserid'] = proof.assertion;
 
-      request.open('POST', browserIdSignInUrl, true);
-
-      request.onreadystatechange = function(evt) {
-        if (request.readyState == 4) {
-          if (request.status == 200) {
-            self._log.provideProofOfIdentitySuccess();
-            var json = JSON.parse(request.responseText);
-            deferred.resolve(json);
-          } else {
-            self._log.provideProofOfIdentityFailure();
-            deferred.resolve(null);
-          }
+      // - extract the e-mail address
+      // extract the bundled assertion
+      var bundled = JSON.parse($snafu.atob(proof.assertion));
+      // iterate over the identity certificates, stopping when we find one whose
+      //  principal is an email.
+      var email = null;
+      for (var iCert = 0; iCert < bundled.certificates.length; iCert++) {
+        var jwt = bundled.certificates[iCert];
+        var idxFirstPeriod = jwt.indexOf('.'),
+            idxSecondPeriod = jwt.indexOf('.', idxFirstPeriod + 1),
+            secondClause = jwt.substring(idxFirstPeriod + 1, idxSecondPeriod);
+        var certObj = JSON.parse($snafu.atob(secondClause));
+        if (certObj.pricipal.hasOwnProperty('email')) {
+          email = certObj.pricipal.email;
+          break;
         }
-      };
-      request.send(data);
+      }
+      if (!email)
+        throw new Error("Assertion had no e-mail present!");
 
-      return deferred.promise;
+      // - perform the gravatar fetch
+      if (this._signupWaitForPromises === null)
+        this._signupWaitForPromises = [];
+      var mePromise = when(this._fetchGravatarImageAsDataUrl(email, 48),
+        function gotGravatar(dataUrl) {
+          // - update poco with email, gravatar
+          this._poco.emails = [{ value: email }];
+          this._poco.photos = [{ value: dataUrl }];
+
+          // I was going to have us remove ourselves from the signup list,
+          //  but realistically, the promise is not a burden and will be
+          //  cleaned up once the signup process is triggered.
+        });
+      this._signupWaitForPromises.push(mePromise);
     }
   },
 
-  fetchGravatarImageUrl: function(email) {
+  /**
+   * Given an e-mail address, compute the gravatar image URL, fetch the image,
+   *  and convert it into a data url.
+   */
+  _fetchGravatarImageAsDataUrl: function(email, imageSize) {
     var deferred = $Q.defer(),
         self = this,
         request = new xhr();
 
-    request.open('GET', XXXX, true);
+    email = email.toLowerCase();
+    var url = "http://www.gravatar.com/avatar/" + $md5.hex_md5(email) +
+        ".jpg?d=wavatar&s=" + imageSize;
 
-//XX?X? BROKEN: how to get the image data.
-
+    request.open('GET', url, true);
     request.onreadystatechange = function(evt) {
       if (request.readyState == 4) {
         if (request.status == 200) {
-          self._log.fetchGravatarImageUrlSuccess();
-          var json = JSON.parse(request.responseText);
-          deferred.resolve(XXX);
+          self._log.fetchGravatar(url);
+          var base64Jpeg = $snafu.xhrResponseToBase64(request.responseText);
+          var dataUrl = 'data:image/jpg;base64,' + base64Jpeg;
+          deferred.resolve(dataUrl);
         } else {
-          self._log.fetchGravatarImageUrlFailure();
+          self._log.fetchGravatarFailure(url);
           deferred.resolve(null);
         }
       }
@@ -720,8 +769,20 @@ RawClientAPI.prototype = {
    * }
    */
   signupUsingServerSelfIdent: function(serverSelfIdentBlob) {
+    var self = this;
+
     if (this._signupConn)
       throw new Error("Still have a pending signup connection!");
+
+    // If there are promises in effect that should delay us, wait for them
+    //  first.
+    if (this._signupWaitForPromises) {
+      var aggregatePromise = $Q.all(this._signupWaitForPromises);
+      this._signupWaitForPromises = null;
+      return when(aggregatePromise, function() {
+        return self.signupUsingServerSelfIdent(serverSelfIdentBlob);
+      });
+    }
 
     this._transitServerBlob = serverSelfIdentBlob;
     var serverSelfIdent = this._transitServer =
@@ -738,12 +799,12 @@ RawClientAPI.prototype = {
                          this._selfIdentBlob, clientAuthBlobs,
                          this._keyring.exportKeypairForAgentUse('messaging',
                                                                 'envelopeBox'),
+                         this._signupProof,
                          this._keyring.exposeSimpleBoxingKeyringFor('client',
                                                                     'connBox'),
                          serverSelfIdent.publicKey,
                          serverSelfIdent.url,
                          this._log);
-    var self = this;
     // Use the promise to clear our reference, but otherwise just re-provide it
     //  to our caller.
     return $Q.when(this._signupConn.promise, function success(val) {
@@ -1415,15 +1476,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     asyncJobs: {
       signup: {},
     },
-    TEST_ONLY_events: {
-      insecurelyGetServerSelfIdentUsingDomainName: {selfIdent: true},
-    },
     events: {
       signedUp: {},
       signupChallenged: {},
       insecurelyGetServerSelfIdentUsingDomainName: {},
       provideProofOfIdentitySuccess: {},
-      fetchGravatarImageUrlSuccess: {},
+      fetchGravatar: {},
 
       connecting: {},
       connected: {},
@@ -1432,12 +1490,16 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       allActionsProcessed: {},
       replicaCaughtUp: {},
     },
+    TEST_ONLY_events: {
+      insecurelyGetServerSelfIdentUsingDomainName: { selfIdent: true },
+      fetchGravatar: { url: true },
+    },
     errors: {
       signupFailure: {},
       problemFetchingServerSelfIdent: {},
       replicaBlockProcessingFailure: {err: $log.EXCEPTION, msg: false},
       provideProofOfIdentityFailure: {},
-      fetchGravatarImageUrlFailure: {}
+      fetchGravatarFailure: { url: true }
     },
   }
 });
