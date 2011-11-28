@@ -98,6 +98,7 @@ function PeepBlurb(_liveset, _localName, ourPoco, selfPoco,
   this._numConvs = numConvs;
   this._pinned = pinned;
   this._isMe = isMe;
+  this.data = null;
 }
 PeepBlurb.prototype = {
   __namespace: 'peeps',
@@ -105,6 +106,10 @@ PeepBlurb.prototype = {
     return new PeepBlurb(liveset, this._localName, this.ourPoco, this.selfPoco,
                          this._numUnread, this._numConvs, this._pinned,
                          this._isMe);
+  },
+
+  get id() {
+    return this._localName;
   },
 
   // -- getters exist so writes loudly fail
@@ -132,6 +137,16 @@ PeepBlurb.prototype = {
 
   get numUnreadAuthoredMessages() {
     return this._numUnread;
+  },
+
+  get pic() {
+    // XXX we currently have no upstream validation of these values, but that
+    //  is where we want it to happen.  The pictures should be data URLs.
+    if (this.ourPoco && this.ourPoco.hasOwnProperty('photos'))
+      return this.ourPoco.photos[0].value;
+    if (this.selfPoco.hasOwnProperty('photos'))
+      return this.selfPoco.photos[0].value;
+    return null;
   },
 
   on: itemOnImpl,
@@ -203,9 +218,6 @@ HumanMessage.prototype = {
 /**
  * Provides summary information about a conversation: its participants, initial
  *  message text, most recent activity, # of unread messages.
- *
- * Conversation blurbs are always held by `LiveOrderedSets` which provide their
- *  notifications about changes in their attributes.
  */
 function ConversationBlurb(_liveset, _localName, participants,
                            pinned, numUnread) {
@@ -231,6 +243,10 @@ ConversationBlurb.prototype = {
       clone.firstUnreadMessage = this.firstUnreadMessage.__clone(clone,
                                                                  cloneHelper);
     return clone;
+  },
+
+  get id() {
+    return this._localName;
   },
 
   get pinned() {
@@ -301,10 +317,24 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this.completed = false;
   this._listener = listener;
   this._itemsHaveListeners = false;
-  this._eventMap = { add: null, remove: null, reorder: null };
+  this._eventMap = { add: null, complete: null, remove: null, reorder: null };
   this.data = data;
 }
 LiveOrderedSet.prototype = {
+  on: function(event, listener) {
+    var listeners;
+    switch (event) {
+      case 'add':
+      case 'complete':
+      case 'remove':
+      case 'reorder':
+        this._eventMap[event] = listener;
+        break;
+      default:
+        throw new Error("Unsupported event type: '" + event + "'");
+    }
+  },
+
   /**
    * Clone some subset of items in this set into a new `LiveOrderedSet`.  The
    *  resulting set will only receive updates about the explicitly sliced items
@@ -393,6 +423,7 @@ LiveOrderedSet.prototype = {
   _notifyCompleted: function(added, addedAtIndex, moved, movedToIndex, removed,
                              modifiedPrimaries, modifiedDeps) {
     var i, item;
+try {
     if (this._eventMap.add && added.length) {
       var addCall = this._eventMap.add;
       for (i = 0; i < added.length; i++) {
@@ -442,6 +473,9 @@ LiveOrderedSet.prototype = {
     this.completed = true;
     if (this._listener && this._listener.onCompleted)
       this._listener.onCompleted(this, modifiedPrimaries, modifiedDeps);
+    if (this._eventMap.complete)
+      this._eventMap.complete(this);
+} catch(ex) { console.error("problem during _notifyCompleted:", ex); }
   },
 
   /**
@@ -471,6 +505,11 @@ ServerInfo.prototype = {
   __clone: function(liveset, cloneHelper) {
     return new ServerInfo(this._localName, this.url, this.displayName);
   },
+
+  get id() {
+    return this._localName;
+  },
+
 };
 
 /**
@@ -576,6 +615,10 @@ ConnectRequest.prototype = {
       liveset, this._localName, cloneHelper(this.peep),
       cloneHelper(this.peepServer), this.theirPocoForUs,
       this.receivedAt, this.messageText);
+  },
+
+  get id() {
+    return this._localName;
   },
 
   acceptConnectRequest: function(ourPocoForThem) {

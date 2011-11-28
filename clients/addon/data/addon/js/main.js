@@ -60,7 +60,7 @@ define(function (require) {
       commonNodes = {},
       states = {},
       servers,
-      peeps, update, notifyDom, nodelessActions,
+      peepsQuery, update, notifyDom, nodelessActions,
       newMessageIScroll, newConversationNodeWidth, init, me;
 
   //iScroll just defines a global, bind to it here
@@ -105,9 +105,11 @@ define(function (require) {
 
   function insertTextAndMeta(nodeDom, message) {
     // Insert the friendly time in meta, and message text before meta
-    var metaNode = nodeDom.find('.meta').text(friendly.date(new Date(message.time)).friendly)[0];
-    metaNode.setAttribute('data-time', message.time);
-    metaNode.parentNode.insertBefore(document.createTextNode(message.text), metaNode);
+    var metaNode = nodeDom.find('.meta').text(
+                     friendly.date(new Date(message.receivedAt)).friendly)[0];
+    metaNode.setAttribute('data-time', message.receivedAt);
+    metaNode.parentNode.insertBefore(document.createTextNode(message.text),
+                                     metaNode);
   }
 
   function adjustNewScrollerWidth(convScrollerDom) {
@@ -117,8 +119,7 @@ define(function (require) {
 
   function makeMessageBubble(node, message) {
     var nodeDom = $(node),
-        senderNode, senderDom,
-        isMe = me.id === message.from.id;
+        senderNode, senderDom;
 
     // do declarative text replacements.
     updateDom(nodeDom, message);
@@ -129,13 +130,13 @@ define(function (require) {
     // Update the URL to use for the peep
     senderDom = nodeDom.find('.sender');
     senderNode = senderDom[0];
-    senderNode.href = senderNode.href + encodeURIComponent(message.from.id);
+    senderNode.href = senderNode.href + encodeURIComponent(message.author.id);
 
     // Apply different style if message is from "me"
-    nodeDom.addClass(isMe ? 'right' : 'left');
+    nodeDom.addClass(message.author.isMe ? 'right' : 'left');
 
     // If me, then swap the positions of the picture and name.
-    if (isMe) {
+    if (message.author.isMe) {
       senderDom.find('.name').prependTo(senderDom);
     }
 
@@ -218,35 +219,13 @@ define(function (require) {
     }, 300);
   }
 
-  function onPeepsComplete(dom) {
-    // Get the node to use for each peep.
-    var clonable = getChildCloneNode(dom[0]),
-        frag = document.createDocumentFragment();
-
-    // Put in the Add button.
-    frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
-
-    // Generate nodes for each person.
-    peeps.items.forEach(function (peep) {
-      var node = clonable.cloneNode(true),
-          poco = peep.ourPoco;
-
-      updateDom($(node), poco);
-
-      node.href += '?id=' + encodeURIComponent(peep.id);
-
-      frag.appendChild(node);
-    });
-
-    // Update the card.
-    dom.find('.scroller').append(frag);
-
-    // Refresh card sizes.
-    cards.adjustCardSizes();
-  }
-
   // Set up card update actions.
   update = {
+    /*
+     * First page of the signup process; the user identifies themself by name
+     * and e-mail address (via BrowserID).  Once completed, we switch to the
+     * 'pickServer' card.
+     */
     'signIn': function (data, dom) {
 
       function handleSubmit(evt) {
@@ -295,10 +274,20 @@ define(function (require) {
           .click(handleSubmit);
     },
 
+    /*
+     * This page just tells you you don't have a server and then links you to
+     * 'pickServer'.  Presumably exists for the unhappy (development) situation
+     * where the server does not know who you are anymore.  This should
+     * eventually be nuked.
+     */
     'needServer': function (data, dom) {
       cards.adjustCardSizes();
     },
 
+    /*
+     * Lists (client API hard-coded) servers that can be used plus provides the
+     * ability to enter a domain manually.
+     */
     'pickServer': function (data, dom) {
 
       var clonable = getChildCloneNode(dom[0]),
@@ -334,56 +323,159 @@ define(function (require) {
       });
     },
 
+    /*
+     * Nodeless action that triggers signup.
+     */
     'connectToServer': function (data) {
       var serverInfo = servers.items[data.id];
 
       //TODO: this call does not return anything/no callbacks?
-      me.signupWithServer(serverInfo, function (err) {
+      me.signupWithServer(serverInfo, {
+        onCompleted: function (err) {
+          if (err) {
+            // TODO: make this a pretty Andy dialog.
+            alert('Signup failed: ' + err);
+            return;
+          }
 
-        if (err) {
-          // TODO: make this a pretty Andy dialog.
-          alert('Signup failed: ' + err);
-          return;
+          // Remove the sign in/server setup cards
+          $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
+            '[data-cardid="enterServer"], [data-cardid="needServer"]',
+            '#cardContainer').remove();
+
+          // Show the start card
+          cards.onNav('start', {});
+
+          // Go back one to see the start card.
+          history.back();
         }
-
-        // Remove the sign in/server setup cards
-        $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
-          '[data-cardid="enterServer"], [data-cardid="needServer"]',
-          '#cardContainer').remove();
-
-        // Show the start card
-        cards.onNav('start', {});
-
-        // Go back one to see the start card.
-        history.back();
-
       });
     },
 
-    'peeps': function (data, dom) {
-      if (peeps) {
-        onPeepsComplete(dom);
-      } else {
-        // QUESTION: can pass a "data" argument as third arg to queryPeeps,
-        // set as a property on liveOrderedSet, but not touched by anything,
-        // just context data for listener callbacks?
-        moda.queryPeeps({by: 'alphabet'}, {
-          onSplice: function (index, howMany, addedItems, liveOrderedSet) {
-            // Ignore for now, only regenerate UI if user goes to
-            // that card? Well, could update it if it is in one of the
-            // history cards, but need to be careful about moving the
-            // user's view on that card with update in a way that messes up
-            // their mental model of where they are on that card.
-          },
-
-          onCompleted: function (liveOrderedSet) {
-            //Peeps are assumed to be in an array at liveOrderedSet.items;
-            peeps = liveOrderedSet;
-            onPeepsComplete(dom);
-          }
-        });
+    /*
+     * Lists all friended peeps, providing a gateway to private chat with each
+     * of them.  As part of this, the most recent message from the friend is
+     * displayed as part of the snippet.
+     */
+    'private': function (data, dom) {
+      if (peepsQuery) {
+        // XXXasuth I am still trying to understand the idiom of this
+        //  implementation; this is to help me, but the return seems right given
+        //  that this is nodeless.
+        console.log("'private' page already initialized, reusing");
+        return;
       }
-    }
+
+      // Get the node to use for each peep.
+      var clonable = getChildCloneNode(dom[0]),
+          frag = document.createDocumentFragment();
+
+      // Put in the Add button.
+      frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
+
+      peepsQuery = moda.queryPeeps({ by: 'alphabet' });
+      // Generate nodes for each person.
+      peepsQuery.on('add', function(peep, addedAtIndex) {
+        var node = clonable.cloneNode(true);
+
+        updateDom($(node), peep);
+        node.href += '?id=' + encodeURIComponent(peep.id);
+
+        peep.on('change', function() {
+          // this should still work at runtime because the node instance
+          //  should have been re-parented, not cloned, when the fragment
+          //  got merged in.
+          updateDom($(node), peep);
+        });
+        peep.on('remove', function() {
+          $(node).remove();
+        });
+
+        // XXX currently we are append-only and ignoring ordering hints; need to
+        // talk with James to figure out how ordering would best fit with his
+        // approach.
+        if (!frag)
+          frag = document.createDocumentFragment();
+        frag.appendChild(node);
+      });
+      peepsQuery.on('complete', function() {
+        // Update the card.
+        dom.find('.scroller').append(frag);
+        frag = null;
+
+        // Refresh card sizes.
+        cards.adjustCardSizes();
+      });
+    },
+
+    /*
+     * Lists all existing conversations; not filtered to a specific person.
+     * Provides an affordance to create a new conversation.
+     */
+    'groups': function(data, dom) {
+    },
+
+    /*
+     * Lists connection/friend requests.
+     */
+    'notifications': function(data, dom) {
+    },
+
+    /*
+     * Asks our server for users who are not currently our friends so that we
+     * can add them as friends.
+     */
+    'add': function(data, dom) {
+      // Get the node to use for each peep.
+      var clonable = getChildCloneNode(dom[0]),
+          frag = document.createDocumentFragment();
+
+      // Put in the Add button.
+      frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
+
+      var query = data.query = moda.queryAllKnownServersForPeeps();
+
+      query.on('add', function(peep, addedAtIndex) {
+console.log("adding", peep);
+        var node = clonable.cloneNode(true);
+
+        updateDom($(node), peep);
+        node.href += '?id=' + encodeURIComponent(peep.id);
+
+        peep.on('change', function() {
+          // this should still work at runtime because the node instance
+          //  should have been re-parented, not cloned, when the fragment
+          //  got merged in.
+          updateDom($(node), peep);
+        });
+        peep.on('remove', function() {
+          $(node).remove();
+        });
+
+        // XXX currently we are append-only and ignoring ordering hints; need to
+        // talk with James to figure out how ordering would best fit with his
+        // approach.
+        if (!frag)
+          frag = document.createDocumentFragment();
+        frag.appendChild(node);
+      });
+      query.on('complete', function() {
+console.log("complete notified");
+        // Update the card.
+        dom.find('.scroller').append(frag);
+        frag = null;
+
+        // Refresh card sizes.
+        cards.adjustCardSizes();
+      });
+    },
+
+    /*
+     * Ask the user to confirm they want to ask someone to be their friend,
+     * including including a small message to send with the request.
+     */
+    'askFriend': function(data, dom) {
+    },
   };
 
   // Find out the user.
@@ -428,6 +520,9 @@ define(function (require) {
       cards.startCardId = 'needServer';
     }
 
+    // The list of #id's that do not correspond to a card, but rather exist
+    // just to trigger actions.  These should all trigger navigation once they
+    // complete.
     nodelessActions = {
       'addPeep': true,
       'notify': true,

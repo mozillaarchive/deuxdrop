@@ -25,6 +25,8 @@
 
     <div id="cardContainer">
       <div id="cards">
+
+        <!-- signIn: Give us your name and e-mail (via BrowserID) -->
         <div data-cardid="signIn" title="Sign In" class="card noiscroll">
           <div class="scroller">
             <form class="signUpForm standardForm">
@@ -33,15 +35,21 @@
             </form>
           </div>
         </div>
+
+        <!-- needServer: "bad news, no server" bounce page; needs to die -->
         <div data-cardid="needServer" title="Missing Server" class="card noiscroll">
           <div class="scroller">
             <a class="item" href="#pickServer">Pick a server</a>
           </div>
         </div>
+
+        <!-- pickServer: list known servers the user can sign-up with -->
         <div data-cardid="pickServer" title="Pick Server" class="card">
           <div class="scroller" data-childclass="serverLink">
           </div>
         </div>
+
+        <!-- enterServer: Manual server selection (not from the list) -->
         <div data-cardid="enterServer" title="Enter Server" class="card">
           <div class="scroller">
             <form class="enterServerForm standardForm">
@@ -51,9 +59,11 @@
             </form>
           </div>
         </div>
+
+        <!-- start: The home page (once signed up). -->
         <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
           <div class="scroller">
-            <a class="homeNav" href="#peeps">Private</a>
+            <a class="homeNav" href="#private">Private</a>
             <a class="homeNav" href="#groups">Group</a>
             <a class="homeNav" href="#notifications">Notifications</a>
             <a class="homeNav" href="#add">+</a>
@@ -63,22 +73,40 @@
             </div>
           </div>
         </div>
-        <div data-cardid="peeps" title="Private" class="card conversations">
+
+        <!-- private: Lists of peeps with most recent private conv msg snip -->
+        <div data-cardid="private" title="Private" class="card conversations">
           <div class="subHeader hbox">
             <div class="boxFlex">
               <input id="search" type="text" placeholder="search people">
             </div>
             <button class="search">search</button>
-            <button class="button" data-href="#listUsersForAddPeep">add contact</button>
+            <button class="button" data-href="#add">add contact</button>
           </div>
           <div class="scroller" data-childclass="peepSummary">
           </div>
         </div>
+
+        <!-- privateConv: Private conversation with a friend peep. -->
+        <div data-cardid="privateConv" class="card">
+          <!-- non-scrolling reminder of who our friend is... -->
+          <div class="subHeader hbox">
+            <div class="peepInfo">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+              <span data-bind="displayName" class="peepInfoName"></span>
+            </div>
+          </div>
+          <!-- scrolling messages -->
+          <div class="scroller" data-childclass="privateMessage">
+          </div>
+        </div>
+
+        <!-- User: Details on a user/peep NOT SURE IF NECESSARY AS-IS -->
         <div data-cardid="user" class="card">
           <div class="scroller">
             <div class="peepInfo">
               <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
-              <span data-bind="name" class="peepInfoName"></span>
+              <span data-bind="displayName" class="peepInfoName"></span>
             </div>
             <div class="peepConversations" data-childclass="convListItem">
             </div>
@@ -87,6 +115,21 @@
             <form class="addPeepButtonForm hidden">
               <input type="hidden" name="peepId" value="" data-bind="id" data-attr="value">
               <button class="">Add</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Add: List the server phonebooks to pick someone to connect to.  -->
+        <div data-cardid="add" title="Add a contact" class="card conversations">
+          <div class="scroller" data-childclass="peepPhonebook">
+          </div>
+        </div>
+
+        <div data-cardid="askFriend" title="Make a friend!" class="card">
+          <div class="scroller">
+            <form class="askFriendForm standardForm">
+              <input type="text" name="server" placeholder="Enter server name">
+              <button>Send request</button>
             </form>
           </div>
         </div>
@@ -110,10 +153,18 @@
       </form>
 
       <a href="#conversation?id=" data-classimpl="newConversation" class="newConversation">
-        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"></span>
-        <span class="newConversationPeep" data-bind="from.name"></span>
+        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="author.pic" data-attr="src"></span>
+        <span class="newConversationPeep" data-bind="author.displayName"></span>
         <span class="newConversationTime"></span>
         <span class="newConversationText" data-bind="text"></span>
+      </a>
+
+      <!-- A peep from the phonebook -->
+      <a class="private unread hbox" data-classimpl="peepPhonebook" href="#askFriend">
+        <div class="peepInfo">
+          <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+          <span data-bind="selfPoco.displayName" class="peepInfoName"></span>
+        </div>
       </a>
 
       <a class="private unread hbox" data-classimpl="peepSummary" href="#user">
@@ -124,7 +175,7 @@
           </div>
           <div class="msgPreview boxFlex">
               <div class="msgPreviewHeader hbox">
-                  <span class="author boxFlex overflow" data-bind="name"></span>
+                  <span class="author boxFlex overflow" data-bind="displayName"></span>
                   <span class="new">(5)</span>
                   <span class="boxFlexStrong"></span>
                   <span class="time">5 min</span>
@@ -151,7 +202,7 @@
       <div data-classimpl="message"  class="bubble">
         <a href='#user?id=' class="sender">
           <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
-          <span class="name" data-bind="from.name"></span>
+          <span class="name" data-bind="author.displayName"></span>
         </a>
         <div class="body">
           <div class="meta">
