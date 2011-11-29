@@ -59,7 +59,17 @@ var moduleName = document.location.search.substring(1);
 
 window.GO_RUN_TESTS = function() {
   console.log("!!!!! TRYING TO RUN TEST", moduleName);
-  when($td.runTestsFromModule(moduleName, MAGIC_ERROR_TRAPPER, true),
+  var runOptions = {
+    testMode: 'test',
+    defaultStepDuration: 1 * 1000,
+    maxTestDurationMS: 30 * 1000,
+    maxTotalDurationMS: 30 * 1000,
+    relayArgs: [],
+    exposeToTest: {
+    },
+  };
+  when($td.runTestsFromModule(moduleName, runOptions, MAGIC_ERROR_TRAPPER,
+                              true),
        function() {
          TESTDONE("pass");
        },
