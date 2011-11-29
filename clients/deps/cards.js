@@ -26,6 +26,13 @@
   location: false, history: false, setTimeout: false */
 'use strict';
 
+/*
+ * Changes made:
+ * - onRemove event added
+ * - onNav invocations pass the node that was determined to be the link as the
+ *    third argument.
+ */
+
 define([ 'jquery', 'blade/url', 'blade/array', 'text!./cardsHeader.html',
         'iscroll'],
 function ($,        url,         array,         headerTemplate) {
@@ -84,6 +91,7 @@ function ($,        url,         array,         headerTemplate) {
       return result;
     }
 
+    result.node = node;
     result.href = node.href || node.getAttribute('data-href');
     fragId = result.href.split('#')[1];
 
@@ -106,7 +114,7 @@ function ($,        url,         array,         headerTemplate) {
     var node = evt.target,
         nav = parseUrl(node);
     if (nav.cardId) {
-      cards.onNav(nav.cardId, nav.data);
+      cards.onNav(nav.cardId, nav.data, nav.node);
 
       if (!skipPush && nav.cardId !== 'back' &&
         (!node.getAttribute || !node.getAttribute('data-nonav'))) {
@@ -199,6 +207,8 @@ function ($,        url,         array,         headerTemplate) {
 
           // Remove scrollers.
           removed.each(function (i, node) {
+            cards.onRemove(node);
+
             var scrollId = node.getAttribute('data-scrollid'),
                 scroller = scrollRegistry[scrollId];
             if (scroller) {
@@ -245,6 +255,11 @@ function ($,        url,         array,         headerTemplate) {
   cards.onNav = function (templateId, data) {
     throw new Error('Need to implement cards.onNav');
   };
+
+  /**
+   * Triggered when back navigation pops cards after removal from the DOM tree.
+   */
+  cards.onRemove = function (cardNode) {};
 
   /**
    * Adds a card node to the list.

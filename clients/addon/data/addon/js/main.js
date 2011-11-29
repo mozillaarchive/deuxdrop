@@ -60,7 +60,7 @@ define(function (require) {
       commonNodes = {},
       states = {},
       servers,
-      peepsQuery, update, notifyDom, nodelessActions,
+      update, remove, notifyDom, nodelessActions,
       newMessageIScroll, newConversationNodeWidth, init, me;
 
   //iScroll just defines a global, bind to it here
@@ -219,6 +219,58 @@ define(function (require) {
     }, 300);
   }
 
+  /**
+   * Common query binding logic.
+   *
+   * @param listNode The DOM node to root the created nodes under.
+   * @param clonable The DOM node to clone (or function to call that takes an
+   *                 item object and returns a cloned DOM node).
+   * @param propName The JS property name to set on the resulting node that
+   *                 holds a reference to the item object.
+   * @param query The instantiated moda query.
+   * @param frag  The optional document fragment to use to start appending
+   *              newly created nodes to.  Only needs to be provided if you
+   *              wanted to create one or more sentinel items at the start of
+   *              the list.
+   */
+  function commonQueryBind(listNode, clonable, propName, query, frag) {
+    query.on('add', function(itemObj, addedAtIndex) {
+      var node = clonable.cloneNode(true);
+
+      updateDom($(node), itemObj);
+      // Our use of the linkNode mechanism makes this superfluous.  Keeping it
+      // around for the time being for debugging info.
+      node.href += '?id=' + encodeURIComponent(itemObj.id);
+
+      node[propName] = itemObj;
+
+      itemObj.on('change', function() {
+        // this should still work at runtime because the node instance
+        //  should have been re-parented, not cloned, when the fragment
+        //  got merged in.
+        updateDom($(node), itemObj);
+      });
+      itemObj.on('remove', function() {
+        $(node).remove();
+      });
+
+      // XXX currently we are append-only and ignoring ordering hints; need to
+      // talk with James to figure out how ordering would best fit with his
+      // approach.
+      if (!frag)
+        frag = document.createDocumentFragment();
+      frag.appendChild(node);
+    });
+    query.on('complete', function() {
+      // Update the card.
+      listNode.append(frag);
+      frag = null;
+
+      // Refresh card sizes.
+      cards.adjustCardSizes();
+    });
+  }
+
   // Set up card update actions.
   update = {
     /*
@@ -289,45 +341,15 @@ define(function (require) {
      * ability to enter a domain manually.
      */
     'pickServer': function (data, dom) {
-
-      var clonable = getChildCloneNode(dom[0]),
-          frag = document.createDocumentFragment();
-
-      // Generate nodes for each person.
-
-      // Now show list of servers.
-      moda.queryServers({
-        'onCompleted': function (liveOrderedSet) {
-          servers = liveOrderedSet;
-
-          Object.keys(servers.items).forEach(function (key) {
-            var node = clonable.cloneNode(true),
-                server = servers.items[key];
-
-            updateDom($(node), server);
-
-            node.href += encodeURIComponent(key);
-
-            frag.appendChild(node);
-          });
-
-          // Put in the Add button.
-          frag.appendChild(commonNodes.addServerLink.cloneNode(true));
-
-          // Update the card.
-          dom.find('.scroller').append(frag);
-
-          // Refresh card sizes.
-          cards.adjustCardSizes();
-        }
-      });
+      commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
+                      'server', (data.query = moda.queryServers));
     },
 
     /*
      * Nodeless action that triggers signup.
      */
-    'connectToServer': function (data) {
-      var serverInfo = servers.items[data.id];
+    'connectToServer': function (data, serverNode) {
+      var serverInfo = serverNode.server;
 
       //TODO: this call does not return anything/no callbacks?
       me.signupWithServer(serverInfo, {
@@ -339,6 +361,7 @@ define(function (require) {
           }
 
           // Remove the sign in/server setup cards
+          // XXX this does not result in onRemove being invoked
           $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
             '[data-cardid="enterServer"], [data-cardid="needServer"]',
             '#cardContainer').remove();
@@ -358,14 +381,6 @@ define(function (require) {
      * displayed as part of the snippet.
      */
     'private': function (data, dom) {
-      if (peepsQuery) {
-        // XXXasuth I am still trying to understand the idiom of this
-        //  implementation; this is to help me, but the return seems right given
-        //  that this is nodeless.
-        console.log("'private' page already initialized, reusing");
-        return;
-      }
-
       // Get the node to use for each peep.
       var clonable = getChildCloneNode(dom[0]),
           frag = document.createDocumentFragment();
@@ -373,39 +388,9 @@ define(function (require) {
       // Put in the Add button.
       frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
 
-      peepsQuery = moda.queryPeeps({ by: 'alphabet' });
-      // Generate nodes for each person.
-      peepsQuery.on('add', function(peep, addedAtIndex) {
-        var node = clonable.cloneNode(true);
-
-        updateDom($(node), peep);
-        node.href += '?id=' + encodeURIComponent(peep.id);
-
-        peep.on('change', function() {
-          // this should still work at runtime because the node instance
-          //  should have been re-parented, not cloned, when the fragment
-          //  got merged in.
-          updateDom($(node), peep);
-        });
-        peep.on('remove', function() {
-          $(node).remove();
-        });
-
-        // XXX currently we are append-only and ignoring ordering hints; need to
-        // talk with James to figure out how ordering would best fit with his
-        // approach.
-        if (!frag)
-          frag = document.createDocumentFragment();
-        frag.appendChild(node);
-      });
-      peepsQuery.on('complete', function() {
-        // Update the card.
-        dom.find('.scroller').append(frag);
-        frag = null;
-
-        // Refresh card sizes.
-        cards.adjustCardSizes();
-      });
+      commonQueryBind(dom.find('.scroller'), clonable, 'peep',
+                      (data.query = moda.queryPeeps({ by: 'alphabet' })),
+                      frag);
     },
 
     /*
@@ -419,6 +404,15 @@ define(function (require) {
      * Lists connection/friend requests.
      */
     'notifications': function(data, dom) {
+      commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
+                      'connReq',
+                      (data.query = moda.queryConnectRequests()));
+    },
+
+    /*
+     * Nodeless action to approve a connect request.
+     */
+    'acceptReq': function(data, dom) {
     },
 
     /*
@@ -426,56 +420,50 @@ define(function (require) {
      * can add them as friends.
      */
     'add': function(data, dom) {
-      // Get the node to use for each peep.
-      var clonable = getChildCloneNode(dom[0]),
-          frag = document.createDocumentFragment();
-
-      // Put in the Add button.
-      frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
-
-      var query = data.query = moda.queryAllKnownServersForPeeps();
-
-      query.on('add', function(peep, addedAtIndex) {
-console.log("adding", peep);
-        var node = clonable.cloneNode(true);
-
-        updateDom($(node), peep);
-        node.href += '?id=' + encodeURIComponent(peep.id);
-
-        peep.on('change', function() {
-          // this should still work at runtime because the node instance
-          //  should have been re-parented, not cloned, when the fragment
-          //  got merged in.
-          updateDom($(node), peep);
-        });
-        peep.on('remove', function() {
-          $(node).remove();
-        });
-
-        // XXX currently we are append-only and ignoring ordering hints; need to
-        // talk with James to figure out how ordering would best fit with his
-        // approach.
-        if (!frag)
-          frag = document.createDocumentFragment();
-        frag.appendChild(node);
-      });
-      query.on('complete', function() {
-console.log("complete notified");
-        // Update the card.
-        dom.find('.scroller').append(frag);
-        frag = null;
-
-        // Refresh card sizes.
-        cards.adjustCardSizes();
-      });
+      commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
+                      'peep',
+                      (data.query = moda.queryAllKnownServersForPeeps()));
     },
 
     /*
      * Ask the user to confirm they want to ask someone to be their friend,
      * including including a small message to send with the request.
      */
-    'askFriend': function(data, dom) {
+    'askFriend': function(data, dom, peepNode) {
+      function handleSubmit(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        var nameDom = dom.find('[name="displayName"]'),
+            displayName = nameDom.val().trim(),
+            messageDom = dom.find('[name="message"]'),
+            message = messageDom.val().trim();
+
+        var ourPocoForPeep = {
+          displayName: displayName,
+        };
+        moda.connectToPeep(linkNode.peep, ourPocoForPeep, message);
+
+        // nuke this card
+        history.back();
+
+        // XXX ideally we would disable attempting to friend the person
+        // again at this point.  We do not want to manually trigger a removal
+        // because the query should automatically update for us and that should
+        // be triggering the animation.
+      }
+      dom.find('.askFriendForm').submit(handleSubmit);
     },
+  };
+
+  function commonCardKillQuery(data, node) {
+    data.query.destroy();
+    data.query = null;
+  };
+  remove = {
+    'pickServer': commonCardKillQuery,
+    'private': commonCardKillQuery,
+    'add': commonCardKillQuery,
   };
 
   // Find out the user.
@@ -524,7 +512,7 @@ console.log("complete notified");
     // just to trigger actions.  These should all trigger navigation once they
     // complete.
     nodelessActions = {
-      'addPeep': true,
+      'doFriend': true,
       'notify': true,
       'browserIdSignIn': true,
       'connectToServer': true,
@@ -538,20 +526,21 @@ console.log("complete notified");
     };
 
     // Listen for nav items.
-    cards.onNav = function (templateId, data) {
+    cards.onNav = function (templateId, data, linkNode) {
       var cardDom;
 
       if (nodelessActions[templateId]) {
         // A "back" action that could modify the data in a previous card.
         if (update[templateId]) {
-          update[templateId](data);
+          update[templateId](data, linkNode);
         }
       } else {
         // A new action that will generate a new card.
         cardDom = $(cards.templates[templateId].cloneNode(true));
+        cardDom[0].cardData = data;
 
         if (update[templateId]) {
-          update[templateId](data, cardDom);
+          update[templateId](data, cardDom, linkNode);
         }
 
         cards.add(cardDom);
@@ -560,6 +549,14 @@ console.log("complete notified");
           cards.forward();
         }
       }
+    };
+
+    cards.onRemove = function (cardNode) {
+      var cardData = cardNode.cardData;
+
+      var templateId = cardNode.getAttribute('data-cardid');
+      if (templateId in remove)
+        remove[templateId](cardData, cardNode);
     };
 
     cards.onReady = function () {

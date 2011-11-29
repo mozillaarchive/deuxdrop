@@ -624,6 +624,8 @@ ConnectRequest.prototype = {
   acceptConnectRequest: function(ourPocoForThem) {
     this._liveset._bridge.connectToPeep(this.peep, ourPocoForThem);
   },
+
+  on: itemOnImpl,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
