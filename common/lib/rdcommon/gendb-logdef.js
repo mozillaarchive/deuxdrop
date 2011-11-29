@@ -98,6 +98,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       maximizeIndexValue: {tableName: DICE_INDEX, indexName: DICE_INDEX,
                            indexParam: DICE_INDEX,
                            objectName: true, newValue: false},
+      deleteIndexValue: {tableName: DICE_INDEX, indexName: DICE_INDEX,
+                         indexParam: DICE_INDEX, objectName: true},
 
       scanIndex: {tableName: DICE_INDEX, indexName: DICE_INDEX,
                   indexParam: DICE_INDEX,

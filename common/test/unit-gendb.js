@@ -534,6 +534,24 @@ TD.commonCase('reorderable collection index model', function(T) {
          logNamedValue('ordering'), badNews);
   });
 
+  // - index deletion
+  T.group('batch delete: number');
+  T.action(eLazy, 'del B,X', function() {
+    eLazy.expect_event('did batch deletion');
+    // note that we do not need to provide the previous index value currently
+    var nukes = [
+      [IDX_AGE, '', 'B', null],
+      [IDX_AGE, '', 'X', null],
+    ];
+    when(conn.deleteMultipleIndexValues(TBL_HUMANS, nukes),
+         logEvent('did batch deletion'), badNews);
+  });
+  T.check(eLazy, 'check A,C ordering', function() {
+    eLazy.expect_namedValue('ordering', ['A', 12, 'C', 10]);
+    when(conn.scanIndex(TBL_HUMANS, IDX_AGE, '', -1),
+         logNamedValue('ordering'), badNews);
+  });
+
   // - cleanup
   T.group('cleanup');
   T.cleanup(eLazy, 'cleanup', function() {

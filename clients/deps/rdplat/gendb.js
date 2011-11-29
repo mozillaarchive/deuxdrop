@@ -546,6 +546,54 @@ IndexedDbConn.prototype = {
   },
 
   /**
+   * Delete one or more index entries.  We currently do not require the caller
+   *  to provide the previous index value, although we might end up doing that.
+   *
+   * @args[
+   *   @param[tableName]{
+   *     The name of the associated table we are performing updates on.
+   *   }
+   *   @param[nukes IndexValues]
+   * ]
+   */
+  deleteMultipleIndexValues: function(tableName, nukes) {
+    var deferred = $Q.defer();
+
+    var aggrNames = [], iNuke, nuke;
+
+    for (iNuke = 0; iNuke < nukes.length; iNuke++) {
+      nuke = nukes[iNuke];
+
+      var aggrName = tableName + INDEX_DELIM + nuke[0];
+      if (aggrNames.indexOf(aggrName) === -1)
+        aggrNames.push(aggrName);
+    }
+    var transaction = this._db.transaction(aggrNames,
+                                           IDBTransaction.READ_WRITE);
+    transaction.oncomplete = function() {
+      deferred.resolve(nukes);
+    };
+    transaction.onerror = function() {
+      deferred.reject(transaction.errorCode);
+    };
+
+    for (iNuke = 0; iNuke < nukes.length; iNuke++) {
+      nuke = nukes[iNuke];
+      var indexName = nuke[0], indexParam = nuke[1],
+          objectName = nuke[2], prevValue = nuke[3];
+      this._log.deleteIndexValue(tableName, indexName, indexParam, objectName);
+
+      var aggrName = tableName + INDEX_DELIM + indexName;
+      var store = transaction.objectStore(aggrName);
+      var cellName = indexParam + INDEX_PARAM_DELIM + objectName;
+      store.delete(cellName);
+    }
+
+    return deferred.promise;
+  },
+
+
+  /**
    * Set the numeric value associated with an objectName for the given index to
    *  the maximum of its current value and the value we are providing.
    */
@@ -653,7 +701,7 @@ IndexedDbConn.prototype = {
   // String-Value Indices
   //
   // Same as the numeric-value indices; these only exist because of our redis
-  //  impl and this
+  //  impl.  We copy the references for the general implementation across below.
 
   updateStringIndexValue: null,
   scanStringIndex: null,

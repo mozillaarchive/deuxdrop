@@ -462,6 +462,39 @@ RedisDbConn.prototype = {
   },
 
   /**
+   * Delete one or more index entries.  We currently do not require the caller
+   *  to provide the previous index value, although we might end up doing that.
+   *
+   * @args[
+   *   @param[tableName]{
+   *     The name of the associated table we are performing updates on.
+   *   }
+   *   @param[nukes IndexValues]
+   * ]
+   */
+  deleteMultipleIndexValues: function(tableName, nukes) {
+    var deferred = $Q.defer(),
+        multi = this._conn.multi();
+    for (var iNuke = 0; iNuke < nukes.length; iNuke++) {
+      var nuke = nukes[iNuke],
+          indexName = nuke[0], indexParam = nuke[1],
+          objectName = nuke[2], newValue = nuke[3];
+      this._log.deleteIndexValue(tableName, indexName, indexParam,
+                                 objectName, newValue);
+      multi.zrem(
+        this._prefix + ':' + tableName + ':' + indexName + ':' + indexParam,
+        objectName);
+    }
+    multi.exec(function(err, replies) {
+      if (err)
+        deferred.reject(err);
+      else
+        deferred.resolve(nukes);
+    });
+    return deferred.promise;
+  },
+
+  /**
    * Set the numeric value associated with an objectName for the given index to
    *  the maximum of its current value and the value we are providing.
    */
