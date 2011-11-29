@@ -67,7 +67,8 @@
             <a class="homeNav" href="#groups">Group</a>
             <a class="homeNav" href="#notifications">Notifications</a>
             <a class="homeNav" href="#add">+</a>
-            <div class="newConversationNotifications" data-childclass="newConversation">
+            <div class="newConversationNotifications"
+                 data-childclass="newConversation">
               <div class="newConversationScroller">
               </div>
             </div>
@@ -83,7 +84,7 @@
             <button class="search">search</button>
             <button class="button" data-href="#add">add contact</button>
           </div>
-          <div class="scroller" data-childclass="peepSummary">
+          <div class="scroller" data-childclass="peepPrivate">
           </div>
         </div>
 
@@ -92,7 +93,8 @@
           <!-- non-scrolling reminder of who our friend is... -->
           <div class="subHeader hbox">
             <div class="peepInfo">
-              <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src"
+                   src="i/face2.png">
               <span data-bind="displayName" class="peepInfoName"></span>
             </div>
           </div>
@@ -105,15 +107,19 @@
         <div data-cardid="user" class="card">
           <div class="scroller">
             <div class="peepInfo">
-              <img class="peepInfoPic" data-bind="pic" data-attr="src" src="i/face2.png">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src"
+                   src="i/face2.png">
               <span data-bind="displayName" class="peepInfoName"></span>
             </div>
             <div class="peepConversations" data-childclass="convListItem">
             </div>
             <form data-class="compose"></form>
-            <span class="addToChatMessage hidden">This person needs to add you before you can chat with them.</span>
+            <span class="addToChatMessage hidden">
+              This person needs to add you before you can chat with them.
+            </span>
             <form class="addPeepButtonForm hidden">
-              <input type="hidden" name="peepId" value="" data-bind="id" data-attr="value">
+              <input type="hidden" name="peepId" value=""
+                     data-bind="id" data-attr="value">
               <button class="">Add</button>
             </form>
           </div>
@@ -149,15 +155,35 @@
           </div>
         </div>
 
+        <!-- acceptReq: Confirm accepting a connect/friend requestion  -->
+        <div data-cardid="acceptReq" title="Accept a connection" class="card">
+          <div class="scroller">
+            <form class="askFriendForm standardForm">
+              <div>
+                I call this person: <input type="text" name="displayName">
+              </div>
+              <div class="askMessageBox">
+                <div class="askMessagePrompt">
+                  Message to send with this request:
+                </div>
+                <textarea class="askMessageTextArea" name="message"></textarea>
+              </div>
+              <button>Send connect request</button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Start standard UI elements -->
     <div id="common" class="hidden">
 
-      <a data-classimpl="addServerLink" class="item" href="#enterServer">+ Add Server</a>
+      <a data-classimpl="addServerLink" class="item" href="#enterServer">
+        + Add Server
+      </a>
 
-      <a data-classimpl="serverLink" class="item" data-nonav="nonav" href="#connectToServer?id=">
+      <a data-classimpl="serverLink" class="item" data-nonav="nonav"
+         href="#connectToServer?id=">
         <span data-bind="displayName"></span> (<span data-bind="url"></span>)
       </a>
 
@@ -168,8 +194,12 @@
         <input type="text" name="text">
       </form>
 
-      <a href="#conversation?id=" data-classimpl="newConversation" class="newConversation">
-        <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="author.pic" data-attr="src"></span>
+      <a href="#conversation?id=" data-classimpl="newConversation"
+         class="newConversation">
+        <span class="avatar">
+          <img src="i/face2.png" class="avatar"
+               data-bind="author.pic" data-attr="src">
+        </span>
         <span class="newConversationPeep" data-bind="author.displayName"></span>
         <span class="newConversationTime"></span>
         <span class="newConversationText" data-bind="text"></span>
@@ -188,20 +218,31 @@
       <!-- connReq: A connect/friendship request -->
       <a class="connReqItem vbox" data-classimpl="connReq" href="#acceptReq">
         <div class="hbox">
-          <img class="peepInfoPic" data-bind="pic" data-attr="src"
-               src="i/face2.png">
-          <span data-bind="peep.selfPoco.displayName" class="peepInfoName"></span>
+          <div>
+            <div class="avatar">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src"
+                   src="i/face2.png">
+            </div>
+          </div>
+          <div class="vbox center">
+            <div>
+              <span data-bind="peep.selfPoco.displayName" class="peepInfoName">
+              </span>
+            </div>
+            <div>
+              <span data-bind="peepServer.displayName"></span>
+            </div>
+          </div>
         </div>
         <div>
-          <span data-bind="peepServer.displayName"></span>
-        </div>
-        <div>
-          <span data-bind="receivedAt"></span>: 
-          <span data-bind="messageText"></span>
+          <div class="details">
+            <span class="receivedAt" data-bind="receivedAt"></span>: 
+            <span class="messageText" data-bind="messageText"></span>
+          </div>
         </div>
       </a>
 
-      <a class="private unread hbox" data-classimpl="peepSummary" href="#user">
+      <a class="private unread hbox" data-classimpl="peepPrivate" href="#user">
           <div>
               <div class="avatar">
                   <img src="i/face2.png" data-bind="pic" data-attr="src">
@@ -209,7 +250,8 @@
           </div>
           <div class="msgPreview boxFlex">
               <div class="msgPreviewHeader hbox">
-                  <span class="author boxFlex overflow" data-bind="displayName"></span>
+                  <span class="author boxFlex overflow" data-bind="displayName">
+                  </span>
                   <span class="new">(5)</span>
                   <span class="boxFlexStrong"></span>
                   <span class="time">5 min</span>
@@ -223,15 +265,23 @@
       </a>
 
       <a data-classimpl="personLink" class="item" href="#user">
-        <img class="peepInfoPic" src="i/face2.png" data-bind="pic" data-attr="src" align="absmiddle">
+        <img class="peepInfoPic" src="i/face2.png"
+             data-bind="pic" data-attr="src" align="absmiddle">
         <span class="personName" data-bind="displayName"></span>
       </a>
 
-      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item" href="#user?&id="></a>
+      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item"
+         href="#user?&id=">
+      </a>
 
-      <a data-classimpl="addPersonLink" class="item" href="#listUsersForAddPeep">+ Add Peep</a>
+      <a data-classimpl="addPersonLink" class="item"
+         href="#listUsersForAddPeep">
+        + Add Peep
+      </a>
 
-      <a data-classimpl="convListItem" class="item" href="#conversation?id="><span class="meta"></span></a>
+      <a data-classimpl="convListItem" class="item" href="#conversation?id=">
+        <span class="meta"></span>
+      </a>
 
       <!-- Group messaging human message -->
       <div data-classimpl="message"  class="bubble">

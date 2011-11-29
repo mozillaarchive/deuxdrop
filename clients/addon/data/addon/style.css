@@ -1,13 +1,3 @@
-/*
-
-    Info:     Deuxdrop UI elements
-    ------------------------------
-    Author:   Andy Chung
-    ------------------------------
-    Date:     July, 2011
-
-*/
-
 * {
     margin: 0;
     padding: 0;
@@ -363,6 +353,22 @@ input[type=text]#search {
     border-width: 1px 0 1px 1px;
 }
 
+.connReqItem {
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 0.3em;
+}
+
+    .connReqItem .details {
+        margin-left: 1.5em;
+    }
+    .connReqItem .receivedAt {
+        color: #aaa;
+    }
+    .connReqItem .messageText {
+        color: #666;
+    }
+
 .conversations,
 .conversation {
 }
@@ -674,15 +680,15 @@ input[type=text]#search {
 /* hbox and vbox classes */
 
 .hbox {
-    display: -webkit-box;
+    display: -webkit-box !important;
     -webkit-box-orient: horizontal;
     -webkit-box-align: stretch;
 
-    display: -moz-box;
+    display: -moz-box !important;
     -moz-box-orient: horizontal;
     -moz-box-align: stretch;
 
-    display: box;
+    display: box !important;
     box-orient: horizontal;
     box-align: stretch;
     width: 100%;

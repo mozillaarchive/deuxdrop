@@ -495,7 +495,9 @@ try {
  *  crypto self-ident present, but it should never be exposed/to used by the
  *  user interface directly.
  */
-function ServerInfo(_localName, url, displayName) {
+function ServerInfo(_liveset, _localName, url, displayName) {
+  this._eventMap = null;
+  this._liveset = _liveset,
   this._localName = _localName;
   this.url = url;
   this.displayName = displayName;
@@ -503,13 +505,14 @@ function ServerInfo(_localName, url, displayName) {
 ServerInfo.prototype = {
   __namespace: 'servers',
   __clone: function(liveset, cloneHelper) {
-    return new ServerInfo(this._localName, this.url, this.displayName);
+    return new ServerInfo(liveset, this._localName, this.url, this.displayName);
   },
 
   get id() {
     return this._localName;
   },
 
+  on: itemOnImpl,
 };
 
 /**
@@ -752,10 +755,11 @@ ModaBridge.prototype = {
     }
   },
 
-  _transformServerInfo: function(_localName, serialized) {
+  _transformServerInfo: function(_liveset, _localName, serialized) {
     if (!serialized)
       return null;
-    return new ServerInfo(_localName, serialized.url, serialized.displayName);
+    return new ServerInfo(_liveset, _localName,
+                          serialized.url, serialized.displayName);
   },
 
   _receiveWhoAmI: function(msg) {
@@ -763,7 +767,11 @@ ModaBridge.prototype = {
     this._ourUser.poco = msg.poco;
     this._ourUser.selfIdentBlob = msg.selfIdentBlob;
     this._ourUser.clientPublicKey = msg.clientPublicKey;
-    this._ourUser.usingServer = this._transformServerInfo(null, msg.server);
+    // We are passing an empty obj to masquerade as the owning liveset to stop
+    //  the 'on' method from breaking if it gets used.  There are no events
+    //  associated with this rep, so it should ideally be fine...
+    this._ourUser.usingServer = this._transformServerInfo({}, null,
+                                                          msg.server);
 
     // notify listeners
     for (var i = 0; i < this._ourUser._pendingListeners.length; i++) {
@@ -843,7 +851,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(liveset, NS_SERVERS, key);
         else
-          dataMap[key] = this._transformServerInfo(key, val);
+          dataMap[key] = this._transformServerInfo(liveset, key, val);
       }
     }
 

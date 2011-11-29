@@ -342,7 +342,7 @@ define(function (require) {
      */
     'pickServer': function (data, dom) {
       commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
-                      'server', (data.query = moda.queryServers));
+                      'server', (data.query = moda.queryServers()));
     },
 
     /*
@@ -354,6 +354,7 @@ define(function (require) {
       //TODO: this call does not return anything/no callbacks?
       me.signupWithServer(serverInfo, {
         onCompleted: function (err) {
+console.log("signup completed");
           if (err) {
             // TODO: make this a pretty Andy dialog.
             alert('Signup failed: ' + err);
@@ -430,6 +431,7 @@ define(function (require) {
      * including including a small message to send with the request.
      */
     'askFriend': function(data, dom, peepNode) {
+      var peep = peepNode.peep;
       function handleSubmit(evt) {
         evt.preventDefault();
         evt.stopPropagation();
@@ -442,7 +444,7 @@ define(function (require) {
         var ourPocoForPeep = {
           displayName: displayName,
         };
-        moda.connectToPeep(linkNode.peep, ourPocoForPeep, message);
+        moda.connectToPeep(peep, ourPocoForPeep, message);
 
         // nuke this card
         history.back();
@@ -453,6 +455,7 @@ define(function (require) {
         // be triggering the animation.
       }
       dom.find('.askFriendForm').submit(handleSubmit);
+      dom.find('[name="displayName"]').val(peep.selfPoco.displayName);
     },
   };
 
@@ -506,6 +509,10 @@ define(function (require) {
       cards.startCardId = 'signIn';
     } else if (me && !me.haveServerAccount) {
       cards.startCardId = 'needServer';
+    }
+    else {
+      // automatically connect
+      moda.connect();
     }
 
     // The list of #id's that do not correspond to a card, but rather exist
