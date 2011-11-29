@@ -1,4 +1,8 @@
 Quick list of known bugs that have not been uplifted to issues:
+- connect establishment needs to verify the claimed domain/IP of the sender to
+  make sure we can actually talk to it and the crypto keys line up.  Otherwise,
+  it would be possible for a poser to carry a one-way spammy relationship if our
+  user accepts the connect request.
 
 Quick list of fixed bugs that have not had a test introduced to verify their fix:
 - need to update reused peep data's oident slot when contact completion occurs.

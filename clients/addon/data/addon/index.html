@@ -23,6 +23,7 @@
   </head>
   <body>
 
+    <!-- ===== Cards ======================================================= -->
     <div id="cardContainer">
       <div id="cards">
 
@@ -158,25 +159,61 @@
         <!-- acceptReq: Confirm accepting a connect/friend requestion  -->
         <div data-cardid="acceptReq" title="Accept a connection" class="card">
           <div class="scroller">
-            <form class="askFriendForm standardForm">
+            <div>
+              A person identifying themselves as:
+              <div class="hbox">
+                <div>
+                  <div class="avatar">
+                    <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
+                      src="i/face2.png">
+                  </div>
+                </div>
+                <div>
+                  <span class="untrustedData"
+                      data-bind="peep.selfPoco.displayName"></span>
+                </div>
+              </div>
+            </div>
+            <div>
+              using server at <span class="untrustedData"
+                                    data-bind="peepServer.url"></span>
+            </div>
+            <div class="pocoContainer">
+              with the additional contact information:
+            </div>
+            <div>
+              would like to establish a connection with you.  They sent along
+              this message with the request:
+            </div>
+            <div>
+              <span class="untrustedData" data-bind="messageText"></span>
+            </div>
+            <form class="acceptFriendForm standardForm settings">
+              Yes, I want to connect with them, and...
               <div>
                 I call this person: <input type="text" name="displayName">
               </div>
-              <div class="askMessageBox">
-                <div class="askMessagePrompt">
-                  Message to send with this request:
-                </div>
-                <textarea class="askMessageTextArea" name="message"></textarea>
-              </div>
-              <button>Send connect request</button>
+              <button class="green">Accept connect request</button>
+            </form>
+            <form class="ignoreFriendForm standardForm settings">
+              Not sure right now, I'll want to look at this again in the future.
+              <br />
+              <button>Ignore request for now</button>
+            </form>
+            <form class="rejectFriendForm standardForm settings">
+              No, I don't want to connect with them and I NEVER want to see
+              this request again, so I...
+              <br />
+              <button class="red">Reject connect request</button>
             </form>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Start standard UI elements -->
+    <!-- ===== Widgety ===================================================== -->
     <div id="common" class="hidden">
+      <!-- === Universal === -->
 
       <a data-classimpl="addServerLink" class="item" href="#enterServer">
         + Add Server
@@ -204,6 +241,41 @@
         <span class="newConversationTime"></span>
         <span class="newConversationText" data-bind="text"></span>
       </a>
+
+      <ul class="menu" data-classimpl="menuRoot">
+      </ul>
+
+      <li class="hbox" data-classimpl="menuItem">
+        <label></label>
+        <div class="value">
+        </div>
+      </li>
+
+      <!-- === Limbo (Not yet used, maybe never) === -->
+
+      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item"
+         href="#user?&id=">
+      </a>
+
+      <a data-classimpl="personLink" class="item" href="#user">
+        <img class="peepInfoPic" src="i/face2.png"
+             data-bind="pic" data-attr="src" align="absmiddle">
+        <span class="personName" data-bind="displayName"></span>
+      </a>
+
+      <a data-classimpl="convListItem" class="item" href="#conversation?id=">
+        <span class="meta"></span>
+      </a>
+
+
+      <!-- === Card Specialized === -->
+
+      <!-- addPersonLink: (private) mechanism shortcut to phonebook -->
+      <a data-classimpl="addPersonLink" class="item"
+         href="#listUsersForAddPeep">
+        + Add Peep
+      </a>
+
 
       <!-- peepPhonebook: A peep from the phonebook -->
       <a class="phonebookItem hbox" data-classimpl="peepPhonebook"
@@ -242,6 +314,7 @@
         </div>
       </a>
 
+      <!-- peepPrivate: Identities the peep, provides most recent message -->
       <a class="private unread hbox" data-classimpl="peepPrivate" href="#user">
           <div>
               <div class="avatar">
@@ -264,25 +337,6 @@
           </div>
       </a>
 
-      <a data-classimpl="personLink" class="item" href="#user">
-        <img class="peepInfoPic" src="i/face2.png"
-             data-bind="pic" data-attr="src" align="absmiddle">
-        <span class="personName" data-bind="displayName"></span>
-      </a>
-
-      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item"
-         href="#user?&id=">
-      </a>
-
-      <a data-classimpl="addPersonLink" class="item"
-         href="#listUsersForAddPeep">
-        + Add Peep
-      </a>
-
-      <a data-classimpl="convListItem" class="item" href="#conversation?id=">
-        <span class="meta"></span>
-      </a>
-
       <!-- Group messaging human message -->
       <div data-classimpl="message"  class="bubble">
         <a href='#user?id=' class="sender">
@@ -296,6 +350,6 @@
       </div>
 
     </div>
-    <!-- End standard UI elements -->
+    <!-- =================================================================== -->
   </body>
 </html>

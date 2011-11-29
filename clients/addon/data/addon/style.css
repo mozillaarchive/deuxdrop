@@ -34,6 +34,10 @@ button.invisible {
   visibility: hidden;
 }
 
+.untrustedData {
+  background-color: #fee;
+}
+
 button,
 input,
 textarea {
@@ -461,8 +465,8 @@ input[type=text]#search {
     text-align: center;
 }
 
-.standardForm > * {
-    margin: 40px 0;
+.standardForm > div {
+    margin: 20px 0;
 }
 
 .standardForm [type="text"] {
@@ -486,7 +490,7 @@ input[type=text]#search {
     font-weight: bold;
 }
 
-#menu {
+.menu {
     list-style-type: none;
     background-color: white;
     border-radius: 10px;
@@ -494,17 +498,17 @@ input[type=text]#search {
     margin: 0 0 10px 0;
 }
 
-#menu li {
+.menu li {
     font-size: 12px;
     padding: 10px;
     border-bottom: 1px solid #ddd;
 }
 
-#menu li:last-child {
+.menu li:last-child {
     border-bottom: none;
 }
 
-#menu li label {
+.menu li label {
     color: #666;
 }
 

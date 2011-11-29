@@ -60,8 +60,10 @@ define(function (require) {
       commonNodes = {},
       states = {},
       servers,
-      update, remove, notifyDom, nodelessActions,
-      newMessageIScroll, newConversationNodeWidth, init, me;
+      update = {}, remove = {}, notifyDom, nodelessActions,
+      newMessageIScroll, newConversationNodeWidth, init, me,
+
+      jqBody = $('body');
 
   //iScroll just defines a global, bind to it here
   IScroll = window.iScroll;
@@ -219,6 +221,46 @@ define(function (require) {
     }, 300);
   }
 
+  var _nextUniqueId = 0;
+  function genUniqueId() {
+    return 'eweniq' + _nextUniqueId++;
+  }
+
+  /**
+   * Map entries in the poco to labeled things.
+   */
+  var POCO_PUBLISH_AND_LABEL_MAP = {
+    emails: 'email',
+  };
+  /**
+   * Generate a DOM node to display the contents of a poco dictionary we care
+   *  about.
+   */
+  function generatePocoListNode(poco) {
+    var root = commonNodes['menuRoot'].cloneNode(true),
+        itemTemplate = commonNodes['menuItem'];
+
+    for (var key in POCO_PUBLISH_AND_LABEL_MAP) {
+      if (!poco.hasOwnProperty(key))
+        continue;
+      var label = POCO_PUBLISH_AND_LABEL_MAP[key],
+          values = poco[key];
+
+      for (var i = 0; i < values.length; i++) {
+        var valueObj = values[i],
+            id = genUniqueId();
+
+        var itemNode = itemTemplate.cloneNode(), jqItem = $(itemNode);
+        jqItem.find('label').attr('for', id).text(label);
+        jqItem.find('.value').attr('id', id).text(valueObj.value);
+
+        root.appendChild(itemNode);
+      }
+    }
+
+    return root;
+  }
+
   /**
    * Common query binding logic.
    *
@@ -270,203 +312,236 @@ define(function (require) {
       cards.adjustCardSizes();
     });
   }
-
-  // Set up card update actions.
-  update = {
-    /*
-     * First page of the signup process; the user identifies themself by name
-     * and e-mail address (via BrowserID).  Once completed, we switch to the
-     * 'pickServer' card.
-     */
-    'signIn': function (data, dom) {
-
-      function handleSubmit(evt) {
-        evt.preventDefault();
-        evt.stopPropagation();
-
-        var nameDom = dom.find('[name="name"]'),
-            name = nameDom.val().trim();
-
-        // Reset error style in case this is a second try.
-        nameDom.removeClass('error');
-
-        if (name) {
-          browserId.getVerifiedEmail(function (assertion) {
-            if (assertion) {
-              // Provide our poco
-              me.updatePersonalInfo({
-                displayName: name
-              });
-
-              me.provideProofOfIdentity({
-                type: 'email',
-                source: 'browserid',
-                assertion: assertion,
-                audience: location.hostname +
-                          (location.port ? ':' + location.port : '')
-              });
-              cards.onNav('pickServer', {});
-            } else {
-              // Do not do anything. User stays on sign in screen.
-            }
-          });
-        } else {
-          // Inform user that the form needs to be filled in.
-          nameDom.addClass('error');
-        }
-      }
-
-      // Create an explicit click handler to help some iphone devices,
-      // event bubbling does not allow the window to open.
-      dom
-        .find('.signUpForm')
-          .submit(handleSubmit)
-          .end()
-        .find('.browserSignIn')
-          .click(handleSubmit);
-    },
-
-    /*
-     * This page just tells you you don't have a server and then links you to
-     * 'pickServer'.  Presumably exists for the unhappy (development) situation
-     * where the server does not know who you are anymore.  This should
-     * eventually be nuked.
-     */
-    'needServer': function (data, dom) {
-      cards.adjustCardSizes();
-    },
-
-    /*
-     * Lists (client API hard-coded) servers that can be used plus provides the
-     * ability to enter a domain manually.
-     */
-    'pickServer': function (data, dom) {
-      commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
-                      'server', (data.query = moda.queryServers()));
-    },
-
-    /*
-     * Nodeless action that triggers signup.
-     */
-    'connectToServer': function (data, serverNode) {
-      var serverInfo = serverNode.server;
-
-      //TODO: this call does not return anything/no callbacks?
-      me.signupWithServer(serverInfo, {
-        onCompleted: function (err) {
-console.log("signup completed");
-          if (err) {
-            // TODO: make this a pretty Andy dialog.
-            alert('Signup failed: ' + err);
-            return;
-          }
-
-          // Remove the sign in/server setup cards
-          // XXX this does not result in onRemove being invoked
-          $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
-            '[data-cardid="enterServer"], [data-cardid="needServer"]',
-            '#cardContainer').remove();
-
-          // Show the start card
-          cards.onNav('start', {});
-
-          // Go back one to see the start card.
-          history.back();
-        }
-      });
-    },
-
-    /*
-     * Lists all friended peeps, providing a gateway to private chat with each
-     * of them.  As part of this, the most recent message from the friend is
-     * displayed as part of the snippet.
-     */
-    'private': function (data, dom) {
-      // Get the node to use for each peep.
-      var clonable = getChildCloneNode(dom[0]),
-          frag = document.createDocumentFragment();
-
-      // Put in the Add button.
-      frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
-
-      commonQueryBind(dom.find('.scroller'), clonable, 'peep',
-                      (data.query = moda.queryPeeps({ by: 'alphabet' })),
-                      frag);
-    },
-
-    /*
-     * Lists all existing conversations; not filtered to a specific person.
-     * Provides an affordance to create a new conversation.
-     */
-    'groups': function(data, dom) {
-    },
-
-    /*
-     * Lists connection/friend requests.
-     */
-    'notifications': function(data, dom) {
-      commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
-                      'connReq',
-                      (data.query = moda.queryConnectRequests()));
-    },
-
-    /*
-     * Nodeless action to approve a connect request.
-     */
-    'acceptReq': function(data, dom) {
-    },
-
-    /*
-     * Asks our server for users who are not currently our friends so that we
-     * can add them as friends.
-     */
-    'add': function(data, dom) {
-      commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
-                      'peep',
-                      (data.query = moda.queryAllKnownServersForPeeps()));
-    },
-
-    /*
-     * Ask the user to confirm they want to ask someone to be their friend,
-     * including including a small message to send with the request.
-     */
-    'askFriend': function(data, dom, peepNode) {
-      var peep = peepNode.peep;
-      function handleSubmit(evt) {
-        evt.preventDefault();
-        evt.stopPropagation();
-
-        var nameDom = dom.find('[name="displayName"]'),
-            displayName = nameDom.val().trim(),
-            messageDom = dom.find('[name="message"]'),
-            message = messageDom.val().trim();
-
-        var ourPocoForPeep = {
-          displayName: displayName,
-        };
-        moda.connectToPeep(peep, ourPocoForPeep, message);
-
-        // nuke this card
-        history.back();
-
-        // XXX ideally we would disable attempting to friend the person
-        // again at this point.  We do not want to manually trigger a removal
-        // because the query should automatically update for us and that should
-        // be triggering the animation.
-      }
-      dom.find('.askFriendForm').submit(handleSubmit);
-      dom.find('[name="displayName"]').val(peep.selfPoco.displayName);
-    },
-  };
-
   function commonCardKillQuery(data, node) {
     data.query.destroy();
     data.query = null;
   };
-  remove = {
-    'pickServer': commonCardKillQuery,
-    'private': commonCardKillQuery,
-    'add': commonCardKillQuery,
+
+
+  /*
+   * First page of the signup process; the user identifies themself by name
+   * and e-mail address (via BrowserID).  Once completed, we switch to the
+   * 'pickServer' card.
+   */
+  update['signIn'] = function (data, dom) {
+    function handleSubmit(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      var nameDom = dom.find('[name="name"]'),
+          name = nameDom.val().trim();
+
+      // Reset error style in case this is a second try.
+      nameDom.removeClass('error');
+
+      if (name) {
+        browserId.getVerifiedEmail(function (assertion) {
+          if (assertion) {
+            // Provide our poco
+            me.updatePersonalInfo({
+              displayName: name
+            });
+
+            me.provideProofOfIdentity({
+              type: 'email',
+              source: 'browserid',
+              assertion: assertion,
+              audience: location.hostname +
+                        (location.port ? ':' + location.port : '')
+            });
+            cards.onNav('pickServer', {});
+          } else {
+            // Do not do anything. User stays on sign in screen.
+          }
+        });
+      } else {
+        // Inform user that the form needs to be filled in.
+        nameDom.addClass('error');
+      }
+    }
+
+    // Create an explicit click handler to help some iphone devices,
+    // event bubbling does not allow the window to open.
+    dom
+      .find('.signUpForm')
+        .submit(handleSubmit)
+        .end()
+      .find('.browserSignIn')
+        .click(handleSubmit);
+  };
+
+  /*
+   * This page just tells you you don't have a server and then links you to
+   * 'pickServer'.  Presumably exists for the unhappy (development) situation
+   * where the server does not know who you are anymore.  This should
+   * eventually be nuked.
+   */
+  update['needServer'] = function (data, dom) {
+    cards.adjustCardSizes();
+  };
+
+  /*
+   * Lists (client API hard-coded) servers that can be used plus provides the
+   * ability to enter a domain manually.
+   */
+  update['pickServer'] = function (data, dom) {
+    commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
+                    'server', (data.query = moda.queryServers()));
+  };
+  remove['pickServer'] = commonCardKillQuery;
+
+  /*
+   * Handled by explicit form delegation, see down below.
+   */
+  update['enterServer'] = null;
+  // Form submissions for entering a server.
+  jqBody.delegate('[data-cardid="enterServer"] .enterServerForm', 'submit',
+    function (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      var domain =
+        $(evt.target).find('[name="server"]').val().trim().toLowerCase();
+      if (domain) {
+
+        //Fetch the server info
+        me.insecurelyGetServerSelfIdentUsingDomainName(domain,
+          function (serverInfo) {
+
+          if (!serverInfo) {
+            // TODO: Use Andy's better dialogs.
+            alert('Domain ' + domain + ' does not support deuxdrop');
+            return;
+          }
+
+          // Stash in local copy of servers.
+          servers.items[serverInfo.localName] = serverInfo;
+
+          update.connectToServer({
+            id: serverInfo.localName
+          });
+        });
+      }
+    }
+  );
+
+  /*
+   * Nodeless action that triggers signup.
+   */
+  update['connectToServer'] = function (data, serverNode) {
+    var serverInfo = serverNode.server;
+
+    //TODO: this call does not return anything/no callbacks?
+    me.signupWithServer(serverInfo, {
+      onCompleted: function (err) {
+        if (err) {
+          // TODO: make this a pretty Andy dialog.
+          alert('Signup failed: ' + err);
+          return;
+        }
+
+        // Remove the sign in/server setup cards
+        // XXX this does not result in onRemove being invoked
+        $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
+          '[data-cardid="enterServer"], [data-cardid="needServer"]',
+          '#cardContainer').remove();
+
+        // Show the start card
+        cards.onNav('start', {});
+
+        // Go back one to see the start card.
+        history.back();
+      }
+    });
+  };
+
+  /*
+   * Lists all friended peeps, providing a gateway to private chat with each
+   * of them.  As part of this, the most recent message from the friend is
+   * displayed as part of the snippet.
+   */
+  update['private'] = function (data, dom) {
+    // Get the node to use for each peep.
+    var clonable = getChildCloneNode(dom[0]),
+        frag = document.createDocumentFragment();
+
+    // Put in the Add button.
+    frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
+
+    commonQueryBind(dom.find('.scroller'), clonable, 'peep',
+                    (data.query = moda.queryPeeps({ by: 'alphabet' })),
+                    frag);
+  };
+  remove['private'] = commonCardKillQuery;
+
+  /*
+   * Lists all existing conversations; not filtered to a specific person.
+   * Provides an affordance to create a new conversation.
+   */
+  update['groups'] = function(data, dom) {
+  };
+
+  /*
+   * Lists connection/friend requests.
+   */
+  update['notifications'] = function(data, dom) {
+    commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
+                    'connReq',
+                    (data.query = moda.queryConnectRequests()));
+  };
+
+  /*
+   * Nodeless action to approve a connect request.
+   */
+  update['acceptReq'] = function(data, dom, connReqNode) {
+    var connReq = connReqNode.connReq;
+    updateDom(dom, connReq);
+    dom.find('.pocoContainer')
+         .append(generatePocoListNode(connReq.peep.selfPoco));
+    dom.find('input[name="displayName"]').val(connReq.peep.selfPoco.displayName);
+  };
+
+  /*
+   * Asks our server for users who are not currently our friends so that we
+   * can add them as friends.
+   */
+  update['add'] = function(data, dom) {
+    commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
+                    'peep',
+                    (data.query = moda.queryAllKnownServersForPeeps()));
+  };
+  remove['add'] = commonCardKillQuery;
+
+  /*
+   * Ask the user to confirm they want to ask someone to be their friend,
+   * including including a small message to send with the request.
+   */
+  update['askFriend'] = function(data, dom, peepNode) {
+    var peep = peepNode.peep;
+    function handleSubmit(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      var nameDom = dom.find('[name="displayName"]'),
+          displayName = nameDom.val().trim(),
+          messageDom = dom.find('[name="message"]'),
+          message = messageDom.val().trim();
+
+      var ourPocoForPeep = {
+        displayName: displayName,
+      };
+      moda.connectToPeep(peep, ourPocoForPeep, message);
+
+      // nuke this card
+      history.back();
+
+      // XXX ideally we would disable attempting to friend the person
+      // again at this point.  We do not want to manually trigger a removal
+      // because the query should automatically update for us and that should
+      // be triggering the animation.
+    }
+    dom.find('.askFriendForm').submit(handleSubmit);
+    dom.find('[name="displayName"]').val(peep.selfPoco.displayName);
   };
 
   // Find out the user.
@@ -572,35 +647,6 @@ console.log("signup completed");
     };
 
     $('body')
-      // Form submissions for entering a server.
-      .delegate('[data-cardid="enterServer"] .enterServerForm', 'submit',
-        function (evt) {
-          evt.preventDefault();
-          evt.stopPropagation();
-
-          var domain = $(evt.target).find('[name="server"]').val().trim().toLowerCase();
-          if (domain) {
-
-            //Fetch the server info
-            me.insecurelyGetServerSelfIdentUsingDomainName(domain,
-              function (serverInfo) {
-
-              if (!serverInfo) {
-                // TODO: Use Andy's better dialogs.
-                alert('Domain ' + domain + ' does not support deuxdrop');
-                return;
-              }
-
-              // Stash in local copy of servers.
-              servers.items[serverInfo.localName] = serverInfo;
-
-              update.connectToServer({
-                id: serverInfo.localName
-              });
-            });
-          }
-        }
-      )
 
       // Handle compose from a peep screen.
       .delegate('[data-cardid="user"] .compose', 'submit', function (evt) {
