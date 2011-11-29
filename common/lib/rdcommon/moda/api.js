@@ -868,8 +868,12 @@ ModaBridge.prototype = {
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
-        curRep = dataMap[key];
         delta = values[key];
+        if (delta === null) {
+          delete dataMap[key];
+          continue;
+        }
+        curRep = dataMap[key];
         for (attr in delta) {
           switch (attr) {
             case 'numConvs':
@@ -905,8 +909,12 @@ ModaBridge.prototype = {
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
-        curRep = dataMap[key];
         delta = values[key];
+        if (delta === null) {
+          delete dataMap[key];
+          continue;
+        }
+        curRep = dataMap[key];
         for (attr in delta) {
           switch (attr) {
             case 'participants':
@@ -943,6 +951,18 @@ ModaBridge.prototype = {
           dataMap[key] = this._transformConnectRequest(key, val, liveset);
       }
     }
+    if (msg.dataDelta.hasOwnProperty(NS_CONNREQS)) {
+      values = msg.dataDelta[NS_CONNREQS];
+      dataMap = liveset._dataByNS[NS_CONNREQS];
+      for (key in values) {
+        if (!dataMap.hasOwnProperty(key))
+          throw new Error("dataDelta for unknown key: " + key);
+        delta = values[key];
+        if (delta === null) {
+          delete dataMap[key];
+          continue;
+        }
+    }
 
     if (msg.dataMap.hasOwnProperty(NS_ERRORS)) {
       values = msg.dataMap[NS_ERRORS];
@@ -964,8 +984,12 @@ ModaBridge.prototype = {
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta for unknown key: " + key);
-        curRep = dataMap[key];
         delta = values[key];
+        if (delta === null) {
+          delete dataMap[key];
+          continue;
+        }
+        curRep = dataMap[key];
 
         curRep.lastReported = new Date(delta.lastReported);
         curRep.reportedCount = delta.reportedCount;

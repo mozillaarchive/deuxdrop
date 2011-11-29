@@ -729,6 +729,8 @@ NotificationKing.prototype = {
    */
   reuseIfAlreadyKnown: function(writeQueryHandle, namespace, fullId) {
     // fast-path if the given query already knows the answer
+    // (note: this implies that we don't need to fuseDepsIn because, inductively
+    //  they must have already been fused in.)
     var clientData;
     if (writeQueryHandle.membersByFull[namespace].hasOwnProperty(fullId)) {
       clientData = writeQueryHandle.membersByFull[namespace][fullId];
@@ -736,6 +738,8 @@ NotificationKing.prototype = {
       return clientData;
     }
 
+    // recursively walk a dependency list, making each `LocallyNamedClientData`
+    //  known to `queryHandle`.
     function fuseDepsIn(queryHandle, deps) {
       for (var i = 0; i < deps.length; i++) {
         var depData = deps[i];
@@ -1310,9 +1314,99 @@ NotificationKing.prototype = {
 
   /**
    * Something known to us has been deleted from the system or otherwise should
-   *  now be treated as completely unknown to us.
+   *  now be treated as completely unknown to us.  We only do this for primary
+   *  namespaces because it is semantically confusing to us to have a
+   *  dependent object disappear without its referencing object also dying.
+   *
+   * Implementation-wise, we:
+   * - Generate a splice to remove the item.
+   *
+   * - Decrement the `LocallyNamedClientData.count` of all of its dependencies
+   *    since we are, by definition, driving the deleted item's count to zero.
+   *    This may recursively result in other dependencies having their
+   *    reference counts hit zero.
+   *
+   *   An important consequence of this is that all affected queries for this
+   *    query source will experience the same removals as a consequence of
+   *    this change.  Accordingly,
+   *
+   *
+   *
+   * Because the structures do not maintain a list of
+   *    the queries in which they are present, we will need to perform a
+   *    (separate) pass to remove the entries from the membership maps of
+   *    queries and send messages across the wire to trigger their removal
+   *
    */
-  namespaceItemDeleted: function(namespace, name, item) {
+  namespaceItemDeleted: function(namespace, fullName) {
+    var nukedDeps;
+    function releaseDeps(deps) {
+      for (var iDep = 0; iDep < deps.length; iDep++) {
+        var depData = deps[iDep];
+        if (--depData.count > 0)
+          continue;
+
+        // we are now at zero, note our death
+        nukedDeps.push(depData);
+
+        // possibly process children
+        if (depData.deps && depData.deps.length)
+          releaseDeps(depData.deps);
+      }
+    }
+
+    // --- for each query source...
+    for (var qsKey in this._activeQuerySources) {
+      var querySource = this._activeQuerySources[qsKey];
+      var queryHandles = querySource.queryHandlesByNS[namespace];
+
+      // -- find affected queries (first pass)
+      var affectedHandles = [], clientData = null, queryHandle, iQuery;
+      nukedDeps = [];
+
+      for (iQuery = 0; iQuery < queryHandles.length; iQuery++) {
+        queryHandle = queryHandles[iQuery];
+
+        // (bail if this query was not affected)
+        if (!queryHandle.membersByFull[namespace].hasOwnProperty(fullName))
+          continue;
+
+        affectedHandles.push(queryHandle);
+
+        // (bail if we already figured out the nuked dependencies.
+        if (clientData)
+          continue;
+
+        nukedDeps.push(clientData);
+        if (clientData.deps)
+          releaseDeps(clientData.deps);
+      }
+
+      // -- remove nuked deps from affected queries (second pass)
+      for (iQuery = 0; iQuery < affectedHandles.length; iQuery++) {
+        queryHandle = affectedHandles[iQuery];
+
+        for (var iDep = 0; iDep < nukedDeps.length; iDep++) {
+          var depData = nukedDeps[iDep], ns = depData.ns;
+
+          delete queryHandle.membersByFull[ns][depData.fullName];
+          delete queryHandle.membersByFull[ns][depData.localName];
+
+          queryHandle.dataDelta[ns] = null;
+        }
+
+        this._log.nsItemDeleted(queryHandle.uniqueId, fullName);
+        if (queryHandle.pending === PENDING_NONE) {
+          if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
+            queryHandle.pending = PENDING_NOTIF;
+            querySource.pending.push(queryHandle);
+          }
+          else {
+            this.sendQueryResults(queryHandle);
+          }
+        }
+      }
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1323,6 +1417,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     events: {
       nsItemAdded: {queryId: true, fullName: true},
       nsItemModified: {queryId: true, fullName: true},
+      nsItemDeleted: {queryId: true, fullName: true},
       sendQueryResults: {queryId: true},
     },
     TEST_ONLY_events: {

@@ -100,6 +100,12 @@ TD.commonCase('moda basics', function(T) {
 
   T.group('A responds based on the request');
   moda_a.do_connectToPeep(lqaStatic2Requests, client_b, true);
+  // (an expectation should have been generated that the connection request
+  //  has now been removed).
+
+  T.group('kill and reissue static query to make sure the conn req is gone');
+  moda_a.do_killQuery(lqaStatic2Requests);
+  var lqaStatic3Requests = moda_a.do_queryConnectRequests('reqsA-after');
 
   T.group("cleanup");
 });

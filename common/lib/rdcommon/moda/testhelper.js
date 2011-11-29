@@ -123,7 +123,7 @@
  *   we hear the join messages.
  * }
  *
- * @typedef[DynConnReqInfo @dict[
+ * @typedef[DynamicConnReqInfo @dict[
  *   @key[testClient]
  *   @key[receivedAt Number]
  *   @key[messageText String]
@@ -275,15 +275,18 @@ var DeltaHelper = exports.DeltaHelper = {
     return delta;
   },
 
-  connReqDelta_added: function(lqt, reqInfo) {
+  connReqDelta_delta: function(lqt, reqInfo, deltaType) {
     var delta = this.makeOrReuseDelta(lqt);
 
     lqt._reqInfos.push(reqInfo);
     lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
 
+    if (deltaType === -1)
+      delta.preAnno[this._REQINFO_KEYFUNC(reqInfo)] = -1;
     markListIntoObj(lqt._reqInfos.map(this._REQINFO_KEYFUNC),
                     delta.state, MARK_COUNTER);
-    delta.postAnno[this._REQINFO_KEYFUNC(reqInfo)] = 1;
+    if (deltaType === 1)
+      delta.postAnno[this._REQINFO_KEYFUNC(reqInfo)] = 1;
 
     return delta;
   },
@@ -596,17 +599,43 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // all connect request queries are the same right now so they all care
       // (this changes when we start slicing)
 
-      var deltaRep = DeltaHelper.connReqDelta_added(lqt, reqInfo);
+      var deltaRep = DeltaHelper.connReqDelta_delta(lqt, reqInfo, 1);
+      this._ensureExpectedQuery(lqt);
+    }
+  },
+
+  _notifyConnectRequestMooted: function(reqInfo) {
+    var queries = this._dynamicConnReqQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+      // all connect request queries are the same right now so they all care
+      // (this changes when we start slicing)
+
+      var deltaRep = DeltaHelper.connReqDelta_delta(lqt, reqInfo, -1);
       this._ensureExpectedQuery(lqt);
     }
   },
 
   /**
-   * We have heard about a newly added contact, generate expectations for all
-   *  the queries over peeps that match.
+   * We have heard about a newly added contact, generate expectations for 1) all
+   *  the queries over peeps that match, and 2) the connection requests that
+   *  should be nuked.
    * XXX pinned handling
    */
   _notifyPeepAdded: function(newCinfo) {
+    var connReqs = this._dynConnReqInfos;
+    for (var iReq = 0; iReq < connReqs.length; iReq++) {
+      if (connReqs[iReq].testClient.__name === newCinfo.name) {
+        var connReq = connReqs[iReq];
+        // splice it out of existence
+        connReqs.splice(iReq--, 1);
+        // notify (after the splice, for delta rep reasons)
+        this._notifyConnectRequestMooted(connReq);
+        break;
+      }
+    }
+
+
     var queries = this._dynamicPeepQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];

@@ -291,6 +291,11 @@ DummyTestClient.prototype = {
     if (this.uiTester._uid.canSee_connectRequests())
       this.uiTester._verifyConnectRequests(true);
   },
+  _notifyConnectRequestMooted: function(reqInfo) {
+    if (this.uiTester._uid.canSee_connectRequests())
+      this.uiTester._verifyConnectRequests(true);
+  },
+
   _notifyPeepAdded: function(newCinfo) {
     if (this.uiTester._uid.canSee_peeps())
       this.uiTester._verifyPeeps(true);

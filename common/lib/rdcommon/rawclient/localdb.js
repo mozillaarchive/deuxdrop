@@ -846,6 +846,24 @@ LocalStore.prototype = {
       }); // rejection pass-through is fine
   },
 
+  /**
+   * Erase a connection request from our knowledge.  This should be done when
+   *  the contact addition command is completed.
+   */
+  _nukeConnectRequest: function(othPubring) {
+    var self = this;
+    var delIndices = [
+      // Current semantics do not require us to have the index's value to
+      //  delete it.  This may need to be revisited.
+      [$lss.IDX_CONNREQ_RECEIVED, '', othPubring.rootPublicKey, null],
+    ];
+    return $Q.wait(
+      this._notif.namespaceItemDeleted(NS_CONNREQS, othPubring.rootPublicKey),
+      this._db.deleteMultipleIndexValues($lss.TBL_CONNREQ_DATA, delIndices),
+      this._db.deleteRowCell($lss.TBL_CONNREQ_DATA, othPubring.rootPublicKey)
+    );
+  },
+
   _convertConnectRequest: function(reqRep, fullName, queryHandle, clientData) {
     // our direct representation has nothing in it, nothing to do.
 
@@ -1457,8 +1475,12 @@ LocalStore.prototype = {
     var arg = {
       store: this, peepOident: signedOident, othPubring: this._pubring,
     };
+    var requesterPubring =
+      $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(signedOident);
     return $Q.wait(
+      // contact addition mode
       (new $ls_tasks.PeepNameTrackTask(arg, this._log)).run(),
+      // update indices per the design call
       this._db.updateIndexValue($lss.TBL_PEEP_DATA,
                                 $lss.IDX_PEEP_ANY_INVOLVEMENT,
                                 '',
@@ -1466,7 +1488,10 @@ LocalStore.prototype = {
       this._db.updateIndexValue($lss.TBL_PEEP_DATA,
                                 $lss.IDX_PEEP_WRITE_INVOLVEMENT,
                                 '',
-                                peepRootKey, now));
+                                peepRootKey, now),
+      // delete any existing connection request from the database
+      this._nukeConnectRequest(requesterPubring)
+    );
   },
 
   /**
