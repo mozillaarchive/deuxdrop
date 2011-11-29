@@ -962,6 +962,7 @@ ModaBridge.prototype = {
           delete dataMap[key];
           continue;
         }
+      }
     }
 
     if (msg.dataMap.hasOwnProperty(NS_ERRORS)) {

@@ -278,11 +278,17 @@ var DeltaHelper = exports.DeltaHelper = {
   connReqDelta_delta: function(lqt, reqInfo, deltaType) {
     var delta = this.makeOrReuseDelta(lqt);
 
-    lqt._reqInfos.push(reqInfo);
-    lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
+    if (deltaType === 1) {
+      lqt._reqInfos.push(reqInfo);
+      lqt._reqInfos.sort(this._REQINFO_CMPFUNC);
+    }
+    else {
+      lqt._reqInfos.splice(lqt._reqInfos.indexOf(reqInfo), 1);
+    }
 
     if (deltaType === -1)
       delta.preAnno[this._REQINFO_KEYFUNC(reqInfo)] = -1;
+    // (a fresh state is required)
     markListIntoObj(lqt._reqInfos.map(this._REQINFO_KEYFUNC),
                     delta.state, MARK_COUNTER);
     if (deltaType === 1)

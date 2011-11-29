@@ -1376,23 +1376,30 @@ NotificationKing.prototype = {
         // (bail if we already figured out the nuked dependencies.
         if (clientData)
           continue;
+        clientData = queryHandle.membersByFull[namespace][fullName];
 
         nukedDeps.push(clientData);
         if (clientData.deps)
           releaseDeps(clientData.deps);
       }
 
-      // -- remove nuked deps from affected queries (second pass)
+      // -- splice, remove nuked deps from affected queries (second pass)
       for (iQuery = 0; iQuery < affectedHandles.length; iQuery++) {
         queryHandle = affectedHandles[iQuery];
 
+        // - splice
+        var idxItem = queryHandle.items.indexOf(clientData);
+        queryHandle.items.splice(idxItem, 1);
+        queryHandle.splices.push({ index: idxItem, howMany: 1, items: null });
+
+        // - null out deps
         for (var iDep = 0; iDep < nukedDeps.length; iDep++) {
           var depData = nukedDeps[iDep], ns = depData.ns;
 
           delete queryHandle.membersByFull[ns][depData.fullName];
           delete queryHandle.membersByFull[ns][depData.localName];
 
-          queryHandle.dataDelta[ns] = null;
+          queryHandle.dataDelta[ns][depData.localName] = null;
         }
 
         this._log.nsItemDeleted(queryHandle.uniqueId, fullName);
