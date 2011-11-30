@@ -572,7 +572,7 @@ OurUserAccount.prototype = {
    *  third-party attestation of the user's identity.
    */
   provideProofOfIdentity: function(proof) {
-    this._bridge._send('provideProofOfIdentity', proof);
+    this._bridge._send('provideProofOfIdentity', null, proof);
   },
 
   signupWithServer: function(serverInfo, signupListener) {
