@@ -448,6 +448,7 @@ define(function (require) {
 
         // Show the start card
         cards.onNav('start', {});
+        moda.connect();
 
         // Go back one to see the start card.
         history.back();
@@ -500,18 +501,22 @@ define(function (require) {
          .append(generatePocoListNode(connReq.peep.selfPoco));
     dom.find('input[name="displayName"]').val(connReq.peep.selfPoco.displayName);
 
-    dom.find('.acceptFriendForm').on('submit', function(evt) {
+    dom.find('.acceptFriendForm').submit(function(evt) {
         evt.preventDefault();
-      });
-    dom.find('.ignoreFriendForm').on('submit', function(evt) {
-        evt.preventDefault();
-
+        var ourPoco = {
+          displayName: dom.find('input[name="displayName"]').val().trim(),
+        };
+        connReq.acceptConnectRequest(ourPoco);
         history.back();
       });
-    dom.find('.rejectFriendForm').on('submit', function(evt) {
+    dom.find('.ignoreFriendForm').submit(function(evt) {
         evt.preventDefault();
-
-        
+        history.back();
+      });
+    dom.find('.rejectFriendForm').submit(function(evt) {
+        evt.preventDefault();
+        connReq.rejectConnectRequest();
+        history.back();
       });
   };
 

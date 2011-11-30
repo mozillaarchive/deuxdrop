@@ -358,6 +358,7 @@ input[type=text]#search {
 }
 
 .connReqItem {
+    width: 100%;
     padding-bottom: 0.3em;
     border-bottom: 1px solid #eee;
     margin-bottom: 0.3em;
