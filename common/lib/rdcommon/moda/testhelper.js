@@ -1456,6 +1456,26 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     });
   },
 
+  check_queryContainsConnReqsFromClients: function(lqt, clients) {
+    var self = this;
+    this.T.check(this, 'checks', lqt, 'contains conn reqs from', clients,
+                 function() {
+      var expectedNames = [], i;
+      for (i = 0; i < clients.length; i++) {
+        expectedNames.push(clients[i].__name);
+      }
+      expectedNames.sort();
+      self.expect_connReqCheck(expectedNames);
+
+      var actualNames = [], reqs = lqt._liveset.items;
+      for (i = 0; i < reqs.length; i++) {
+        actualNames.push(reqs[i].peep.selfPoco.displayName);
+      }
+      actualNames.sort();
+      self._logger.connReqCheck(actualNames);
+    });
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Query Lookup Helpers
 
@@ -1812,6 +1832,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       // - query contents detailed results checkers (delta rep is very terse)
       convBlurbCheck: { blurbRep: true },
+
+      connReqCheck: { requestsFrom: true },
 
       // - wrapper holds for the backside
       backsideReceived: { cmd: true },

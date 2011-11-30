@@ -89,9 +89,12 @@ TD.commonCase('moda friending', function(T) {
 
   T.group('B requests friendship with A');
   moda_b.do_connectToPeep(lqbPossibleFriends, client_a, true);
+  // (we should get a live update)
+  moda_a.check_queryContainsConnReqsFromClients(lqaRequests, [client_b]);
 
   T.group('A queries conn requests (already populated)');
   var lqaStaticRequests = moda_a.do_queryConnectRequests('reqsA-after');
+  moda_a.check_queryContainsConnReqsFromClients(lqaStaticRequests, [client_b]);
 
   T.group('kill both queries and re-issue for non-reuse case');
   moda_a.do_killQuery(lqaRequests);
@@ -142,6 +145,7 @@ TD.commonCase('moda rejection', function(T) {
   T.group('A rejects the request');
   moda_a.do_rejectConnectRequest(lqaRequests, client_b, true);
   // (we should see the connection request disappear here)
+  moda_a.check_queryContainsConnReqsFromClients(lqaRequests, []);
 
   T.group('kill the query and re-issue for non-reuse case');
   moda_a.do_killQuery(lqaRequests);
