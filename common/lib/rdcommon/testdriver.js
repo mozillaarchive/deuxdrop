@@ -73,6 +73,7 @@ function TestRuntimeContext(envOptions) {
   this._loggerStack = [];
   this._pendingActorsByLoggerType = {};
   this.envOptions = envOptions || {};
+  this.blackboard = {};
 
   /**
    * Strictly increasing value for use in tests that want a relative time
@@ -185,7 +186,9 @@ function TestDefinerRunner(testDefiner, superDebug, exposeToTestOptions) {
   if (!testDefiner)
     throw new Error("No test definer provided!");
   this._testDefiner = testDefiner;
-  this._runtimeContext = new TestRuntimeContext(exposeToTestOptions);
+  this._exposeToTestOptions = exposeToTestOptions;
+  // created before each test case is run
+  this._runtimeContext = null;
   this._superDebug = Boolean(superDebug);
 
   this._logBadThingsToLogger = null;
@@ -425,6 +428,10 @@ TestDefinerRunner.prototype = {
   },
 
   runTestCase: function(testCase) {
+    // create a fresh context every time
+    this._runtimeContext = new TestRuntimeContext(this._exposeToTestOptions);
+    // mark things as under test, and tell them about the new context
+    this._markDefinerUnderTest(this._testDefiner);
     return this.runTestCasePermutation(testCase, 0);
   },
 
@@ -446,7 +453,6 @@ TestDefinerRunner.prototype = {
 //console.error(" runAll()");
     var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
         self = this;
-    this._markDefinerUnderTest(definer);
     definer._log.run_begin();
     // -- next case
     function runNextTestCase() {
