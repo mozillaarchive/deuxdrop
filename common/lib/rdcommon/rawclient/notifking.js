@@ -269,7 +269,9 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       DEP_NAMESPACES = [NS_PEEPS, NS_SERVERS],
       // namespaces that can have dependencies on the above namespaces.
       // nb: NS_CONNREQS populates its peeps itself and they never get updates,
-      //  so it is not included in this list.
+      //  so it is not included in this list.  (nb: by definition, the conn
+      //  req gets removed once the contact is added, which is the point at
+      //  which we would need/want updates.)
       DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS],
       // namespaces that can be dispatched immediately without waiting for an
       //  update phase

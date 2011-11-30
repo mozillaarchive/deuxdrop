@@ -224,12 +224,16 @@ LocalStore.prototype = {
   generateAndPerformReplicaCryptoBlock: function(command, id, payload) {
     var serialized = this.generateReplicaCryptoBlock(command, id, payload);
     this._performReplicaCommand(command, id, payload);
+    // we want to make sure any database effects of the above are relayed
+    this._notif.updatePhaseDoneReleaseNotifications();
     return serialized;
   },
 
   generateAndPerformReplicaAuthBlock: function(command, id, payload) {
     var serialized = this.generateReplicaAuthBlock(command, id, payload);
     this._performReplicaCommand(command, id, payload);
+    // we want to make sure any database effects of the above are relayed
+    this._notif.updatePhaseDoneReleaseNotifications();
     return serialized;
   },
 

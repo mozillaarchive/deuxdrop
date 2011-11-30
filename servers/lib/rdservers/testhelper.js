@@ -558,10 +558,18 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
    *    case a test will get less coverage.)
    */
   _expect_rejectContactRequest_prep: function(otherClient) {
+    this.RT.reportActiveActorThisStep(this._eLocalStore);
+    this.RT.reportActiveActorThisStep(this._eRawClient);
+
+    this._eLocalStore.expect_replicaCmd('rejectContact',
+                                        otherClient.rootPublicKey);
+    this._eRawClient.expect_allActionsProcessed();
+
     this._usingServer.holdAllReplicaBlocksForOtherClients(this);
     this._usingServer.expectReplicaBlocksForOtherClients(this, 1);
 
     this._dynamicNotifyModaActors('rejectContact', otherClient);
+
   },
 
   /**

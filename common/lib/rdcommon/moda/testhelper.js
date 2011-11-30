@@ -1647,7 +1647,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     });
     this.T.action(this._eBackside, 'processes rejectConnectRequest, invokes on',
                   this._testClient._eRawClient, function() {
-      self._testClient._eRawClient.expect_allActionsProcessed();
       self._testClient._expect_rejectContactRequest_prep(other);
       self.releaseAndPeekAtModaCommand('rejectConnectRequest');
       self.stopHoldingAndAssertNoHeldModaCommands();
