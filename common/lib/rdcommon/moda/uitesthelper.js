@@ -280,6 +280,7 @@ DummyTestClient.prototype = {
 
   __receiveConnectRequest: TestModaActorMixins.__receiveConnectRequest,
   __addingContact: TestModaActorMixins.__addingContact,
+  __rejectContact: TestModaActorMixins.__rejectContact,
   __receiveConvWelcome: TestModaActorMixins.__receiveConvWelcome,
   __receiveConvMessage: TestModaActorMixins.__receiveConvMessage,
   __updatePhaseComplete: TestModaActorMixins.__updatePhaseComplete,
@@ -291,7 +292,7 @@ DummyTestClient.prototype = {
     if (this.uiTester._uid.canSee_connectRequests())
       this.uiTester._verifyConnectRequests(true);
   },
-  _notifyConnectRequestMooted: function(reqInfo) {
+  _notifyConnectRequestMooted: function(name) {
     if (this.uiTester._uid.canSee_connectRequests())
       this.uiTester._verifyConnectRequests(true);
   },

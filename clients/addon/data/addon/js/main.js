@@ -499,6 +499,20 @@ define(function (require) {
     dom.find('.pocoContainer')
          .append(generatePocoListNode(connReq.peep.selfPoco));
     dom.find('input[name="displayName"]').val(connReq.peep.selfPoco.displayName);
+
+    dom.find('.acceptFriendForm').on('submit', function(evt) {
+        evt.preventDefault();
+      });
+    dom.find('.ignoreFriendForm').on('submit', function(evt) {
+        evt.preventDefault();
+
+        history.back();
+      });
+    dom.find('.rejectFriendForm').on('submit', function(evt) {
+        evt.preventDefault();
+
+        
+      });
   };
 
   /*

@@ -610,14 +610,28 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     }
   },
 
-  _notifyConnectRequestMooted: function(reqInfo) {
+  _notifyConnectRequestMooted: function(name) {
+    var connReqs = this._dynConnReqInfos, mootedReq = null;
+    for (var iReq = 0; iReq < connReqs.length; iReq++) {
+      if (connReqs[iReq].testClient.__name === name) {
+        mootedReq = connReqs[iReq];
+        // splice it out of existence
+        connReqs.splice(iReq--, 1);
+        break;
+      }
+    }
+    // it's possible we don't have a connect request; like if we are the
+    //  initiator...
+    if (!mootedReq)
+      return;
+
     var queries = this._dynamicConnReqQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
       // all connect request queries are the same right now so they all care
       // (this changes when we start slicing)
 
-      var deltaRep = DeltaHelper.connReqDelta_delta(lqt, reqInfo, -1);
+      var deltaRep = DeltaHelper.connReqDelta_delta(lqt, mootedReq, -1);
       this._ensureExpectedQuery(lqt);
     }
   },
@@ -629,19 +643,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    * XXX pinned handling
    */
   _notifyPeepAdded: function(newCinfo) {
-    var connReqs = this._dynConnReqInfos;
-    for (var iReq = 0; iReq < connReqs.length; iReq++) {
-      if (connReqs[iReq].testClient.__name === newCinfo.name) {
-        var connReq = connReqs[iReq];
-        // splice it out of existence
-        connReqs.splice(iReq--, 1);
-        // notify (after the splice, for delta rep reasons)
-        this._notifyConnectRequestMooted(connReq);
-        break;
-      }
-    }
-
-
     var queries = this._dynamicPeepQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
@@ -870,7 +871,12 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this._dynamicContactInfos.push(newCinfo);
 
     // -- generate expectations about peep query deltas
+    this._notifyConnectRequestMooted(newCinfo.name);
     this._notifyPeepAdded(newCinfo);
+  },
+
+  __rejectContact: function(otherClient) {
+    this._notifyConnectRequestMooted(otherClient.__name);
   },
 
   __receiveConvWelcome: function(tConv) {
@@ -1472,6 +1478,17 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
                     + "' back to a PeepBlurb instsance.");
   },
 
+  _grabConnReqFromQueryUsingClient: function(lqt, testClient) {
+    var items = lqt._liveset.items, i;
+
+    for (i = 0; i < items.length; i++) {
+      if (items[i].peep.selfPoco.displayName === testClient.__name)
+        return items[i];
+    }
+    throw new Error("Unable to map testClient '" + testClient.__name +
+                    + "' back to a ConnectRequest instsance.");
+  },
+
   _mapPeepsFromQueryUsingClients: function(lqt, testClients) {
     var peeps = [];
     for (var i = 0; i < testClients.length; i++) {
@@ -1596,6 +1613,26 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     });
     this._testClient._expdo_contactRequest_everything_else(
       other, messageText, interesting);
+  },
+
+  do_rejectConnectRequest: function(usingQuery, other, interesting) {
+    var self = this;
+    this.T.action('moda sends rejectConnectRequest to', this._eBackside,
+                  function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('rejectConnectRequest');
+
+      var connReq = self._grabConnReqFromQueryUsingClient(usingQuery, other);
+      connReq.rejectConnectRequest();
+    });
+    this.T.action(this._eBackside, 'processes rejectConnectRequest, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._testClient._eRawClient.expect_allActionsProcessed();
+      self._testClient._expect_rejectContactRequest_prep(other);
+      self.releaseAndPeekAtModaCommand('rejectConnectRequest');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+    });
+    this._testClient._expdo_rejectContactRequest_everything_else(other);
   },
 
   /**

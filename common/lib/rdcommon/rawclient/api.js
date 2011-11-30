@@ -1000,7 +1000,19 @@ RawClientAPI.prototype = {
   /**
    * Reject a connection request.
    */
-  rejectConnectRequest: function(rootKey, receivedAt, reportAs) {
+  rejectConnectRequest: function(rootKey, tellKey, receivedAt, reportAs) {
+    // rootKey is in case we change the backend-ish bit
+    // reportAs is for eventual handling of blacklisting a server, collaborative
+    //  spam detection, etc.
+    var replicaBlock =
+      this.store.generateAndPerformReplicaAuthBlock('rejectContact', rootKey,
+                                                    {});
+    this._enqueuePersistentAction({
+      type: 'rejectContact',
+      receivedAt: receivedAt,
+      tellKey: tellKey,
+      replicaBlock: replicaBlock
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////

@@ -226,6 +226,14 @@ UserMessageProcessor.prototype = {
     return (new UserOutgoingContactRequestTask(arg, this._logger)).run();
   },
 
+  rejectContactRequest: function(msg) {
+    // No real auditing of this data needs to occur; if the client screws up
+    //  the timestamp, they will just fail to remove the request.   If the
+    //  tell key is bogus, they have just banned a bogus key and the question
+    //  then becomes one of storage usage/misuse.
+    this.store.rejectContactRequest(msg.receivedAt, msg.tellKey);
+  },
+
   /**
    * Complete the contact request/addition cycle.  This gets invoked when we
    *  have both received and incoming request and generated (and sent) an

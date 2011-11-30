@@ -846,26 +846,33 @@ LocalStore.prototype = {
       }); // rejection pass-through is fine
   },
 
+  _cmd_rejectContact: function(peepRootKey, ignored) {
+    this._nukeConnectRequest(peepRootKey);
+  },
+
   /**
    * Erase a connection request from our knowledge.  This should be done when
    *  the contact addition command is completed.
    */
-  _nukeConnectRequest: function(othPubring) {
+  _nukeConnectRequest: function(peepRootKey) {
     var self = this;
     var delIndices = [
       // Current semantics do not require us to have the index's value to
       //  delete it.  This may need to be revisited.
-      [$lss.IDX_CONNREQ_RECEIVED, '', othPubring.rootPublicKey, null],
+      [$lss.IDX_CONNREQ_RECEIVED, '', peepRootKey, null],
     ];
     return $Q.wait(
-      this._notif.namespaceItemDeleted(NS_CONNREQS, othPubring.rootPublicKey),
+      this._notif.namespaceItemDeleted(NS_CONNREQS, peepRootKey),
       this._db.deleteMultipleIndexValues($lss.TBL_CONNREQ_DATA, delIndices),
-      this._db.deleteRowCell($lss.TBL_CONNREQ_DATA, othPubring.rootPublicKey)
+      this._db.deleteRowCell($lss.TBL_CONNREQ_DATA, peepRootKey)
     );
   },
 
   _convertConnectRequest: function(reqRep, fullName, queryHandle, clientData) {
-    // our direct representation has nothing in it, nothing to do.
+    // backside data: we need the receivedAt date, we get the rest via the peep
+    clientData.data = {
+      receivedAt: reqRep.receivedAt
+    };
 
     // - synthesize the peep rep
     var peepClientData = this._notif.reuseIfAlreadyKnown(
@@ -880,7 +887,7 @@ LocalStore.prototype = {
         fullName: fullName,
         ns: NS_PEEPS,
         count: 1,
-        data: null,
+        data: null, // (value assigned by the convert call)
         indexValues: [],
         deps: [],
       };
@@ -1475,8 +1482,6 @@ LocalStore.prototype = {
     var arg = {
       store: this, peepOident: signedOident, othPubring: this._pubring,
     };
-    var requesterPubring =
-      $pubring.createPersonPubringFromOthIdentDO_NOT_VERIFY(signedOident);
     return $Q.wait(
       // contact addition mode
       (new $ls_tasks.PeepNameTrackTask(arg, this._log)).run(),
@@ -1490,7 +1495,7 @@ LocalStore.prototype = {
                                 '',
                                 peepRootKey, now),
       // delete any existing connection request from the database
-      this._nukeConnectRequest(requesterPubring)
+      this._nukeConnectRequest(peepRootKey)
     );
   },
 

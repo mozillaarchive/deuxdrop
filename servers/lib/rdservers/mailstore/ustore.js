@@ -196,7 +196,7 @@ UserBehalfDataStore.prototype = {
   //    requests, and if they do, we should probably be cutting them off before
   //    that as presumption of bad actorness.)
   //
-  // Incoming: [timestamp]
+  // Incoming: [timestamp (lexipadded)]
   // - d:TELLKEY
   //
   // Suppress: [other user tell key/server longterm box key]

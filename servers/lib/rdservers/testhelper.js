@@ -284,7 +284,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     var otherClients = this._allClones.filter(function(client) {
                                                 return client !== self;
                                               });
-    this._parameterizedSteps('action', arguments, connectedClients);
+    this._parameterizedSteps('action', arguments, otherClients);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -549,6 +549,33 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     this._eRawClient.expect_replicaCaughtUp();
 
     this._dynamicNotifyModaActors('addingContact', otherClient);
+  },
+
+  /**
+   * Expect the server side bits of a contact rejection.  This entails:
+   * - removal of the record from the incoming connect requests table
+   * - queueing of the replica block to other connected clients that says
+   *    the rejection took place.  (note that because the replica block
+   *    is played locally before the server gets it, in a single-client
+   *    case a test will get less coverage.)
+   */
+  _expect_rejectContactRequest_prep: function(otherClient) {
+    this._usingServer.holdAllReplicaBlocksForOtherClients(this);
+    this._usingServer.expectReplicaBlocksForOtherClients(this, 1);
+
+    this._dynamicNotifyModaActors('rejectContact', otherClient);
+  },
+
+  /**
+   * Generate test steps for
+   */
+  _expdo_rejectContactRequest_everything_else: function(otherClient) {
+    var self = this;
+    this._T_otherClientsStep(this._usingServer,
+        'delivers rejections auth block to', '*PARAM*', function(paramClient) {
+      paramClient._dynamicNotifyModaActors('rejectContact', otherClient);
+      self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
+    });
   },
 
   expectReplicaUpdate: function() {
@@ -1369,14 +1396,41 @@ var TestServerActorMixins = {
    *  don't abuse.  Call `stopHoldingAndAssertNoHeldReplicaBlocks` when done.
    */
   holdAllReplicaBlocksForUser: function(testClient) {
-    var csc = testClient._eServerConn._logger.__instance.appConn;
-    // wrap it for hold support if not already wrapped
-    if (!("__hold_all" in csc))
-      $testwrap_mailstore.storeConnWrap(csc, this._logger,
-                                        { name: testClient.__name });
+    for (var i = 0; i < testClient._allClones.length; i++) {
+      var cloneClient = testClient._allClones[i];
 
-    csc.__hold_all(true);
+      var csc = cloneClient._eServerConn._logger.__instance.appConn;
+      // wrap it for hold support if not already wrapped
+      if (!("__hold_all" in csc))
+        $testwrap_mailstore.storeConnWrap(csc, this._logger,
+                                          { name: cloneClient.__name });
+
+      csc.__hold_all(true);
+    }
   },
+
+  /**
+   * Tell our mailstore to hold all replica blocks (or other unsolicited
+   *  notifications) for all the OTHER clients of a user (identified by their
+   *  canonical client) pending explicit release calls.  Used for step-sanity,
+   *  don't abuse.  Call `stopHoldingAndAssertNoHeldReplicaBlocks` when done.
+   */
+  holdAllReplicaBlocksForOtherClients: function(testClient) {
+    for (var i = 0; i < testClient._allClones.length; i++) {
+      var cloneClient = testClient._allClones[i];
+      if (cloneClient === testClient)
+        continue;
+
+      var csc = cloneClient._eServerConn._logger.__instance.appConn;
+      // wrap it for hold support if not already wrapped
+      if (!("__hold_all" in csc))
+        $testwrap_mailstore.storeConnWrap(csc, this._logger,
+                                          { name: cloneClient.__name });
+
+      csc.__hold_all(true);
+    }
+  },
+
 
   /**
    * Expect some number of replica blocks to be queued for all of the clients of
@@ -1385,12 +1439,31 @@ var TestServerActorMixins = {
    * This does assume that all of the clones are fully subscribed to everything.
    */
   expectReplicaBlocksForUser: function(testClient, expectedCount) {
+    this.RT.reportActiveActorThisStep(this);
     for (var i = 0; i < testClient._allClones.length; i++) {
       var cloneClient = testClient._allClones[i];
-      testClient.RT.reportActiveActorThisStep(cloneClient);
       var count = expectedCount;
       while (count--) {
-        this.expect_replicaBlockNotifiedOnServer(testClient.__name);
+        this.expect_replicaBlockNotifiedOnServer(cloneClient.__name);
+      }
+    }
+  },
+
+  /**
+   * Expect some number of replica blocks to be queued for the other clients of
+   *  a user.
+   *
+   * This does assume that all of the clones are fully subscribed to everything.
+   */
+  expectReplicaBlocksForOtherClients: function(testClient, expectedCount) {
+    this.RT.reportActiveActorThisStep(this);
+    for (var i = 0; i < testClient._allClones.length; i++) {
+      var cloneClient = testClient._allClones[i];
+      if (cloneClient === testClient)
+        continue;
+      var count = expectedCount;
+      while (count--) {
+        this.expect_replicaBlockNotifiedOnServer(cloneClient.__name);
       }
     }
   },
@@ -1409,9 +1482,12 @@ var TestServerActorMixins = {
   /**
    * Counterpart to `holdAllReplicaBlocks`.
    */
-  stopHoldingAndAssertNoHeldReplicaBlocksForUse: function(testClient) {
-    var csc = testClient._eServerConn._logger.__instance.appConn;
-    csc.__hold_all(false);
+  stopHoldingAndAssertNoHeldReplicaBlocksForUser: function(testClient) {
+    for (var i = 0; i < testClient._allClones.length; i++) {
+      var cloneClient = testClient._allClones[i];
+      var csc = cloneClient._eServerConn._logger.__instance.appConn;
+      csc.__hold_all(false);
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////

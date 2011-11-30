@@ -198,6 +198,18 @@ ModaBackside.prototype = {
                                                 payload.messageText);
   },
 
+  _cmd_rejectConnectRequest: function(_ignored, payload) {
+    var reqData = this._notif.mapLocalNameToClientData(
+                    this._querySource, NS_CONNREQS, payload.localName),
+        peepData = reqData.deps[0],
+        pubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                    peepData.data.sident);
+
+    this._rawClient.rejectConnectRequest(
+      pubring.rootPublicKey, pubring.getPublicKeyFor('messaging', 'tellBox'),
+      reqData.data.receivedAt, payload.reportAs);
+  },
+
   _cmd_createConversation: function(_ignored, convData) {
     var peepOIdents = [], peepPubrings = [];
     for (var iPeep = 0; iPeep < convData.peeps.length; iPeep++) {

@@ -26,6 +26,13 @@ the federated protocol or the protocol we use here.
   @key[replicaBlock ReplicaCryptoBlock]
 ]
 
+@message[ClientRejectContact #:extends GenClientMessage
+  @key[userTellKey TellKey]
+  @key[receivedAt DateMS]
+]{
+  Message used to reject a contact.
+}
+
 @section{Contacts}
 
 @section{Conversations}

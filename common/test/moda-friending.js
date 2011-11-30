@@ -110,4 +110,44 @@ TD.commonCase('moda friending', function(T) {
   T.group("cleanup");
 });
 
+TD.commonCase('moda rejection', function(T) {
+  T.group('setup');
+
+  // only A needs to use moda for our tests.
+  var client_a = T.actor('testClient', 'A', {moda: true}),
+      moda_a = T.actor('testModa', 'mA', {client: client_a}, client_a),
+      client_b = T.actor('testClient', 'B', {moda: true}),
+      moda_b = T.actor('testModa', 'mB', {client: client_b}, client_b);
+  var serverOpts = {roles: ['auth', 'signup', 'drop', 'sender', 'store',
+                            'fanout']};
+  var server_x = T.actor('testServer', 'X', serverOpts),
+      server_y = T.actor('testServer', 'Y', serverOpts);
+
+  moda_a.setup_useServer(server_x);
+  moda_b.setup_useServer(server_y);
+
+  client_a.setup_connect();
+  client_b.setup_connect();
+
+  T.group('A queries conn requests (for dynamic update)');
+  var lqaRequests = moda_a.do_queryConnectRequests('reqsA-before');
+
+  T.group('B finds A');
+  var lqbPossibleFriends = moda_b.do_queryPossibleFriends('possfriendsB',
+                                                          [client_a]);
+
+  T.group('B requests friendship with A');
+  moda_b.do_connectToPeep(lqbPossibleFriends, client_a, true);
+
+  T.group('A rejects the request');
+  moda_a.do_rejectConnectRequest(lqaRequests, client_b, true);
+  // (we should see the connection request disappear here)
+
+  T.group('kill the query and re-issue for non-reuse case');
+  moda_a.do_killQuery(lqaRequests);
+  var lqaRequests2 = moda_a.do_queryConnectRequests('reqsA-after');
+
+  T.group("cleanup");
+});
+
 }); // end define

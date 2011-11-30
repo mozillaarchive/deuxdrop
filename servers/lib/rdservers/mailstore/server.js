@@ -461,13 +461,13 @@ ClientServicingConnection.prototype = {
   // Contact Mutation
 
   /**
-   * Request/approve the establishment of a contact relationship using
-   *  webfinger.  The primary issue in contact establishment is making sure we
-   *  know when both parties have agreed to be friends.  This is important
-   *  because our UX does not want to deal with the pre-friend limbo state and
-   *  so we have to know when success happens.  One pleasant side-effect of this
-   *  decision is that it does allow our protocol to require the client to be
-   *  involved in the process, allowing signatures to be fully verified.
+   * Request/approve the establishment of a contact relationship.  The primary
+   *  issue in contact establishment is making sure we know when both parties
+   *  have agreed to be friends.  This is important because our UX does not want
+   *  to deal with the pre-friend limbo state and so we have to know when
+   *  success happens.  One pleasant side-effect of this decision is that it
+   *  does allow our protocol to require the client to be involved in the
+   *  process, allowing signatures to be fully verified.
    *
    * The general flow goes like this:
    *
@@ -531,6 +531,16 @@ ClientServicingConnection.prototype = {
    */
   _msg_root_reqContact: function(msg) {
     return when(this.uproc.issueContactRequest(msg), this._bound_ackAction);
+  },
+
+  /**
+   * Reject a contact request.
+   */
+  _msg_root_rejectContact: function(msg) {
+    return when(
+      $Q.wait(this.sendReplicaBlockToOtherClients(msg.replicaBlock),
+              this.uproc.rejectContactRequest(msg)),
+      this._bound_ackAction);
   },
 
   /**

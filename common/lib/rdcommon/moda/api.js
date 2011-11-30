@@ -624,8 +624,25 @@ ConnectRequest.prototype = {
     return this._localName;
   },
 
+  /**
+   * Accept this connection request, providing a portable contacts
+   *  representation that we will include in our assertion of this person's
+   *  identity.
+   */
   acceptConnectRequest: function(ourPocoForThem) {
     this._liveset._bridge.connectToPeep(this.peep, ourPocoForThem);
+  },
+
+
+  /**
+   * Reject this connection request permanently, removing it from the connect
+   *  request list and never allowing any new requests to be issued by this
+   *  person.  If you simply want to ignore a request, then don't call any
+   *  methods.
+   */
+  rejectConnectRequest: function() {
+    this._liveset._bridge._send('rejectConnectRequest', null,
+      { localName: this._localName, reportAs: null });
   },
 
   on: itemOnImpl,
