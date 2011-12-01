@@ -667,6 +667,10 @@ PossibleFriend.prototype = {
       liveset, this._localName, cloneHelper(this.peep));
   },
 
+  get id() {
+    return this._localName;
+  },
+
   on: itemOnImpl,
 };
 

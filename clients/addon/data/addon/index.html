@@ -281,9 +281,10 @@
       <a class="phonebookItem hbox" data-classimpl="peepPhonebook"
          href="#askFriend">
         <div class="peepInfo">
-          <img class="peepInfoPic" data-bind="pic" data-attr="src"
+          <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
                src="i/face2.png" />
-          <span data-bind="selfPoco.displayName" class="peepInfoName"></span>
+          <span data-bind="peep.selfPoco.displayName" class="peepInfoName">
+          </span>
         </div>
       </a>
 
