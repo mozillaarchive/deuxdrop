@@ -552,7 +552,7 @@ ty.defineWidget({
     type: 'tab',
     obj: { kind: 'make-friends' },
   },
-  focus: wy.focus.container.vertical('peeps'),
+  focus: wy.focus.container.vertical('possFriends'),
   emit: ['openTab'],
   structure: {
     possFriends: wy.vertList({type: 'possible-friend-blurb'}),
@@ -567,8 +567,9 @@ ty.defineWidget({
     },
   },
   events: {
-    peeps: {
-      command: function(possFriendBinding) {
+    possFriends: {
+      command: function(clickedBinding) {
+        var possFriendBinding = this.climbToChildBinding(clickedBinding);
         // XXX we don't have any guarantee we're not getting a child binding
         //  now that we have gone and nested stuff.  FIX WMSY IMPORTANT USE CASE
         var clonedSet = this.vs.liveSet.cloneSlice([possFriendBinding.obj]),
@@ -621,7 +622,7 @@ ty.defineWidget({
         var moda = this.__context.moda;
         var ourPocoForPeep =
           this.pocoEditor_element.binding.gimmePoco();
-        moda.connectToPeep(this.obj.peep, ourPocoForPeep,
+        moda.connectToPeep(this.obj.possFriend.peep, ourPocoForPeep,
                            this.messageText_element.value);
 
         this.emit_closeTab(this.obj);

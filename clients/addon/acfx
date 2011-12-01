@@ -9,7 +9,7 @@
 #  we need to do a few copying passes.
 
 # --delete --delete-excluded
-CPCMD="rsync -av --exclude-from .acfx-exclude"
+CPCMD="rsync -avL --exclude-from .acfx-exclude"
 
 ## Copy over UI used by the content part of the addon.
 mkdir -p data/web

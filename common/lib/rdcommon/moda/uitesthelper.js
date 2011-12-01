@@ -197,6 +197,11 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._dynPendingQueries = [];
   this._dynamicPossFriendsQueries = [];
   this._dynamicConnReqQueries = [];
+
+  // - hacked state tracking
+  // we lack an expectation representation for this, so we have to save off
+  //  the explicit payloads given to us.
+  this._dynPossibleFriendClients = null;
 }
 DummyTestClient.prototype = {
   toString: function() {
@@ -280,6 +285,7 @@ DummyTestClient.prototype = {
   // Notifications from testClient
 
   __receiveConnectRequest: TestModaActorMixins.__receiveConnectRequest,
+  __requestContact: TestModaActorMixins.__requestContact,
   __addingContact: TestModaActorMixins.__addingContact,
   __rejectContact: TestModaActorMixins.__rejectContact,
   __receiveConvWelcome: TestModaActorMixins.__receiveConvWelcome,
@@ -289,9 +295,19 @@ DummyTestClient.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Live-UI checking logic
 
-  _notifyConnectRequestIssued: function(name) {
+  _notifyConnectRequestIssued: function(testClient) {
+    var expectedClients = this._dynPossibleFriendClients;
+    if (!expectedClients)
+      return;
+
+    var idxIssued = expectedClients.indexOf(testClient);
+    if (idxIssued === -1)
+      return;
+
+    expectedClients.splice(idxIssued, 1);
+
     if (this.uiTester._uid.canSee_possibleFriends())
-      this.uiTester._verifyPossibleFriends(true);
+      this.uiTester._verifyPossibleFriends(expectedClients, true);
   },
 
   _notifyConnectRequestReceived: function(reqInfo) {
@@ -440,12 +456,12 @@ var TestUIActorMixins = {
       self._uid.showPage_possibleFriends();
     });
     this.T.check('verify possible friends', function() {
-      self._verifyPossibleFriends();
+      self._verifyPossibleFriends(otherClients);
     });
   },
 
-  _verifyPossibleFriends: function(waitForUpdate) {
-    this._uid.verify_possibleFriends(otherClients);
+  _verifyPossibleFriends: function(otherClients, waitForUpdate) {
+    this._uid.verify_possibleFriends(otherClients, waitForUpdate);
   },
 
   /**
