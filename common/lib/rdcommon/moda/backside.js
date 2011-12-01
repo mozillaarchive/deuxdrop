@@ -68,8 +68,10 @@ define(
 const when = $Q.when;
 
 const NS_PEEPS = 'peeps',
-      NS_CONVBLURBS = 'convblurbs', NS_CONVMSGS = 'convmsgs',
+      NS_CONVBLURBS = 'convblurbs',
+      NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers',
+      NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
       NS_ERRORS = 'errors';
 
@@ -364,11 +366,14 @@ ModaBackside.prototype = {
     this._notif.sendQueryResults(queryHandle);
   },
 
-  _cmd_queryMakeNewFriends: function(bridgeQueryName) {
-    var queryHandle = this._notif.newTrackedQuery(
-                        this._querySource, bridgeQueryName,
-                        NS_PEEPS, {}),
+  _cmd_queryPossibleFriends: function(bridgeQueryName) {
+    var querySource = this._querySource,
+        queryHandle = this._notif.newTrackedQuery(
+                        querySource, bridgeQueryName,
+                        NS_POSSFRIENDS, {}),
         self = this;
+
+    // note: they come back sorted by display name already
     when(this._rawClient.queryServerForPossibleFriends(queryHandle),
       function resolved(blobsAndPayloads) {
         var viewItems = [];
@@ -378,31 +383,30 @@ ModaBackside.prototype = {
               selfIdentPayload = blobAndPayload.payload,
               fullName = selfIdentPayload.root.rootSignPubKey;
 
-          var clientData = self._notif.reuseIfAlreadyKnown(
-                             queryHandle, NS_PEEPS, fullName);
-          if (clientData) {
-            viewItems.push(clientData.localName);
-            continue;
-          }
+          var peepClientData = self._store._convertSynthPeep(
+                                 queryHandle, fullName, selfIdentBlob,
+                                 selfIdentPayload);
 
-          var localName = "" + (self._querySource.nextUniqueIdAlloc++);
-          clientData = {
-            localName: localName,
-            fullName: fullName,
-            count: 1,
-            data: null,
-            indexValues: [],
-            deps: [],
+          var localName = "" + (querySource.nextUniqueIdAlloc++),
+              clientData = {
+                localName: localName,
+                fullName: fullName,
+                ns: NS_POSSFRIENDS,
+                count: 1,
+                data: null,
+                indexValues: [],
+                deps: [peepClientData],
+              };
+
+          queryHandle.membersByLocal[NS_POSSFRIENDS][localName] = clientData;
+          queryHandle.membersByFull[NS_POSSFRIENDS][fullName] = clientData;
+
+          queryHandle.dataMap[NS_POSSFRIENDS][localName] = {
+            peepLocalName: peepClientData.localName
           };
-          var frontData = self._store._convertPeepSelfIdentToBothReps(
-                            selfIdentBlob, selfIdentPayload, clientData);
-
-          queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
-          queryHandle.membersByFull[NS_PEEPS][fullName] = clientData;
-
-          queryHandle.dataMap[NS_PEEPS][localName] = frontData;
 
           viewItems.push(localName);
+          queryHandle.items.push(clientData);
         }
 
         queryHandle.splices.push(

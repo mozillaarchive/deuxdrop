@@ -195,6 +195,7 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._dynamicPeepConvQueries = [];
   this._dynamicConvMsgsQueries = [];
   this._dynPendingQueries = [];
+  this._dynamicPossFriendsQueries = [];
   this._dynamicConnReqQueries = [];
 }
 DummyTestClient.prototype = {
@@ -288,7 +289,12 @@ DummyTestClient.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Live-UI checking logic
 
-  _notifyConnectRequest: function(reqInfo) {
+  _notifyConnectRequestIssued: function(name) {
+    if (this.uiTester._uid.canSee_possibleFriends())
+      this.uiTester._verifyPossibleFriends(true);
+  },
+
+  _notifyConnectRequestReceived: function(reqInfo) {
     if (this.uiTester._uid.canSee_connectRequests())
       this.uiTester._verifyConnectRequests(true);
   },
@@ -430,11 +436,16 @@ var TestUIActorMixins = {
   do_showPossibleFriends: function(otherClients) {
     var self = this;
     this.T.action('show possible friends page', function() {
+      self.client._dynPossibleFriendClients = otherClients;
       self._uid.showPage_possibleFriends();
     });
     this.T.check('verify possible friends', function() {
-      self._uid.verify_possibleFriends(otherClients);
+      self._verifyPossibleFriends();
     });
+  },
+
+  _verifyPossibleFriends: function(waitForUpdate) {
+    this._uid.verify_possibleFriends(otherClients);
   },
 
   /**

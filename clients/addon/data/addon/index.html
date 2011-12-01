@@ -95,7 +95,7 @@
           <div class="subHeader hbox">
             <div class="peepInfo">
               <img class="peepInfoPic" data-bind="pic" data-attr="src"
-                   src="i/face2.png">
+                   src="i/face2.png" />
               <span data-bind="displayName" class="peepInfoName"></span>
             </div>
           </div>
@@ -109,7 +109,7 @@
           <div class="scroller">
             <div class="peepInfo">
               <img class="peepInfoPic" data-bind="pic" data-attr="src"
-                   src="i/face2.png">
+                   src="i/face2.png" />
               <span data-bind="displayName" class="peepInfoName"></span>
             </div>
             <div class="peepConversations" data-childclass="convListItem">
@@ -165,7 +165,7 @@
                 <div>
                   <div class="avatar">
                     <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
-                      src="i/face2.png">
+                      src="i/face2.png" />
                   </div>
                 </div>
                 <div>
@@ -235,7 +235,7 @@
          class="newConversation">
         <span class="avatar">
           <img src="i/face2.png" class="avatar"
-               data-bind="author.pic" data-attr="src">
+               data-bind="author.pic" data-attr="src" />
         </span>
         <span class="newConversationPeep" data-bind="author.displayName"></span>
         <span class="newConversationTime"></span>
@@ -259,7 +259,7 @@
 
       <a data-classimpl="personLink" class="item" href="#user">
         <img class="peepInfoPic" src="i/face2.png"
-             data-bind="pic" data-attr="src" align="absmiddle">
+             data-bind="pic" data-attr="src" align="absmiddle" />
         <span class="personName" data-bind="displayName"></span>
       </a>
 
@@ -282,7 +282,7 @@
          href="#askFriend">
         <div class="peepInfo">
           <img class="peepInfoPic" data-bind="pic" data-attr="src"
-               src="i/face2.png">
+               src="i/face2.png" />
           <span data-bind="selfPoco.displayName" class="peepInfoName"></span>
         </div>
       </a>
@@ -293,7 +293,7 @@
           <div>
             <div class="avatar">
               <img class="peepInfoPic" data-bind="pic" data-attr="src"
-                   src="i/face2.png">
+                   src="i/face2.png" />
             </div>
           </div>
           <div class="vbox center">
@@ -318,7 +318,7 @@
       <a class="private unread hbox" data-classimpl="peepPrivate" href="#user">
           <div>
               <div class="avatar">
-                  <img src="i/face2.png" data-bind="pic" data-attr="src">
+                  <img src="i/face2.png" data-bind="pic" data-attr="src" />
               </div>
           </div>
           <div class="msgPreview boxFlex">
@@ -340,7 +340,10 @@
       <!-- Group messaging human message -->
       <div data-classimpl="message"  class="bubble">
         <a href='#user?id=' class="sender">
-          <span class="avatar"><img src="i/face2.png" class="avatar" data-bind="from.pic" data-attr="src"/></span>
+          <span class="avatar">
+            <img src="i/face2.png" class="avatar"
+                 data-bind="from.pic" data-attr="src" />
+          </span>
           <span class="name" data-bind="author.displayName"></span>
         </a>
         <div class="body">

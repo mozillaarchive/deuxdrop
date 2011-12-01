@@ -431,7 +431,6 @@ define(function (require) {
   update['connectToServer'] = function (data, serverNode) {
     var serverInfo = serverNode.server;
 
-    //TODO: this call does not return anything/no callbacks?
     me.signupWithServer(serverInfo, {
       onCompleted: function (err) {
         if (err) {
@@ -526,8 +525,8 @@ define(function (require) {
    */
   update['add'] = function(data, dom) {
     commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
-                    'peep',
-                    (data.query = moda.queryAllKnownServersForPeeps()));
+                    'pfriend',
+                    (data.query = moda.queryPossibleFriends()));
   };
   remove['add'] = commonCardKillQuery;
 
@@ -535,8 +534,8 @@ define(function (require) {
    * Ask the user to confirm they want to ask someone to be their friend,
    * including including a small message to send with the request.
    */
-  update['askFriend'] = function(data, dom, peepNode) {
-    var peep = peepNode.peep;
+  update['askFriend'] = function(data, dom, pfriendNode) {
+    var peep = pfriendNode.pfriend.peep;
     function handleSubmit(evt) {
       evt.preventDefault();
       evt.stopPropagation();

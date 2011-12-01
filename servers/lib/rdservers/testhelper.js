@@ -444,6 +444,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     this._usingServer.holdAllMailSenderMessages();
     this._usingServer.expectContactRequestToServerUser(other._usingServer,
                                                        other);
+    this._dynamicNotifyModaActors('requestContact', other);
 
     if (closesTheLoop) {
       // add-contact replica block is good to go!
@@ -458,6 +459,17 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
 
   _expdo_contactRequest_everything_else: function(other, messageText,
                                                   interesting) {
+    var self = this;
+    // other clients process the sent notification replica block
+    this._T_otherClientsStep(this._usingServer,
+      'delivers request sent replica to', '*PARAM*',
+      function(paramClient) {
+        paramClient._dynamicNotifyModaActors('requestContact', other);
+        self._usingServer.releaseReplicaBlockForClient(paramClient);
+        // We're releasing only one, so we can force a caught-up event to
+        //  reliably occur by waiting for it.
+        paramClient._eRawClient.expect_replicaCaughtUp();
+      });
     if (this._dohelp_closesConnReqLoop(other)) {
       this._expdo_closeContactRequest(other, messageText, interesting);
     }
@@ -1472,6 +1484,11 @@ var TestServerActorMixins = {
         this.expect_replicaBlockNotifiedOnServer(cloneClient.__name);
       }
     }
+  },
+
+  releaseReplicaBlockForClient: function(testClient) {
+    var csc = testClient._eServerConn._logger.__instance.appConn;
+    csc.__release_heyAReplicaBlock();
   },
 
   /**

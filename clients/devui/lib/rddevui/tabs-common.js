@@ -532,6 +532,20 @@ wy.defineWidget({
   },
 });
 
+wy.defineWidget({
+  name: 'possible-friend-blurb',
+  constraint: {
+    type: 'possible-friend-blurb',
+  },
+  focus: wy.focus.item,
+  structure: {
+    // XXX we should use an inline structure or take what we need, as things
+    //  are going to be unhappy about us not actually deferring focus into our
+    //  child widget but it being so enabled.
+    peep: wy.widget({ type: 'peep-blurb' }, 'peep'),
+  },
+});
+
 ty.defineWidget({
   name: 'make-friends-tab',
   constraint: {
@@ -541,30 +555,30 @@ ty.defineWidget({
   focus: wy.focus.container.vertical('peeps'),
   emit: ['openTab'],
   structure: {
-    peeps: wy.vertList({type: 'peep-blurb'}),
+    possFriends: wy.vertList({type: 'possible-friend-blurb'}),
   },
   impl: {
     postInit: function() {
       var moda = this.__context.moda;
 
-      console.log("issuing peep query");
-      var peepsSet = moda.queryAllKnownServersForPeeps();
-      console.log("peep query issued");
-      var vs = this.vs = new LiveSetListenerViewSliceAdapter(peepsSet);
-      this.peeps_set(vs);
+      var possFriendsSet = moda.queryPossibleFriends();
+      var vs = this.vs = new LiveSetListenerViewSliceAdapter(possFriendsSet);
+      this.possFriends_set(vs);
     },
   },
   events: {
     peeps: {
-      command: function(peepBinding) {
-        var clonedSet = this.vs.liveSet.cloneSlice([peepBinding.obj]),
-            peep = clonedSet.items[0];
+      command: function(possFriendBinding) {
+        // XXX we don't have any guarantee we're not getting a child binding
+        //  now that we have gone and nested stuff.  FIX WMSY IMPORTANT USE CASE
+        var clonedSet = this.vs.liveSet.cloneSlice([possFriendBinding.obj]),
+            possFriend = clonedSet.items[0];
         this.emit_openTab({
           kind: 'author-contact-request',
-          name: "Connect with " + peep.selfPoco.displayName,
+          name: "Connect with " + possFriend.peep.selfPoco.displayName,
           liveSet: clonedSet,
-          peep: peep,
-          peepPoco: peep.selfPoco,
+          possFriend: possFriend,
+          peepPoco: possFriend.peep.selfPoco,
           message: '',
         }, true);
       },
@@ -583,7 +597,7 @@ ty.defineWidget({
   structure: {
     peepBlock: {
       overviewLabel0: "We are going to ask: ",
-      peep: wy.widget({ type: 'peep-blurb' }, 'peep'),
+      peep: wy.widget({ type: 'peep-blurb' }, ['possFriend', 'peep']),
       overviewLabel1: " to be our friend.",
     },
     localPocoBlock: {

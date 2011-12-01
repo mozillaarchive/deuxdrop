@@ -263,6 +263,7 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = exports.NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = exports.NS_SERVERS = 'servers',
+      NS_POSSFRIENDS = exports.NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = exports.NS_CONNREQS = 'connreqs',
       NS_ERRORS = exports.NS_ERRORS = 'errors',
       // dependent namespaces that need to be checked for updates
@@ -272,6 +273,7 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       //  so it is not included in this list.  (nb: by definition, the conn
       //  req gets removed once the contact is added, which is the point at
       //  which we would need/want updates.)
+      // nb: NS_POSSFRIENDS is in the same boat.
       DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS],
       // namespaces that can be dispatched immediately without waiting for an
       //  update phase
@@ -297,6 +299,7 @@ function makeEmptyListsByNS() {
     convblurbs: [],
     convmsgs: [],
     servers: [],
+    possfriends: [],
     connreqs: [],
     errors: [],
   };
@@ -308,6 +311,7 @@ function makeEmptyMapsByNS() {
     convblurbs: {},
     convmsgs: {},
     servers: {},
+    possfriends: {},
     connreqs: {},
     errors: {},
   };
@@ -1405,6 +1409,7 @@ NotificationKing.prototype = {
         }
 
         this._log.nsItemDeleted(queryHandle.uniqueId, fullName);
+
         if (queryHandle.pending === PENDING_NONE) {
           if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
             queryHandle.pending = PENDING_NOTIF;

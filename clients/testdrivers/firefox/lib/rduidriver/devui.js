@@ -546,6 +546,10 @@ DevUIDriver.prototype = {
       });
   },
 
+  canSee_possibleFriends: function() {
+    return this._staticActiveTab === 'make-friends';
+  },
+
   showPage_possibleFriends: function() {
     this._nukeTabSpawnNewViaHomeTab(this._eMakeFriendsBtn, 'make-friends');
   },

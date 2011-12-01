@@ -113,17 +113,28 @@ exports.IDX_PEEP_ANY_INVOLVEMENT = "idxPeepAny";
  *  particularly efficient way to store the requests.  We could just be keying
  *  off of "timestamp + rootkey" with the rootkey present just for uniqueness.
  *  However, our redis gendb implementation is not amenable to such a
- *  represetation, so that's a future refactoring once we dump redis or what
+ *  representation, so that's a future refactoring once we dump redis or what
  *  not.
  * XXX potentially refactor our storage of this, ideally with gendb change
  *
  * - d:req {selfIdent: selfIdentBlob, receivedAt: timestamp, mesageText: "..."}
  */
-exports.TBL_CONNREQ_DATA = "connRequests";
+exports.TBL_CONNREQ_RECV = "connRequestsRecv";
 /**
  * Timestamp of when the connect request was received.
  */
 exports.IDX_CONNREQ_RECEIVED = "idxReceived";
+
+/**
+ * Connection requests we have sent.  Keyed by the root key of the recipient.
+ *
+ * - d:req {othIdent, sentAt, messageText}
+ */
+exports.TBL_CONNREQ_SENT = "connRequestsSent";
+/**
+ * Timestamp of when the connect request was sent.
+ */
+exports.IDX_CONNREQ_SENT = "idxSent";
 
 /**
  * Conversation data.
@@ -165,10 +176,17 @@ exports.dbSchemaDef = {
       ],
     },
     {
-      name: exports.TBL_CONNREQ_DATA,
+      name: exports.TBL_CONNREQ_RECV,
       columnFamilies: ['d'],
       indices: [
         exports.IDX_CONNREQ_RECEIVED,
+      ],
+    },
+    {
+      name: exports.TBL_CONNREQ_SENT,
+      columnFamilies: ['d'],
+      indices: [
+        exports.IDX_CONNREQ_SENT,
       ],
     },
     {

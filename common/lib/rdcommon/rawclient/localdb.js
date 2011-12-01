@@ -74,6 +74,7 @@ const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers',
+      NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
       NS_ERRORS = 'errors';
 
@@ -222,18 +223,24 @@ LocalStore.prototype = {
   },
 
   generateAndPerformReplicaCryptoBlock: function(command, id, payload) {
-    var serialized = this.generateReplicaCryptoBlock(command, id, payload);
-    this._performReplicaCommand(command, id, payload);
-    // we want to make sure any database effects of the above are relayed
-    this._notif.updatePhaseDoneReleaseNotifications();
+    var serialized = this.generateReplicaCryptoBlock(command, id, payload),
+        self = this;
+    when(this._performReplicaCommand(command, id, payload),
+         function() {
+           // we want to make sure any database effects of the above are relayed
+           self._notif.updatePhaseDoneReleaseNotifications();
+         });
     return serialized;
   },
 
   generateAndPerformReplicaAuthBlock: function(command, id, payload) {
-    var serialized = this.generateReplicaAuthBlock(command, id, payload);
-    this._performReplicaCommand(command, id, payload);
-    // we want to make sure any database effects of the above are relayed
-    this._notif.updatePhaseDoneReleaseNotifications();
+    var serialized = this.generateReplicaAuthBlock(command, id, payload),
+        self = this;
+    when(this._performReplicaCommand(command, id, payload),
+         function() {
+           // we want to make sure any database effects of the above are relayed
+           self._notif.updatePhaseDoneReleaseNotifications();
+         });
     return serialized;
   },
 
@@ -833,9 +840,9 @@ LocalStore.prototype = {
     //  root key.
     var self = this;
     return when($Q.wait(
-        this._db.putCells($lss.TBL_CONNREQ_DATA, othPubring.rootPublicKey,
+        this._db.putCells($lss.TBL_CONNREQ_RECV, othPubring.rootPublicKey,
                           cells),
-        this._db.updateMultipleIndexValues($lss.TBL_CONNREQ_DATA,
+        this._db.updateMultipleIndexValues($lss.TBL_CONNREQ_RECV,
                                            indexValues)
       ),
       function() {
@@ -850,13 +857,40 @@ LocalStore.prototype = {
       }); // rejection pass-through is fine
   },
 
+  _cmd_trackOutgoingConnRequest: function(recipRootKey, details) {
+    var indexValues = [
+      [$lss.IDX_CONNREQ_SENT, '', recipRootKey, details.sentAt],
+    ], self = this;
+    return when(
+      $Q.wait(this._db.putCells($lss.TBL_CONNREQ_SENT, recipRootKey, details),
+              this._db.updateMultipleIndexValues($lss.TBL_CONNREQ_SENT,
+                                                 indexValues)),
+      function() {
+        // if there is a phonebook result for this person, let us remove it.
+        self._notif.namespaceItemDeleted(NS_POSSFRIENDS, recipRootKey);
+    });
+  },
+
+  getRootKeysForAllSentContactRequests: function() {
+    return when(this._db.scanIndex($lss.TBL_CONNREQ_SENT,
+                                   $lss.IDX_CONNREQ_SENT, '',
+                                   -1),
+      function(rootKeysWithScores) {
+        var rootKeys = [];
+        for (var i = 0; i < rootKeysWithScores.length; i += 2) {
+          rootKeys.push(rootKeysWithScores[i]);
+        }
+        return rootKeys;
+      }); // failure pass-through is fine
+  },
+
   _cmd_rejectContact: function(peepRootKey, ignored) {
     this._nukeConnectRequest(peepRootKey);
   },
 
   /**
-   * Erase a connection request from our knowledge.  This should be done when
-   *  the contact addition command is completed.
+   * Erase a received connection request from our knowledge.  This should be
+   *  done when the contact addition command is completed.
    */
   _nukeConnectRequest: function(peepRootKey) {
     var self = this;
@@ -867,9 +901,43 @@ LocalStore.prototype = {
     ];
     return $Q.wait(
       this._notif.namespaceItemDeleted(NS_CONNREQS, peepRootKey),
-      this._db.deleteMultipleIndexValues($lss.TBL_CONNREQ_DATA, delIndices),
-      this._db.deleteRowCell($lss.TBL_CONNREQ_DATA, peepRootKey)
+      this._db.deleteMultipleIndexValues($lss.TBL_CONNREQ_RECV, delIndices),
+      this._db.deleteRowCell($lss.TBL_CONNREQ_RECV, peepRootKey)
     );
+  },
+
+
+  /**
+   * Create a peepClientData rep from a self-ident blob; for use in creating
+   *  connection requests and possible friend structures (when we don't already
+   *  know about the person via some other means).
+   */
+  _convertSynthPeep: function(queryHandle, fullName, selfIdentBlob,
+                              selfIdentPayload) {
+    var peepClientData = this._notif.reuseIfAlreadyKnown(
+                           queryHandle, NS_PEEPS, fullName);
+    if (peepClientData)
+      return peepClientData;
+
+    var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
+    peepClientData = {
+      localName: localName,
+      fullName: fullName,
+      ns: NS_PEEPS,
+      count: 1,
+      data: null, // (value assigned by the convert call)
+      indexValues: [],
+      deps: [],
+    };
+    var frontData = this._convertPeepSelfIdentToBothReps(
+                      selfIdentBlob, selfIdentPayload, peepClientData);
+
+    queryHandle.membersByLocal[NS_PEEPS][localName] = peepClientData;
+    queryHandle.membersByFull[NS_PEEPS][fullName] = peepClientData;
+
+    queryHandle.dataMap[NS_PEEPS][localName] = frontData;
+
+    return peepClientData;
   },
 
   _convertConnectRequest: function(reqRep, fullName, queryHandle, clientData) {
@@ -879,30 +947,11 @@ LocalStore.prototype = {
     };
 
     // - synthesize the peep rep
-    var peepClientData = this._notif.reuseIfAlreadyKnown(
-                           queryHandle, NS_PEEPS, fullName),
-        selfIdentPayload = $pubident.peekPersonSelfIdentNOVERIFY(
+    var selfIdentPayload = $pubident.peekPersonSelfIdentNOVERIFY(
                              reqRep.selfIdent),
-        localName;
-    if (!peepClientData) {
-      localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
-      peepClientData = {
-        localName: localName,
-        fullName: fullName,
-        ns: NS_PEEPS,
-        count: 1,
-        data: null, // (value assigned by the convert call)
-        indexValues: [],
-        deps: [],
-      };
-      var frontData = this._convertPeepSelfIdentToBothReps(
-                        reqRep.selfIdent, selfIdentPayload, peepClientData);
-
-      queryHandle.membersByLocal[NS_PEEPS][localName] = peepClientData;
-      queryHandle.membersByFull[NS_PEEPS][fullName] = peepClientData;
-
-      queryHandle.dataMap[NS_PEEPS][localName] = frontData;
-    }
+        peepClientData = this._convertSynthPeep(queryHandle, fullName,
+                                                reqRep.selfIdent,
+                                                selfIdentPayload);
     clientData.deps.push(peepClientData);
 
     // - synthesize the peep's server info rep
@@ -968,7 +1017,7 @@ LocalStore.prototype = {
       return b.receivedAt - a.receivedAt;
     };
     return when(this._db.scanIndex(
-                  $lss.TBL_CONNREQ_DATA, $lss.IDX_CONNREQ_RECEIVED, '', -1),
+                  $lss.TBL_CONNREQ_RECV, $lss.IDX_CONNREQ_RECEIVED, '', -1),
       function(results) {
         var rootKeys = [];
         for (var iRes = 0; iRes < results.length; iRes += 2) {
@@ -1018,7 +1067,7 @@ LocalStore.prototype = {
 
             // increment every time to avoid ending up in an infinite loop
             //  in case of data invariant violation
-            return when(self._db.getRowCell($lss.TBL_CONNREQ_DATA,
+            return when(self._db.getRowCell($lss.TBL_CONNREQ_RECV,
                                             rootKeys[iKey++], 'd:req'),
                         getNextMaybeGot);
           }

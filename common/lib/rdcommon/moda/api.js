@@ -56,6 +56,7 @@ const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
       NS_SERVERS = 'servers',
+      NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
       NS_ERRORS = 'errors';
 
@@ -309,6 +310,7 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
     convblurbs: {},
     convmsgs: {},
     servers: {},
+    possfriends: {},
     connreqs: {},
     errors: {},
   };
@@ -648,6 +650,26 @@ ConnectRequest.prototype = {
   on: itemOnImpl,
 };
 
+/**
+ * Represents a possible friend with a rationale of why that person is a
+ *  candidate and perhaps how good a candidate they are.
+ */
+function PossibleFriend(_liveset, localName, peep) {
+  this._eventMap = null;
+  this._liveset = _liveset;
+  this._localName = localName;
+  this.peep = peep;
+}
+PossibleFriend.prototype = {
+  __namespace: 'possfriends',
+  __clone: function(liveset, cloneHelper) {
+    return new PossibleFriend(
+      liveset, this._localName, cloneHelper(this.peep));
+  },
+
+  on: itemOnImpl,
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 // Error Representations
 
@@ -964,6 +986,33 @@ ModaBridge.prototype = {
       }
     }
 
+    if (msg.dataMap.hasOwnProperty(NS_POSSFRIENDS)) {
+      values = msg.dataMap[NS_POSSFRIENDS];
+      dataMap = liveset._dataByNS[NS_POSSFRIENDS];
+      for (key in values) {
+        val = values[key];
+        // null (in the non-delta case) means pull it from cache
+        if (val === null)
+          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_POSSFRIENDS,
+                                                    key);
+        else
+          dataMap[key] = this._transformPossibleFriend(key, val, liveset);
+      }
+    }
+    if (msg.dataDelta.hasOwnProperty(NS_POSSFRIENDS)) {
+      values = msg.dataDelta[NS_POSSFRIENDS];
+      dataMap = liveset._dataByNS[NS_POSSFRIENDS];
+      for (key in values) {
+        if (!dataMap.hasOwnProperty(key))
+          throw new Error("dataDelta for unknown key: " + key);
+        delta = values[key];
+        if (delta === null) {
+          delete dataMap[key];
+          continue;
+        }
+      }
+    }
+
     if (msg.dataMap.hasOwnProperty(NS_CONNREQS)) {
       values = msg.dataMap[NS_CONNREQS];
       dataMap = liveset._dataByNS[NS_CONNREQS];
@@ -1239,6 +1288,11 @@ ModaBridge.prototype = {
     };
   },
 
+  _transformPossibleFriend: function(localName, wireRep, liveset) {
+    var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
+    return new PossibleFriend(liveset, localName, peepRep);
+  },
+
   /**
    * Create a `ConnectRequest` representation from the wire rep.
    */
@@ -1330,14 +1384,14 @@ ModaBridge.prototype = {
    *  was okay to let it be known to the public or some friend-graph thing was
    *  satisfied.
    */
-  queryAllKnownServersForPeeps: function(listener, data) {
+  queryPossibleFriends: function(listener, data) {
     var handle = this._nextHandle++;
     var query = {};
-    var liveset = new LiveOrderedSet(this, handle, NS_PEEPS, query,
+    var liveset = new LiveOrderedSet(this, handle, NS_POSSFRIENDS, query,
                                      listener, data);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
-    this._send('queryMakeNewFriends', handle, query);
+    this._send('queryPossibleFriends', handle, query);
     return liveset;
   },
 

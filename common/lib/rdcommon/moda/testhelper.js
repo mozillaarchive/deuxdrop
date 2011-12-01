@@ -197,6 +197,9 @@ var DeltaHelper = exports.DeltaHelper = {
   _TESTCLIENT_QUERY_KEYFUNC: function (testClient) {
     return testClient._rawClient.rootPublicKey;
   },
+  _TESTCLIENT_QUERY_NAME: function(testClient) {
+    return testClient.__name;
+  },
 
   _PEEP_QUERY_KEYFUNC: function(x) { return x.rootKey; },
 
@@ -302,12 +305,37 @@ var DeltaHelper = exports.DeltaHelper = {
    *  expectation is that this query will never update because it is from
    *  a static data source.
    */
-  peepExpStaticDelta: function(lqt, testClients) {
+  possFriendDelta_base: function(lqt, testClients) {
     var delta = this.makeOrReuseDelta(lqt);
+
+    lqt._possClients = testClients.concat();
+    lqt._possClients.sort(this._TESTCLIENT_QUERY_NAME);
 
     var rootKeys = testClients.map(this._TESTCLIENT_QUERY_KEYFUNC);
     markListIntoObj(rootKeys, delta.state, MARK_COUNTER);
     markListIntoObj(rootKeys, delta.postAnno, 1);
+
+    return delta;
+  },
+
+  possFriendDelta_delta: function(lqt, testClient, deltaType) {
+    var delta = this.makeOrReuseDelta(lqt);
+
+    if (deltaType === 1) {
+      lqt._possClients.push(testClient);
+      lqt._possClients.sort(this._TESTCLIENT_QUERY_NAME);
+    }
+    else {
+      lqt._possClients.splice(lqt._possClients.indexOf(testClient), 1);
+    }
+
+    if (deltaType === -1)
+      delta.preAnno[this._TESTCLIENT_QUERY_KEYFUNC(testClient)] = -1;
+    // (a fresh state is required)
+    markListIntoObj(lqt._possClients.map(this._TESTCLIENT_QUERY_KEYFUNC),
+                    delta.state, MARK_COUNTER);
+    if (deltaType === 1)
+      delta.postAnno[this._TESTCLIENT_QUERY_KEYFUNC(testClient)] = 1;
 
     return delta;
   },
@@ -525,9 +553,8 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     self._dynamicPeepConvQueries = [];
     // XXX need an all-conv-queries thing
     self._dynamicConvMsgsQueries = [];
-
     self._dynPendingQueries = [];
-
+    self._dynamicPossFriendsQueries = [];
     self._dynamicConnReqQueries = [];
 
 
@@ -598,7 +625,21 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   //////////////////////////////////////////////////////////////////////////////
   // Query Update Helpers
 
-  _notifyConnectRequest: function(reqInfo) {
+  _notifyConnectRequestIssued: function(otherClient) {
+    // update any/all queries
+    var queries = this._dynamicPossFriendsQueries;
+    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+      var lqt = queries[iQuery];
+
+      // all connect request queries are the same right now so they all care
+      // (this changes when we start slicing)
+
+      var deltaRep = DeltaHelper.possFriendDelta_delta(lqt, otherClient, -1);
+      this._ensureExpectedQuery(lqt);
+    }
+  },
+
+  _notifyConnectRequestReceived: function(reqInfo) {
     var queries = this._dynamicConnReqQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
@@ -647,10 +688,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
-      // skip non-index queries (ex: new friends queries)
-      if (!lqt._liveset.query.hasOwnProperty('by'))
-        continue;
-      // XXX we also need to discard based on 'pinned' constraints soon
+      // XXX we need to discard based on 'pinned' constraints soon
 
       // in the case of an addition we expect a positioned splice followed
       //  by a completion notification
@@ -681,10 +719,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
-      // skip non-index queries (ex: new friends queries)
-      if (!lqt._liveset.query.hasOwnProperty('by'))
-        continue;
-      // XXX we also need to discard based on 'pinned' constraints soon
+      // XXX we need to discard based on 'pinned' constraints soon
 
       var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo,
                                                           knownChange);
@@ -846,7 +881,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       messageText: messageText,
     };
     this._dynConnReqInfos.push(reqInfo);
-    this._notifyConnectRequest(reqInfo);
+    this._notifyConnectRequestReceived(reqInfo);
+  },
+
+  __requestContact: function(otherClient) {
+    this._notifyConnectRequestIssued(otherClient);
   },
 
   /**
@@ -1029,6 +1068,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   },
 
   onSplice: function(index, howMany, addedItems, liveSet) {
+    if (index < 0)
+      throw new Error("totally illegal splice index: " + index);
+
     var lqt = liveSet.data, delta;
     if (!lqt._pendingDelta)
       delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
@@ -1051,6 +1093,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     else if (liveSet._ns === 'connreqs') {
       keymapper = function(connReq) {
         return connReq.peep.selfPoco.displayName + ': ' + connReq.messageText;
+      };
+    }
+    else if (liveSet._ns === 'possfriends') {
+      keymapper = function(possFriend) {
+        return self._remapLocalToFullName('peeps', possFriend.peep._localName);
       };
     }
     else {
@@ -1250,7 +1297,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   // Queries: Issue Static Queries
   //
   // Things that use the query mechanism but aren't really updated because their
-  // data source is once and done.
+  // data source is once and done except for removals...
 
   /**
    * Issue the query for possible friends, with the caller providing the
@@ -1264,10 +1311,10 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this.T.action('moda sends request for possible friends to', this._eBackside,
                   function() {
       self.holdAllModaCommands();
-      self.expectModaCommand('queryMakeNewFriends');
+      self.expectModaCommand('queryPossibleFriends');
 
-      lqt._liveset = self._bridge.queryAllKnownServersForPeeps(self, lqt);
-      self._dynamicPeepQueries.push(lqt);
+      lqt._liveset = self._bridge.queryPossibleFriends(self, lqt);
+      self._dynamicPossFriendsQueries.push(lqt);
     });
     this.T.action(this._eBackside,
                   'processes friend query request, invokes on',
@@ -1280,11 +1327,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       //  is that the death of connections could spill over into the next step
       //  which could be confusing.  From a correctness perspective, our results
       //  expectation should be sufficient.
-      var delta = DeltaHelper.peepExpStaticDelta(lqt, expectedClients);
+      var delta = DeltaHelper.possFriendDelta_base(lqt, expectedClients);
       self.expect_queryCompleted(lqt.__name, delta);
       lqt._pendingExpDelta = null;
 
-      self.releaseAndPeekAtModaCommand('queryMakeNewFriends');
+      self.releaseAndPeekAtModaCommand('queryPossibleFriends');
       self.stopHoldingAndAssertNoHeldModaCommands();
     });
 
@@ -1319,6 +1366,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           break;
         case 'convmsgs':
           self._assertRemoveFromList(self._dynamicConvMsgsQueries, lqt);
+          break;
+        case 'possfriends':
+          self._assertRemoveFromList(self._dynamicPossFriendsQueries, lqt);
           break;
         case 'connreqs':
           self._assertRemoveFromList(self._dynamicConnReqQueries, lqt);
@@ -1456,6 +1506,34 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     });
   },
 
+  /**
+   * Check that the query containing possible friends has peeps with names
+   *  matching those of the provided clients.
+   */
+  check_queryContainsPossibleFriends: function(lqt, clients) {
+    var self = this;
+    this.T.check(this, 'checks', lqt, 'contains possible friends:', clients,
+                 function() {
+      var expectedNames = [], i;
+      for (i = 0; i < clients.length; i++) {
+        expectedNames.push(clients[i].__name);
+      }
+      expectedNames.sort();
+      self.expect_possFriendCheck(expectedNames);
+
+      var actualNames = [], pfriends = lqt._liveset.items;
+      for (i = 0; i < pfriends.length; i++) {
+        actualNames.push(pfriends[i].peep.selfPoco.displayName);
+      }
+      actualNames.sort();
+      self._logger.possFriendCheck(actualNames);
+    });
+  },
+
+  /**
+   * Check that the query containing connection requests has peeps with names
+   *  matching those of the provided clients.
+   */
   check_queryContainsConnReqsFromClients: function(lqt, clients) {
     var self = this;
     this.T.check(this, 'checks', lqt, 'contains conn reqs from', clients,
@@ -1482,7 +1560,8 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   _grabPeepFromQueryUsingClient: function(lqt, testClient) {
     var items = lqt._liveset.items, i;
 
-    if (lqt._liveset._ns === 'connreqs') {
+    if (lqt._liveset._ns === 'connreqs' ||
+        lqt._liveset._ns === 'possfriends') {
       for (i = 0; i < items.length; i++) {
         if (items[i].peep.selfPoco.displayName === testClient.__name)
           return items[i].peep;
@@ -1832,6 +1911,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       // - query contents detailed results checkers (delta rep is very terse)
       convBlurbCheck: { blurbRep: true },
 
+      possFriendCheck: { possibleFriends: true },
       connReqCheck: { requestsFrom: true },
 
       // - wrapper holds for the backside

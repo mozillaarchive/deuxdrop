@@ -86,10 +86,13 @@ TD.commonCase('moda friending', function(T) {
   T.group('B finds A');
   var lqbPossibleFriends = moda_b.do_queryPossibleFriends('possfriendsB',
                                                           [client_a]);
+  moda_b.check_queryContainsPossibleFriends(lqbPossibleFriends, [client_a]);
 
   T.group('B requests friendship with A');
   moda_b.do_connectToPeep(lqbPossibleFriends, client_a, true);
-  // (we should get a live update)
+  // (B should have the peep removed from the possible friends list)
+  moda_b.check_queryContainsPossibleFriends(lqbPossibleFriends, []);
+  // (A should get a live update of the request)
   moda_a.check_queryContainsConnReqsFromClients(lqaRequests, [client_b]);
 
   T.group('A queries conn requests (already populated)');

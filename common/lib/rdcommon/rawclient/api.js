@@ -638,7 +638,7 @@ RawClientAPI.prototype = {
       // - note the proof for the signup step
       // XXX XXX punting on providing the proof until the server is fully able
       //  to validate
-      //this._proof['browserid'] = proof.assertion;
+      //this._signupProof['browserid'] = proof.assertion;
 
       // - extract the e-mail address
       // extract the bundled assertion
@@ -652,8 +652,8 @@ RawClientAPI.prototype = {
             idxSecondPeriod = jwt.indexOf('.', idxFirstPeriod + 1),
             secondClause = jwt.substring(idxFirstPeriod + 1, idxSecondPeriod);
         var certObj = JSON.parse($snafu.atob(secondClause));
-        if (certObj.pricipal.hasOwnProperty('email')) {
-          email = certObj.pricipal.email;
+        if (certObj.principal.hasOwnProperty('email')) {
+          email = certObj.principal.email;
           break;
         }
       }
@@ -873,9 +873,11 @@ RawClientAPI.prototype = {
       $Q.all([
         this._enqueueEphemeralActionAndResolveResult({type: 'findFriends'}),
         this.store.getRootKeysForAllContacts(),
+        this.store.getRootKeysForAllSentContactRequests()
       ]),
       function success(results) {
         var msg = results[0], knownFriendRootKeys = results[1],
+            sentRequestRootKeys = results[2],
             myRootKey = self.rootPublicKey;
 
         // - filter out us, existing friends
@@ -894,7 +896,8 @@ RawClientAPI.prototype = {
 
           var identRootKey = identPayload.root.rootSignPubKey;
           if (identRootKey === myRootKey ||
-              knownFriendRootKeys.indexOf(identRootKey) !== -1)
+              knownFriendRootKeys.indexOf(identRootKey) !== -1 ||
+              sentRequestRootKeys.indexOf(identRootKey) !== -1)
             continue;
           blobsAndPayloads.push({name: identPayload.poco.displayName,
                                  blob: identBlob, payload: identPayload});
@@ -931,10 +934,12 @@ RawClientAPI.prototype = {
 
   connectToPeepUsingSelfIdent: function(personSelfIdentBlob, localPoco,
                                         messageText) {
-    var identPayload = $pubident.assertGetPersonSelfIdent(personSelfIdentBlob);
-    var othPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
-      personSelfIdentBlob);
+    var now = Date.now(),
+        identPayload = $pubident.assertGetPersonSelfIdent(personSelfIdentBlob),
+        othPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                       personSelfIdentBlob);
 
+    // -- other person ident gen
     // XXX temporary simplification: copy out the displayName so we can be sure
     //  it's always in the poco.
     if (!localPoco.hasOwnProperty("displayName"))
@@ -944,11 +949,23 @@ RawClientAPI.prototype = {
     var otherPersonIdentBlob = $pubident.generateOtherPersonIdent(
       this._longtermKeyring, personSelfIdentBlob, localPoco);
 
+    // -- request replica block: historical record of this request
+    var requestReplicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
+        'trackOutgoingConnRequest', othPubring.rootPublicKey,
+        {
+          sentAt: now,
+          othIdent: otherPersonIdentBlob,
+          messageText: messageText
+        });
+
+    // -- contact add replica (to be played on join)
     // this will get told to us once the connect process has completed
     var replicaBlock = this.store.generateReplicaCryptoBlock(
       'addContact', identPayload.root.rootSignPubKey, otherPersonIdentBlob);
 
-    var now = Date.now(), nonce = $keyops.makeBoxNonce();
+
+    // -- message to the client
+    var nonce = $keyops.makeBoxNonce();
     // - request body (for client)
     var requestBody = {
       otherPersonIdent: otherPersonIdentBlob,
@@ -990,6 +1007,7 @@ RawClientAPI.prototype = {
       userTellKey: identPayload.keys.tellBoxPubKey,
       serverSelfIdent: identPayload.transitServerIdent,
       toRequestee: requestTransitOuter,
+      requestReplicaBlock: requestReplicaBlock,
       replicaBlock: replicaBlock
     });
 

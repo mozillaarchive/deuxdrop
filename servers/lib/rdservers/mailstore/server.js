@@ -530,7 +530,17 @@ ClientServicingConnection.prototype = {
    * ]
    */
   _msg_root_reqContact: function(msg) {
-    return when(this.uproc.issueContactRequest(msg), this._bound_ackAction);
+    var self = this;
+    // XXX we want to ensure our request replica block gets sent out before
+    //  a contact addition event, so we have forced it here because the helper
+    //  is badly located on our instance; clean this up!
+    return when(
+      this.sendReplicaBlockToOtherClients(msg.requestReplicaBlock),
+      function() {
+        return when(
+          self.uproc.issueContactRequest(msg),
+          self._bound_ackAction);
+      });
   },
 
   /**
