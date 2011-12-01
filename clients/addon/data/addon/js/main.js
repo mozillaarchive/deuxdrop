@@ -318,6 +318,81 @@ define(function (require) {
   };
 
 
+  /**
+   * Exists to help us out with the 'peep blurb with private conversation blurb'
+   *  hack.  The idea is to issue a query for all peeps and a query for all
+   *  conversations, then associate the private conversations (if they exist)
+   *  with the peep blurb.
+   */
+  function compositeQueryBind(listNode, clonable, propName, pieces, frag) {
+    var fusionMap = {}, requiredCount = 0;
+    function chewPiece(piece, iPiece) {
+      if (piece.required)
+        requiredCount++;
+      piece.query.on('add', function(item) {
+        var mappedKey = piece.keyFunc(item);
+        // ignore things we are told to ignore
+        if (mappedKey === null)
+          return;
+
+        var fuser;
+        if (!fusionMap.hasOwnProperty(mappedKey)) {
+          fuser = fusionMap[mappedKey] = {
+            rep: {},
+            togo: requiredCount,
+            node: null,
+            onChange: function(thing) {
+              if (fuser.node)
+                updateDom($(fuser.node), rep);
+            },
+            onRemove: function(thing) {
+              if (!fuser.node)
+                return;
+              $(fuser.node).remove();
+              fuser.node = null;
+            }
+          };
+        }
+        else {
+          fuser = fusionMap[mappedKey];
+          if (fuser.rep.hasOwnProperty(piece.name))
+            throw new Error("Map collision for piece '" + piece.name +
+                            "' on key '" + mappedKey + "'");
+        }
+        if (piece.required)
+          fuser.togo--;
+        fuser.rep[piece.name] = item;
+
+        if (fuser.togo === 0) {
+          var node = fuser.node = clonable.cloneNode(true),
+              rep = fuser.rep;
+
+          updateDom($(node), rep);
+          node[propName] = rep;
+
+          // XXX currently we are append-only and ignoring ordering hints; need to
+          // talk with James to figure out how ordering would best fit with his
+          // approach.
+          if (!frag)
+            frag = document.createDocumentFragment();
+          frag.appendChild(node);
+        }
+      });
+      piece.query.on('complete', function() {
+        if (!frag)
+          return;
+
+        // Update the card.
+        listNode.append(frag);
+        frag = null;
+
+        // Refresh card sizes.
+        cards.adjustCardSizes();
+      });
+    }
+    pieces.forEach(chewPiece);
+  }
+
   /*
    * First page of the signup process; the user identifies themself by name
    * and e-mail address (via BrowserID).  Once completed, we switch to the
@@ -471,6 +546,36 @@ define(function (require) {
     commonQueryBind(dom.find('.scroller'), clonable, 'peep',
                     (data.query = moda.queryPeeps({ by: 'alphabet' })),
                     frag);
+
+    compositeQueryBind(
+      dom.find('.scroller'), clonable, 'privBundle',
+      [
+        {
+          name: 'peep',
+          required: true,
+          query: moda.queryPeeps({ by: 'alphabet' }),
+          // Join on the person's id; it is uniqued
+          keyFunc: function(peep) {
+            return peep.id;
+          },
+        },
+        {
+          name: 'conv',
+          required: false,
+          query: moda.queryAllConversations(),
+          keyFunc: function(convBlurb) {
+            // ignore non-private messages
+            if (convBlurb.firstMessage.text !== 'PRIVATE' ||
+                convBlurb.participants.length !== 2 ||
+                (!convBlurb.participants[0].isMe &&
+                 !convBlurb.participants[1].isMe))
+              return null;
+            var idxNotMe = convBlurb.participants[0].isMe ? 1 : 0;
+            return convBlurb.participants[idxNotMe].id;
+          },
+        }
+      ],
+      frag);
   };
   remove['private'] = commonCardKillQuery;
 

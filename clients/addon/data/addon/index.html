@@ -271,8 +271,7 @@
       <!-- === Card Specialized === -->
 
       <!-- addPersonLink: (private) mechanism shortcut to phonebook -->
-      <a data-classimpl="addPersonLink" class="item"
-         href="#listUsersForAddPeep">
+      <a data-classimpl="addPersonLink" class="item" href="#add">
         + Add Peep
       </a>
 
@@ -319,20 +318,21 @@
       <a class="private unread hbox" data-classimpl="peepPrivate" href="#user">
           <div>
               <div class="avatar">
-                  <img src="i/face2.png" data-bind="pic" data-attr="src" />
+                  <img src="i/face2.png" data-bind="peep.pic" data-attr="src" />
               </div>
           </div>
           <div class="msgPreview boxFlex">
               <div class="msgPreviewHeader hbox">
-                  <span class="author boxFlex overflow" data-bind="displayName">
+                  <span class="author boxFlex overflow"
+                        data-bind="peep.displayName">
                   </span>
-                  <span class="new">(5)</span>
+                  (<span class="new" data-bind="conv.numUnreadMessages"></span>)
                   <span class="boxFlexStrong"></span>
-                  <span class="time">5 min</span>
+                  <span class="time">X min</span>
               </div>
               <div class="hbox">
-                  <span class="snippet boxFlex overflow">
-                      This is a snippet of text from the latest msg
+                  <span class="snippet boxFlex overflow"
+                        data-bind="conv.firstUnreadMessage.text">
                   </span>
               </div>
           </div>
