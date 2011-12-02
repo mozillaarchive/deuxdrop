@@ -116,6 +116,9 @@
  *       @key[recip TestDomainSeq]
  *     ]]
  *   ]]
+ *   @key[seq TestDomainSeq]{
+ *     Sequence of the most recent (message) event for the conversation.
+ *   }
  *   @key[participantInfos @listof[DynamicContactInfo]]
  * ]]{
  *   Information about conversations, created as the moda testhelper hears about
@@ -244,7 +247,7 @@ var DeltaHelper = exports.DeltaHelper = {
     },
   },
 
-  _PEEPCONV_QUERY_KEYFUNC: function(x) { return x.tConv.digitalName; },
+  _CONVBLURB_QUERY_KEYFUNC: function(x) { return x.tConv.digitalName; },
   _THINGMSG_KEYFUNC: function(x) { return x.digitalName; },
   _THINGMSG_TEXTFUNC: function(t) {
     var data = t.data;
@@ -410,24 +413,32 @@ var DeltaHelper = exports.DeltaHelper = {
   },
 
   /**
-   * Generate the delta rep for the inital result set of a conversations-by-peep
+   * Generate the delta rep for the inital result set of a conversation blurb
    *  query.
    */
-  peepConvsExpDelta_base: function(lqt, cinfo, allConvs, queryBy) {
+  convBlurbsExpDelta_base: function(lqt, cinfo, allConvs, queryBy) {
     var delta = this.makeOrReuseDelta(lqt);
 
-    // filter conversations to ones actually involving the given cinfo
-    lqt._convs = allConvs.filter(function(convInfo) {
-      return convInfo.participantInfos.indexOf(cinfo) !== -1;
-    });
-    lqt._sorter = function(a, b) {
-      var va = a.peepSeqsByName[cinfo.name][queryBy],
-          vb = b.peepSeqsByName[cinfo.name][queryBy];
-      return vb - va;
-    };
+    if (queryBy !== 'all') {
+      // filter conversations to ones actually involving the given cinfo
+      lqt._convs = allConvs.filter(function(convInfo) {
+        return convInfo.participantInfos.indexOf(cinfo) !== -1;
+      });
+      lqt._sorter = function(a, b) {
+        var va = a.peepSeqsByName[cinfo.name][queryBy],
+            vb = b.peepSeqsByName[cinfo.name][queryBy];
+        return vb - va;
+      };
+    }
+    else {
+      lqt._convs = allConvs.concat();
+      lqt._sorter = function(a, b) {
+        return b.seq - a.seq;
+      };
+    }
     lqt._convs.sort(lqt._sorter);
 
-    var convIds = lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC);
+    var convIds = lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC);
     markListIntoObj(convIds, delta.state, MARK_COUNTER);
     markListIntoObj(convIds, delta.postAnno, 1);
 
@@ -435,22 +446,22 @@ var DeltaHelper = exports.DeltaHelper = {
   },
 
 // nop-ing out in conjunction with nop-ing _notifyPeepJoinedConv which should
-//  not be required now that `peepConvsExpMaybeDelta_newmsg` is smarter.
+//  not be required now that `convBlurbsExpMaybeDelta_newmsg` is smarter.
   /**
    * Generate the delta rep for a peep being added to a conversation for a
    *  conversations-by-peep query.
    */
 /*
-  peepConvsExpDelta_joined: function(lqt, convInfo) {
+  convBlurbsExpDelta_joined: function(lqt, convInfo) {
     var delta = this.makeEmptyDelta();
 
     lqt._convs.push(convInfo);
     lqt._convs.sort(lqt._sorter);
 
-    markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
+    markListIntoObj(lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC),
                     delta.state, null);
 
-    delta.postAnno[this._PEEPCONV_QUERY_KEYFUNC(convInfo)] = 1;
+    delta.postAnno[this._CONVBLURB_QUERY_KEYFUNC(convInfo)] = 1;
 
     return delta;
   },
@@ -466,7 +477,7 @@ var DeltaHelper = exports.DeltaHelper = {
    * We may also explicitly know that a change has occurred, in which case we
    *  definitely generate a delta.
    */
-  peepConvsExpMaybeDelta_newmsg: function(lqt, convInfo, changeKnown) {
+  convBlurbsExpMaybeDelta_newmsg: function(lqt, convInfo, changeKnown) {
     var preIndex = lqt._convs.indexOf(convInfo);
     var added = (preIndex === -1);
     if (added)
@@ -477,9 +488,9 @@ var DeltaHelper = exports.DeltaHelper = {
       return null;
 
     var delta = this.makeOrReuseDelta(lqt);
-    markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
+    markListIntoObj(lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC),
                     delta.state, MARK_COUNTER);
-    var convId = this._PEEPCONV_QUERY_KEYFUNC(convInfo);
+    var convId = this._CONVBLURB_QUERY_KEYFUNC(convInfo);
     // we used to generate moves; no longer.
     if (added)
       delta.postAnno[convId] = 1;
@@ -487,9 +498,9 @@ var DeltaHelper = exports.DeltaHelper = {
   },
 
   /** Generate state only for dep notification. */
-  peepConvsDelta_nop: function(lqt) {
+  convBlurbsDelta_nop: function(lqt) {
     var delta = this.makeOrReuseDelta(lqt);
-    markListIntoObj(lqt._convs.map(this._PEEPCONV_QUERY_KEYFUNC),
+    markListIntoObj(lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC),
                     delta.state, MARK_COUNTER);
     return delta;
   },
@@ -550,7 +561,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     self._dynPendingConvMsgs = [];
 
     self._dynamicPeepQueries = [];
-    self._dynamicPeepConvQueries = [];
+    self._dynamicConvBlurbQueries = [];
     // XXX need an all-conv-queries thing
     self._dynamicConvMsgsQueries = [];
     self._dynPendingQueries = [];
@@ -734,7 +745,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 //  join case.
 /*
   _notifyPeepJoinedConv: function(cinfo, convInfo) {
-    var queries = this._dynamicPeepConvQueries;
+    var queries = this._dynamicConvBlurbQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
@@ -742,7 +753,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
         continue;
 
-      var deltaRep = DeltaHelper.peepConvsExpDelta_joined(lqt, convInfo);
+      var deltaRep = DeltaHelper.convBlurbsExpDelta_joined(lqt, convInfo);
       this.RT.reportActiveActorThisStep(this);
       this.expect_queryCompleted(lqt.__name, deltaRep);
     }
@@ -756,7 +767,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    */
   _notifyPeepConvTimestampsChanged: function(cinfo, convIndices, convInfo,
                                              joinOccurred) {
-    var queries = this._dynamicPeepConvQueries;
+    var queries = this._dynamicConvBlurbQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
@@ -764,7 +775,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
         continue;
 
-      var deltaRep = DeltaHelper.peepConvsExpMaybeDelta_newmsg(
+      var deltaRep = DeltaHelper.convBlurbsExpMaybeDelta_newmsg(
         lqt, convInfo, joinOccurred);
       if (deltaRep)
         this._ensureExpectedQuery(lqt);
@@ -828,7 +839,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     }
 
     // - convblurbs queries
-    queries = this._dynamicPeepConvQueries;
+    queries = this._dynamicConvBlurbQueries;
     for (iQuery = 0; iQuery < queries.length; iQuery++) {
       lqt = queries[iQuery];
 
@@ -837,7 +848,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
                             return touchesConvInfos.indexOf(x) !== -1;
                           })) {
         // it does, give it a dependent dep.
-        DeltaHelper.peepConvsDelta_nop(lqt);
+        DeltaHelper.convBlurbsDelta_nop(lqt);
         this._ensureExpectedQuery(lqt);
       }
     }
@@ -927,6 +938,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       highestMsgSeen: 0,
       highestMsgReported: 0,
       peepSeqsByName: {},
+      seq: 0,
       participantInfos: [],
     };
     this._dynamicConvInfos.push(convInfo);
@@ -950,6 +962,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       this._dynPendingConvMsgs.push(convInfo);
 
     convInfo.highestMsgSeen++;
+    convInfo.seq = tMsg.data.seq;
 
     var self = this;
     function goNotify(authorInfo, participantInfos, joineeInfo, forceUpdate) {
@@ -1229,7 +1242,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       var peep = self._grabPeepFromQueryUsingClient(usingQuery, peepClient),
           cinfo = self._lookupContactInfo(peepClient);
 
-      var delta = DeltaHelper.peepConvsExpDelta_base(
+      var delta = DeltaHelper.convBlurbsExpDelta_base(
         lqt, cinfo, self._dynamicConvInfos, query.by);
       self._ensureExpectedQuery(lqt);
       lqt._pendingExpDelta = null;
@@ -1240,11 +1253,37 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       lqt._liveset = self._bridge.queryPeepConversations(peep, query,
                                                          self, lqt);
-      self._dynamicPeepConvQueries.push(lqt);
+      self._dynamicConvBlurbQueries.push(lqt);
     });
 
     return lqt;
   },
+
+  /**
+   * Issue and name a moda conversations query on conversations involving a
+   *  given peep.  To make things realistic, you need to provide us with a query
+   *  that contains the peep in question so we can get the right reference.
+   */
+  do_queryAllConversations: function(thingName, query)  {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
+    this.T.action(this, 'create', lqt, function() {
+      var delta = DeltaHelper.convBlurbsExpDelta_base(
+        lqt, null, self._dynamicConvInfos, query.by);
+      self._ensureExpectedQuery(lqt);
+      lqt._pendingExpDelta = null;
+
+      lqt.data = {
+      };
+
+      lqt._liveset = self._bridge.queryAllConversations(query, self, lqt);
+      self._dynamicConvBlurbQueries.push(lqt);
+    });
+
+    return lqt;
+  },
+
 
   do_queryConversations: function(query) {
     throw new Error("XXX no all-conversations query testing support yet");
@@ -1362,7 +1401,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           self._assertRemoveFromList(self._dynamicPeepQueries, lqt);
           break;
         case 'convblurbs':
-          self._assertRemoveFromList(self._dynamicPeepConvQueries, lqt);
+          self._assertRemoveFromList(self._dynamicConvBlurbQueries, lqt);
           break;
         case 'convmsgs':
           self._assertRemoveFromList(self._dynamicConvMsgsQueries, lqt);

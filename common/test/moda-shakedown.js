@@ -157,15 +157,17 @@ TD.commonCase('moda basics', function(T) {
   //  notifications would be generated for involved conv count changes, etc.)
 
   // --- conversations
-  T.group("A live-updating conversation query");
+  T.group("A live-updating conversation queries");
   // - issue B and C live queries, both initially empty
   var lqBconvBlurbs = moda_a.do_queryPeepConversations(
                         'BconvBlurbs', lqAllPeeps, client_b, {by: 'any'});
   var lqCconvBlurbs = moda_a.do_queryPeepConversations(
                         'CconvBlurbs', lqAllPeeps, client_c, {by: 'any'});
+  var lqAllConvBlurbs = moda_a.do_queryAllConversations(
+                        'allConvBlurbs', { by: 'all' });
 
   // - create a conversation between A and B
-  T.group('new conversation between A, B');
+  T.group('new conversation #1 between A, B');
   var tConv1 = T.thing('conversation', 'conv1'),
       tConv1_msg1 = T.thing('message', 'c1:1:a');
   moda_a.do_createConversation(tConv1, tConv1_msg1, lqAllPeeps, [client_b]);
@@ -175,6 +177,7 @@ TD.commonCase('moda basics', function(T) {
   // "checkAllOutstandingQueries" type mechanism... or on query completed?
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
+  moda_a.check_queryContainsConvBlurbs(lqAllConvBlurbs, [tConv1]);
 
   // - make sure that the conversation addition did not screw up our peeps list
   T.group('check peeps list after conversation join');
@@ -212,16 +215,17 @@ TD.commonCase('moda basics', function(T) {
   // the C query should now contain the conversation...
 
   // - create a conversation between A,B,C
-  T.group('A starts new conversation between A, B, C');
+  T.group('A starts new conversation #2 between A, B, C');
   var tConv2 = T.thing('conversation', 'conv2'),
       tConv2_msg1 = T.thing('message', 'c2:1:a');
   moda_a.do_createConversation(tConv2, tConv2_msg1, lqAllPeeps,
                                [client_b, client_c]);
 
+  // both queries should now contain the conversation..
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv2, tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, [tConv2, tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqAllConvBlurbs, [tConv2, tConv1]);
 
-  // both queries should now contain the conversation..
 // XXX leaving this alive results in a test failure where the next message send
 //  is expected to trigger a dependent query update; that needs to be fixed
 //  but not quite yet as I have another test failure in my sights.
@@ -234,7 +238,7 @@ TD.commonCase('moda basics', function(T) {
 
   // - have B initiate a conversation
   // this results in a different notification chain from a's perspective
-  T.group('B starts new conversation between A, B');
+  T.group('B starts new conversation #3 between A, B');
   var tConv3 = T.thing('conversation', 'conv3'),
       tConv3_msg1 = T.thing('message', 'c3:1:b');
   client_b.do_startConversation(tConv3, tConv3_msg1, [client_a]);
@@ -243,10 +247,20 @@ TD.commonCase('moda basics', function(T) {
   T.group('conversation queries without reuse');
   moda_a.do_killQuery(lqBconvBlurbs);
   moda_a.do_killQuery(lqCconvBlurbs);
+  moda_a.do_killQuery(lqAllConvBlurbs);
 
-  lqBconvBlurbs = moda_a.do_queryPeepConversations(
-                    'BconvBlurbs', lqAllPeeps, client_b, {by: 'any'});
-  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv3, tConv2, tConv1]);
+  var lqBconvBlurbs2 = moda_a.do_queryPeepConversations(
+                         'BconvBlurbs2', lqAllPeeps, client_b, {by: 'any'}),
+      lqCconvBlurbs2 = moda_a.do_queryPeepConversations(
+                         'CconvBlurbs2', lqAllPeeps, client_c, {by: 'any'}),
+      lqAllConvBlurbs2 = moda_a.do_queryAllConversations(
+                           'allConvBlurbs2', { by: 'all' });
+  moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs2,
+                                       [tConv3, tConv2, tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs2,
+                                       [tConv2, tConv1]);
+  moda_a.check_queryContainsConvBlurbs(lqAllConvBlurbs2,
+                                       [tConv3, tConv2, tConv1]);
 
   T.group("cleanup");
   moda_a.do_killQuery(lqAllPeeps);

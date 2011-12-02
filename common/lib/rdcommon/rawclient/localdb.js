@@ -250,7 +250,7 @@ LocalStore.prototype = {
    *  batching up.
    */
   replicaCaughtUp: function() {
-    this._notif.updatePhaseDoneReleaseNotifications();
+    return this._notif.updatePhaseDoneReleaseNotifications();
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -522,6 +522,9 @@ LocalStore.prototype = {
   _notifyModifiedConversation: function(convId, cells, mutatedCells,
                                         updatedIndexValues) {
     var mergedCells = null, self = this;
+    // we don't provide an indexPopulater because current filtering only occurs
+    //  on peeps, and a newly added peep is going to already have all of their
+    //  relevant index values in updatedIndexValues
     this._notif.namespaceItemModified(
       NS_CONVBLURBS, convId, cells, mutatedCells, updatedIndexValues,
       function genFullReps(clientData, queryHandle) {
@@ -723,6 +726,40 @@ LocalStore.prototype = {
                                                       index, peepRootKey));
   },
 
+  /**
+   * Get the list of all known conversations.
+   *
+   * @args[
+   *   @param[query @dict[
+   *   ]]
+   * ]
+   */
+  queryAndWatchAllConversationBlurbs: function(queryHandle) {
+    // pick the index to use
+    var index = queryHandle.index = $lss.IDX_ALL_CONVS,
+        indexParam = queryHandle.indexParam = '';
+
+    // comparison predicate is keyed off the index
+    queryHandle.cmpFunc = function(aClientData, bClientData) {
+      var aVal = assertGetIndexValue(aClientData.indexValues,
+                                     index, indexParam),
+          bVal = assertGetIndexValue(aClientData.indexValues,
+                                     index, indexParam);
+      return aVal - bVal;
+    };
+
+    queryHandle.testFunc = function(baseCells, mutatedCells, convId) {
+      // all conversations match
+      return true;
+    };
+
+    // - generate an index scan, netting us the conversation id's, hand-off
+    return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, '', -1,
+                                   null, null, null, null, null, null),
+      this._fetchAndReportConversationBlurbsById.bind(this, queryHandle,
+                                                      index, indexParam));
+  },
+
 
   //////////////////////////////////////////////////////////////////////////////
   // Index Updating
@@ -766,9 +803,10 @@ LocalStore.prototype = {
       // - boost any involvement
       if (!recipIsOurUser)
         peepMaxes.push([$lss.IDX_PEEP_ANY_INVOLVEMENT, '', rootKey, timestamp]);
-
-      convUpdates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, rootKey,
-                    convId, timestamp]);
+      // (authorRootKey previously got an any involvement above)
+      if (authorRootKey !== rootKey)
+        convUpdates.push([$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, rootKey,
+                          convId, timestamp]);
       // - boost recip involvement
       if (authorIsOurUser) {
         if (!recipIsOurUser)
@@ -1372,6 +1410,10 @@ LocalStore.prototype = {
       });
   },
 
+  /**
+   * Generate notifications for peep blurbs due to new messages in
+   *  conversations.
+   */
   _notifyPeepConvDeltas: function(authorRootKey, recipRootKeys,
                                   peepIndexValues,
                                   inviteeRootKey, inviteeDeltaRep) {

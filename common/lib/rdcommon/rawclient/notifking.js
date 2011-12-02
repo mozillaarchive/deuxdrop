@@ -268,13 +268,17 @@ const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_ERRORS = exports.NS_ERRORS = 'errors',
       // dependent namespaces that need to be checked for updates
       DEP_NAMESPACES = [NS_PEEPS, NS_SERVERS],
-      // namespaces that can have dependencies on the above namespaces.
+      // List all the namespaces that can depend on the key namespace.
       // nb: NS_CONNREQS populates its peeps itself and they never get updates,
       //  so it is not included in this list.  (nb: by definition, the conn
       //  req gets removed once the contact is added, which is the point at
       //  which we would need/want updates.)
       // nb: NS_POSSFRIENDS is in the same boat.
-      DEP_HAVING_NAMESPACES = [NS_CONVBLURBS, NS_CONVMSGS],
+      // nb: NS_SERVERS never update, so no one has to list them as a dep.
+      DEP_NAMESPACES_FOR_NS = {
+        // peeps are referenced (and can change) when involved in conversations
+        peeps: [NS_CONVBLURBS, NS_CONVMSGS],
+      },
       // namespaces that can be dispatched immediately without waiting for an
       //  update phase
       IMMED_NAMESPACES = [NS_ERRORS];
@@ -613,6 +617,7 @@ NotificationKing.prototype = {
       uniqueId: uniqueId,
       namespace: namespace,
       pending: PENDING_INITIAL,
+      pendingIndex: -1,
       //
       queryDef: queryDef,
       index: null,
@@ -650,19 +655,43 @@ NotificationKing.prototype = {
   },
 
   forgetTrackedQuery: function(queryHandle) {
+    var querySource = queryHandle.owner;
+
     // remove from per-namespace list
-    var qhList = queryHandle.owner.queryHandlesByNS[queryHandle.namespace];
+    var qhList = querySource.queryHandlesByNS[queryHandle.namespace];
     var qhIndex = qhList.indexOf(queryHandle);
     if (qhIndex === -1)
       throw new Error("Query handle life-cycle violation; does not exist!");
     qhList.splice(qhIndex, 1);
 
     // remove from the big list
-    qhList = queryHandle.owner.allQueryHandles;
+    qhList = querySource.allQueryHandles;
     qhIndex = qhList.indexOf(queryHandle);
     qhList.splice(qhIndex, 1);
+
+    // remove from the pending list if relevant
+    if (queryHandle.pending === PENDING_NOTIF) {
+      qhList = querySource.pending;
+      qhIndex = qhList.indexOf(queryHandle);
+      qhList.splice(qhIndex, 1);
+    }
   },
 
+  /**
+   * Mark a query as pending.  This will result in it being queued for
+   *  transmission when the update phase completes or sent immediately
+   *  depending on the namespace.
+   */
+  pendQuery: function(queryHandle) {
+    if (IMMED_NAMESPACES.indexOf(queryHandle.namespace) === -1) {
+      queryHandle.pending = PENDING_NOTIF;
+      queryHandle.pendingIndex = queryHandle.owner.pending.length;
+      queryHandle.owner.pending.push(queryHandle);
+    }
+    else {
+      this.sendQueryResults(queryHandle);
+    }
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // Transmission to the bridge
@@ -679,6 +708,7 @@ NotificationKing.prototype = {
     };
     // - reset state
     queryHandle.pending = PENDING_NONE;
+    queryHandle.pendingIndex = -1;
     queryHandle.dataNeeded = makeEmptyListsByNS();
     queryHandle.splices = [];
     queryHandle.dataMap = makeEmptyMapsByNS();
@@ -746,25 +776,43 @@ NotificationKing.prototype = {
 
     // recursively walk a dependency list, making each `LocallyNamedClientData`
     //  known to `queryHandle`.
-    function fuseDepsIn(queryHandle, deps) {
+    var queryHandle, deltaDanger = false;
+    // clone-note: similar logic exists in namespaceItemModified.
+    function fuseDepsIn(deps) {
       for (var i = 0; i < deps.length; i++) {
         var depData = deps[i];
-        // It's possible these next ops (and the recursive traversal) are
-        //  redundant, so we could potentially fast-bail.  Our dep graph is
-        //  likely to be small enough right now that the extra step would not
-        //  pay off.
-        queryHandle.membersByLocal[depData.ns][depData.localName] = depData;
-        queryHandle.membersByFull[depData.ns][depData.fullName] = depData;
+
+        // skip this dependency if it's already known
+        if (writeQueryHandle.membersByLocal[depData.ns].hasOwnProperty(
+              depData.localName))
+          continue;
+
+        writeQueryHandle.membersByLocal[depData.ns][depData.localName] =
+          writeQueryHandle.membersByFull[depData.ns][depData.fullName] =
+          depData;
+
+        // put a null in the data-map so the client knows to grab the value
+        //  from its cache.
+        writeQueryHandle.dataMap[depData.ns][depData.localName] = null;
+
+        // steal deltas if we are at risk of missing them (see below)
+        if (deltaDanger &&
+            queryHandle.dataDelta[depData.ns].hasOwnProperty(
+              depData.localName)) {
+          writeQueryHandle.dataDelta[depData.ns][depData.localName] =
+            queryHandle.dataDelta[depData.ns][depData.localName];
+        }
+
         if (depData.deps && depData.deps.length)
-          fuseDepsIn(queryHandle, depData.deps);
+          fuseDepsIn(depData.deps);
       }
     }
 
-    // scan other queries
+    // scan ALL other queries (not just ones for the same namespace)
     var querySource = writeQueryHandle.owner;
-    var queryHandles = querySource.queryHandlesByNS[namespace];
+    var queryHandles = querySource.allQueryHandles;
     for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-      var queryHandle = queryHandles[iQuery];
+      queryHandle = queryHandles[iQuery];
       if (queryHandle === writeQueryHandle)
         continue;
       var nsMembers = queryHandle.membersByFull[namespace];
@@ -774,11 +822,29 @@ NotificationKing.prototype = {
         writeQueryHandle.membersByLocal[namespace][clientData.localName] =
           writeQueryHandle.membersByFull[namespace][clientData.fullName] =
             clientData;
+
         // put a null in the data-map so the client knows to grab the value
         //  from its cache.
         writeQueryHandle.dataMap[namespace][clientData.localName] = null;
+
+        // the potential gotcha is that is if both our write query and our
+        //  source query are already in the pending queue, but our source is
+        //  located after the write query *and* has a delta, we need to copy
+        //  that delta or our data will diverge.  Specifically, we will clone
+        //  the data before the delta is applied.
+        deltaDanger =
+          (writeQueryHandle.pendingIndex !== -1 &&
+           queryHandle.pendingIndex !== -1 &&
+           queryHandle.pendingIndex > writeQueryHandle.pendingIndex);
+
+        if (deltaDanger &&
+            queryHandle.dataDelta[namespace].hasOwnProperty(
+              clientData.localName))
+          writeQueryHandle.dataDelta[namespace][clientData.localName] =
+            queryHandle.dataDelta[namespace][clientData.localName];
+
         if (clientData.deps && clientData.deps.length)
-          fuseDepsIn(writeQueryHandle, clientData.deps);
+          fuseDepsIn(clientData.deps);
         return clientData;
       }
     }
@@ -890,8 +956,7 @@ NotificationKing.prototype = {
             queryHandle.dataDelta[NS_CONVMSGS][localName] = {
               messages: (outMessages = []),
             };
-            queryHandle.pending = PENDING_NOTIF;
-            querySource.pending.push(queryHandle);
+            this.pendQuery(queryHandle);
             break;
         }
 
@@ -1051,6 +1116,7 @@ NotificationKing.prototype = {
           frontData = clientDataPopulater(clientData, queryHandle);
         }
         else {
+          // (localName is still set from when we set clientData)
           clientData.count++;
         }
         queryHandle.membersByLocal[namespace][localName] = clientData;
@@ -1074,16 +1140,8 @@ NotificationKing.prototype = {
         this._log.nsItemAdded(queryHandle.uniqueId, fullName,
                               clientData.count, insertIdx, queryHandle.pending);
 
-        if (queryHandle.pending === PENDING_NONE) {
-          // some namespaces are immediately dispatched, others are not
-          if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
-            queryHandle.pending = PENDING_NOTIF;
-            querySource.pending.push(queryHandle);
-          }
-          else {
-            this.sendQueryResults(queryHandle);
-          }
-        }
+        if (queryHandle.pending === PENDING_NONE)
+          this.pendQuery(queryHandle);
       }
     }
   },
@@ -1096,10 +1154,6 @@ NotificationKing.prototype = {
    * We check:
    * - If the indexed value used by any queries has changed.
    * - If a query's test result changes to merit addition/removal.
-   *
-   * XXX we need to provide a rep generation callback like `namespaceItemAdded`
-   *  has for the cases where a transition in object state can change its
-   *  query visibility.
    *
    * @args[
    *   @param[namespace]
@@ -1117,6 +1171,10 @@ NotificationKing.prototype = {
    *     for idempotently mutating any existing clientData backside
    *     representation, but instead returns a frontside delta representation
    *     instead of a full frontside representation.
+   *
+   *     The function may add or remove object dependencies by manipulating
+   *     the "deps" list of the client data structure.  Additions are assumed
+   *     to be accompanied by appropriate manipulation
    *   }
    *   @param[indexPopulater Function]{
    *     XXX Speculative at this point function to help regenerate indices that
@@ -1136,15 +1194,82 @@ NotificationKing.prototype = {
                                   clientDataPopulater, deltaPopulater,
                                   indexPopulater
                                   ) {
+    var querySource, queryHandle, frontDataDelta, deltaAdds, deltaRemovals;
+
+
+    function fuseDepsIn() {
+    }
+
+    function buildOrReuseDelta() {
+      // create/update delta if required
+      if (frontDataDelta === undefined) {
+        // try and grab an existing delta to update
+        frontDataDelta = findExistingDelta(localName);
+        // didn't find it?  create a new one
+        if (frontDataDelta === undefined)
+          frontDataDelta = {};
+        deltaAdds = [], deltaRemovals = [];
+
+        var preDeltaDeps = clientData.deps.concat();
+        deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
+        var postDeltaDeps = clientData.deps, iDep, depData;
+
+        // figure out what dependencies changed
+        for (iDep = 0; iDep < preDeltaDeps.length; iDep++) {
+          depData = preDeltaDeps[iDep];
+          if (postDeltaDeps.indexOf(dep) === -1)
+            deltaRemovals.push(dep);
+        }
+        for (iDep = 0; iDep < postDeltaDeps.length; iDep++) {
+          depData = postDeltaDeps[iDep];
+          if (preDeltaDeps.indexOf(dep) === -1)
+            deltaAdds.push(dep);
+        }
+
+
+      }
+      // reuse of a delta from this pass; we may need to
+      else {
+        // we need to run a fuse deps pass in case the delta changed our
+        //  dependencies
+      }
+
+
+    }
+
+    function findExistingDelta(localName) {
+      // It is possible that someone later than us in the query handle
+      //  traversal order already has the delta because they matched
+      //  this item before we matched it.  We could either walk the list
+      //  of (per-source) pending queries or maintain a hash on the
+      //  source of all the populated deltas not yet flushed.  For now,
+      //  we will just walk the list of pending queries.
+      for (var iPend = 0; iPend < querySource.pending.length; iPend++) {
+        var pendDeltaMap =
+          querySource.pending[iPend].dataDelta[namespace];
+        if (pendDeltaMap.hasOwnProperty(localName)) {
+          return pendDeltaMap[localName];
+        }
+      }
+      return undefined;
+    }
 
     for (var qsKey in this._activeQuerySources) {
-      var querySource = this._activeQuerySources[qsKey];
+      querySource = this._activeQuerySources[qsKey];
       // --- primary updates
-      var queryHandles = querySource.queryHandlesByNS[namespace], iQuery,
-          queryHandle;
+      var queryHandles = querySource.queryHandlesByNS[namespace], iQuery;
 
-      var clientData = null, frontData = null, localName = null,
-          frontDataDelta = undefined, updatedIndices = false;
+      // Because we issue deltas redundantly but only want to compute them once,
+      //  cache the looked up delta for the query source once we find it (or
+      //  create it).  (We issue them redundantly as a simplification for the
+      //  other side which uses distinct instances for each query handle.  We
+      //  don't redundantly encode the dataMap because we can convey reuse
+      //  through a 'null' value and the other side will clone an existing
+      //  value.)
+      frontDataDelta = undefined, deltaAdds = null, deltaRemovals = null;
+          // only recompute potentially missing indices once
+      var updatedIndices = false,
+          clientData = null, localName = null;
 
       for (iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         queryHandle = queryHandles[iQuery];
@@ -1167,9 +1292,8 @@ NotificationKing.prototype = {
             updatedIndices = true;
           }
           // try and reuse an existing clientData rep if possible
-          if (!clientData)
-            clientData = this.reuseIfAlreadyKnown(queryHandle, namespace,
-                                                  fullName);
+          clientData = this.reuseIfAlreadyKnown(queryHandle, namespace,
+                                                fullName);
           if (!clientData) {
             localName = "" + (querySource.nextUniqueIdAlloc++);
             clientData = {
@@ -1183,43 +1307,32 @@ NotificationKing.prototype = {
               indexValues: [],
               deps: [],
             };
-            frontData = clientDataPopulater(clientData, queryHandle, fullName);
 
             queryHandle.membersByLocal[namespace][localName] = clientData;
             queryHandle.membersByFull[namespace][fullName] = clientData;
+            queryHandle.dataMap[namespace][localName] =
+              clientDataPopulater(clientData, queryHandle, fullName);
+            anyChanges = 'full';
           }
           else {
             localName = clientData.localName;
-            if (!frontData) {
-              frontData = clientDataPopulater(clientData, queryHandle,
-                                              fullName);
-            }
+            anyChanges = 'reuse';
           }
-
-          queryHandle.dataMap[namespace][localName] = frontData;
-          anyChanges = 'full';
         }
         // -- item already present in query result
         else {
-          if (!clientData)
-            clientData = queryHandle.membersByFull[namespace][fullName];
+          clientData = queryHandle.membersByFull[namespace][fullName];
           localName = clientData.localName;
 
-          // generate the delta rep if required.
+          // - generate the delta rep if required.
           if (deltaPopulater) {
-            if (frontDataDelta === undefined) {
-              // try and grab an existing delta (possibly from a previous round)
-              //  so we don't clobber previous but yet unsent deltas.
-              if (queryHandle.dataDelta[namespace].hasOwnProperty(localName))
-                frontDataDelta = queryHandle.dataDelta[namespace][localName];
-              else
-                frontDataDelta = {};
-              deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
-            }
-
+            buildOrReuseDelta();
             if (frontDataDelta !== null) {
               queryHandle.dataDelta[namespace][localName] = frontDataDelta;
-              anyChanges = 'delta';
+              if (anyChanges)
+                anyChanges += '-delta';
+              else
+                anyChanges = 'delta';
             }
           }
         }
@@ -1240,9 +1353,10 @@ NotificationKing.prototype = {
 
             // generate two splices if there was a move and flag a change
             if (preIdx !== insertIdx) {
-              if (preIdx !== -1)
+              if (preIdx !== -1) {
                 queryHandle.splices.push(
                   { index: preIdx, howMany: 1, items: null });
+              }
               queryHandle.splices.push(
                 { index: insertIdx, howMany: 0, items: [clientData.localName]});
               if (anyChanges)
@@ -1257,15 +1371,8 @@ NotificationKing.prototype = {
           this._log.nsItemModified(queryHandle.uniqueId, fullName, anyChanges);
 
           // some namespaces are immediately dispatched, others are not
-          if (queryHandle.pending === PENDING_NONE) {
-            if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
-              queryHandle.pending = PENDING_NOTIF;
-              querySource.pending.push(queryHandle);
-            }
-            else {
-              this.sendQueryResults(queryHandle);
-            }
-          }
+          if (queryHandle.pending === PENDING_NONE)
+            this.pendQuery(queryHandle);
         }
       }
 
@@ -1275,13 +1382,15 @@ NotificationKing.prototype = {
       //  to our item due to a reference/dependency hear about the update,
       //  so let's check the namespaces that can reference our namespace.
 
-      // no point trying to do this if we can't generate deltas.
-      if (!deltaPopulater)
+      // no point trying to do this if:
+      // - we can't generate deltas.
+      // - there are no namespaces dependent on our namespace
+      if (!deltaPopulater || !DEP_NAMESPACES_FOR_NS.hasOwnProperty(namespace))
         continue;
-      for (var iDepNS = 0; iDepNS < DEP_HAVING_NAMESPACES.length; iDepNS++) {
-        var depNS = DEP_HAVING_NAMESPACES[iDepNS];
-        if (depNS === namespace)
-          continue;
+      // get the list of namespaces that can reference our namespace.
+      var depNamespaces = DEP_NAMESPACES_FOR_NS[namespace];
+      for (var iDepNS = 0; iDepNS < depNamespaces.length; iDepNS++) {
+        var depNS = depNamespaces[iDepNS];
 
         queryHandles = querySource.queryHandlesByNS[depNS];
         for (iQuery = 0; iQuery < queryHandles.length; iQuery++) {
@@ -1293,25 +1402,15 @@ NotificationKing.prototype = {
           clientData = queryHandle.membersByFull[namespace][fullName];
           localName = clientData.localName;
 
-          // generate delta rep if not previously generated
-          if (frontDataDelta === undefined) {
-            // XXX duped logic from above
-            if (queryHandle.dataDelta[namespace].hasOwnProperty(localName))
-              frontDataDelta = queryHandle.dataDelta[namespace][localName];
-            else
-              frontDataDelta = {};
-            deltaPopulater(clientData, queryHandle, frontDataDelta, fullName);
-          }
+          buildOrReuseDelta();
+
           if (frontDataDelta !== null) {
             queryHandle.dataDelta[namespace][localName] = frontDataDelta;
 
             this._log.nsItemModified(queryHandle.uniqueId, fullName, 'dep');
 
-            if (queryHandle.pending === PENDING_NONE) {
-              // (dependent item namespaces are currently never immediate)
-              queryHandle.pending = PENDING_NOTIF;
-              querySource.pending.push(queryHandle);
-            }
+            if (queryHandle.pending === PENDING_NONE)
+              this.pendQuery(queryHandle);
           }
         }
       }
@@ -1410,15 +1509,8 @@ NotificationKing.prototype = {
 
         this._log.nsItemDeleted(queryHandle.uniqueId, fullName);
 
-        if (queryHandle.pending === PENDING_NONE) {
-          if (IMMED_NAMESPACES.indexOf(namespace) === -1) {
-            queryHandle.pending = PENDING_NOTIF;
-            querySource.pending.push(queryHandle);
-          }
-          else {
-            this.sendQueryResults(queryHandle);
-          }
-        }
+        if (queryHandle.pending === PENDING_NONE)
+          this.pendQuery(queryHandle);
       }
     }
   },

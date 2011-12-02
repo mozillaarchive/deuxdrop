@@ -484,8 +484,12 @@ RawClientAPI.prototype = {
   },
 
   _replicaCaughtUp: function() {
-    this._log.replicaCaughtUp();
-    this.store.replicaCaughtUp();
+    var self = this;
+    // the caught-up notification releases query results, a potentially async
+    //  process if there are lookups required, so use a when().
+    when(this.store.replicaCaughtUp(), function() {
+      self._log.replicaCaughtUp();
+    });
   },
 
   _replicaBlockProcessingFailure: function(msg, err) {

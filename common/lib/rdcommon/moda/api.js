@@ -1454,6 +1454,15 @@ ModaBridge.prototype = {
   },
 
   queryAllConversations: function(query, listener, data) {
+    if (query.by !== 'all')
+      throw new Error("only supported ordering is 'all'");
+    var handle = this._nextHandle++;
+    var liveset = new LiveOrderedSet(this, handle, NS_CONVBLURBS, query,
+                                     listener, data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryAllConversations', handle, { query: query });
+    return liveset;
   },
 
   queryConnectRequests: function(listener, data) {

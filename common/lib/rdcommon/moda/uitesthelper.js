@@ -192,7 +192,7 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   //  checks every time.  So we can leave these empty, but iteration logic
   //  really needs them to exist.
   this._dynamicPeepQueries = [];
-  this._dynamicPeepConvQueries = [];
+  this._dynamicConvBlurbQueries = [];
   this._dynamicConvMsgsQueries = [];
   this._dynPendingQueries = [];
   this._dynamicPossFriendsQueries = [];

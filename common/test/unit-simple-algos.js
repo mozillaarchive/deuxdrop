@@ -86,6 +86,8 @@ TD.commonCase('binary search for insertion', function(T) {
   }
 
   testify([], 0, 0);
+  testify([], 1, 0);
+  testify([], -1, 0);
 
   testify([0], -1, 0);
   testify([0], 1, 1);

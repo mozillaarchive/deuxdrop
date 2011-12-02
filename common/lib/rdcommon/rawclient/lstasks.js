@@ -341,14 +341,6 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
       };
 
 
-      // - peep change notification
-      // (timestamps are affected and so is the number of conversations)
-      var peepConvIndexUpdates = this.peepConvIndexUpdates = [
-        // create peep conversation involvement index entry
-        [$lss.IDX_CONV_PEEP_ANY_INVOLVEMENT, inviteeRootKey,
-         this.convMeta.id, timestamp],
-      ];
-
       // (we are not traversing writeCells, so we need to put the invitee in)
       var recipRootKeys = this.recipRootKeys = [inviteeRootKey],
           inviterCellName = "d:p" + this.fanoutEnv.sentBy, cells = this.cells;
@@ -383,17 +375,17 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
       this.store._notifyPeepConvDeltas(
         this.inviterPubring.rootPublicKey, this.recipRootKeys,
         this.peepIndexMaxes,
-        this.inviteeRootKey, { numConvs: 1});
+        this.inviteeRootKey, { numConvs: 1 });
 
       // - conversation blurb notification
       if (this.msgNum === 1)
         this.store._notifyNewConversation(
           this.convMeta.id, this.cells, this.writeCells,
-          this.peepConvIndexUpdates);
+          this.convIndexUpdates);
       else
         this.store._notifyModifiedConversation(
           this.convMeta.id, this.cells, this.writeCells,
-          this.peepConvIndexUpdates);
+          this.convIndexUpdates);
 
       // - "new" notifications, conv messages notifications
       this.store._notif.trackNewishMessage(this.convMeta.id, this.msgNum,

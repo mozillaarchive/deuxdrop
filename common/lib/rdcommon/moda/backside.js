@@ -322,6 +322,16 @@ ModaBackside.prototype = {
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
 
+  _cmd_queryAllConversations: function(bridgeQueryName, payload) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_CONVBLURBS, payload.query);
+    when(this._store.queryAndWatchAllConversationBlurbs(queryHandle,
+                                                        payload.query),
+         null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
+  },
+  
   _cmd_queryConvMsgs: function(bridgeQueryName, payload) {
     // map the provided conv blurb local name to the true name
     var convId = this._notif.mapLocalNameToFullName(this._querySource,
