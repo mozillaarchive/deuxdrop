@@ -305,15 +305,6 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this._bridge = _bridge;
   this._handle = handle;
   this._ns = ns;
-  this._dataByNS = {
-    peeps: {},
-    convblurbs: {},
-    convmsgs: {},
-    servers: {},
-    possfriends: {},
-    connreqs: {},
-    errors: {},
-  };
   this.query = query;
   this.items = [];
   this.completed = false;
@@ -355,6 +346,8 @@ LiveOrderedSet.prototype = {
    *  is received (without throwing errors about missing things that were
    *  likely filtered out), but that is deemed surplus to needs given current
    *  levels of laziness.
+   *
+   * XXX revisit once we complete the rest of the rejiggering
    */
   cloneSlice: function(items, data) {
     var cloneSet = new LiveOrderedSet(this._bridge, this._bridge._nextHandle++,
@@ -726,6 +719,20 @@ function ModaBridge() {
   /** @listof[LiveOrderedSet] */
   this._sets = [];
 
+  /**
+   * Per-namespace maps from local names to the list of instances bound to that
+   *  local name.  Every liveset gets its own instance for a given local name.
+   */
+  this._dataByNS = {
+    peeps: {},
+    convblurbs: {},
+    convmsgs: {},
+    servers: {},
+    possfriends: {},
+    connreqs: {},
+    errors: {},
+  };
+
   /** `OurUserAccount` */
   this._ourUser = null;
 
@@ -798,7 +805,7 @@ ModaBridge.prototype = {
     }
   },
 
-  _transformServerInfo: function(_liveset, _localName, serialized) {
+  _transform_servers: function(_liveset, _localName, serialized) {
     if (!serialized)
       return null;
     return new ServerInfo(_liveset, _localName,
@@ -813,7 +820,7 @@ ModaBridge.prototype = {
     // We are passing an empty obj to masquerade as the owning liveset to stop
     //  the 'on' method from breaking if it gets used.  There are no events
     //  associated with this rep, so it should ideally be fine...
-    this._ourUser.usingServer = this._transformServerInfo({}, null,
+    this._ourUser.usingServer = this._transform_servers({}, null,
                                                           msg.server);
 
     // notify listeners
@@ -839,6 +846,40 @@ ModaBridge.prototype = {
    *
    */
   _receiveCloneQueryAck: function(msg) {
+  },
+
+  _commonProcess: function(namespace, msg) {
+    var values, dataMap, val;
+    if (msg.dataMap.hasOwnProperty(namespace)) {
+      var transformFunc = this['_transform_' + namespace];
+      values = msg.dataMap[namespace];
+      dataMap = this._dataByNS[namespace];
+      for (key in values) {
+        val = values[key];
+        dataMap[key] = transformFunc.call(this, liveset, key, val);
+      }
+    }
+    if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
+      var deltaFunc = this['_delta_' + namespace];
+
+      values = msg.dataDelta[NS_PEEPS];
+      dataMap = this._dataByNS[NS_PEEPS];
+
+      for (key in values) {
+        if (!dataMap.hasOwnProperty(key))
+          throw new Error("dataDelta in '" + namespace + "' for key '" + key
+                          + "'");
+        var delta = values[key];
+        if (delta === null) {
+          delete dataMap[key];
+          continue;
+        }
+
+        curRep = dataMap[key];
+        useModified.push(curRep);
+      }
+    }
+
   },
 
   /**
@@ -884,21 +925,10 @@ ModaBridge.prototype = {
     //  relevant to unit testing...
     var modifiedPrimaries = [], modifiedDeps = [], useModified = null;
 
-    // -- Servers
-    if (msg.dataMap.hasOwnProperty(NS_SERVERS)) {
-      values = msg.dataMap[NS_SERVERS];
-      dataMap = liveset._dataByNS[NS_SERVERS];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_SERVERS, key);
-        else
-          dataMap[key] = this._transformServerInfo(liveset, key, val);
-      }
-    }
 
-    // -- Peeps
+    this._commonProcess(NS_SERVERS, msg);
+    this._commonProcess(NS_PEEPS, msg);
+
     if (msg.dataMap.hasOwnProperty(NS_PEEPS)) {
       values = msg.dataMap[NS_PEEPS];
       dataMap = liveset._dataByNS[NS_PEEPS];
@@ -908,34 +938,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(liveset, NS_PEEPS, key);
         else
-          dataMap[key] = this._transformPeepBlurb(key, val, liveset);
-      }
-    }
-    if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
-      values = msg.dataDelta[NS_PEEPS];
-      dataMap = liveset._dataByNS[NS_PEEPS];
-      useModified = (liveset._ns === NS_PEEPS) ? modifiedPrimaries
-                                               : modifiedDeps;
-      for (key in values) {
-        if (!dataMap.hasOwnProperty(key))
-          throw new Error("dataDelta for unknown key: " + key);
-        delta = values[key];
-        if (delta === null) {
-          delete dataMap[key];
-          continue;
-        }
-        curRep = dataMap[key];
-        for (attr in delta) {
-          switch (attr) {
-            case 'numConvs':
-              curRep._numConvs = delta.numConvs;
-              break;
-            case 'ourPoco':
-              curRep.ourPoco = delta.ourPoco;
-              break;
-          }
-        }
-        useModified.push(curRep);
+          dataMap[key] = this._transform_peeps(key, val, liveset);
       }
     }
 
@@ -949,7 +952,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONVBLURBS, key);
         else
-          dataMap[key] = this._transformConvBlurb(key, val, liveset);
+          dataMap[key] = this._transform_convblurbs(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
@@ -1000,7 +1003,7 @@ ModaBridge.prototype = {
           dataMap[key] = this._cacheLookupOrExplode(liveset, NS_POSSFRIENDS,
                                                     key);
         else
-          dataMap[key] = this._transformPossibleFriend(key, val, liveset);
+          dataMap[key] = this._transform_possfriends(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_POSSFRIENDS)) {
@@ -1026,7 +1029,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONNREQS, key);
         else
-          dataMap[key] = this._transformConnectRequest(key, val, liveset);
+          dataMap[key] = this._transform_connreqs(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_CONNREQS)) {
@@ -1052,7 +1055,7 @@ ModaBridge.prototype = {
         if (val === null)
           dataMap[key] = this._cacheLookupOrExplode(liveset, NS_ERRORS, key);
         else
-          dataMap[key] = this._transformError(key, val, liveset);
+          dataMap[key] = this._transform_errors(key, val, liveset);
       }
     }
     if (msg.dataDelta.hasOwnProperty(NS_ERRORS)) {
@@ -1229,10 +1232,23 @@ ModaBridge.prototype = {
   /**
    * Create a `PeepBlurb` representation from the wire rep.
    */
-  _transformPeepBlurb: function(localName, data, liveset) {
+  _transform_peeps: function(localName, data, liveset) {
     return new PeepBlurb(liveset, localName, data.ourPoco, data.selfPoco,
                          data.numUnread, data.numConvs, data.pinned,
                          data.isMe);
+  },
+
+  _delta_peeps: function(curRep, delta) {
+    for (attr in delta) {
+      switch (attr) {
+        case 'numConvs':
+          curRep._numConvs = delta.numConvs;
+          break;
+        case 'ourPoco':
+          curRep.ourPoco = delta.ourPoco;
+          break;
+      }
+    }
   },
 
   /**
@@ -1263,7 +1279,7 @@ ModaBridge.prototype = {
   /**
    * Create a `ConversationBlurb` representation from the wire rep.
    */
-  _transformConvBlurb: function(localName, wireConv, liveset) {
+  _transform_convblurbs: function(localName, wireConv, liveset) {
     var participants = [];
     for (var i = 0; i < wireConv.participants.length; i++) {
       participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
@@ -1292,7 +1308,7 @@ ModaBridge.prototype = {
     };
   },
 
-  _transformPossibleFriend: function(localName, wireRep, liveset) {
+  _transform_possfriends: function(localName, wireRep, liveset) {
     var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
     return new PossibleFriend(liveset, localName, peepRep);
   },
@@ -1300,7 +1316,7 @@ ModaBridge.prototype = {
   /**
    * Create a `ConnectRequest` representation from the wire rep.
    */
-  _transformConnectRequest: function(localName, wireRep, liveset) {
+  _transform_connreqs: function(localName, wireRep, liveset) {
     var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
     var serverRep = liveset._dataByNS.servers[wireRep.serverLocalName];
     return new ConnectRequest(liveset, localName, peepRep, serverRep,
@@ -1310,7 +1326,7 @@ ModaBridge.prototype = {
   /**
    * Create an `ErrorRep` from the wire rep.
    */
-  _transformError: function(localName, wireRep, liveset) {
+  _transform_errors: function(localName, wireRep, liveset) {
     return new ErrorRep(
       wireRep.errorId, wireRep.errorParam,
       wireRep.firstReported, wireRep.lastReported,

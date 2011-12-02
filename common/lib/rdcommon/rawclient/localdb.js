@@ -265,17 +265,18 @@ LocalStore.prototype = {
    *  and re-run, otherwise send the query results.
    */
   _fillOutQueryDepsAndSend: function(queryHandle) {
+    var querySource = queryHandle.owner;
     // fetch blurbs before peeps because blurbs can generate peep deps
-    if (queryHandle.dataNeeded[NS_CONVBLURBS].length) {
-      var convIds = queryHandle.dataNeeded[NS_CONVBLURBS].splice(0,
-                      queryHandle.dataNeeded[NS_CONVBLURBS].length);
-      return this._fetchAndReportConversationBlurbsById(query, null, null,
+    if (querySource.dataNeeded[NS_CONVBLURBS].length) {
+      var convIds = querySource.dataNeeded[NS_CONVBLURBS].splice(0,
+                      querySource.dataNeeded[NS_CONVBLURBS].length);
+      return this._fetchAndReportConversationBlurbsById(queryHandle, null, null,
                                                         convIds);
     }
     // fetch peep deps last-ish because they can't generate deps
-    if (queryHandle.dataNeeded[NS_PEEPS].length) {
-      var peepRootKeys = queryHandle.dataNeeded[NS_PEEPS].splice(0,
-                           queryHandle.dataNeeded[NS_PEEPS].length);
+    if (querySource.dataNeeded[NS_PEEPS].length) {
+      var peepRootKeys = querySource.dataNeeded[NS_PEEPS].splice(0,
+                           querySource.dataNeeded[NS_PEEPS].length);
       // we never pass index/indexparam because a query on peeps would always
       //  get its data directly, not by our dependency loading logic.
       return this._fetchAndReportPeepBlurbsById(queryHandle, null, null,
@@ -302,7 +303,7 @@ LocalStore.prototype = {
       while (iConv < conversationIds.length) {
         var convId = conversationIds[iConv], clientData;
         // - attempt cache re-use
-        if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle,
+        if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle.owner,
                                                           NS_CONVBLURBS,
                                                           convId))) {
           viewItems.push(clientData.localName);
@@ -339,18 +340,9 @@ LocalStore.prototype = {
   _fetchConversationBlurb: function(queryHandle, convId) {
     var querySource = queryHandle.owner, self = this;
     var localName = "" + (querySource.nextUniqueIdAlloc++);
-    var deps = [];
-    var clientData = {
-      localName: localName,
-      fullName: convId,
-      ns: NS_CONVBLURBS,
-      count: 1,
-      data: null,
-      indexValues: [],
-      deps: deps,
-    };
-    queryHandle.membersByLocal[NS_CONVBLURBS][localName] = clientData;
-    queryHandle.membersByFull[NS_CONVBLURBS][convId] = clientData;
+
+    var clientData = this._notif.generateClientData(querySource, NS_CONVBLURBS,
+                                                    convId);
 
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
@@ -358,8 +350,8 @@ LocalStore.prototype = {
       clientData.data = cells['d:meta'];
 
       // -- build the client rep
-      queryHandle.dataMap[NS_CONVBLURBS][localName] =
-        self._convertConversationBlurb(queryHandle, cells, deps);
+      querySource.dataMap[NS_CONVBLURBS][localName] =
+        self._convertConversationBlurb(queryHandle, cells, clientData.deps);
       return clientData;
     });
   },
@@ -527,13 +519,13 @@ LocalStore.prototype = {
     //  relevant index values in updatedIndexValues
     this._notif.namespaceItemModified(
       NS_CONVBLURBS, convId, cells, mutatedCells, updatedIndexValues,
-      function genFullReps(clientData, queryHandle) {
+      function genFullReps(clientData, querySource) {
         if (!mergedCells) // merge only the first time needed
           mergedCells = $notifking.mergeCells(cells, mutatedCells);
         // back data
         clientData.data = mergedCells['d:meta'];
         return self._convertConversationBlurb(
-          queryHandle, mergedCells, clientData.deps
+          querySource, mergedCells, clientData.deps
         );
       },
       function genDeltaReps(clientData, queryHandle, outDeltaRep) {
@@ -554,14 +546,14 @@ LocalStore.prototype = {
     //  we can rely on the blurb already being known to the bridge and explode
     //  if it somehow is no longer known.)
     var blurbClientData = this._notif.reuseIfAlreadyKnown(
-                            queryHandle, NS_CONVBLURBS, convId);
+                            queryHandle.owner, NS_CONVBLURBS, convId);
     if (!blurbClientData) {
       throw this._notifking.badQuery(queryHandle, "Conv blurb does not exist!");
     }
 
     // - does the bridge already know the answer to the question?
     var msgsClientData = this._notif.reuseIfAlreadyKnown(
-                           queryHandle, NS_CONVMSGS, convId);
+                           queryHandle.owner, NS_CONVMSGS, convId);
     if (msgsClientData) {
       this._fillOutQueryDepsAndSend(queryHandle);
       return;
@@ -623,23 +615,9 @@ LocalStore.prototype = {
    */
   _fetchConversationMessages: function(queryHandle, convId) {
     var querySource = queryHandle.owner;
-    var localName = "" + (querySource.nextUniqueIdAlloc++);
-    var deps = [];
-    var clientData = {
-      localName: localName,
-      fullName: convId,
-      ns: NS_CONVMSGS,
-      count: 1,
-      // we don't need to maintain any data about the messages; only the blurb
-      //  needs it because the blurb is what gets acted upon
-      data: null,
-      // we don't need any indices because the messages are inherently ordered
-      //  and cannot be reordered.
-      indexValues: null,
-      deps: deps,
-    };
-    queryHandle.membersByLocal[NS_CONVMSGS][localName] = clientData;
-    queryHandle.membersByFull[NS_CONVMSGS][convId] = clientData;
+
+    var clientData = this._notif.generateClientData(querySource, NS_CONVMSGS,
+                                                    convId);
 
     var self = this;
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
@@ -653,8 +631,9 @@ LocalStore.prototype = {
         msgRecs.push(cells['d:m' + iMsg]);
       }
 
-      queryHandle.dataMap[NS_CONVMSGS][localName] = {
-        messages: self._convertConversationMessages(queryHandle, msgRecs, deps),
+      querySource.dataMap[NS_CONVMSGS][localName] = {
+        messages: self._convertConversationMessages(queryHandle, msgRecs,
+                                                    clientData.deps),
       };
 
       return self._fillOutQueryDepsAndSend(queryHandle);
@@ -952,30 +931,21 @@ LocalStore.prototype = {
    */
   _convertSynthPeep: function(queryHandle, fullName, selfIdentBlob,
                               selfIdentPayload) {
-    var peepClientData = this._notif.reuseIfAlreadyKnown(
-                           queryHandle, NS_PEEPS, fullName);
-    if (peepClientData)
-      return peepClientData;
+    var clientData = this._notif.reuseIfAlreadyKnown(
+                           queryHandle.owner, NS_PEEPS, fullName);
+    if (clientData)
+      return clientData;
 
-    var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
-    peepClientData = {
-      localName: localName,
-      fullName: fullName,
-      ns: NS_PEEPS,
-      count: 1,
-      data: null, // (value assigned by the convert call)
-      indexValues: [],
-      deps: [],
-    };
+    var self = this;
+    clientData = this._notif.generateClientData(queryHandle.owner, NS_PEEPS,
+                                                fullName);
+
     var frontData = this._convertPeepSelfIdentToBothReps(
-                      selfIdentBlob, selfIdentPayload, peepClientData);
+                      selfIdentBlob, selfIdentPayload, clientData);
 
-    queryHandle.membersByLocal[NS_PEEPS][localName] = peepClientData;
-    queryHandle.membersByFull[NS_PEEPS][fullName] = peepClientData;
+    querySource.dataMap[NS_PEEPS][localName] = frontData;
 
-    queryHandle.dataMap[NS_PEEPS][localName] = frontData;
-
-    return peepClientData;
+    return clientData;
   },
 
   _convertConnectRequest: function(reqRep, fullName, queryHandle, clientData) {
@@ -996,7 +966,7 @@ LocalStore.prototype = {
     var serverIdent = $pubident.peekServerSelfIdentNOVERIFY(
                         selfIdentPayload.transitServerIdent);
     var serverClientData = this._notif.reuseIfAlreadyKnown(
-                             queryHandle, NS_SERVERS,
+                             queryHandle.owner, NS_SERVERS,
                              serverIdent.rootPublicKey);
     if (!serverClientData)
       serverClientData = this._convertServerInfo(
@@ -1015,23 +985,13 @@ LocalStore.prototype = {
 
   _convertServerInfo: function(queryHandle, serverIdent,
                                serverIdentBlob) {
-    var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
-    var serverClientData = {
-      localName: localName,
-      fullName: serverIdent.rootPublicKey,
-      ns: NS_SERVERS,
-      count: 1,
-      data: serverIdentBlob,
-      indexValues: null,
-      deps: null,
-    };
-    queryHandle.membersByLocal[NS_SERVERS][localName] = serverClientData;
-    queryHandle.membersByFull[NS_SERVERS][serverIdent.rootPublicKey] =
-      serverClientData;
-    queryHandle.dataMap[NS_SERVERS][localName] =
+    var clientData = this._notif.generateClientData(
+        queryHandle.owner, NS_SERVERS, serverIdent.rootPublicKey);
+    clientData.data = serverIdentBlob;
+    querySource.dataMap[NS_SERVERS][localName] =
       this._transformServerIdent(serverIdent);
 
-    return serverClientData;
+    return clientData;
   },
 
   /**
@@ -1070,21 +1030,11 @@ LocalStore.prototype = {
         function getNextMaybeGot(reqRep) {
           var clientData;
           if (reqRep) {
-            var localName = "" + (querySource.nextUniqueIdAlloc++),
-                fullName = rootKeys[iKey - 1]; // (infinite loop protection)
-            clientData = {
-              localName: localName,
-              fullName: fullName,
-              ns: NS_CONNREQS,
-              count: 1,
-              data: null,
-              indexValues: [],
-              deps: [],
-            };
-            queryHandle.membersByLocal[NS_CONNREQS][localName] = clientData;
-            queryHandle.membersByFull[NS_CONNREQS][fullName] = clientData;
+            var fullName = rootKeys[iKey - 1]; // (infinite loop protection)
+            clientData = self._notif.generateClientData(
+                           querySource, NS_CONNREQS, fullName);
 
-            queryHandle.dataMap[NS_CONNREQS][localName] =
+            querySource.dataMap[NS_CONNREQS][localName] =
               self._convertConnectRequest(reqRep, fullName,
                                           queryHandle, clientData);
             viewItems.push(localName);
@@ -1096,7 +1046,8 @@ LocalStore.prototype = {
           //  stack on non-tail-call optimized impls.)
           while (iKey < rootKeys.length) {
             if ((clientData = self._notif.reuseIfAlreadyKnown(
-                                queryHandle, NS_CONNREQS, rootKeys[iKey]))) {
+                                queryHandle.owner, NS_CONNREQS,
+                                rootKeys[iKey]))) {
               viewItems.push(clientData.localName);
               clientDataItems.push(clientData);
               iKey++;
@@ -1399,7 +1350,7 @@ LocalStore.prototype = {
     this._notif.namespaceItemModified(
       NS_PEEPS, peepRootKey, cells, mutatedCells, indexValues,
       this._convertPeepToBothReps.bind(this, cells, mutatedCells),
-      function updatePeepRep(clientData, queryHandle, frontDataDelta) {
+      function updatePeepRep(clientData, querySource, frontDataDelta) {
         // we must must must update the oident.
         var signedOident = mutatedCells['d:oident'];
         clientData.data.oident = signedOident;
@@ -1424,7 +1375,7 @@ LocalStore.prototype = {
     if (inviteeRootKey) {
       this._notif.namespaceItemModified(
         NS_PEEPS, inviteeRootKey, null, null, peepIndexValues, null,
-        function deltaGen(clientData, queryHandle, outDeltaRep) {
+        function deltaGen(clientData, querySource, outDeltaRep) {
           if (inviteeDeltaRep.hasOwnProperty('numConvs')) {
             // this function only gets invoked once per query source, so it's
             //  fine and won't screw up and increment several times.
@@ -1463,7 +1414,7 @@ LocalStore.prototype = {
         // - perform cache lookup, reuse only if valid
         // (_deferringPeepQueryResolve creates speculative entries and we are
         //  the logic that actually fulfills them.)
-        if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle,
+        if ((clientData = self._notif.reuseIfAlreadyKnown(queryHandle.owner,
                                                           NS_PEEPS,
                                                           peepRootKey))) {
           if (clientData.data) {
@@ -1502,25 +1453,14 @@ LocalStore.prototype = {
 
   _fetchPeepBlurb: function(queryHandle, peepRootKey, clientData) {
     // if we don't already have a data-empty structure, create one
-    if (!clientData) {
-      var querySource = queryHandle.owner;
-      var localName = "" + (querySource.nextUniqueIdAlloc++);
-      clientData = {
-        localName: localName,
-        fullName: peepRootKey,
-        ns: NS_PEEPS,
-        count: 1,
-        data: null,
-        indexValues: [],
-        deps: null,
-      };
-      queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
-      queryHandle.membersByFull[NS_PEEPS][peepRootKey] = clientData;
-    }
+    if (!clientData)
+      clientData = this._notif.generateClientData(queryHandle.owner,
+                                                  NS_PEEPS, peepRootKey);
+
     var self = this;
     return when(this._db.getRow($lss.TBL_PEEP_DATA, peepRootKey, null),
                 function(cells) {
-      queryHandle.dataMap[NS_PEEPS][clientData.localName] =
+      querySource.dataMap[NS_PEEPS][clientData.localName] =
                     self._convertPeepToBothReps(cells, null, clientData);
       return clientData;
     });
@@ -1532,28 +1472,18 @@ LocalStore.prototype = {
    *  not already known.
    */
   _deferringPeepQueryResolve: function(queryHandle, peepRootKey, addToDeps) {
-    var fullMap = queryHandle.membersByFull[NS_PEEPS],
-        clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_PEEPS,
+    var clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_PEEPS,
                                                      peepRootKey);
     if (clientData)
       return clientData.localName;
 
-    queryHandle.dataNeeded[NS_PEEPS].push(peepRootKey);
-    var localName = "" + (queryHandle.owner.nextUniqueIdAlloc++);
-    clientData = {
-      localName: localName,
-      fullName: peepRootKey,
-      ns: NS_PEEPS,
-      count: 1,
-      data: null,
-      indexValues: [],
-      deps: null, // peeps have no additional deps
-    };
-    queryHandle.membersByLocal[NS_PEEPS][localName] = clientData;
-    fullMap[peepRootKey] = clientData;
+    var querySource = queryHandle.owner;
+    querySource.dataNeeded[NS_PEEPS].push(peepRootKey);
+    clientData = this._notif.generateClientData(querySource, NS_PEEPS,
+                                                peepRootKey);
     addToDeps.push(clientData);
 
-    return localName;
+    return clientData.localName;
   },
 
   //////////////////////////////////////////////////////////////////////////////

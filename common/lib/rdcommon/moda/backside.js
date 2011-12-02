@@ -258,11 +258,9 @@ ModaBackside.prototype = {
 
   _cmd_cloneQuery: function(clonedQueryName, sourceQueryInfo) {
     var ns = sourceQueryInfo.ns, sliced = sourceQueryInfo.sliced;
-    var srcQuery = this._notif.getQueryHandleByUniqueId(
-                     this._querySource, ns, sourceQueryInfo.source),
-    // create the empty cloned query
-        queryHandle = this._notif.newTrackedQuery(
-                        this._querySource, clonedQueryName, ns, 'CLONE');
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, clonedQueryName, ns, 'CLONE'),
+        querySource = queryHandle.owner;
 
     // we need a test function that only returns true for already present items
     queryHandle.testFunc = function(baseCells, mutatedCells, fullName) {
@@ -272,10 +270,9 @@ ModaBackside.prototype = {
     // now go through the list of sliced items and mark them as deps
     for (var iSliced = 0; iSliced < sliced.length; iSliced++) {
       var localName = sliced[iSliced];
-      // this could be faster, since we know the srcQuery already has the
-      //  item...
-      this._notif.reuseIfAlreadyKnown(
-        queryHandle, ns, srcQuery.membersByLocal[localName].fullName);
+      var clientData = this._notif.reuseIfAlreadyKnown(
+        querySource, ns, querySource.membersByLocal[localName].fullName);
+      queryHandle.items.push(clientData);
     }
     this.send({
       type: 'cloneQueryAck',
@@ -331,7 +328,7 @@ ModaBackside.prototype = {
          null,
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
-  
+
   _cmd_queryConvMsgs: function(bridgeQueryName, payload) {
     // map the provided conv blurb local name to the true name
     var convId = this._notif.mapLocalNameToFullName(this._querySource,
