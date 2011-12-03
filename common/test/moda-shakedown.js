@@ -104,7 +104,13 @@ TD.commonCase('moda basics', function(T) {
       server_y = T.actor('testServer', 'Y', serverOpts),
       server_z = T.actor('testServer', 'Z', serverOpts);
 
-  moda_a.setup_useServer(server_x);
+  var lqServers = moda_a.do_queryServers('servers');
+  // (lqServers is optional; we will automatically do this query bit if it's
+  //  not explicitly done.  We're just expanding it here to make the test steps
+  //  more explicit.)
+  moda_a.setup_useServer(server_x, lqServers);
+  moda_a.do_killQuery(lqServers);
+
   client_b.setup_useServer(server_y);
   client_c.setup_useServer(server_z);
 

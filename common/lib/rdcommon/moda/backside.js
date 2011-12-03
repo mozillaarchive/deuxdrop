@@ -349,8 +349,9 @@ ModaBackside.prototype = {
    * Get a list of all known servers.
    */
   _cmd_queryServers: function(bridgeQueryName, payload) {
-    var queryHandle = this._notif.newTrackedQuery(
-                        this._querySource, bridgeQueryName,
+    var querySource = this._querySource,
+        queryHandle = this._notif.newTrackedQuery(
+                        querySource, bridgeQueryName,
                         NS_SERVERS, payload.query);
 
     var viewItems = [], clientDataItems = null;
@@ -362,11 +363,12 @@ ModaBackside.prototype = {
       var serverIdentBlob = serverIdentBlobs[iServer].selfIdent;
       var serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
 
-      var clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_SERVERS,
+      var clientData = this._notif.reuseIfAlreadyKnown(querySource,
+                                                       NS_SERVERS,
                                                        serverIdent.rootPublicKey);
       if (!clientData)
         clientData = this._store._convertServerInfo(
-                       queryHandle, serverIdent, serverIdentBlob);
+                       querySource, serverIdent, serverIdentBlob);
       viewItems.push(clientData.localName);
       clientDataItems.push(clientData);
     }
@@ -391,28 +393,17 @@ ModaBackside.prototype = {
               fullName = selfIdentPayload.root.rootSignPubKey;
 
           var peepClientData = self._store._convertSynthPeep(
-                                 queryHandle, fullName, selfIdentBlob,
+                                 querySource, fullName, selfIdentBlob,
                                  selfIdentPayload);
 
-          var localName = "" + (querySource.nextUniqueIdAlloc++),
-              clientData = {
-                localName: localName,
-                fullName: fullName,
-                ns: NS_POSSFRIENDS,
-                count: 1,
-                data: null,
-                indexValues: [],
-                deps: [peepClientData],
-              };
-
-          queryHandle.membersByLocal[NS_POSSFRIENDS][localName] = clientData;
-          queryHandle.membersByFull[NS_POSSFRIENDS][fullName] = clientData;
-
-          queryHandle.dataMap[NS_POSSFRIENDS][localName] = {
+          var clientData = self._notif.generateClientData(
+                             querySource, NS_POSSFRIENDS, fullName);
+          clientData.deps.push(peepClientData);
+          querySource.dataMap[NS_POSSFRIENDS][clientData.localName] = {
             peepLocalName: peepClientData.localName
           };
 
-          viewItems.push(localName);
+          viewItems.push(clientData.localName);
           queryHandle.items.push(clientData);
         }
 
@@ -489,8 +480,9 @@ ModaBackside.prototype = {
   },
 
   _cmd_insecureServerDomainQuery: function(bridgeQueryName, query) {
-    var queryHandle = this._notif.newTrackedQuery(
-                        this._querySource, bridgeQueryName,
+    var querySource = this._querySource,
+        queryHandle = this._notif.newTrackedQuery(
+                        querySource, bridgeQueryName,
                         NS_SERVERS, query),
         viewItems = [],
         clientDataItems = queryHandle.items = [], self = this;
@@ -506,7 +498,7 @@ ModaBackside.prototype = {
           var serverIdent = $pubident.assertGetServerSelfIdent(serverIdentBlob);
 
           var clientData = self._store._convertServerInfo(
-                             queryHandle, serverIdent, serverIdentBlob);
+                             querySource, serverIdent, serverIdentBlob);
           viewItems.push(clientData.localName);
           clientDataItems.push(clientData);
         }

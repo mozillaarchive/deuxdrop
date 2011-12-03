@@ -800,9 +800,7 @@ NotificationKing.prototype = {
    * ]
    * @return[LocallyNamedClientData]
    */
-  reuseIfAlreadyKnown: function(writeQueryHandle, namespace, fullId) {
-    var querySource = writeQueryHandle.owner;
-
+  reuseIfAlreadyKnown: function(querySource, namespace, fullId) {
     // fast-path if the given query already knows the answer
     if (querySource.membersByFull[namespace].hasOwnProperty(fullId)) {
       var clientData = querySource.membersByFull[namespace][fullId];
@@ -1053,7 +1051,7 @@ NotificationKing.prototype = {
       var querySource = this._activeQuerySources[qsKey];
       var queryHandles = querySource.queryHandlesByNS[namespace];
 
-      var localName = null, clientData = null, frontData = null;
+      var clientData = null;
 
       for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
         var queryHandle = queryHandles[iQuery];
@@ -1077,7 +1075,7 @@ NotificationKing.prototype = {
 
         // - generate a splice
         queryHandle.splices.push(
-          { index: insertIdx, howMany: 0, items: [localName]});
+          { index: insertIdx, howMany: 0, items: [clientData.localName]});
         queryHandle.items.splice(insertIdx, 0, clientData);
 
         this._log.nsItemAdded(queryHandle.uniqueId, fullName,
@@ -1144,19 +1142,24 @@ NotificationKing.prototype = {
       var clientData = null;
       if (querySource.membersByFull[namespace].hasOwnProperty(fullName))
         clientData = querySource.membersByFull[namespace][fullName];
+      // we need to generate a delta if the object is known to the query
+      //  source on entry and still known on exit...
       var deltaNeeded = !!clientData;
 
       var queryHandles = querySource.queryHandlesByNS[namespace], iQuery;
       for (iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-        var queryHandle = queryHandles[iQuery];
-        var anyChanges = false, preIdx = -1;
+        var queryHandle = queryHandles[iQuery],
+            anyChange = false, preIdx = -1;
 
         var prePresent =
               (clientData &&
                 (preIdx = queryHandle.items.indexOf(clientData)) !== -1),
             matchesNow =
-              (!baseCells ||
-                !queryHandle.testFunc(baseCells, mutatedCells, fullName));
+              // if we aren't providing cells then we aren't trying to cause
+              //  a change in membership...
+              ((!baseCells && prePresent) ||
+               (baseCells &&
+                queryHandle.testFunc(baseCells, mutatedCells, fullName)));
 
         // - didn't match, still doesn't match
         if (!prePresent && !matchesNow) {
@@ -1174,10 +1177,14 @@ NotificationKing.prototype = {
         }
         // matchesNow.
 
-        if (!prePresent) {
-          // boost refcount
-          clientData.count++;
+        // generate the value if it's not known to the system
+        if (!clientData)
+          clientData = this.generateClientData(querySource, namespace,
+                                               fullName, clientDataPopulater);
+        else if (!prePresent)
+          clientData++;
 
+        if (!prePresent) {
           // We need to regenerate the indices if possible because the update
           //  may not have affected the indices the query cares about and they
           //  may not already be at hand.  We could try and be more clever and
@@ -1187,11 +1194,6 @@ NotificationKing.prototype = {
             updatedIndices = true;
           }
         }
-
-        // generate the value if it's not known to the system
-        if (!clientData)
-          clientData = this.generateClientData(querySource, namespace,
-                                               fullName, clientDataPopulater);
 
         // - find the right new location for us
         if (!queryHandle.index ||
@@ -1210,6 +1212,7 @@ NotificationKing.prototype = {
 
           // generate two splices if there was a move and flag a change
           if (preIdx !== insertIdx) {
+            anyChange = true;
             if (preIdx !== -1) {
               queryHandle.splices.push(
                 { index: preIdx, howMany: 1, items: null });
@@ -1219,7 +1222,7 @@ NotificationKing.prototype = {
           }
         }
 
-        if (anyChanges) {
+        if (anyChange) {
           this._log.nsItemModified(queryHandle.uniqueId, fullName);
           this.pendQuery(queryHandle);
         }
@@ -1227,6 +1230,15 @@ NotificationKing.prototype = {
 
       // generate a delta if clientData is still alive
       if (deltaNeeded && clientData.count > 0 && deltaPopulater) {
+        var frontDataDelta;
+        if (querySource.dataDelta[namespace]
+                         .hasOwnProperty(clientData.localName))
+          frontDataDelta =
+            querySource.dataDelta[namespace][clientData.localName];
+        else
+          frontDataDelta =
+            querySource.dataDelta[namespace][clientData.localName] = {};
+
         var preDeltaDeps = clientData.deps.concat();
         deltaPopulater(clientData, querySource, frontDataDelta, fullName);
         var postDeltaDeps = clientData.deps, iDep, depData;

@@ -1167,6 +1167,8 @@ var TestServerActorMixins = {
       $serverlist.serverSelfIdents.splice(
         0, $serverlist.serverSelfIdents.length);
       self.RT.blackboard.clobberedServerList = true;
+
+      self.RT.blackboard.testServers = [];
     }
 
     self._eServer = self.T.actor('server', self.__name, null, self);
@@ -1218,6 +1220,8 @@ var TestServerActorMixins = {
       $serverlist.serverSelfIdents.push({
         selfIdent: signedSelfIdent,
       });
+      // for moda server-list querying, maintain a parallel list too
+      self.RT.blackboard.testServers.push(self);
 
       // -- create api's, bind server definitions
       var serverConfig = self._config =

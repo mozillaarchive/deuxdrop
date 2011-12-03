@@ -351,7 +351,7 @@ LocalStore.prototype = {
 
       // -- build the client rep
       querySource.dataMap[NS_CONVBLURBS][localName] =
-        self._convertConversationBlurb(queryHandle, cells, clientData.deps);
+        self._convertConversationBlurb(querySource, cells, clientData.deps);
       return clientData;
     });
   },
@@ -360,7 +360,7 @@ LocalStore.prototype = {
    * Create a send-to-moda-bridge wire representation representation of a
    *  conversation blurb given its cells.
    */
-  _convertConversationBlurb: function(queryHandle, cells, deps) {
+  _convertConversationBlurb: function(querySource, cells, deps) {
     var numMessages = cells['d:m'];
     var participants = [];
 
@@ -371,7 +371,7 @@ LocalStore.prototype = {
       if (!iFirstMsg && msg.type === 'message') {
         firstMsgRep = {
           type: 'message',
-          author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
+          author: this._deferringPeepQueryResolve(querySource, msg.authorId,
                                                   deps),
           composedAt: msg.composedAt,
           receivedAt: msg.receivedAt,
@@ -380,7 +380,7 @@ LocalStore.prototype = {
         iFirstMsg = iMsg;
       }
       else if (msg.type === 'join') {
-        participants.push(this._deferringPeepQueryResolve(queryHandle,
+        participants.push(this._deferringPeepQueryResolve(querySource,
                                                           msg.id,
                                                           deps));
       }
@@ -399,7 +399,7 @@ LocalStore.prototype = {
         if (!firstUnreadMsgRep) {
           firstUnreadMsgRep = {
             type: 'message',
-            author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
+            author: this._deferringPeepQueryResolve(querySource, msg.authorId,
                                                     deps),
             composedAt: msg.composedAt,
             receivedAt: msg.receivedAt,
@@ -422,7 +422,7 @@ LocalStore.prototype = {
    * Create a send-to-moda-bridge wire delta representation for changes to a
    *  converstaion blurb given the changed hbase cells.
    */
-  _convertConversationBlurbDelta: function(queryHandle, clientData, outDeltaRep,
+  _convertConversationBlurbDelta: function(querySource, clientData, outDeltaRep,
                                            cells, mutatedCells) {
     for (var key in mutatedCells) {
       // - participants
@@ -430,7 +430,7 @@ LocalStore.prototype = {
         if (!outDeltaRep.hasOwnProperty("participants"))
           outDeltaRep.participants = [];
         outDeltaRep.participants.push(
-          this._deferringPeepQueryResolve(queryHandle, mutatedCells[key],
+          this._deferringPeepQueryResolve(querySource, mutatedCells[key],
                                           clientData.deps));
       }
     }
@@ -442,7 +442,7 @@ LocalStore.prototype = {
     if (msgRec.type === 'message') {
       outDeltaRep.firstMessage = {
         type: 'message',
-        author: this._deferringPeepQueryResolve(queryHandle, msgRec.authorId,
+        author: this._deferringPeepQueryResolve(querySource, msgRec.authorId,
                                                 clientData.deps),
         composedAt: msgRec.composedAt,
         receivedAt: msgRec.receivedAt,
@@ -497,13 +497,13 @@ LocalStore.prototype = {
     var mergedCells = null, self = this;
     this._notif.namespaceItemAdded(
       NS_CONVBLURBS, convId, cells, mutatedCells, indexValues,
-      function buildReps(clientData, queryHandle) {
+      function buildReps(clientData, querySource) {
         if (!mergedCells) // merge only the first time needed
           mergedCells = $notifking.mergeCells(cells, mutatedCells);
         // back data
         clientData.data = mergedCells['d:meta'];
         return self._convertConversationBlurb(
-          queryHandle, mergedCells, clientData.deps
+          querySource, mergedCells, clientData.deps
         );
       });
   },
@@ -528,12 +528,12 @@ LocalStore.prototype = {
           querySource, mergedCells, clientData.deps
         );
       },
-      function genDeltaReps(clientData, queryHandle, outDeltaRep) {
+      function genDeltaReps(clientData, querySource, outDeltaRep) {
         // no change to the backside rep is required beause we don't need the
         //  set of participants under our current shared-key-per-conversation
         //  crypto key setup.  If the crypto changes, this may change.
         return self._convertConversationBlurbDelta(
-          queryHandle, clientData, outDeltaRep, cells, mutatedCells);
+          querySource, clientData, outDeltaRep, cells, mutatedCells);
       });
   },
 
@@ -551,13 +551,29 @@ LocalStore.prototype = {
       throw this._notifking.badQuery(queryHandle, "Conv blurb does not exist!");
     }
 
+    queryHandle.index = 'order';
+    queryHandle.cmpFunc = function(aClientData, bClientData) {
+      return aClientData.data.index - bClientData.data.index;
+    };
+    queryHandle.testFunc = function(baseCells, mutatedCells, msgFullName) {
+      return (msgFullName.substring(0, convId.length) === convId);
+    };
+
     // - does the bridge already know the answer to the question?
+    // XXX semantics change means in order to perform full reuse we need to
+    //  have some concept of being confident we already have all of the
+    //  messages in question loaded.  This means being able to see we already
+    //  have the exact query already populated, so for now...
+    // XXX punt on this optimization and just re-query the database (but
+    //  we will normalize for each message.)
+    /*
     var msgsClientData = this._notif.reuseIfAlreadyKnown(
                            queryHandle.owner, NS_CONVMSGS, convId);
     if (msgsClientData) {
       this._fillOutQueryDepsAndSend(queryHandle);
       return;
     }
+    */
 
     // - need to fetch the data
     this._fetchConversationMessages(queryHandle, convId);
@@ -571,33 +587,53 @@ LocalStore.prototype = {
    *  `_fetchConversationBlurb` which currently inlines the same
    *  transformations.
    */
-  _convertConversationMessages: function(queryHandle, msgRecs, deps) {
-    var messages = [];
+  _convertConversationMessages: function(queryHandle, convId, msgRecs) {
+    var querySource = queryHandle.owner;
+    var viewItems = [];
+    queryHandle.splices.push({ index: 0, howMany: 0, items: viewItems });
+
     for (var i = 0; i < msgRecs.length; i++) {
-      var msg = msgRecs[i];
+      var fullName = convId + i;
+      var clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_CONVMSGS,
+                                                       fullName);
+      if (clientData) {
+        queryHandle.items.push(clientData);
+        viewItems.push(clientData.localName);
+        continue;
+      }
+      clientData = this._notif.generateClientData(querySource, NS_CONVMSGS,
+                                                    fullName);
+      clientData.data = {
+        convId: convId,
+        index: i,
+      };
+
+      var msg = msgRecs[i], frontData;
       if (msg.type === 'message') {
-        messages.push({
+        frontData = {
           type: 'message',
-          author: this._deferringPeepQueryResolve(queryHandle, msg.authorId,
-                                                  deps),
+          author: this._deferringPeepQueryResolve(querySource, msg.authorId,
+                                                  clientData.deps),
           composedAt: msg.composedAt,
           receivedAt: msg.receivedAt,
           text: msg.text,
-        });
-        break;
+        };
       }
       else if (msg.type === 'join') {
-        messages.push({
+        frontData = {
           type: 'join',
-          inviter: this._deferringPeepQueryResolve(queryHandle, msg.by, deps),
-          invitee: this._deferringPeepQueryResolve(queryHandle, msg.id, deps),
+          inviter: this._deferringPeepQueryResolve(querySource, msg.by,
+                                                   clientData.deps),
+          invitee: this._deferringPeepQueryResolve(querySource, msg.id,
+                                                   clientData.deps),
           receivedAt: msg.receivedAt,
           text: msg.text,
-        });
+        };
       }
       else {
         throw new Error("Unknown message type '" + msg.type + "'");
       }
+      querySource.dataMap[clientData.localName] = frontData;
     }
     return messages;
   },
@@ -631,10 +667,7 @@ LocalStore.prototype = {
         msgRecs.push(cells['d:m' + iMsg]);
       }
 
-      querySource.dataMap[NS_CONVMSGS][localName] = {
-        messages: self._convertConversationMessages(queryHandle, msgRecs,
-                                                    clientData.deps),
-      };
+      self._convertConversationMessages(queryHandle, convId, msgRecs);
 
       return self._fillOutQueryDepsAndSend(queryHandle);
     });
@@ -866,9 +899,9 @@ LocalStore.prototype = {
         // - notify
         self._notif.namespaceItemAdded(
           NS_CONNREQS, othPubring.rootPublicKey, cells, null, indexValues,
-          function(clientData, queryHandle) {
+          function(clientData, querySource) {
             return self._convertConnectRequest(
-              persistRep, othPubring.rootPublicKey, queryHandle, clientData);
+              persistRep, othPubring.rootPublicKey, querySource, clientData);
           });
         self._log.contactRequest(reqmsg.senderKey);
       }); // rejection pass-through is fine
@@ -929,26 +962,26 @@ LocalStore.prototype = {
    *  connection requests and possible friend structures (when we don't already
    *  know about the person via some other means).
    */
-  _convertSynthPeep: function(queryHandle, fullName, selfIdentBlob,
+  _convertSynthPeep: function(querySource, fullName, selfIdentBlob,
                               selfIdentPayload) {
     var clientData = this._notif.reuseIfAlreadyKnown(
-                           queryHandle.owner, NS_PEEPS, fullName);
+                           querySource, NS_PEEPS, fullName);
     if (clientData)
       return clientData;
 
     var self = this;
-    clientData = this._notif.generateClientData(queryHandle.owner, NS_PEEPS,
+    clientData = this._notif.generateClientData(querySource, NS_PEEPS,
                                                 fullName);
 
     var frontData = this._convertPeepSelfIdentToBothReps(
                       selfIdentBlob, selfIdentPayload, clientData);
 
-    querySource.dataMap[NS_PEEPS][localName] = frontData;
+    querySource.dataMap[NS_PEEPS][clientData.localName] = frontData;
 
     return clientData;
   },
 
-  _convertConnectRequest: function(reqRep, fullName, queryHandle, clientData) {
+  _convertConnectRequest: function(reqRep, fullName, querySource, clientData) {
     // backside data: we need the receivedAt date, we get the rest via the peep
     clientData.data = {
       receivedAt: reqRep.receivedAt
@@ -957,7 +990,7 @@ LocalStore.prototype = {
     // - synthesize the peep rep
     var selfIdentPayload = $pubident.peekPersonSelfIdentNOVERIFY(
                              reqRep.selfIdent),
-        peepClientData = this._convertSynthPeep(queryHandle, fullName,
+        peepClientData = this._convertSynthPeep(querySource, fullName,
                                                 reqRep.selfIdent,
                                                 selfIdentPayload);
     clientData.deps.push(peepClientData);
@@ -966,11 +999,11 @@ LocalStore.prototype = {
     var serverIdent = $pubident.peekServerSelfIdentNOVERIFY(
                         selfIdentPayload.transitServerIdent);
     var serverClientData = this._notif.reuseIfAlreadyKnown(
-                             queryHandle.owner, NS_SERVERS,
+                             querySource, NS_SERVERS,
                              serverIdent.rootPublicKey);
     if (!serverClientData)
       serverClientData = this._convertServerInfo(
-                           queryHandle, serverIdent,
+                           querySource, serverIdent,
                            selfIdentPayload.transferServerIdent);
     clientData.deps.push(serverClientData);
 
@@ -983,12 +1016,12 @@ LocalStore.prototype = {
     };
   },
 
-  _convertServerInfo: function(queryHandle, serverIdent,
+  _convertServerInfo: function(querySource, serverIdent,
                                serverIdentBlob) {
     var clientData = this._notif.generateClientData(
-        queryHandle.owner, NS_SERVERS, serverIdent.rootPublicKey);
+          querySource, NS_SERVERS, serverIdent.rootPublicKey);
     clientData.data = serverIdentBlob;
-    querySource.dataMap[NS_SERVERS][localName] =
+    querySource.dataMap[NS_SERVERS][clientData.localName] =
       this._transformServerIdent(serverIdent);
 
     return clientData;
@@ -1034,7 +1067,7 @@ LocalStore.prototype = {
             clientData = self._notif.generateClientData(
                            querySource, NS_CONNREQS, fullName);
 
-            querySource.dataMap[NS_CONNREQS][localName] =
+            querySource.dataMap[NS_CONNREQS][clientData.localName] =
               self._convertConnectRequest(reqRep, fullName,
                                           queryHandle, clientData);
             viewItems.push(localName);
@@ -1430,7 +1463,7 @@ LocalStore.prototype = {
           }
         }
 
-        return when(self._fetchPeepBlurb(queryHandle, peepRootKeys[iPeep],
+        return when(self._fetchPeepBlurb(queryHandle.owner, peepRootKeys[iPeep],
                                          clientData),
                     function(resultClientData) {
           if (usingIndex) {
@@ -1451,10 +1484,10 @@ LocalStore.prototype = {
     return getNextMaybeGot();
   },
 
-  _fetchPeepBlurb: function(queryHandle, peepRootKey, clientData) {
+  _fetchPeepBlurb: function(querySource, peepRootKey, clientData) {
     // if we don't already have a data-empty structure, create one
     if (!clientData)
-      clientData = this._notif.generateClientData(queryHandle.owner,
+      clientData = this._notif.generateClientData(querySource,
                                                   NS_PEEPS, peepRootKey);
 
     var self = this;
@@ -1471,13 +1504,12 @@ LocalStore.prototype = {
    *  to the list of records to look up during the appropriate batch phase if
    *  not already known.
    */
-  _deferringPeepQueryResolve: function(queryHandle, peepRootKey, addToDeps) {
+  _deferringPeepQueryResolve: function(querySource, peepRootKey, addToDeps) {
     var clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_PEEPS,
                                                      peepRootKey);
     if (clientData)
       return clientData.localName;
 
-    var querySource = queryHandle.owner;
     querySource.dataNeeded[NS_PEEPS].push(peepRootKey);
     clientData = this._notif.generateClientData(querySource, NS_PEEPS,
                                                 peepRootKey);

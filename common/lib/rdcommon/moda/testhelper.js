@@ -204,6 +204,10 @@ var DeltaHelper = exports.DeltaHelper = {
     return testClient.__name;
   },
 
+  _TESTSERVER_QUERY_KEYFUNC: function (testServer) {
+    return testServer._config.keyring.rootPublicKey;
+  },
+
   _PEEP_QUERY_KEYFUNC: function(x) { return x.rootKey; },
 
   _PEEP_QUERY_BY_TO_CMPFUNC: {
@@ -299,6 +303,18 @@ var DeltaHelper = exports.DeltaHelper = {
                     delta.state, MARK_COUNTER);
     if (deltaType === 1)
       delta.postAnno[this._REQINFO_KEYFUNC(reqInfo)] = 1;
+
+    return delta;
+  },
+
+  serversDelta_base: function(lqt, testServers) {
+    var delta = this.makeOrReuseDelta(lqt);
+
+    lqt._servers = testServers.concat();
+
+    var rootKeys = testServers.map(this._TESTSERVER_QUERY_KEYFUNC);
+    markListIntoObj(rootKeys, delta.state, MARK_COUNTER);
+    markListIntoObj(rootKeys, delta.postAnno, 1);
 
     return delta;
   },
@@ -567,6 +583,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     self._dynPendingQueries = [];
     self._dynamicPossFriendsQueries = [];
     self._dynamicConnReqQueries = [];
+    self._dynamicServerQueries = [];
 
 
     self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
@@ -1110,12 +1127,24 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     }
     else if (liveSet._ns === 'possfriends') {
       keymapper = function(possFriend) {
-        return self._remapLocalToFullName('peeps', possFriend.peep._localName);
+        // we need to save off the fullname on the add or what not because
+        //  once the removal splice happens it's too late to perform the
+        //  mapping.
+        if (!possFriend.hasOwnProperty("fullName"))
+          possFriend.fullName =
+            self._remapLocalToFullName('peeps', possFriend.peep._localName);
+        return possFriend.fullName;
       };
     }
     else {
       keymapper = function(item) {
-        return self._remapLocalToFullName(liveSet._ns, item._localName);
+        // we need to save off the fullname on the add or what not because
+        //  once the removal splice happens it's too late to perform the
+        //  mapping.
+        if (!item.hasOwnProperty("fullName"))
+          item.fullName =
+            self._remapLocalToFullName(liveSet._ns, item._localName);
+        return item.fullName;
       };
     }
 
@@ -1146,19 +1175,21 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     //this._logger.queryUpdateSplice(liveSet.data.__name, deltaRep);
   },
 
-  onCompleted: function(liveSet, modifiedPrimaries, modifiedDeps) {
+  onCompleted: function(liveSet) {
     var lqt = liveSet.data, delta, rootKey;
     if (!lqt._pendingDelta)
       delta = lqt._pendingDelta = DeltaHelper.makeEmptyDelta();
     else
       delta = lqt._pendingDelta;
 
+    /*
     var depMap = modifiedDeps.length ? {} : null;
     for (var iDep = 0; iDep < modifiedDeps.length; iDep++) {
       var depRep = modifiedDeps[iDep];
       depMap[this._remapLocalToFullName(depRep.__namespace,
                                         depRep._localName)] = true;
     }
+    */
 
     var keymapper, self = this;
     if (liveSet._ns === 'convmsgs') {
@@ -1191,7 +1222,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       delta.state[rootKey] = counter++;
     }
 
-    this._logger.queryCompleted(liveSet.data.__name, delta, depMap);
+    this._logger.queryCompleted(liveSet.data.__name, delta);
     lqt._pendingDelta = null;
   },
 
@@ -1377,6 +1408,29 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     return lqt;
   },
 
+  /**
+   * Query the list of servers with a static expectation derived from the
+   *  runtime state.  (So perhaps this technically does not go under the
+   *  static list except where we assume this query never updates.)
+   */
+  do_queryServers: function(thingName) {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
+
+    this.T.action(this, 'create', lqt, 'query', function() {
+      var delta = DeltaHelper.serversDelta_base(lqt,
+                                                self.RT.blackboard.testServers);
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
+
+      lqt._liveset = self._bridge.queryServers(self, lqt);
+      self._dynamicServerQueries.push(lqt);
+    });
+    return lqt;
+  },
+
+
   //////////////////////////////////////////////////////////////////////////////
   // Queries: Kill
 
@@ -1412,10 +1466,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         case 'connreqs':
           self._assertRemoveFromList(self._dynamicConnReqQueries, lqt);
           break;
-
         case 'servers':
-          throw new Error(
-            "XXX we don't test the servers queries right about now");
+          self._assertRemoveFromList(self._dynamicServerQueries, lqt);
+          break;
       }
 
       // - close the query
@@ -1655,6 +1708,17 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
                     "text: '" + firstMessageText + "'");
   },
 
+  _grabServerInfoFromQueryUsingTestServer: function(lqt, testServer) {
+    var liveset = lqt._liveset;
+    for (var i = 0; i < liveset.items.length; i++) {
+      var modaServer = liveset.items[i];
+      if (modaServer.displayName === testServer.__name)
+        return modaServer;
+    }
+    throw new Error("Unable to find server with name '" + testServer.__name +
+                    "'");
+  },
+
   //////////////////////////////////////////////////////////////////////////////
   // Actions
 
@@ -1664,8 +1728,8 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    *  initialization, so then we can issue a query on the list of servers and
    *  use that to identify the right handle to use and then use that.
    */
-  setup_useServer: function setup_useServer(testServer) {
-    var self = this, me, servers;
+  setup_useServer: function setup_useServer(testServer, lqt) {
+    var self = this, me, servers, autoCreatedQuery = false;
     // it is very important to update the static server info on the test client!
     self._testClient._usingServer = testServer;
     this.T.convenienceSetup(self, 'asks whoAmI', function() {
@@ -1677,37 +1741,29 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         },
       });
     });
-    this.T.convenienceSetup(self, 'asks for the list of servers', function() {
-      self.expect_serverQueryCompleted();
-      servers = self._bridge.queryServers({
-        onCompleted: function() {
-          self._logger.serverQueryCompleted();
-        },
-      });
-    });
+    if (!lqt) {
+      lqt = this.do_queryServers('setup_userServer:autoquery', null);
+      autoCreatedQuery = true;
+    }
     this.T.convenienceSetup(self, 'triggers signup with the server',
                             function() {
-      for (var i = 0; i < servers.items.length; i++) {
-        var modaServer = servers.items[i];
-        if (modaServer.displayName === testServer.__name) {
-          self.expect_signupResult(null);
-          self.RT.reportActiveActorThisStep(self._testClient._eRawClient);
-          self._testClient._eRawClient
-            .expect_signup_begin()
-            .expect_signedUp()
-            .expect_signup_end();
+      var modaServer = self._grabServerInfoFromQueryUsingTestServer(
+                         lqt, testServer);
+      self.expect_signupResult(null);
+      self.RT.reportActiveActorThisStep(self._testClient._eRawClient);
+      self._testClient._eRawClient
+        .expect_signup_begin()
+        .expect_signedUp()
+        .expect_signup_end();
 
-          me.signupWithServer(modaServer, {
-            onCompleted: function(err) {
-              self._logger.signupResult(err);
-            }
-          });
-          return;
+      me.signupWithServer(modaServer, {
+        onCompleted: function(err) {
+          self._logger.signupResult(err);
         }
-      }
-      throw new Error("No server info for '" + testServer.__name +
-                      "' found!");
+      });
     });
+    if (autoCreatedQuery)
+      this.do_killQuery(lqt);
     // make sure that if we refresh the whoAmI call that we get the updated
     //  server info.
     this.T.convenienceSetup(self, 'checks post-signup whoAmI', function() {
@@ -1941,11 +1997,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     events: {
       // - signup related
       whoAmI: {poco: true, serverUrl: true},
-      serverQueryCompleted: {},
       signupResult: {err: true},
 
       // - do_query* helpers (does not cover servers right now)
-      queryCompleted: { name: true, state: true, depMap: false },
+      queryCompleted: { name: true, state: true },
 
       // - query contents detailed results checkers (delta rep is very terse)
       convBlurbCheck: { blurbRep: true },

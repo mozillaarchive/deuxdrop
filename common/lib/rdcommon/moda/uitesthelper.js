@@ -197,6 +197,7 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._dynPendingQueries = [];
   this._dynamicPossFriendsQueries = [];
   this._dynamicConnReqQueries = [];
+  this._dynamicServerQueries = [];
 
   // - hacked state tracking
   // we lack an expectation representation for this, so we have to save off

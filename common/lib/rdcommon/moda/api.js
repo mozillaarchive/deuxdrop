@@ -108,6 +108,11 @@ PeepBlurb.prototype = {
                          this._numUnread, this._numConvs, this._pinned,
                          this._isMe);
   },
+  __forget: function(forgetHelper) {
+  },
+  toString: function() {
+    return '[PeepBlurb ' + this._localName + ']';
+  },
 
   get id() {
     return this._localName;
@@ -164,19 +169,32 @@ PeepBlurb.prototype = {
  *   @param[receivedAt Date]
  * ]
  */
-function JoinMessage(_owner, inviter, invitee, receivedAt) {
-  this._ownerConv = _owner;
+function JoinMessage(_liveset, _localName, inviter, invitee, receivedAt) {
+  this._eventMap = null;
+  this._liveset = _liveset;
+  this._localName = _localName;
   this.inviter = inviter;
   this.invitee = invitee;
   this.receivedAt = receivedAt;
 }
 JoinMessage.prototype = {
-  type: 'join',
-  __clone: function(owner, cloneHelper) {
+  __namespace: 'convmsgs',
+  __clone: function(liveset, cloneHelper) {
     return new JoinMessage(
-      owner, cloneHelper(this.inviter), cloneHelper(this.invitee),
+      liveset, this._localName,
+      cloneHelper(this.inviter), cloneHelper(this.invitee),
       this.receivedAt);
   },
+  __forget: function(forgetHelper) {
+    forgetHelper(this.inviter);
+    forgetHelper(this.invitee);
+  },
+  toString: function() {
+    return '[JoinMessage ' + this._localName + ']';
+  },
+
+  type: 'join',
+  on: itemOnImpl,
 };
 
 /**
@@ -194,26 +212,38 @@ JoinMessage.prototype = {
  *   }
  * ]
  */
-function HumanMessage(_owner, author, composedAt, receivedAt, text) {
-  this._ownerConv = _owner;
+function HumanMessage(_liveset, _localName, author, composedAt, receivedAt,
+                      text) {
+  this._eventMap = null;
+  this._liveset = _liveset;
+  this._localName = _localName,
   this.author = author;
   this.composedAt = composedAt;
   this.receivedAt = receivedAt;
   this.text = text;
 }
 HumanMessage.prototype = {
-  type: 'message',
-  __clone: function(owner, cloneHelper) {
+  __namespace: 'convmsgs',
+  __clone: function(liveset, cloneHelper) {
     return new HumanMessage(
-      owner, cloneHelper(this.author),
+      liveset, this._localName, cloneHelper(this.author),
       this.composedAt, this.receivedAt, this.text);
   },
+  __forget: function(forgetHelper) {
+    forgetHelper(this.author);
+  },
+  toString: function() {
+    return '[HumanMessage ' + this._localName + ']';
+  },
 
+  type: 'message',
   markAsLastSeenMessage: function() {
   },
 
   markAsLastReadMessage: function() {
   },
+
+  on: itemOnImpl,
 };
 
 /**
@@ -238,12 +268,22 @@ ConversationBlurb.prototype = {
     var clone = new ConversationBlurb(
       liveset, this._localName, this.participants.map(cloneHelper),
       this._pinned, this._numUnread);
-    if (this.firstMessage)
-      clone.firstMessage = this.firstMessage.__clone(clone, cloneHelper);
-    if (this.firstUnreadMessage)
-      clone.firstUnreadMessage = this.firstUnreadMessage.__clone(clone,
-                                                                 cloneHelper);
+    this.firstMessage = cloneHelper(this.firstMessage);
+    this.firstUnreadMessage = cloneHelper(this.firstUnreadMessage);
     return clone;
+  },
+  __forget: function(forgetHelper) {
+    this.participants.map(forgetHelper);
+    // our messages don't need to be directly forgotten because they are not
+    //  tracked by the liveset infrastructure, but they may have deps that need
+    //  to be tracked.
+    if (this.firstMessage)
+      this.firstMessage.__forget(forgetHelper);
+    if (this.firstUnreadMessage)
+      this.firstUnreadMessage.__forget(forgetHelper);
+  },
+  toString: function() {
+    return '[ConversationBlurb ' + this._localName + ']';
   },
 
   get id() {
@@ -308,6 +348,15 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this.query = query;
   this.items = [];
   this.completed = false;
+  this._instancesByNS = {
+    peeps: {},
+    convblurbs: {},
+    convmsgs: {},
+    servers: {},
+    possfriends: {},
+    connreqs: {},
+    errors: {},
+  };
   this._listener = listener;
   this._itemsHaveListeners = false;
   this._eventMap = { add: null, complete: null, remove: null, reorder: null };
@@ -357,6 +406,8 @@ LiveOrderedSet.prototype = {
     this._bridge._sets.push(cloneSet);
 
     function cloneHelper(item) {
+      if (!item)
+        return item;
       var nsMap = cloneSet._dataByNS[item.__namespace],
           localName = item._localName;
       // if we already have a version specialized for this set, return it
@@ -415,10 +466,8 @@ LiveOrderedSet.prototype = {
    *   }
    * ]
    */
-  _notifyCompleted: function(added, addedAtIndex, moved, movedToIndex, removed,
-                             modifiedPrimaries, modifiedDeps) {
+  _notifyCompleted: function(added, addedAtIndex, moved, movedToIndex, removed) {
     var i, item;
-try {
     if (this._eventMap.add && added.length) {
       var addCall = this._eventMap.add;
       for (i = 0; i < added.length; i++) {
@@ -445,18 +494,6 @@ try {
         if (itemEvents && itemEvents.reorder)
           itemEvents.reorder(item, movedToIndex[i], this);
       }
-      for (i = 0; i < modifiedPrimaries.length; i++) {
-        item = modifiedPrimaries[i];
-        itemEvents = item._eventMap;
-        if (itemEvents && itemEvents.change)
-          itemEvents.change(item, this);
-      }
-      for (i = 0; i < modifiedDeps.length; i++) {
-        item = modifiedDeps[i];
-        itemEvents = item._eventMap;
-        if (itemEvents && itemEvents.change)
-          itemEvents.change(item, this);
-      }
       for (i = 0; i < removed.length; i++) {
         item = removed[i];
         itemEvents = item._eventMap;
@@ -467,10 +504,9 @@ try {
 
     this.completed = true;
     if (this._listener && this._listener.onCompleted)
-      this._listener.onCompleted(this, modifiedPrimaries, modifiedDeps);
+      this._listener.onCompleted(this);
     if (this._eventMap.complete)
       this._eventMap.complete(this);
-} catch(ex) { console.error("problem during _notifyCompleted:", ex); }
   },
 
   /**
@@ -501,6 +537,11 @@ ServerInfo.prototype = {
   __namespace: 'servers',
   __clone: function(liveset, cloneHelper) {
     return new ServerInfo(liveset, this._localName, this.url, this.displayName);
+  },
+  __forget: function(forgetHelper) {
+  },
+  toString: function() {
+    return '[ServerInfo ' + this._localName + ']';
   },
 
   get id() {
@@ -541,6 +582,10 @@ function OurUserAccount(_bridge, poco, usingServer) {
   this._signupListener = null;
 }
 OurUserAccount.prototype = {
+  toString: function() {
+    return '[OurUserAccount]';
+  },
+
   /**
    * Has the user configured their identity at all/enough?
    */
@@ -614,6 +659,13 @@ ConnectRequest.prototype = {
       cloneHelper(this.peepServer), this.theirPocoForUs,
       this.receivedAt, this.messageText);
   },
+  __forget: function(forgetHelper) {
+    forgetHelper(this.peep);
+    forgetHelper(this.peepServer);
+  },
+  toString: function() {
+    return '[ConnectRequest ' + this._localName + ']';
+  },
 
   get id() {
     return this._localName;
@@ -659,6 +711,12 @@ PossibleFriend.prototype = {
     return new PossibleFriend(
       liveset, this._localName, cloneHelper(this.peep));
   },
+  __forget: function(forgetHelper) {
+    forgetHelper(this.peep);
+  },
+  toString: function() {
+    return '[PossibleFriend ' + this._localName + ']';
+  },
 
   get id() {
     return this._localName;
@@ -670,8 +728,12 @@ PossibleFriend.prototype = {
 ////////////////////////////////////////////////////////////////////////////////
 // Error Representations
 
-function ErrorRep(errorId, errorParam, firstReported, lastReported, count,
+function ErrorRep(_liveset, _localName, errorId, errorParam,
+                  firstReported, lastReported, count,
                   userActionRequired, permanent) {
+  this._eventMap = null;
+  this._liveset = _liveset;
+  this._localName = _localName;
   this.errorId = errorId;
   this.errorParam = errorParam;
   this.firstReported = new Date(firstReported);
@@ -683,10 +745,21 @@ function ErrorRep(errorId, errorParam, firstReported, lastReported, count,
 ErrorRep.prototype = {
   __namespace: 'errors',
   __clone: function(liveset, cloneHelper) {
-    return new ErrorRep(this.errorId, this.errorParam, this.firstReported,
-                        this.lastReported, this.count, this.userActionRequired,
-                        this.permanent);
+    return new ErrorRep(liveset, this._localName, this.errorId, this.errorParam,
+                        this.firstReported, this.lastReported, this.count,
+                        this.userActionRequired, this.permanent);
   },
+  __forget: function(forgetHelper) {
+  },
+  toString: function() {
+    return '[ErrorRep ' + this._localName + ']';
+  },
+
+  get id() {
+    return this._localName;
+  },
+
+  on: itemOnImpl,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -805,10 +878,10 @@ ModaBridge.prototype = {
     }
   },
 
-  _transform_servers: function(_liveset, _localName, serialized) {
+  _transform_servers: function(_localName, serialized, lookup) {
     if (!serialized)
       return null;
-    return new ServerInfo(_liveset, _localName,
+    return new ServerInfo(null, _localName,
                           serialized.url, serialized.displayName);
   },
 
@@ -817,11 +890,8 @@ ModaBridge.prototype = {
     this._ourUser.poco = msg.poco;
     this._ourUser.selfIdentBlob = msg.selfIdentBlob;
     this._ourUser.clientPublicKey = msg.clientPublicKey;
-    // We are passing an empty obj to masquerade as the owning liveset to stop
-    //  the 'on' method from breaking if it gets used.  There are no events
-    //  associated with this rep, so it should ideally be fine...
-    this._ourUser.usingServer = this._transform_servers({}, null,
-                                                          msg.server);
+    this._ourUser.usingServer = this._transform_servers(null,
+                                                        msg.server);
 
     // notify listeners
     for (var i = 0; i < this._ourUser._pendingListeners.length; i++) {
@@ -849,34 +919,92 @@ ModaBridge.prototype = {
   },
 
   _commonProcess: function(namespace, msg) {
-    var values, dataMap, val;
+    var values, dataMap, val,
+        iSet, liveset, sets = this._sets, instMap, instances, iInst;
+
+    function lookupTemplate(namespace, thing) {
+      return this._dataByNS[namespace][thing];
+    }
+
     if (msg.dataMap.hasOwnProperty(namespace)) {
       var transformFunc = this['_transform_' + namespace];
       values = msg.dataMap[namespace];
       dataMap = this._dataByNS[namespace];
       for (key in values) {
         val = values[key];
-        dataMap[key] = transformFunc.call(this, liveset, key, val);
+        dataMap[key] = transformFunc.call(this, key, val, lookupTemplate);
       }
     }
-    if (msg.dataDelta.hasOwnProperty(NS_PEEPS)) {
+    if (msg.dataDelta.hasOwnProperty(namespace)) {
       var deltaFunc = this['_delta_' + namespace];
 
-      values = msg.dataDelta[NS_PEEPS];
-      dataMap = this._dataByNS[NS_PEEPS];
+      // function to provide to delta handlers to indicate a release of a
+      //  tracked object.
+      function forgetHelper(thing) {
+        var instMap = liveset._instancesByNS[thing.__namespace];
+        var instList = instMap[thing._localName];
+        var idx = instList.indexOf(thing);
+        instList.splice(idx, 1);
+        if (instList.length === 0)
+          delete instMap[thing._localName];
+        thing.__forget(forgetHelper);
+      }
+      function lookupClone(namespace, thing) {
+        return liveset._instancesByNS[namespace][thing].__clone(liveset);
+      }
+
+      values = msg.dataDelta[namespace];
+      dataMap = this._dataByNS[namespace];
 
       for (key in values) {
         if (!dataMap.hasOwnProperty(key))
           throw new Error("dataDelta in '" + namespace + "' for key '" + key
                           + "'");
+
+        var templateRep = dataMap[key];
+
         var delta = values[key];
+        // -- deletion handling
         if (delta === null) {
+          // (we generate remove notifications on splice only)
+          // - forget about the template instance
           delete dataMap[key];
+
+          // - have all livesets forget about their instances as well
+          for (iSet = 0; iSet < sets.length; iSet++) {
+            liveset = sets[iSet];
+            instMap = liveset._instancesByNS[namespace];
+
+            if (instMap.hasOwnProperty(key))
+              delete instMap[key];
+          }
           continue;
         }
 
-        curRep = dataMap[key];
-        useModified.push(curRep);
+        // -- update the template rep
+        deltaFunc.call(this, templateRep, delta, lookupTemplate, forgetHelper);
+
+        // -- update instances, generate change notifications
+        for (iSet = 0; iSet < sets.length; iSet++) {
+          liveset = sets[iSet];
+          instMap = liveset._instancesByNS[namespace];
+
+          if (instMap.hasOwnProperty(key)) {
+            instances = instMap[key];
+            for (iInst = 0; iInst < instances.length; iInst++) {
+              var inst = instances[i];
+              // - apply delta
+              deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
+
+              // - generate 'change' notification
+              if (!inst._eventMap)
+                continue;
+              var changeFunc = instances[i]._eventMap.change;
+              if (changeFunc)
+                changeFunc(inst, liveset);
+            }
+          }
+        }
       }
     }
 
@@ -909,337 +1037,126 @@ ModaBridge.prototype = {
       return;
     }
 
-    // --- Data transformation / Cache unification
-    // We perform these in the order: server, peep, conv blurb because
-    //  the dependency situation is such that peeps can't mention anything
-    //  else (directly), and conversations can reference peeps.
-    // An intentional effect of this is that it is okay for subsequent steps to
-    //  use _dataByNS to peek into the liveset for their dependencies rather
-    //  than needing to use _cacheLookupOrExplode themselves.
-    // Messages aren't treated separately because they are immutable and small
-    //  so we don't care about tracking them independently.
+    // -- Transform data, apply deltas
+    // We choose our order so that namespaces are processed only after all their
+    //  dependent namespaces are already processed.  This allows the
+    //  _transform_* funcs to directly grab references.
     var i, key, attr, values, val, dataMap, curRep, delta;
 
-    // Track the modified objects be binned into either modified primary objects
-    //  or modified dependent objects.  This differentiation may only be
-    //  relevant to unit testing...
-    var modifiedPrimaries = [], modifiedDeps = [], useModified = null;
-
-
+    // servers have no deps
     this._commonProcess(NS_SERVERS, msg);
+    // peeps have no deps
     this._commonProcess(NS_PEEPS, msg);
+    // messages depend on peeps
+    this._commonProcess(NS_CONVMSGS, msg);
+    // conv blurbs depend on messages, peeps
+    this._commonProcess(NS_CONVBLURBS, msg);
+    // possible friends depend on peeps
+    this._commonProcess(NS_POSSFRIENDS, msg);
+    // connection requests depend on peeps
+    this._commonProcess(NS_CONNREQS, msg);
 
-    if (msg.dataMap.hasOwnProperty(NS_PEEPS)) {
-      values = msg.dataMap[NS_PEEPS];
-      dataMap = liveset._dataByNS[NS_PEEPS];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_PEEPS, key);
-        else
-          dataMap[key] = this._transform_peeps(key, val, liveset);
-      }
-    }
+    // errors depend on nothing
+    this._commonProcess(NS_ERRORS, msg);
 
-    // -- Conv Blurbs
-    if (msg.dataMap.hasOwnProperty(NS_CONVBLURBS)) {
-      values = msg.dataMap[NS_CONVBLURBS];
-      dataMap = liveset._dataByNS[NS_CONVBLURBS];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONVBLURBS, key);
-        else
-          dataMap[key] = this._transform_convblurbs(key, val, liveset);
-      }
-    }
-    if (msg.dataDelta.hasOwnProperty(NS_CONVBLURBS)) {
-      values = msg.dataDelta[NS_CONVBLURBS];
-      dataMap = liveset._dataByNS[NS_CONVBLURBS];
-      useModified = (liveset._ns === NS_CONVBLURBS) ? modifiedPrimaries
-                                                    : modifiedDeps;
-      for (key in values) {
-        if (!dataMap.hasOwnProperty(key))
-          throw new Error("dataDelta for unknown key: " + key);
-        delta = values[key];
-        if (delta === null) {
-          delete dataMap[key];
-          continue;
-        }
-        curRep = dataMap[key];
-        for (attr in delta) {
-          switch (attr) {
-            case 'participants':
-              for (i = 0; i < delta.participants.length; i++) {
-                // to make this idempotent in the face of our redundant updates
-                //  we need to check to make sure we didn't already add them.
-                var participant =
-                  liveset._dataByNS.peeps[delta.participants[i]];
-                if (curRep.participants.indexOf(participant) === -1)
-                  curRep.participants.push(participant);
-              }
-              break;
-            case 'firstMessage':
-              // only use it if we don't already have one
-              if (!curRep.firstMessage)
-                curRep.firstMessage = this._transformMessage(delta.firstMessage,
-                                                             curRep, liveset);
-              break;
-          }
-        }
-        useModified.push(curRep);
-      }
-    }
 
-    if (msg.dataMap.hasOwnProperty(NS_POSSFRIENDS)) {
-      values = msg.dataMap[NS_POSSFRIENDS];
-      dataMap = liveset._dataByNS[NS_POSSFRIENDS];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_POSSFRIENDS,
-                                                    key);
-        else
-          dataMap[key] = this._transform_possfriends(key, val, liveset);
-      }
-    }
-    if (msg.dataDelta.hasOwnProperty(NS_POSSFRIENDS)) {
-      values = msg.dataDelta[NS_POSSFRIENDS];
-      dataMap = liveset._dataByNS[NS_POSSFRIENDS];
-      for (key in values) {
-        if (!dataMap.hasOwnProperty(key))
-          throw new Error("dataDelta for unknown key: " + key);
-        delta = values[key];
-        if (delta === null) {
-          delete dataMap[key];
-          continue;
-        }
-      }
-    }
-
-    if (msg.dataMap.hasOwnProperty(NS_CONNREQS)) {
-      values = msg.dataMap[NS_CONNREQS];
-      dataMap = liveset._dataByNS[NS_CONNREQS];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONNREQS, key);
-        else
-          dataMap[key] = this._transform_connreqs(key, val, liveset);
-      }
-    }
-    if (msg.dataDelta.hasOwnProperty(NS_CONNREQS)) {
-      values = msg.dataDelta[NS_CONNREQS];
-      dataMap = liveset._dataByNS[NS_CONNREQS];
-      for (key in values) {
-        if (!dataMap.hasOwnProperty(key))
-          throw new Error("dataDelta for unknown key: " + key);
-        delta = values[key];
-        if (delta === null) {
-          delete dataMap[key];
-          continue;
-        }
-      }
-    }
-
-    if (msg.dataMap.hasOwnProperty(NS_ERRORS)) {
-      values = msg.dataMap[NS_ERRORS];
-      dataMap = liveset._dataByNS[NS_ERRORS];
-      for (key in values) {
-        val = values[key];
-        // null (in the non-delta case) means pull it from cache
-        if (val === null)
-          dataMap[key] = this._cacheLookupOrExplode(liveset, NS_ERRORS, key);
-        else
-          dataMap[key] = this._transform_errors(key, val, liveset);
-      }
-    }
-    if (msg.dataDelta.hasOwnProperty(NS_ERRORS)) {
-      values = msg.dataDelta[NS_ERRORS];
-      dataMap = liveset._dataByNS[NS_ERRORS];
-      useModified = (liveset._ns === NS_ERRORS) ? modifiedPrimaries
-                                                : modifiedDeps;
-      for (key in values) {
-        if (!dataMap.hasOwnProperty(key))
-          throw new Error("dataDelta for unknown key: " + key);
-        delta = values[key];
-        if (delta === null) {
-          delete dataMap[key];
-          continue;
-        }
-        curRep = dataMap[key];
-
-        curRep.lastReported = new Date(delta.lastReported);
-        curRep.reportedCount = delta.reportedCount;
-
-        useModified.push(curRep);
-      }
-    }
-
-    // --- Populate The Set = Apply Splices or Special Case.
+    // -- Populate the Set: Apply Splices
     var added = [], addedAtIndex = [], moved = [], movedToIndex = [],
-        removed = [];
+        removed = [], localName, dataByNS = this._dataByNS;
+    dataMap = this._dataByNS[liveset._ns];
+    var instMap = liveset._instancesByNS[liveset._ns];
 
-    // -- Special Case: Conv Messages
-    // Note: this is a less straightforward mapping because our query is
-    //  on a single conversation, but the ordered set contains the
-    //  messages that are part of that conversation, so we need to 'explode'
-    //  them out, as it were.
-    if (liveset._ns === NS_CONVMSGS) {
-      if (msg.dataMap.hasOwnProperty(NS_CONVMSGS)) {
-        values = msg.dataMap[NS_CONVMSGS];
-        dataMap = liveset._dataByNS[NS_CONVMSGS];
+    function forgetHelper(thing) {
+      var instMap = liveset._instancesByNS[thing.__namespace];
+      var instList = instMap[thing._localName];
+      // it's possible a refcount nuke is occurring concurrently, in which
+      //  case we have no work to do.
+      if (!instList)
+        return;
+      var idx = instList.indexOf(thing);
+      instList.splice(idx, 1);
+      if (instList.length === 0)
+        delete instMap[thing._localName];
+      thing.__forget(forgetHelper);
+    }
+    function cloneHelper(thing) {
+      if (!thing)
+        return thing;
+      return dataByNS[thing.__namespace][thing._localName]
+               .__clone(liveset, cloneHelper);
+    }
 
-        // so there will only be one of these...
-        for (key in values) {
-          val = values[key];
-          // null (in the non-delta case) means pull it from cache
-          if (val === null)
-            dataMap[key] = this._cacheLookupOrExplode(liveset, NS_CONVMSGS,
-                                                      key);
+    for (i = 0; i < msg.splices.length; i++) {
+      var spliceInfo = msg.splices[i];
+      var objItems = [], objItem, addIdx, moveIdx, delIdx;
+      // - deletion
+      if (spliceInfo.howMany) {
+        for (var iDel = spliceInfo.index;
+             iDel < spliceInfo.index + spliceInfo.howMany;
+             iDel++) {
+          objItem = liveset.items[iDel];
+          if ((addIdx = added.indexOf(objItem)) !== -1) {
+            added.splice(addIdx, 1);
+            addedAtIndex.splice(addIdx, 1);
+          }
+          // has it already moved?  move it back to a deletion
+          else if ((moveIdx = moved.indexOf(objItem)) !== -1) {
+            moved.splice(moveIdx, 1);
+            movedToIndex.splice(moveIdx, 1);
+            removed.push(objItem);
+          }
+          // if it wasn't added in this update, then track it as a deletion
+          // (added and deleted in a single pass cancels out into nothing)
+          else {
+            removed.push(objItem);
+          }
+        }
+      }
+      // - (optional) addition or the latter half of a move
+      if (spliceInfo.items) {
+        for (var iName = 0; iName < spliceInfo.items.length; iName++) {
+          localName = spliceInfo.items[iName];
+          if (instMap.hasOwnProperty(localName))
+            objItem = instMap[localName];
           else
-            dataMap[key] = this._transformConvMessages(liveset.blurb,
-                                                       key, val, liveset);
-
-          // now, splice the messages in.
-          liveset._notifyAndSplice(0, 0, dataMap[key].messages);
-        }
-      }
-      // our deltas encode additional messages being added to a conv
-      if (msg.dataDelta.hasOwnProperty(NS_CONVMSGS)) {
-        values = msg.dataDelta[NS_CONVMSGS];
-        for (key in values) {
-          val = values[key];
-
-          // - process new messages
-          // build the representations
-          var newMessages = this._transformConvMessages(liveset.blurb,
-                                                        key, val, liveset)
-                                  .messages;
-          if (!liveset._dataByNS[NS_CONVMSGS].hasOwnProperty(key))
-            throw new Error("liveset lacks data on conv '" + key + "'");
-          var curData = liveset._dataByNS[NS_CONVMSGS][key];
-          // notify the liveset and its consumers
-          liveset._notifyAndSplice(curData.messages.length, 0, newMessages);
-          // update our liveset references so that if a redundant query is
-          //  issued the cache gets the right/up-to-date data.
-          curData.messages.splice.apply(
-            curData.messages, [curData.messages.length, 0].concat(newMessages));
-
-          // - process watermark changes
-          // XXX yes, process watermarks.
-        }
-      }
-    }
-    // -- Common Case: Apply Splices
-    else {
-      for (i = 0; i < msg.splices.length; i++) {
-        dataMap = liveset._dataByNS[liveset._ns];
-        var spliceInfo = msg.splices[i];
-        var objItems = [], objItem, addIdx, moveIdx, delIdx;
-        // - deletion
-        if (spliceInfo.howMany) {
-          for (var iDel = spliceInfo.index;
-               iDel < spliceInfo.index + spliceInfo.howMany;
-               iDel++) {
-            objItem = liveset.items[iDel];
-            if ((addIdx = added.indexOf(objItem)) !== -1) {
-              added.splice(addIdx, 1);
-              addedAtIndex.splice(addIdx, 1);
-            }
-            // has it already moved?  move it back to a deletion
-            else if ((moveIdx = moved.indexOf(objItem)) !== -1) {
-              moved.splice(moveIdx, 1);
-              movedToIndex.splice(moveIdx, 1);
-              removed.push(objItem);
-            }
-            // if it wasn't added in this update, then track it as a deletion
-            // (added and deleted in a single pass cancels out into nothing)
-            else {
-              removed.push(objItem);
-            }
+            objItem = dataMap[localName].__clone(liveset, cloneHelper);
+          objItems.push(objItem);
+          // XXX these checks can be folded into the above case
+          // turn a removal into a move...
+          if ((delIdx = removed.indexOf(objItem)) !== -1) {
+            removed.splice(delIdx, 1);
+            moved.push(objItem);
+            moved.push(iName + spliceInfo.index);
+          }
+          // otherwise it's an add.
+          else {
+            added.push(objItem);
+            addedAtIndex.push(iName + spliceInfo.index);
           }
         }
-        // - (optional) addition or the latter half of a move
-        if (spliceInfo.items) {
-          for (var iName = 0; iName < spliceInfo.items.length; iName++) {
-            objItem = dataMap[spliceInfo.items[iName]];
-            objItems.push(objItem);
-            // turn a removal into a move...
-            if ((delIdx = removed.indexOf(objItem)) !== -1) {
-              removed.splice(delIdx, 1);
-              moved.push(objItem);
-              moved.push(iName + spliceInfo.index);
-            }
-            // otherwise it's an add.
-            else {
-              added.push(objItem);
-              addedAtIndex.push(iName + spliceInfo.index);
-            }
-          }
-        }
-        liveset._notifyAndSplice(spliceInfo.index, spliceInfo.howMany,
-                                 objItems);
       }
-    }
-    liveset._notifyCompleted(added, addedAtIndex, moved, movedToIndex, removed,
-                             modifiedPrimaries, modifiedDeps);
-  },
-
-  /**
-   * Look up the associated representation that we know must exist somewhere
-   *  and clone it into existence for the target `liveset`.
-   *
-   * This is intended to be used when the backside knows we already have
-   *  information on an object and it can avoid sending us duplicate data.
-   *  In such a case, the backside will only tell us about the primary object
-   *  and will not bother to send nulls across for dependent objects.
-   *
-   * @args[
-   *   @param[liveset LiveOrderedSet]{
-   *     The target liveset the object will be inserted into.  The caller
-   *     is responsible for taking this action.
-   *   }
-   * ]
-   */
-  _cacheLookupOrExplode: function(liveset, ns, localName) {
-    // helper to clone the given item
-    function cloneHelper(item) {
-      var nsMap = liveset._dataByNS[item.__namespace],
-          localName = item._localName;
-      // if we already have a version specialized for this set, return it
-      if (nsMap.hasOwnProperty(localName))
-        return nsMap[localName];
-      // otherwise, we need to perform a clone and stash the result
-      return (nsMap[localName] = item.__clone(liveset, cloneHelper));
+      liveset._notifyAndSplice(spliceInfo.index, spliceInfo.howMany,
+                               objItems);
     }
 
-    var sets = this._sets;
-    for (var iSet = 0; iSet < sets.length; iSet++) {
-      var lset = sets[iSet];
-      var nsMap = lset._dataByNS[ns];
-      if (nsMap.hasOwnProperty(localName))
-        return nsMap[localName].__clone(liveset, cloneHelper);
+    // kill off the instance hierarchy for removed items
+    for (i = 0; i < removed.length; i++) {
+      forgetHelper(removed[i]);
     }
-    throw new Error("No such entry in namespace '" + ns + "' with name '" +
-                    localName + "'");
+    liveset._notifyCompleted(added, addedAtIndex, moved, movedToIndex, removed);
   },
 
   /**
    * Create a `PeepBlurb` representation from the wire rep.
    */
-  _transform_peeps: function(localName, data, liveset) {
-    return new PeepBlurb(liveset, localName, data.ourPoco, data.selfPoco,
+  _transform_peeps: function(localName, data) {
+    return new PeepBlurb(null, localName, data.ourPoco, data.selfPoco,
                          data.numUnread, data.numConvs, data.pinned,
                          data.isMe);
   },
 
-  _delta_peeps: function(curRep, delta) {
-    for (attr in delta) {
+  _delta_peeps: function(curRep, delta, liveset, forgetHelper) {
+    for (var attr in delta) {
       switch (attr) {
         case 'numConvs':
           curRep._numConvs = delta.numConvs;
@@ -1252,14 +1169,49 @@ ModaBridge.prototype = {
   },
 
   /**
-   * Create a `Message` representation from the wire rep.
+   * Create a `ConversationBlurb` representation from the wire rep.
    */
-  _transformMessage: function(msg, owner, liveset) {
+  _transform_convblurbs: function(localName, wireConv) {
+    var participants = [];
+    for (var i = 0; i < wireConv.participants.length; i++) {
+      participants.push(this._dataByNS.peeps[wireConv.participants[i]]);
+    }
+    var blurb = new ConversationBlurb(
+      null, localName, participants, wireConv.pinned, wireConv.numUnread
+    );
+    if (wireConv.firstMessage)
+      blurb.firstMessage = this._dataByNS[NS_CONVMSGS][wireConv.firstMessage];
+    if (wireConv.firstUnreadMessage)
+      blurb.firstUnreadMessage =
+        this._dataByNS[NS_CONVMSGS][wireConv.firstUnreadMessage];
+
+    return blurb;
+  },
+
+  _delta_convblurbs: function(curRep, delta, lookupClone, forgetHelper) {
+    for (var attr in delta) {
+      switch (attr) {
+      case 'participants':
+        for (var i = 0; i < delta.participants.length; i++) {
+          var participant = lookupClone(NS_PEEPS, delta.participants[i]);
+          curRep.participants.push(participant);
+        }
+        break;
+      case 'firstMessage':
+        // only use it if we don't already have one
+        if (!curRep.firstMessage)
+          curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
+        break;
+      }
+    }
+  },
+
+  _transform_convmsgs: function(localName, msg) {
     switch (msg.type) {
       case 'message':
         return new HumanMessage(
           owner,
-          liveset._dataByNS.peeps[msg.author],
+          this._dataByNS[NS_PEEPS][msg.author],
           new Date(msg.composedAt),
           new Date(msg.receivedAt),
           msg.text
@@ -1267,8 +1219,8 @@ ModaBridge.prototype = {
       case 'join':
         return new JoinMessage(
           owner,
-          liveset._dataByNS.peeps[msg.inviter],
-          liveset._dataByNS.peeps[msg.invitee],
+          this._dataByNS[NS_PEEPS][msg.inviter],
+          this._dataByNS[NS_PEEPS][msg.invitee],
           new Date(msg.receivedAt)
         );
       default:
@@ -1276,62 +1228,48 @@ ModaBridge.prototype = {
     }
   },
 
-  /**
-   * Create a `ConversationBlurb` representation from the wire rep.
-   */
-  _transform_convblurbs: function(localName, wireConv, liveset) {
-    var participants = [];
-    for (var i = 0; i < wireConv.participants.length; i++) {
-      participants.push(liveset._dataByNS.peeps[wireConv.participants[i]]);
-    }
-    var blurb = new ConversationBlurb(
-      liveset, localName, participants, wireConv.pinned, wireConv.numUnread
-    );
-    blurb.firstMessage = wireConv.firstMessage &&
-      this._transformMessage(wireConv.firstMessage, blurb, liveset);
-    blurb.firstUnreadMessage = wireConv.firstUnreadMessage &&
-      this._transformMessage(wireConv.firstUnreadMessage, blurb, liveset);
-    return blurb;
+  _delta_convmsgs: function(curRep, delta, lookup, forget) {
+    // nothing to do right now; messages are currently immutable
   },
 
-  /**
-   * Create a `ConversationInFull` representation from the wire rep.
-   */
-  _transformConvMessages: function(blurb, localName, wireConv, liveset) {
-    var messages = [];
-    for (var iMsg = 0; iMsg < wireConv.messages.length; iMsg++) {
-      messages.push(
-        this._transformMessage(wireConv.messages[iMsg], blurb, liveset));
-    }
-    return {
-      messages: messages,
-    };
+  _transform_possfriends: function(localName, wireRep, lookup) {
+    var peepRep = this._dataByNS.peeps[wireRep.peepLocalName];
+    return new PossibleFriend(null, localName, peepRep);
   },
 
-  _transform_possfriends: function(localName, wireRep, liveset) {
-    var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
-    return new PossibleFriend(liveset, localName, peepRep);
+  _delta_possfriends: function(curRep, delta) {
+    // no delta processing at this time because no deltas
   },
 
   /**
    * Create a `ConnectRequest` representation from the wire rep.
    */
-  _transform_connreqs: function(localName, wireRep, liveset) {
-    var peepRep = liveset._dataByNS.peeps[wireRep.peepLocalName];
-    var serverRep = liveset._dataByNS.servers[wireRep.serverLocalName];
-    return new ConnectRequest(liveset, localName, peepRep, serverRep,
+  _transform_connreqs: function(localName, wireRep, lookup) {
+    var peepRep = this._dataByNS.peeps[wireRep.peepLocalName];
+    var serverRep = this._dataByNS.servers[wireRep.serverLocalName];
+    return new ConnectRequest(null, localName, peepRep, serverRep,
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
+  },
+
+  _delta_connreqs: function(curRep, delta) {
+    // no deltas yet
   },
 
   /**
    * Create an `ErrorRep` from the wire rep.
    */
-  _transform_errors: function(localName, wireRep, liveset) {
+  _transform_errors: function(localName, wireRep, lookup) {
     return new ErrorRep(
+      null, localName,
       wireRep.errorId, wireRep.errorParam,
       wireRep.firstReported, wireRep.lastReported,
       wireRep.reportedCount,
       wireRep.userActionRequired, wireRep.permanent);
+  },
+
+  _delta_errors: function(curRep, delta) {
+    curRep.lastReported = new Date(delta.lastReported);
+    curRep.reportedCount = delta.reportedCount;
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1460,7 +1398,9 @@ ModaBridge.prototype = {
     // Save off the blurb for convenience and for direct access by message
     //  processing.  The other side will make sure to loop the blurb into the
     //  query's dependencies for GC et al.
-    liveset.blurb = convBlurb;
+    liveset.blurb = convBlurb.__clone(liveset);
+    liveset._instancesByNS[NS_CONVBLURBS][liveset.blurb._localName] =
+      [liveset.blurb];
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryConvMsgs', handle, {
