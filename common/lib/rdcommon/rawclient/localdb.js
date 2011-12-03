@@ -351,7 +351,7 @@ LocalStore.prototype = {
 
       // -- build the client rep
       querySource.dataMap[NS_CONVBLURBS][localName] =
-        self._convertConversationBlurb(querySource, cells, clientData.deps);
+        self._convertConversationBlurb(clientData, querySource, cells);
       return clientData;
     });
   },
@@ -360,29 +360,25 @@ LocalStore.prototype = {
    * Create a send-to-moda-bridge wire representation representation of a
    *  conversation blurb given its cells.
    */
-  _convertConversationBlurb: function(querySource, cells, deps) {
-    var numMessages = cells['d:m'];
+  _convertConversationBlurb: function(clientData, querySource, cells) {
+    var numMessages = cells['d:m'], convId = clientData.fullName;
     var participants = [];
 
     // - first message, participants list
-    var msg, iMsg, firstMsgRep = null, iFirstMsg = null;
+    var msg, iMsg, firstMsgName = null, iFirstMsg = null, msgClientData;
     for (iMsg = 1; iMsg <= numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
       if (!iFirstMsg && msg.type === 'message') {
-        firstMsgRep = {
-          type: 'message',
-          author: this._deferringPeepQueryResolve(querySource, msg.authorId,
-                                                  deps),
-          composedAt: msg.composedAt,
-          receivedAt: msg.receivedAt,
-          text: msg.text,
-        };
-        iFirstMsg = iMsg;
+        msgClientData = this._convertConversationMessage(
+                          querySource, convId, msg, iMsg);
+        clientData.deps.push(msgClientData);
+        firstMsgName = msgClientData.localName;
+        iFirstMsg = clientData.data.first = iMsg;
       }
       else if (msg.type === 'join') {
         participants.push(this._deferringPeepQueryResolve(querySource,
                                                           msg.id,
-                                                          deps));
+                                                          clientData.deps));
       }
     }
     if (!iFirstMsg)
@@ -390,29 +386,26 @@ LocalStore.prototype = {
 
     // - number of unread
     // XXX unread status not yet dealt with. pragmatism!
-    var numUnreadTextMessages = 1, firstUnreadMsgRep = null;
+    var numUnreadTextMessages = 1, firstUnreadMsgName = null;
     for (iMsg = iFirstMsg; iMsg <= numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
       if (msg.type === 'message') {
         numUnreadTextMessages++;
         // - first unread (non-join) message...
-        if (!firstUnreadMsgRep) {
-          firstUnreadMsgRep = {
-            type: 'message',
-            author: this._deferringPeepQueryResolve(querySource, msg.authorId,
-                                                    deps),
-            composedAt: msg.composedAt,
-            receivedAt: msg.receivedAt,
-            text: msg.text,
-          };
+        if (!firstUnreadMsgName) {
+          clientData.data.unread = iMsg;
+          msgClientData = this._convertConversationMessage(
+                            querySource, convId, msg, iMsg);
+          clientData.deps.push(msgClientData);
+          firstUnreadMsgName = msgClientData.localName;
         }
       }
     }
 
     return {
       participants: participants,
-      firstMessage: firstMsgRep,
-      firstUnreadMessage: firstUnreadMsgRep,
+      firstMessage: firstMsgName,
+      firstUnreadMessage: firstUnreadMsgName,
       pinned: false,
       numUnread: numUnreadTextMessages,
     };
@@ -436,18 +429,10 @@ LocalStore.prototype = {
     }
     // - If this is our first human message, populate.
     var msgNum = mutatedCells['d:m'], msgRec = mutatedCells['d:m' + msgNum];
-    // XXX skimping on checking if this is the first; let's just always send
-    //  the message for now and have the bridge ignore it if it's alreayd got
-    //  one.
-    if (msgRec.type === 'message') {
-      outDeltaRep.firstMessage = {
-        type: 'message',
-        author: this._deferringPeepQueryResolve(querySource, msgRec.authorId,
-                                                clientData.deps),
-        composedAt: msgRec.composedAt,
-        receivedAt: msgRec.receivedAt,
-        text: msgRec.text,
-      };
+    if (msgRec.type === 'message' && !clientData.data.first) {
+      outDeltaRep.firstMessage =
+        this._convertConversationMessage(querySource, clientData.fullName,
+                                         msgRec, msgNum).localName;
     }
 
     // - If we have no unread messages, and this is unread...
@@ -501,19 +486,48 @@ LocalStore.prototype = {
         if (!mergedCells) // merge only the first time needed
           mergedCells = $notifking.mergeCells(cells, mutatedCells);
         // back data
-        clientData.data = mergedCells['d:meta'];
+        clientData.data = {
+          meta: mergedCells['d:meta'],
+          first: null,
+          unread: null,
+        };
         return self._convertConversationBlurb(
-          querySource, mergedCells, clientData.deps
+          clientData, querySource, mergedCells
         );
       });
   },
 
   /**
-   * Notification about a modified conversation.
+   * Notification about a modified conversation; triggered because of a single
+   *  processed message (join/human message/metadata) or other metadata change
+   *  by our user.  Emphasis on the ONE added message.
    */
   _notifyModifiedConversation: function(convId, cells, mutatedCells,
                                         updatedIndexValues) {
-    var mergedCells = null, self = this;
+    var self = this;
+
+    // -- messages
+    // Do this before blurbs because the added notification assumes this is the
+    //  first the system has heard of the object and we can produce duplicates
+    //  if the order is the other way.
+    if (mutatedCells.hasOwnProperty('d:m')) {
+      var msgNum = mutatedCells['d:m'],
+          msgRec = mutatedCells['d:m' + msgNum],
+          msgFullName = convId + msgNum;
+      this._notif.namespaceItemAdded(
+        NS_CONVMSGS, msgFullName, cells, mutatedCells,
+        // we use a synthetic index which is the message number
+        [
+          ['order', null, null, msgNum],
+        ],
+        function(clientData, querySource) {
+          return self._convertConversationMessage(
+                   querySource, convId, msgRec, msgNum, clientData);
+        });
+    }
+
+    // -- blurb
+    var mergedCells = null;
     // we don't provide an indexPopulater because current filtering only occurs
     //  on peeps, and a newly added peep is going to already have all of their
     //  relevant index values in updatedIndexValues
@@ -525,7 +539,7 @@ LocalStore.prototype = {
         // back data
         clientData.data = mergedCells['d:meta'];
         return self._convertConversationBlurb(
-          querySource, mergedCells, clientData.deps
+          clientData, querySource, mergedCells
         );
       },
       function genDeltaReps(clientData, querySource, outDeltaRep) {
@@ -535,6 +549,7 @@ LocalStore.prototype = {
         return self._convertConversationBlurbDelta(
           querySource, clientData, outDeltaRep, cells, mutatedCells);
       });
+
   },
 
 
@@ -580,62 +595,64 @@ LocalStore.prototype = {
   },
 
   /**
-   * Convert message records (as pulled from or pushed to hbase) into wire
-   *  representations to send to the moda bridge.
-   *
-   * If you change this method, you need to also change
-   *  `_fetchConversationBlurb` which currently inlines the same
-   *  transformations.
+   * Produce a message record clientData struct from its database storage
+   *  (cell) format.  Also supports a mode of operation where it updates an
+   *  existing clientData structure, in which case the return value is the
+   *  frontData (which does not get directly set either.)
    */
-  _convertConversationMessages: function(queryHandle, convId, msgRecs) {
-    var querySource = queryHandle.owner;
-    var viewItems = [];
-    queryHandle.splices.push({ index: 0, howMany: 0, items: viewItems });
+  _convertConversationMessage: function(querySource, convId, msg, msgIndex,
+                                        clientData) {
+    var fullName = convId + msgIndex, reuseMode;
+    if (!clientData) {
+      reuseMode = false;
+      clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_CONVMSGS,
+                                                   fullName);
+      if (clientData)
+        return clientData;
 
-    for (var i = 0; i < msgRecs.length; i++) {
-      var fullName = convId + i;
-      var clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_CONVMSGS,
-                                                       fullName);
-      if (clientData) {
-        queryHandle.items.push(clientData);
-        viewItems.push(clientData.localName);
-        continue;
-      }
       clientData = this._notif.generateClientData(querySource, NS_CONVMSGS,
-                                                    fullName);
-      clientData.data = {
-        convId: convId,
-        index: i,
-      };
-
-      var msg = msgRecs[i], frontData;
-      if (msg.type === 'message') {
-        frontData = {
-          type: 'message',
-          author: this._deferringPeepQueryResolve(querySource, msg.authorId,
-                                                  clientData.deps),
-          composedAt: msg.composedAt,
-          receivedAt: msg.receivedAt,
-          text: msg.text,
-        };
-      }
-      else if (msg.type === 'join') {
-        frontData = {
-          type: 'join',
-          inviter: this._deferringPeepQueryResolve(querySource, msg.by,
-                                                   clientData.deps),
-          invitee: this._deferringPeepQueryResolve(querySource, msg.id,
-                                                   clientData.deps),
-          receivedAt: msg.receivedAt,
-          text: msg.text,
-        };
-      }
-      else {
-        throw new Error("Unknown message type '" + msg.type + "'");
-      }
-      querySource.dataMap[clientData.localName] = frontData;
+                                                  fullName);
     }
-    return messages;
+    else {
+      reuseMode = true;
+    }
+
+    clientData.data = {
+      convId: convId,
+      index: msgIndex,
+    };
+
+    var frontData;
+    if (msg.type === 'message') {
+      frontData = {
+        type: 'message',
+        author: this._deferringPeepQueryResolve(querySource, msg.authorId,
+                                                clientData.deps),
+        composedAt: msg.composedAt,
+        receivedAt: msg.receivedAt,
+        text: msg.text,
+      };
+    }
+    else if (msg.type === 'join') {
+      frontData = {
+        type: 'join',
+        inviter: this._deferringPeepQueryResolve(querySource, msg.by,
+                                                 clientData.deps),
+        invitee: this._deferringPeepQueryResolve(querySource, msg.id,
+                                                 clientData.deps),
+        receivedAt: msg.receivedAt,
+        text: msg.text,
+      };
+    }
+    else {
+      throw new Error("Unknown message type '" + msg.type + "'");
+    }
+
+    if (reuseMode)
+      return frontData;
+
+    querySource.dataMap[NS_CONVMSGS][clientData.localName] = frontData;
+    return clientData;
   },
 
   /**
@@ -651,9 +668,8 @@ LocalStore.prototype = {
    */
   _fetchConversationMessages: function(queryHandle, convId) {
     var querySource = queryHandle.owner;
-
-    var clientData = this._notif.generateClientData(querySource, NS_CONVMSGS,
-                                                    convId);
+    var viewItems = [];
+    queryHandle.splices.push({ index: 0, howMany: 0, items: viewItems });
 
     var self = this;
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
@@ -662,12 +678,14 @@ LocalStore.prototype = {
       var numMessages = cells['d:m'];
 
       // - all messages
-      var msgRecs = [];
       for (var iMsg = 1; iMsg <= numMessages; iMsg++) {
-        msgRecs.push(cells['d:m' + iMsg]);
-      }
+        var msgRec = cells['d:m' + iMsg];
 
-      self._convertConversationMessages(queryHandle, convId, msgRecs);
+        var clientData = self._convertConversationMessage(
+                           querySource, convId, msgRec, iMsg);
+        queryHandle.items.push(clientData);
+        viewItems.push(clientData.localName);
+      }
 
       return self._fillOutQueryDepsAndSend(queryHandle);
     });

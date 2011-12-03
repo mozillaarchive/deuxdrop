@@ -276,6 +276,8 @@ TestDefinerRunner.prototype = {
       var deferred = $Q.defer(), self = this;
       // -- timeout handler
       var countdownTimer = $timers.setTimeout(function() {
+        if (self._superDebug)
+          console.error("!! timeout fired, deferred?", deferred !== null);
         if (!deferred) return;
         // - tell the actors to fail any remaining expectations
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
@@ -297,6 +299,8 @@ TestDefinerRunner.prototype = {
       if (this._superDebug)
         console.log("waiting on", promises.length, "promises");
       when($Q.all(promises), function passed() {
+        if (self._superDebug)
+          console.error("!! all resolved, deferred?", deferred !== null);
         if (!deferred) return;
         clearTimeout(countdownTimer);
 
@@ -318,6 +322,8 @@ TestDefinerRunner.prototype = {
         deferred.resolve(allGood);
         deferred = null;
       }, function failed(expPair) {
+        if (self._superDebug)
+          console.error("!! failed, deferred?", deferred !== null);
         if (!deferred) return;
         // XXX we should do something with the failed expectation pair...
         clearTimeout(countdownTimer);

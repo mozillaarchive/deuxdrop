@@ -817,9 +817,12 @@ NotificationKing.prototype = {
    *  recursively decrement its dependencies.  Tell the query source about
    *  all the dead thing.
    */
-  decrefClientData: function(querySource, clientData) {
+  decrefClientData: function(querySource, clientData, count) {
+    if (count === undefined)
+      count = 1;
+    clientData.count -= count;
     // nothing to do if our reference count does not hit 0
-    if (--clientData.count > 0)
+    if (clientData.count > 0)
       return;
 
     var namespace = clientData.ns;
@@ -878,12 +881,6 @@ NotificationKing.prototype = {
    *
    * The following namespaces derive their notifications from us:
    * - newness: XXX notyet; notifications about new messages/conversations
-   * - convmsgs: the queries on the messages in a conversation.
-   *
-   * We update all queries immediately, although they will not be flushed to
-   *  the moda layer until `updatePhaseDoneReleaseNotifications` is invoked.
-   *  This coalesces notifications without significantly complicating our
-   *  logic.
    */
   trackNewishMessage: function(convId, msgNum, msgRec, baseCells,
                                mutatedCells) {
@@ -897,38 +894,6 @@ NotificationKing.prototype = {
       newishForConv = this._newishMessagesByConvId[convId];
     newishForConv.push({index: msgIndex, rec: msgRec});
 */
-
-    // -- update NS_CONVMSGS queries
-    // we can skip out early since you can't have a query about a conversation
-    //  you've never heard of.
-    if (msgNum === 1)
-      return;
-
-    for (var qsKey in this._activeQuerySources) {
-      var querySource = this._activeQuerySources[qsKey];
-
-      if (querySource.membersByFull[NS_CONVMSGS].hasOwnProperty(convId)) {
-        var clientData = querySource.membersByFull[NS_CONVMSGS][convId],
-            localName = clientData.localName, outMessages;
-
-        if (querySource.dataDelta[NS_CONVMSGS].hasOwnProperty(localName)) {
-          outMessages = querySource.dataDelta[NS_CONVMSGS][localName].messages;
-        }
-        else {
-          querySource.dataDelta[NS_CONVMSGS][localName] = {
-            messages: (outMessages = []),
-          };
-        }
-
-        // this is a synchronous operation that may introduce new peeps
-        //  dependencies that will be resolved by _fillOutQueryDepsAndSend.
-        var converted = this._store._convertConversationMessages(
-                          queryHandle, [msgRec], clientData.deps);
-        outMessages.splice(outMessages.length, 0, converted[0]);
-
-        querySource.dirty = true;
-      }
-    }
   },
 
   /**
@@ -1139,7 +1104,7 @@ NotificationKing.prototype = {
     for (var qsKey in this._activeQuerySources) {
       var querySource = this._activeQuerySources[qsKey];
 
-      var clientData = null;
+      var clientData = null, decrementBy = 0;
       if (querySource.membersByFull[namespace].hasOwnProperty(fullName))
         clientData = querySource.membersByFull[namespace][fullName];
       // we need to generate a delta if the object is known to the query
@@ -1171,7 +1136,9 @@ NotificationKing.prototype = {
           // generate a removal splice, decref.
           queryHandle.splices.push(
             { index: preIdx, howMany: 1, items: null });
-          this.decrefClientData(querySource, clientData);
+          // don't process the decrement until we are done with the loop in
+          //  order to avoid flapping
+          decrementBy++;
           this.pendQuery(queryHandle);
           continue;
         }
@@ -1182,7 +1149,7 @@ NotificationKing.prototype = {
           clientData = this.generateClientData(querySource, namespace,
                                                fullName, clientDataPopulater);
         else if (!prePresent)
-          clientData++;
+          clientData.count++;
 
         if (!prePresent) {
           // We need to regenerate the indices if possible because the update
@@ -1228,6 +1195,10 @@ NotificationKing.prototype = {
         }
       }
 
+      // process any decrements
+      if (decrementBy)
+        this.decrefClientData(querySource, clientData, decrementBy);
+
       // generate a delta if clientData is still alive
       if (deltaNeeded && clientData.count > 0 && deltaPopulater) {
         var frontDataDelta;
@@ -1248,7 +1219,7 @@ NotificationKing.prototype = {
         //  taken care of as part of the dependency creation process
         for (iDep = 0; iDep < preDeltaDeps.length; iDep++) {
           depData = preDeltaDeps[iDep];
-          if (postDeltaDeps.indexOf(dep) === -1)
+          if (postDeltaDeps.indexOf(depData) === -1)
             this.decrefClientData(querySource, depData);
         }
 

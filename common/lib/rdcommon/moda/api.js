@@ -268,19 +268,14 @@ ConversationBlurb.prototype = {
     var clone = new ConversationBlurb(
       liveset, this._localName, this.participants.map(cloneHelper),
       this._pinned, this._numUnread);
-    this.firstMessage = cloneHelper(this.firstMessage);
-    this.firstUnreadMessage = cloneHelper(this.firstUnreadMessage);
+    clone.firstMessage = cloneHelper(this.firstMessage);
+    clone.firstUnreadMessage = cloneHelper(this.firstUnreadMessage);
     return clone;
   },
   __forget: function(forgetHelper) {
     this.participants.map(forgetHelper);
-    // our messages don't need to be directly forgotten because they are not
-    //  tracked by the liveset infrastructure, but they may have deps that need
-    //  to be tracked.
-    if (this.firstMessage)
-      this.firstMessage.__forget(forgetHelper);
-    if (this.firstUnreadMessage)
-      this.firstUnreadMessage.__forget(forgetHelper);
+    forgetHelper(this.firstMessage);
+    forgetHelper(this.firstUnreadMessage);
   },
   toString: function() {
     return '[ConversationBlurb ' + this._localName + ']';
@@ -363,6 +358,9 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   this.data = data;
 }
 LiveOrderedSet.prototype = {
+  toString: function() {
+    return '[LiveOrderedSet ' + this._handle + ']';
+  },
   on: function(event, listener) {
     var listeners;
     switch (event) {
@@ -384,47 +382,20 @@ LiveOrderedSet.prototype = {
    *  Because new clones of the items and all of their referenced objects will
    *  be created, the user of the new set should acquire (new) references to
    *  the (new) objects.
-   *
-   * This is an expert-only API because there is currently a race window as
-   *  implemented.  The cloned query will not be properly subscribed for updates
-   *  until the backside receives our notification about the clone.  From our
-   *  perspective, this means that everything the bridge hears about the source
-   *  query between the time this API call is invoked and the 'cloneQueryAck'
-   *  message is received will not be reflected in the cloned query.  This could
-   *  be addressed by applying all updates for the source query until the ack
-   *  is received (without throwing errors about missing things that were
-   *  likely filtered out), but that is deemed surplus to needs given current
-   *  levels of laziness.
-   *
-   * XXX revisit once we complete the rest of the rejiggering
    */
   cloneSlice: function(items, data) {
     var cloneSet = new LiveOrderedSet(this._bridge, this._bridge._nextHandle++,
-                                      this._ns, 'CLONE', data),
-        cloneMap = cloneSet._dataByNS[this._ns];
+                                      this._ns, 'CLONE', data);
     this._bridge._handleMap[cloneSet._handle] = cloneSet;
     this._bridge._sets.push(cloneSet);
-
-    function cloneHelper(item) {
-      if (!item)
-        return item;
-      var nsMap = cloneSet._dataByNS[item.__namespace],
-          localName = item._localName;
-      // if we already have a version specialized for this set, return it
-      if (nsMap.hasOwnProperty(localName))
-        return nsMap[localName];
-      // otherwise, we need to perform a clone and stash the result
-      return (nsMap[localName] = item.__clone(cloneSet, cloneHelper));
-    }
 
     var slicedLocalNames = [];
     for (var i = 0; i < items.length; i++) {
       var srcItem = items[i];
       slicedLocalNames.push(srcItem._localName);
 
-      var clonedItem = srcItem.__clone(cloneSet, cloneHelper);
+      var clonedItem = this._cloneItemIntoLiveset(cloneSet, srcItem);
       cloneSet.items.push(clonedItem);
-      cloneMap[clonedItem._localName] = clonedItem;
     }
 
     this._bridge._send(
@@ -918,12 +889,30 @@ ModaBridge.prototype = {
   _receiveCloneQueryAck: function(msg) {
   },
 
+  _cloneItemIntoLiveset: function(liveset, thing) {
+    var dataByNS = this._dataByNS;
+    function cloneHelper(thing) {
+      if (!thing)
+        return thing;
+      var clone = dataByNS[thing.__namespace][thing._localName]
+                    .__clone(liveset, cloneHelper);
+      var instMap = liveset._instancesByNS[thing.__namespace], instList;
+      if (!instMap.hasOwnProperty(thing._localName))
+        instList = instMap[thing._localName] = [];
+      else
+        instList = instMap[thing._localName];
+      instList.push(clone);
+      return clone;
+    }
+    return cloneHelper(thing);
+  },
+
   _commonProcess: function(namespace, msg) {
-    var values, dataMap, val,
+    var values, dataMap, val, self = this,
         iSet, liveset, sets = this._sets, instMap, instances, iInst;
 
     function lookupTemplate(namespace, thing) {
-      return this._dataByNS[namespace][thing];
+      return self._dataByNS[namespace][thing];
     }
 
     if (msg.dataMap.hasOwnProperty(namespace)) {
@@ -941,6 +930,8 @@ ModaBridge.prototype = {
       // function to provide to delta handlers to indicate a release of a
       //  tracked object.
       function forgetHelper(thing) {
+        if (!thing)
+          return;
         var instMap = liveset._instancesByNS[thing.__namespace];
         var instList = instMap[thing._localName];
         var idx = instList.indexOf(thing);
@@ -949,8 +940,19 @@ ModaBridge.prototype = {
           delete instMap[thing._localName];
         thing.__forget(forgetHelper);
       }
-      function lookupClone(namespace, thing) {
-        return liveset._instancesByNS[namespace][thing].__clone(liveset);
+      function lookupClone(namespace, thingName) {
+        if (thingName == null)
+          return thingName;
+        var clone = liveset._instancesByNS[namespace][thingName]
+                      .__clone(liveset, lookupClone);
+console.error("cloned[" + liveset._handle + "]: " + clone);
+        var instMap = liveset._instancesByNS[namespace], instList;
+        if (!instMap.hasOwnProperty(thingName))
+          instList = instMap[thingName] = [];
+        else
+          instList = instMap[thingName];
+        instList.push(clone);
+        return clone;
       }
 
       values = msg.dataDelta[namespace];
@@ -964,9 +966,19 @@ ModaBridge.prototype = {
         var templateRep = dataMap[key];
 
         var delta = values[key];
-        // -- deletion handling
+        // -- forget handling
+        // Forgetting happens when the reference counts maintained by the
+        //  `NotificationKing` in the client daemon on our behalf are driven to
+        //  zero.  This happens because our queries no longer directly reference
+        //  the object nor do their dependent references.
+        // We do not need to use the forgetHelper in this case because it is
+        //  handled elsewhere.  Direct removals are handled in splice processing
+        //  in `_receiveQueryUpdate`, and indirect removals are handled below
+        //  in delta processing.  (The forgetting process is recursive and those
+        //  are its 'roots'.)
         if (delta === null) {
           // (we generate remove notifications on splice only)
+
           // - forget about the template instance
           delete dataMap[key];
 
@@ -982,8 +994,8 @@ ModaBridge.prototype = {
         }
 
         // -- update the template rep
+console.error("template deltaFunc: " + templateRep);
         deltaFunc.call(this, templateRep, delta, lookupTemplate, forgetHelper);
-
         // -- update instances, generate change notifications
         for (iSet = 0; iSet < sets.length; iSet++) {
           liveset = sets[iSet];
@@ -992,8 +1004,9 @@ ModaBridge.prototype = {
           if (instMap.hasOwnProperty(key)) {
             instances = instMap[key];
             for (iInst = 0; iInst < instances.length; iInst++) {
-              var inst = instances[i];
+              var inst = instances[iInst];
               // - apply delta
+console.error("instance deltaFunc:" + inst);
               deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
 
               // - generate 'change' notification
@@ -1067,6 +1080,8 @@ ModaBridge.prototype = {
     var instMap = liveset._instancesByNS[liveset._ns];
 
     function forgetHelper(thing) {
+      if (!thing)
+        return;
       var instMap = liveset._instancesByNS[thing.__namespace];
       var instList = instMap[thing._localName];
       // it's possible a refcount nuke is occurring concurrently, in which
@@ -1082,8 +1097,16 @@ ModaBridge.prototype = {
     function cloneHelper(thing) {
       if (!thing)
         return thing;
-      return dataByNS[thing.__namespace][thing._localName]
-               .__clone(liveset, cloneHelper);
+      var clone = dataByNS[thing.__namespace][thing._localName]
+                    .__clone(liveset, cloneHelper);
+console.error("cloned[" + liveset._handle + "]: " + clone);
+      var instMap = liveset._instancesByNS[thing.__namespace], instList;
+      if (!instMap.hasOwnProperty(thing._localName))
+        instList = instMap[thing._localName] = [];
+      else
+        instList = instMap[thing._localName];
+      instList.push(clone);
+      return clone;
     }
 
     for (i = 0; i < msg.splices.length; i++) {
@@ -1116,10 +1139,11 @@ ModaBridge.prototype = {
       if (spliceInfo.items) {
         for (var iName = 0; iName < spliceInfo.items.length; iName++) {
           localName = spliceInfo.items[iName];
+          // (there should only be one of the instance in the set)
           if (instMap.hasOwnProperty(localName))
-            objItem = instMap[localName];
+            objItem = instMap[localName][0];
           else
-            objItem = dataMap[localName].__clone(liveset, cloneHelper);
+            objItem = cloneHelper(dataMap[localName]);
           objItems.push(objItem);
           // XXX these checks can be folded into the above case
           // turn a removal into a move...
@@ -1198,9 +1222,11 @@ ModaBridge.prototype = {
         }
         break;
       case 'firstMessage':
-        // only use it if we don't already have one
-        if (!curRep.firstMessage)
-          curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
+        curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
+        break;
+      case 'firstUnreadMessage':
+        curRep.firstUnreadMessage = lookupClone(NS_CONVMSGS,
+                                                delta.firstUnreadMessage);
         break;
       }
     }
@@ -1210,7 +1236,8 @@ ModaBridge.prototype = {
     switch (msg.type) {
       case 'message':
         return new HumanMessage(
-          owner,
+          null,
+          localName,
           this._dataByNS[NS_PEEPS][msg.author],
           new Date(msg.composedAt),
           new Date(msg.receivedAt),
@@ -1218,7 +1245,8 @@ ModaBridge.prototype = {
         );
       case 'join':
         return new JoinMessage(
-          owner,
+          null,
+          localName,
           this._dataByNS[NS_PEEPS][msg.inviter],
           this._dataByNS[NS_PEEPS][msg.invitee],
           new Date(msg.receivedAt)
@@ -1398,9 +1426,7 @@ ModaBridge.prototype = {
     // Save off the blurb for convenience and for direct access by message
     //  processing.  The other side will make sure to loop the blurb into the
     //  query's dependencies for GC et al.
-    liveset.blurb = convBlurb.__clone(liveset);
-    liveset._instancesByNS[NS_CONVBLURBS][liveset.blurb._localName] =
-      [liveset.blurb];
+    liveset.blurb = this._cloneItemIntoLiveset(liveset, convBlurb);
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryConvMsgs', handle, {
