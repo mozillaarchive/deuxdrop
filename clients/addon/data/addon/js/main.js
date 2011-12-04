@@ -93,8 +93,11 @@ define(function (require) {
         parts = bindName.split('.');
         value = model;
         parts.forEach(function (part) {
-          value = value[part];
+          if (value != null)
+            value = value[part];
         });
+        if (value == null)
+          value = '';
       }
 
       if (attrName) {
@@ -543,10 +546,6 @@ define(function (require) {
     // Put in the Add button.
     frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
 
-    commonQueryBind(dom.find('.scroller'), clonable, 'peep',
-                    (data.query = moda.queryPeeps({ by: 'alphabet' })),
-                    frag);
-
     compositeQueryBind(
       dom.find('.scroller'), clonable, 'privBundle',
       [
@@ -562,7 +561,7 @@ define(function (require) {
         {
           name: 'conv',
           required: false,
-          query: moda.queryAllConversations(),
+          query: moda.queryAllConversations({ by: 'all' }),
           keyFunc: function(convBlurb) {
             // ignore non-private messages
             if (convBlurb.firstMessage.text !== 'PRIVATE' ||

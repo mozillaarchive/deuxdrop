@@ -264,14 +264,19 @@ ModaBackside.prototype = {
 
     // we need a test function that only returns true for already present items
     queryHandle.testFunc = function(baseCells, mutatedCells, fullName) {
-      return queryHandle.membersByFull[ns].hasOwnProperty(fullName);
+      for (var i = 0; i < queryHandle.items.length; i++) {
+        if (queryHandle.items[i].fullName === fullName)
+          return true;
+      }
+      return false;
     };
 
     // now go through the list of sliced items and mark them as deps
     for (var iSliced = 0; iSliced < sliced.length; iSliced++) {
       var localName = sliced[iSliced];
       var clientData = this._notif.reuseIfAlreadyKnown(
-        querySource, ns, querySource.membersByLocal[localName].fullName);
+        querySource, ns,
+        this._notif.mapLocalNameToFullName(querySource, ns, localName));
       queryHandle.items.push(clientData);
     }
     this.send({

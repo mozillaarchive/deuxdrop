@@ -908,7 +908,7 @@ ModaBridge.prototype = {
   },
 
   _commonProcess: function(namespace, msg) {
-    var values, dataMap, val, self = this,
+    var values, dataMap, val, key, self = this,
         iSet, liveset, sets = this._sets, instMap, instances, iInst;
 
     function lookupTemplate(namespace, thing) {
@@ -945,7 +945,6 @@ ModaBridge.prototype = {
           return thing;
         var clone = dataByNS[thing.__namespace][thing._localName]
                       .__clone(liveset, cloneHelper);
-console.error("cloned[" + liveset._handle + "]: " + clone);
         var instMap = liveset._instancesByNS[thing.__namespace], instList;
         if (!instMap.hasOwnProperty(thing._localName))
           instList = instMap[thing._localName] = [];
@@ -959,7 +958,6 @@ console.error("cloned[" + liveset._handle + "]: " + clone);
           return thingName;
         var clone = dataByNS[namespace][thingName].__clone(liveset,
                                                            cloneHelper);
-console.error("cloned[" + liveset._handle + "]: " + clone);
         var instMap = liveset._instancesByNS[namespace], instList;
         if (!instMap.hasOwnProperty(thingName))
           instList = instMap[thingName] = [];
@@ -1008,7 +1006,6 @@ console.error("cloned[" + liveset._handle + "]: " + clone);
         }
 
         // -- update the template rep
-console.error("template deltaFunc: " + templateRep);
         deltaFunc.call(this, templateRep, delta, lookupTemplate, forgetHelper);
         // -- update instances, generate change notifications
         for (iSet = 0; iSet < sets.length; iSet++) {
@@ -1020,7 +1017,6 @@ console.error("template deltaFunc: " + templateRep);
             for (iInst = 0; iInst < instances.length; iInst++) {
               var inst = instances[iInst];
               // - apply delta
-console.error("instance deltaFunc:" + inst);
               deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
 
               // - generate 'change' notification
@@ -1125,7 +1121,6 @@ console.error("instance deltaFunc:" + inst);
         return thing;
       var clone = dataByNS[thing.__namespace][thing._localName]
                     .__clone(liveset, cloneHelper);
-console.error("cloned[" + liveset._handle + "]: " + clone);
       var instMap = liveset._instancesByNS[thing.__namespace], instList;
       if (!instMap.hasOwnProperty(thing._localName))
         instList = instMap[thing._localName] = [];

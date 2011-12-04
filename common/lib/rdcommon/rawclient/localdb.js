@@ -340,8 +340,6 @@ LocalStore.prototype = {
    */
   _fetchConversationBlurb: function(querySource, convId) {
     var self = this;
-    var localName = "" + (querySource.nextUniqueIdAlloc++);
-
     var clientData = this._notif.generateClientData(querySource, NS_CONVBLURBS,
                                                     convId);
 
@@ -355,7 +353,7 @@ LocalStore.prototype = {
       };
 
       // -- build the client rep
-      querySource.dataMap[NS_CONVBLURBS][localName] =
+      querySource.dataMap[NS_CONVBLURBS][clientData.localName] =
         self._convertConversationBlurb(clientData, querySource, cells);
       return clientData;
     });

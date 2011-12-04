@@ -104,6 +104,31 @@
           </div>
         </div>
 
+        <!-- groups: Lists of all conversations -->
+        <div data-cardid="groups" title="Group" class="card conversations">
+          <div class="subHeader hbox">
+            <div class="boxFlex">
+              <input id="search" type="text" placeholder="search people">
+            </div>
+            <button class="search">search</button>
+            <button class="button" data-href="#new">new</button>
+          </div>
+          <div class="scroller" data-childclass="convBlurb">
+          </div>
+        </div>
+
+        <!-- groupConv: Contents of a group conversation -->
+        <div data-cardid="groupConv" class="card">
+          <!-- non-scrolling reminder of the participants... -->
+          <div class="subHeader hbox">
+            <div class="participants" data-childclass="participant">
+            </div>
+          </div>
+          <!-- scrolling messages -->
+          <div class="scroller">
+          </div>
+        </div>
+
         <!-- User: Details on a user/peep NOT SURE IF NECESSARY AS-IS -->
         <div data-cardid="user" class="card">
           <div class="scroller">
@@ -326,7 +351,9 @@
                   <span class="author boxFlex overflow"
                         data-bind="peep.displayName">
                   </span>
-                  (<span class="new" data-bind="conv.numUnreadMessages"></span>)
+                  <span class="new">
+                    (<span data-bind="conv.numUnreadMessages"></span>)
+                  </span>
                   <span class="boxFlexStrong"></span>
                   <span class="time">X min</span>
               </div>
@@ -338,8 +365,52 @@
           </div>
       </a>
 
+      <a class="private unread hbox" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="avatar">
+                  <img src="i/face2.png" data-bind="peep.pic" data-attr="src" />
+              </div>
+          </div>
+          <div class="msgPreview boxFlex">
+              <div class="msgPreviewHeader hbox">
+                  <span class="author boxFlex overflow"
+                        data-bind="peep.displayName">
+                  </span>
+                  <span class="new">
+                    (<span data-bind="conv.numUnreadMessages"></span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="time">X min</span>
+              </div>
+              <div class="hbox">
+                  <span class="snippet boxFlex overflow"
+                        data-bind="conv.firstUnreadMessage.text">
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <span data-classimpl="participant" data-bind="displayName">
+      </span>
+
+      <!-- Group messaging join message -->
+      <div data-classimpl="join" class="bubble">
+        <a href='#user?id=' class="sender">
+          <span class="avatar">
+            <img src="i/face2.png" class="avatar"
+                 data-bind="from.pic" data-attr="src" />
+          </span>
+          <span class="name" data-bind="author.displayName"></span>
+        </a>
+        <div class="body">
+          <div class="meta">
+          </div>
+        </div>
+      </div>
+
       <!-- Group messaging human message -->
-      <div data-classimpl="message"  class="bubble">
+      <div data-classimpl="message" class="bubble">
         <a href='#user?id=' class="sender">
           <span class="avatar">
             <img src="i/face2.png" class="avatar"
