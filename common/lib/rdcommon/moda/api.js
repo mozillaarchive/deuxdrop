@@ -394,7 +394,7 @@ LiveOrderedSet.prototype = {
       var srcItem = items[i];
       slicedLocalNames.push(srcItem._localName);
 
-      var clonedItem = this._cloneItemIntoLiveset(cloneSet, srcItem);
+      var clonedItem = this._bridge._cloneItemIntoLiveset(cloneSet, srcItem);
       cloneSet.items.push(clonedItem);
     }
 
