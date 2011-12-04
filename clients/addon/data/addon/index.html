@@ -365,17 +365,22 @@
           </div>
       </a>
 
+
+      <!-- =============================== -->
+      <!-- === Group Conversation List === -->
+
+      <!-- convBlurb: group conversation blurb -->
       <a class="private unread hbox" data-classimpl="convBlurb"
          href="#groupConv">
           <div>
               <div class="avatar">
-                  <img src="i/face2.png" data-bind="peep.pic" data-attr="src" />
+                  <img src="i/group.png" />
               </div>
           </div>
           <div class="msgPreview boxFlex">
               <div class="msgPreviewHeader hbox">
-                  <span class="author boxFlex overflow"
-                        data-bind="peep.displayName">
+                  <span class="author boxFlex overflow namechecks"
+                        data-childclass="namecheck">
                   </span>
                   <span class="new">
                     (<span data-bind="conv.numUnreadMessages"></span>)
@@ -385,12 +390,21 @@
               </div>
               <div class="hbox">
                   <span class="snippet boxFlex overflow"
-                        data-bind="conv.firstUnreadMessage.text">
+                        data-bind="firstUnreadMessage.text">
                   </span>
               </div>
           </div>
       </a>
 
+      <!-- namecheck: Cite a participant in a convBlurb -->
+      <span data-classimpl="namecheck" data-bind="displayName">
+      </span>
+
+
+      <!-- ================================== -->
+      <!-- === Group Conversation Display === -->
+
+      <!-- participant: Cite a participant in a conversation display card -->
       <span data-classimpl="participant" data-bind="displayName">
       </span>
 

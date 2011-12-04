@@ -1017,14 +1017,15 @@ ModaBridge.prototype = {
             for (iInst = 0; iInst < instances.length; iInst++) {
               var inst = instances[iInst];
               // - apply delta
-              deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
+              var explained =
+                deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
 
               // - generate 'change' notification
               if (!inst._eventMap)
                 continue;
               var changeFunc = instances[i]._eventMap.change;
               if (changeFunc)
-                changeFunc(inst, liveset);
+                changeFunc(inst, liveset, explained);
             }
           }
         }
@@ -1234,6 +1235,11 @@ ModaBridge.prototype = {
   },
 
   _delta_convblurbs: function(curRep, delta, lookupClone, forgetHelper) {
+    var explainDelta = {
+      participants: false,
+      firstMessage: false,
+      firstUnreadMessage: false,
+    };
     for (var attr in delta) {
       switch (attr) {
       case 'participants':
@@ -1241,16 +1247,20 @@ ModaBridge.prototype = {
           var participant = lookupClone(NS_PEEPS, delta.participants[i]);
           curRep.participants.push(participant);
         }
+        explainDelta.participants = true;
         break;
       case 'firstMessage':
         curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
+        explainDelta.firstMessage = true;
         break;
       case 'firstUnreadMessage':
         curRep.firstUnreadMessage = lookupClone(NS_CONVMSGS,
                                                 delta.firstUnreadMessage);
+        explainDelta.firstUnreadMessage = true;
         break;
       }
     }
+    return explainDelta;
   },
 
   _transform_convmsgs: function(localName, msg) {

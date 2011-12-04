@@ -1,4 +1,4 @@
-/* ***** BEGIN LICENSE BLOCK *****
+/****** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -82,11 +82,15 @@ define(function (require) {
 
   function updateDom(rootDom, model) {
     // Update the data bound nodes.
-    rootDom.find('[data-bind]').each(function (i, node) {
+
+    var matches = rootDom.find('[data-bind]');
+    // allow the root to match
+    if (rootDom[0].hasAttribute('data-bind'))
+      matches = matches.add(rootDom[0]);
+    matches.each(function (i, node) {
       var bindName = node.getAttribute('data-bind'),
           attrName = node.getAttribute('data-attr'),
-          value = model[bindName],
-          parts;
+          value, parts;
 
       // Allow for dot names in the bindName
       if (bindName.indexOf('.') !== -1) {
@@ -98,6 +102,9 @@ define(function (require) {
         });
         if (value == null)
           value = '';
+      }
+      else {
+        value = model[bindName];
       }
 
       if (attrName) {
@@ -277,26 +284,35 @@ define(function (require) {
    *              newly created nodes to.  Only needs to be provided if you
    *              wanted to create one or more sentinel items at the start of
    *              the list.
+   * @param [updateDomFunc] A function to update the DOM node, if you don't
+   *                        provide one, we just use the updateDom module
+   *                        global.  You'll need to provide a custom one if
+   *                        you have repeated nested elements; as the current
+   *                        James-idiom does not have magic for that.  (Maybe
+   *                        blade does?)
    */
-  function commonQueryBind(listNode, clonable, propName, query, frag) {
+  function commonQueryBind(listNode, clonable, propName, query, frag,
+                           updateDomFunc) {
+    if (!updateDomFunc)
+      updateDomFunc = updateDom;
     query.on('add', function(itemObj, addedAtIndex) {
-      var node = clonable.cloneNode(true);
+      var node = clonable.cloneNode(true), jqNode = $(node);
 
-      updateDom($(node), itemObj);
+      updateDomFunc(jqNode, itemObj, null);
       // Our use of the linkNode mechanism makes this superfluous.  Keeping it
       // around for the time being for debugging info.
       node.href += '?id=' + encodeURIComponent(itemObj.id);
 
       node[propName] = itemObj;
 
-      itemObj.on('change', function() {
+      itemObj.on('change', function(itemObj, liveset, whatChanged) {
         // this should still work at runtime because the node instance
         //  should have been re-parented, not cloned, when the fragment
-        //  got merged in.
-        updateDom($(node), itemObj);
+        //  got merged in
+        updateDomFunc(jqNode, itemObj, whatChanged);
       });
       itemObj.on('remove', function() {
-        $(node).remove();
+        jqNode.remove();
       });
 
       // XXX currently we are append-only and ignoring ordering hints; need to
@@ -583,6 +599,30 @@ define(function (require) {
    * Provides an affordance to create a new conversation.
    */
   update['groups'] = function(data, dom) {
+    commonQueryBind(
+      dom.find('.scroller'), getChildCloneNode(dom[0]), 'conv',
+      (data.query = moda.queryAllConversations({ by: 'all' })), null,
+      function updom(jqNode, convBlurb, whatChanged) {
+        // okay, so whatChanged knows all kinds of useful stuff, but in order
+        //  to be able to invoke updateDom at a high level, we need to nuke
+        //  all the cloned children before doing so, so let's not optimize
+        //  for the nitty gritty.
+        var jqPartRoot = jqNode.find('.namechecks'),
+            partClonable = getChildCloneNode(jqPartRoot[0]);
+
+        // - nuke all clone child points
+        jqPartRoot.empty();
+
+        // - update the blurb
+        updateDom(jqNode, convBlurb);
+
+        // - clone children
+        convBlurb.participants.forEach(function(peepBlurb) {
+          var jqPartNode = $(partClonable.cloneNode(true));
+          updateDom(jqPartNode, peepBlurb);
+          jqPartRoot.append(jqPartNode);
+        });
+      });
   };
 
   /*
