@@ -407,13 +407,13 @@ var DeltaHelper = exports.DeltaHelper = {
    * Check whether a new message has affected the ordering of a peep query and
    *  generate a delta if so.
    */
-  peepExpMaybeDelta_newmsg: function(lqt, modifiedCinfo, knownChange) {
+  peepExpMaybeDelta_newmsg: function(lqt, modifiedCinfo) {
     var cinfos = lqt._cinfos;
     var preIndex = cinfos.indexOf(modifiedCinfo);
     cinfos.sort(lqt._sorter);
     // no change in position, no delta.
     var moved = (cinfos.indexOf(modifiedCinfo) !== preIndex);
-    if (!knownChange && !moved)
+    if (!moved)
       return null;
 
     var delta = this.makeOrReuseDelta(lqt);
@@ -726,16 +726,15 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   },
 
   /**
-   * Conversation activity has (possibly) affected a peep's indices OR the
-   *  peep has joined a conversation and needs their number of conversations
-   *  bumped. Generate expectations for the relevant queries if we believe
-   *  ordering is affected or we are explicitly told there is another change.
+   * Conversation activity has (possibly) affected a peep's indices.
    */
-  _notifyPeepChanged: function(cinfo, knownChange) {
+  _notifyPeepChanged: function(cinfo) {
     // -- dependent (indirect) queries
     // queries that know about this peep for dependency reasons will also
     //  receive a notification
-    this._notifyDepConvQueries(cinfo, cinfo.involvedConvs);
+    // XXX potentially bring back dependent updates, but recognize they won't
+    //  trigger a query complete directly
+    //this._notifyDepConvQueries(cinfo, cinfo.involvedConvs);
 
     // -- direct queries
     // ignore changes about our own peep for direct queries.
@@ -749,8 +748,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       // XXX we need to discard based on 'pinned' constraints soon
 
-      var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo,
-                                                          knownChange);
+      var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo);
       if (deltaRep)
         this._ensureExpectedQuery(lqt);
     }
@@ -758,17 +756,18 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   },
 
 // nop-ing out because I believe the timestamp changes cover this notification
-//  as a side-effect, and I think we can cover the peep changed case with the
-//  join case.
+//  as a side-effect.
 /*
   _notifyPeepJoinedConv: function(cinfo, convInfo) {
     var queries = this._dynamicConvBlurbQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
-      // the query only cares if its dude is involved
-      if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
-        continue;
+      if (lqt.data.by !== 'all') {
+        // the query only cares if its dude is involved
+        if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
+          continue;
+      }
 
       var deltaRep = DeltaHelper.convBlurbsExpDelta_joined(lqt, convInfo);
       this.RT.reportActiveActorThisStep(this);
@@ -782,18 +781,18 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    *  generate expectations for the relevant queries if this has affected
    *  blurb ordering.
    */
-  _notifyPeepConvTimestampsChanged: function(cinfo, convIndices, convInfo,
-                                             joinOccurred) {
+  _notifyPeepConvTimestampsChanged: function(cinfo, convIndices, convInfo) {
     var queries = this._dynamicConvBlurbQueries;
     for (var iQuery = 0; iQuery < queries.length; iQuery++) {
       var lqt = queries[iQuery];
 
-      // the query only cares if its dude is involved
-      if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
-        continue;
+      if (lqt.data.by !== 'all') {
+        // the query only cares if its dude is involved
+        if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
+          continue;
+      }
 
-      var deltaRep = DeltaHelper.convBlurbsExpMaybeDelta_newmsg(
-        lqt, convInfo, joinOccurred);
+      var deltaRep = DeltaHelper.convBlurbsExpMaybeDelta_newmsg(lqt, convInfo);
       if (deltaRep)
         this._ensureExpectedQuery(lqt);
     }
@@ -982,7 +981,12 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     convInfo.seq = tMsg.data.seq;
 
     var self = this;
-    function goNotify(authorInfo, participantInfos, joineeInfo, forceUpdate) {
+    // joineeInfo: we previously passed this in to be able to force generation
+    //  of notifications when the splice order did not change because it was
+    //  clear a join was happening which would affect their peep blurb and
+    //  accordingly generate dependent notifications.  This is moot now, but
+    //  I'll leave it around for a bit just in case.
+    function goNotify(authorInfo, participantInfos, joineeInfo) {
       var convAuthIndices = convInfo.peepSeqsByName[authorInfo.name],
           ourInfo = self._contactMetaInfoByName[self._testClient.__name];
 
@@ -993,8 +997,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       convAuthIndices.any = tMsg.data.seq;
 
       // - peep notifications
-      // a change definitely occurred if they are joining the conv
-      self._notifyPeepChanged(authorInfo, joineeInfo === authorInfo);
+      self._notifyPeepChanged(authorInfo);
 
       var iPart, pinfo;
       for (iPart = 0; iPart < participantInfos.length; iPart++) {
@@ -1007,13 +1010,12 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         if (authorInfo === ourInfo)
           pinfo.recip = Math.max(pinfo.recip, tMsg.data.seq);
         pinfo.any = Math.max(pinfo.any, tMsg.data.seq);
-        // a change definitely occurred if they are joining the conv
-        self._notifyPeepChanged(pinfo, pinfo === joineeInfo);
+        self._notifyPeepChanged(pinfo);
       }
 
       // - conversation notifications
       self._notifyPeepConvTimestampsChanged(
-        authorInfo, convAuthIndices, convInfo, forceUpdate || !!joineeInfo);
+        authorInfo, convAuthIndices, convInfo);
       for (iPart = 0; iPart < participantInfos.length; iPart++) {
         pinfo = participantInfos[iPart];
         // do not process the author again
@@ -1026,15 +1028,13 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         convPartIndices.any = tMsg.data.seq;
 
         self._notifyPeepConvTimestampsChanged(
-          pinfo, convPartIndices, convInfo, forceUpdate || !!joineeInfo);
+          pinfo, convPartIndices, convInfo);
       }
     }
 
     if (tMsg.data.type === 'message') {
       var authorInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
-      // force the update on messages because we are always sending blurb
-      //  updates with the message as a possible firstMessage as a hack
-      goNotify(authorInfo, convInfo.participantInfos, null, true);
+      goNotify(authorInfo, convInfo.participantInfos, null);
     }
     else if (tMsg.data.type === 'join') {
       var joinerName = tMsg.data.inviter.__name,
@@ -1279,6 +1279,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       lqt._pendingExpDelta = null;
 
       lqt.data = {
+        by: query.by,
         contactInfo: cinfo,
       };
 
@@ -1306,6 +1307,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       lqt._pendingExpDelta = null;
 
       lqt.data = {
+        by: 'all',
       };
 
       lqt._liveset = self._bridge.queryAllConversations(query, self, lqt);

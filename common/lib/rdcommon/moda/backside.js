@@ -235,14 +235,14 @@ ModaBackside.prototype = {
 
   _cmd_replyToConv: function(convLocalName, msgData) {
     var convMeta = this._notif.mapLocalNameToClientData(
-                     this._querySource, NS_CONVBLURBS, convLocalName).data;
+                     this._querySource, NS_CONVBLURBS, convLocalName).data.meta;
     // returned for testing purposes (see createConversation)
     return this._rawClient.replyToConversation(convMeta, msgData.messageText);
   },
 
   _cmd_inviteToConv: function(convLocalName, invData) {
     var convMeta = this._notif.mapLocalNameToClientData(
-                     this._querySource, NS_CONVBLURBS, convLocalName).data;
+                     this._querySource, NS_CONVBLURBS, convLocalName).data.meta;
     var peepOurData = this._notif.mapLocalNameToClientData(
                            this._querySource, NS_PEEPS, invData.peepName).data;
     if (!peepOurData.oident)

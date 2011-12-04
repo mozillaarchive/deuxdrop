@@ -925,7 +925,7 @@ ModaBridge.prototype = {
       }
     }
     if (msg.dataDelta.hasOwnProperty(namespace)) {
-      var deltaFunc = this['_delta_' + namespace];
+      var deltaFunc = this['_delta_' + namespace], dataByNS = this._dataByNS;
 
       // function to provide to delta handlers to indicate a release of a
       //  tracked object.
@@ -940,11 +940,25 @@ ModaBridge.prototype = {
           delete instMap[thing._localName];
         thing.__forget(forgetHelper);
       }
+      function cloneHelper(thing) {
+        if (!thing)
+          return thing;
+        var clone = dataByNS[thing.__namespace][thing._localName]
+                      .__clone(liveset, cloneHelper);
+console.error("cloned[" + liveset._handle + "]: " + clone);
+        var instMap = liveset._instancesByNS[thing.__namespace], instList;
+        if (!instMap.hasOwnProperty(thing._localName))
+          instList = instMap[thing._localName] = [];
+        else
+          instList = instMap[thing._localName];
+        instList.push(clone);
+        return clone;
+      }
       function lookupClone(namespace, thingName) {
         if (thingName == null)
           return thingName;
-        var clone = liveset._instancesByNS[namespace][thingName]
-                      .__clone(liveset, lookupClone);
+        var clone = dataByNS[namespace][thingName].__clone(liveset,
+                                                           cloneHelper);
 console.error("cloned[" + liveset._handle + "]: " + clone);
         var instMap = liveset._instancesByNS[namespace], instList;
         if (!instMap.hasOwnProperty(thingName))
@@ -1035,19 +1049,28 @@ console.error("instance deltaFunc:" + inst);
    * ]
    */
   _receiveQueryUpdate: function(msg) {
-    if (!this._handleMap.hasOwnProperty(msg.handle))
-      throw new Error("Received notification about unknown handle: " +
-                      msg.handle);
-    var liveset = this._handleMap[msg.handle];
-    if (liveset === null) {
-      // if this is the other side confirming the death of the query, delete it
-      //  from our table
-      if (msg.op === 'dead')
-        delete this._handleMap[msg.handle];
-      // (otherwise this is a notifcation we no longer care about)
-      if (this._mootedMessageReceivedListener)
-        this._mootedMessageReceivedListener(msg);
-      return;
+    var liveset;
+
+    // is there an associated query?
+    if (msg.handle !== null) {
+      if (!this._handleMap.hasOwnProperty(msg.handle))
+        throw new Error("Received notification about unknown handle: " +
+                        msg.handle);
+      liveset = this._handleMap[msg.handle];
+      if (liveset === null) {
+        // if this is the other side confirming the death of the query, delete
+        //  it from our table
+        if (msg.op === 'dead')
+          delete this._handleMap[msg.handle];
+        // (otherwise this is a notifcation we no longer care about)
+        if (this._mootedMessageReceivedListener)
+          this._mootedMessageReceivedListener(msg);
+        return;
+      }
+    }
+    // otherwise, this is just deltas without any splices
+    else {
+      liveset = null;
     }
 
     // -- Transform data, apply deltas
@@ -1072,6 +1095,9 @@ console.error("instance deltaFunc:" + inst);
     // errors depend on nothing
     this._commonProcess(NS_ERRORS, msg);
 
+    // bail if this was just delta and there are no splices to apply
+    if (!liveset)
+      return;
 
     // -- Populate the Set: Apply Splices
     var added = [], addedAtIndex = [], moved = [], movedToIndex = [],

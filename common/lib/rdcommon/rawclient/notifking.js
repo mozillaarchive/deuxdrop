@@ -192,6 +192,10 @@
  *   @param[items @listof[LocallyNamedClientData]]{
  *     The items in the view in their sorted order.
  *   }
+ *   @param[lastItems @listof[LocallyNamedClientData]]{
+ *     The list of the last set of items that was sent across the wire.  This
+ *     is used to detect no-op splice shuffles.
+ *   }
  *
  *   @param[testFunc @func[
  *     @args[
@@ -636,6 +640,7 @@ NotificationKing.prototype = {
         high: null,
       },
       items: [],
+      lastSentItems: null,
       testFunc: funcThatJustReturnsFalse,
       cmpFunc: funcThatJustReturnsZero,
       // - data to send over the wire once this round is done
@@ -701,22 +706,32 @@ NotificationKing.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Transmission to the bridge
 
-  sendQueryResults: function(queryHandle) {
-    var isInitial = (queryHandle.pending === PENDING_INITIAL),
-        querySource = queryHandle.owner;
+  sendQueryResults: function(queryHandle, querySource) {
+    var isInitial;
+    if (!querySource) {
+      querySource = queryHandle.owner;
+      isInitial = (queryHandle.pending === PENDING_INITIAL);
+    }
+    else {
+      isInitial = false;
+    }
+
     var msg = {
       type: 'query',
-      handle: queryHandle.uniqueId,
+      handle: queryHandle && queryHandle.uniqueId,
       op: isInitial ? 'initial' : 'update',
-      splices: queryHandle.splices,
+      splices: queryHandle && queryHandle.splices,
 
       dataMap: querySource.dataMap,
       dataDelta: querySource.dataDelta,
     };
     // - reset state
-    queryHandle.pending = PENDING_NONE;
-    queryHandle.dataNeeded = makeEmptyListsByNS();
-    queryHandle.splices = [];
+    if (queryHandle) {
+      queryHandle.pending = PENDING_NONE;
+      queryHandle.dataNeeded = makeEmptyListsByNS();
+      queryHandle.splices = [];
+      queryHandle.lastSentItems = queryHandle.items.concat();
+    }
 
     querySource.dataMap = makeEmptyMapsByNS();
     querySource.dataDelta = makeEmptyMapsByNS();
@@ -725,8 +740,8 @@ NotificationKing.prototype = {
     if (isInitial)
       this._log.queryFill_end(queryHandle.namespace, queryHandle.uniqueId);
 
-    this._log.sendQueryResults(queryHandle.uniqueId, msg);
-    queryHandle.owner.listener.send(msg);
+    this._log.sendQueryResults(queryHandle && queryHandle.uniqueId, msg);
+    querySource.listener.send(msg);
   },
 
   /**
@@ -949,6 +964,25 @@ NotificationKing.prototype = {
         // (we need to use shift to avoid inverting the ordering)
         var queryHandle = querySource.pending.shift();
 
+        // - handle no-op splice shuffles
+        // It is possible that our splices end up things to end up back as
+        //  they originally started.  We want to suppress this mainly because
+        //  it upsets our unit tests, but it's also nice to not cause the GUI
+        //  to waste its time.
+        if (queryHandle.lastSentItems &&
+            queryHandle.items.length === queryHandle.lastSentItems.length) {
+          var match = true;
+          for (var i = 0; i < queryHandle.items.length; i++) {
+            if (queryHandle.items[i] !== queryHandle.lastSentItems[i]) {
+              match = false;
+              break;
+            }
+          }
+          // they match exactly; eat the transmission of this handle!
+          if (match)
+            continue;
+        }
+
         // a promise is returned if we go async
         var sendResult;
         if ((sendResult = this._store._fillOutQueryDepsAndSend(queryHandle))) {
@@ -964,6 +998,11 @@ NotificationKing.prototype = {
                         self._log.errorDuringReleaseNotifications(err);
                       });
         }
+      }
+
+      // generate a synthetic query update if there was nothing pending
+      if (querySource.dirty) {
+        return this._store._fillOutQueryDepsAndSend(null, querySource);
       }
     }
     return undefined;
