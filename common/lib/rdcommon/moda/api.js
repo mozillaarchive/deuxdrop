@@ -251,7 +251,7 @@ HumanMessage.prototype = {
  *  message text, most recent activity, # of unread messages.
  */
 function ConversationBlurb(_liveset, _localName, participants,
-                           pinned, numUnread) {
+                           pinned, numUnread, mostRecentActivity) {
   this._eventMap = null;
   this._liveset = _liveset;
   this._localName = _localName;
@@ -261,13 +261,14 @@ function ConversationBlurb(_liveset, _localName, participants,
   this.firstUnreadMessage = null;
   this._pinned = pinned;
   this._numUnread = numUnread;
+  this._mostRecentActivity = mostRecentActivity;
 }
 ConversationBlurb.prototype = {
   __namespace: 'convblurbs',
   __clone: function(liveset, cloneHelper) {
     var clone = new ConversationBlurb(
       liveset, this._localName, this.participants.map(cloneHelper),
-      this._pinned, this._numUnread);
+      this._pinned, this._numUnread, this._mostRecentActivity);
     clone.firstMessage = cloneHelper(this.firstMessage);
     clone.firstUnreadMessage = cloneHelper(this.firstUnreadMessage);
     return clone;
@@ -290,6 +291,9 @@ ConversationBlurb.prototype = {
   },
   get numUnreadMessages() {
     return this._numUnread;
+  },
+  get mostRecentActivity() {
+    return this._mostRecentActivity;
   },
 
   /**
@@ -383,9 +387,10 @@ LiveOrderedSet.prototype = {
    *  be created, the user of the new set should acquire (new) references to
    *  the (new) objects.
    */
-  cloneSlice: function(items, data) {
+  cloneSlice: function(items, listener, data) {
     var cloneSet = new LiveOrderedSet(this._bridge, this._bridge._nextHandle++,
-                                      this._ns, 'CLONE', data);
+                                      items[0].__namespace, 'CLONE', listener,
+                                      data);
     this._bridge._handleMap[cloneSet._handle] = cloneSet;
     this._bridge._sets.push(cloneSet);
 
@@ -401,7 +406,7 @@ LiveOrderedSet.prototype = {
     this._bridge._send(
       'cloneQuery', cloneSet._handle,
       {
-        ns: this._ns,
+        ns: cloneSet._ns,
         source: this._handle,
         sliced: slicedLocalNames,
       });
@@ -1223,8 +1228,8 @@ ModaBridge.prototype = {
       participants.push(this._dataByNS.peeps[wireConv.participants[i]]);
     }
     var blurb = new ConversationBlurb(
-      null, localName, participants, wireConv.pinned, wireConv.numUnread
-    );
+      null, localName, participants, wireConv.pinned, wireConv.numUnread,
+      new Date(wireConv.mostRecentActivity));
     if (wireConv.firstMessage)
       blurb.firstMessage = this._dataByNS[NS_CONVMSGS][wireConv.firstMessage];
     if (wireConv.firstUnreadMessage)
@@ -1242,22 +1247,25 @@ ModaBridge.prototype = {
     };
     for (var attr in delta) {
       switch (attr) {
-      case 'participants':
-        for (var i = 0; i < delta.participants.length; i++) {
-          var participant = lookupClone(NS_PEEPS, delta.participants[i]);
-          curRep.participants.push(participant);
-        }
-        explainDelta.participants = true;
-        break;
-      case 'firstMessage':
-        curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
-        explainDelta.firstMessage = true;
-        break;
-      case 'firstUnreadMessage':
-        curRep.firstUnreadMessage = lookupClone(NS_CONVMSGS,
-                                                delta.firstUnreadMessage);
-        explainDelta.firstUnreadMessage = true;
-        break;
+        case 'participants':
+          for (var i = 0; i < delta.participants.length; i++) {
+            var participant = lookupClone(NS_PEEPS, delta.participants[i]);
+            curRep.participants.push(participant);
+          }
+          explainDelta.participants = true;
+          break;
+        case 'firstMessage':
+          curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
+          explainDelta.firstMessage = true;
+          break;
+        case 'firstUnreadMessage':
+          curRep.firstUnreadMessage = lookupClone(NS_CONVMSGS,
+                                                  delta.firstUnreadMessage);
+          explainDelta.firstUnreadMessage = true;
+          break;
+        case 'mostRecentActivity':
+          curRep._mostRecentActivity = new Date(delta.mostRecentActivity);
+          break;
       }
     }
     return explainDelta;

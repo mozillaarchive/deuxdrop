@@ -219,7 +219,7 @@ a {
 }
 
 .subHeader,
-#compose {
+.compose {
     height: 34px;
     line-height: 24px;
     padding: 5px;
@@ -240,7 +240,7 @@ a {
             box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
 }
 
-#compose {
+.compose {
     border-top: 1px solid #aaa;
     margin-top: -1px;
 
@@ -287,7 +287,7 @@ a {
 
 button,
 .subHeader button,
-#compose button {
+.compose button {
     background-color: #EEEEEE;
     border-width: 1px;
     border-style: solid;
@@ -373,6 +373,10 @@ input[type=text]#search {
     .connReqItem .messageText {
         color: #666;
     }
+
+.name {
+  font-weight: bold;
+}
 
 .conversations,
 .conversation {

@@ -90,7 +90,7 @@ define(function (require) {
     matches.each(function (i, node) {
       var bindName = node.getAttribute('data-bind'),
           attrName = node.getAttribute('data-attr'),
-          value, parts;
+          missing = false, missingAction, value, parts;
 
       // Allow for dot names in the bindName
       if (bindName.indexOf('.') !== -1) {
@@ -101,14 +101,30 @@ define(function (require) {
             value = value[part];
         });
         if (value == null)
-          value = '';
+          missing = true;
       }
       else {
         value = model[bindName];
       }
 
+      if (missing && (missingAction = node.getAttribute('data-missing'))) {
+        if (missingAction === "OMIT")
+          return;
+        value = missingAction;
+        // convert missing dates into straight-up text mappings (this pass only)
+        if (attrName === 'data-time')
+          attrName = null;
+      }
+
       if (attrName) {
-        node.setAttribute(attrName, value);
+        // special handling for (auto-updating) dates
+        if (attrName === 'data-time') {
+          $(node).text(friendly.date(value).friendly);
+          node.setAttribute(attrName, value.valueOf());
+        }
+        else {
+          node.setAttribute(attrName, value);
+        }
       } else {
         $(node).text(value);
       }
@@ -295,13 +311,20 @@ define(function (require) {
                            updateDomFunc) {
     if (!updateDomFunc)
       updateDomFunc = updateDom;
+    var cloneFunc;
+    if (typeof(clonable) === 'function') {
+        cloneFunc = clonable;
+    }
+    else {
+      cloneFunc = function() {
+        return clonable.cloneNode(true);
+      };
+    }
     query.on('add', function(itemObj, addedAtIndex) {
-      var node = clonable.cloneNode(true), jqNode = $(node);
+      var node = cloneFunc(itemObj), jqNode = $(node);
 
       updateDomFunc(jqNode, itemObj, null);
-      // Our use of the linkNode mechanism makes this superfluous.  Keeping it
-      // around for the time being for debugging info.
-      node.href += '?id=' + encodeURIComponent(itemObj.id);
+      //node.href += '?id=' + encodeURIComponent(itemObj.id);
 
       node[propName] = itemObj;
 
@@ -331,7 +354,7 @@ define(function (require) {
       cards.adjustCardSizes();
     });
   }
-  function commonCardKillQuery(data, node) {
+  function commonQueryKill(data, node) {
     data.query.destroy();
     data.query = null;
   };
@@ -343,8 +366,10 @@ define(function (require) {
    *  conversations, then associate the private conversations (if they exist)
    *  with the peep blurb.
    */
-  function compositeQueryBind(listNode, clonable, propName, pieces, frag) {
+  function compositeQueryBind(listNode, clonable, propName, data, pieces,
+                              frag) {
     var fusionMap = {}, requiredCount = 0;
+    data.pieces = pieces;
     function chewPiece(piece, iPiece) {
       if (piece.required)
         requiredCount++;
@@ -378,25 +403,34 @@ define(function (require) {
             throw new Error("Map collision for piece '" + piece.name +
                             "' on key '" + mappedKey + "'");
         }
-        if (piece.required)
-          fuser.togo--;
         fuser.rep[piece.name] = item;
 
-        if (fuser.togo === 0) {
-          var node = fuser.node = clonable.cloneNode(true),
-              rep = fuser.rep;
+        if (piece.required) {
+          fuser.togo--;
+          if (fuser.togo === 0) {
+            var node = fuser.node = clonable.cloneNode(true),
+                rep = fuser.rep;
 
-          updateDom($(node), rep);
-          node[propName] = rep;
+            updateDom($(node), rep);
+            node[propName] = rep;
 
-          // XXX currently we are append-only and ignoring ordering hints; need to
-          // talk with James to figure out how ordering would best fit with his
-          // approach.
-          if (!frag)
-            frag = document.createDocumentFragment();
-          frag.appendChild(node);
+            // XXX currently we are append-only and ignoring ordering hints;
+            // need to talk with James to figure out how ordering would best fit
+            // with his approach.
+            if (!frag)
+              frag = document.createDocumentFragment();
+            frag.appendChild(node);
+          }
+        }
+        // if the underlying data is already there, generate a change
+        else if (fuser.togo === 0) {
+          fuser.onChange();
         }
       });
+      piece.query.on('change', fuser.onChange);
+      // (in theory, we should only remove for required removals, and just
+      //  update in other cases.)
+      piece.query.on('remove', fuser.onRemove);
       piece.query.on('complete', function() {
         if (!frag)
           return;
@@ -411,6 +445,15 @@ define(function (require) {
     }
     pieces.forEach(chewPiece);
   }
+  function compositeQueryKill(data, node) {
+    data.pieces.forEach(function(piece) {
+      piece.query.destroy();
+      piece.query = null;
+    });
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Signup Process
 
   /*
    * First page of the signup process; the user identifies themself by name
@@ -482,7 +525,7 @@ define(function (require) {
     commonQueryBind(dom.find('.scroller'), getChildCloneNode(dom[0]),
                     'server', (data.query = moda.queryServers()));
   };
-  remove['pickServer'] = commonCardKillQuery;
+  remove['pickServer'] = commonQueryKill;
 
   /*
    * Handled by explicit form delegation, see down below.
@@ -549,6 +592,9 @@ define(function (require) {
     });
   };
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Display
+
   /*
    * Lists all friended peeps, providing a gateway to private chat with each
    * of them.  As part of this, the most recent message from the friend is
@@ -563,7 +609,7 @@ define(function (require) {
     frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
 
     compositeQueryBind(
-      dom.find('.scroller'), clonable, 'privBundle',
+      dom.find('.scroller'), clonable, 'privBundle', data,
       [
         {
           name: 'peep',
@@ -592,7 +638,7 @@ define(function (require) {
       ],
       frag);
   };
-  remove['private'] = commonCardKillQuery;
+  remove['private'] = compositeQueryKill;
 
   /*
    * Lists all existing conversations; not filtered to a specific person.
@@ -624,6 +670,82 @@ define(function (require) {
         });
       });
   };
+  remove['groups'] = commonQueryKill;
+
+  /*
+   * Display the contents of a group conversation.
+   *
+   * Display is somewhat special in that we have a header at the top of the
+   *  conversation that displays data based on the associated conversation
+   *  blurb, so we use a commonQueryBind plus specialized display for the
+   *  participants (which looks sorta similar to what we do for the 'groups'
+   *  card).
+   */
+  update['groupConv'] = function(data, dom, convNode) {
+    data.query = moda.queryConversationMessages(convNode.conv);
+
+    // - convblurb header
+    // (a lot of this logic is similar to the groups items)
+    var jqHeader = dom.find('.subHeader'),
+        jqPartRoot = jqHeader.find('.participants'),
+        partClonable = getChildCloneNode(jqPartRoot[0]);
+    function updateHeader(blurb) {
+      // - nuke clone child points
+      jqPartRoot.empty();
+
+      // - update the header generally
+      updateDom(jqHeader, blurb);
+
+      // - clone children
+      blurb.participants.forEach(function(peepBlurb) {
+        var jqPartNode = $(partClonable.cloneNode(true));
+        updateDom(jqPartNode, peepBlurb);
+        jqPartRoot.append(jqPartNode);
+      });
+    }
+    data.query.blurb.on('change', updateHeader);
+    updateHeader(data.query.blurb);
+
+    // - messages
+    commonQueryBind(
+      dom.find('.conversation'),
+      function cloner(message) {
+        return commonNodes[message.type].cloneNode(true);
+      },
+      'conv',
+      data.query);
+  };
+  remove['groupConv'] = commonQueryKill;
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // User details
+
+  update['user'] = function(data, dom, coercableNode) {
+    var prevCardNode = cards.allCards().slice(-2, -1)[0],
+        prevPeep;
+    if (coercableNode.hasOwnProperty('peep'))
+      prevPeep = coercableNode.peep;
+    else if (coercableNode.hasOwnProperty('conv'))
+      prevPeep = coercableNode.conv.author;
+    else
+      throw new Error("Unable to coerce peep from link node");
+
+    var userQuery = data.query =
+          prevCardNode.cardData.query.cloneSlice([prevPeep]),
+        peep = userQuery.items[0];
+    function updom() {
+      updateDom(dom, peep);
+      dom.find('.pocoContainer').empty().append(
+        generatePocoListNode(peep.selfPoco));
+    }
+    peep.on('change', updom);
+    updom();
+  };
+  remove['user'] = commonQueryKill;
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Friending / contact establishment
 
   /*
    * Lists connection/friend requests.
@@ -633,6 +755,7 @@ define(function (require) {
                     'connReq',
                     (data.query = moda.queryConnectRequests()));
   };
+
 
   /*
    * Nodeless action to approve a connect request.
@@ -672,7 +795,7 @@ define(function (require) {
                     'pfriend',
                     (data.query = moda.queryPossibleFriends()));
   };
-  remove['add'] = commonCardKillQuery;
+  remove['add'] = commonQueryKill;
 
   /*
    * Ask the user to confirm they want to ask someone to be their friend,
@@ -705,6 +828,9 @@ define(function (require) {
     dom.find('.askFriendForm').submit(handleSubmit);
     dom.find('[name="displayName"]').val(peep.selfPoco.displayName);
   };
+
+  //////////////////////////////////////////////////////////////////////////////
+
 
   // Find out the user.
   moda.whoAmI({

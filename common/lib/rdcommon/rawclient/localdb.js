@@ -368,7 +368,8 @@ LocalStore.prototype = {
     var participants = [];
 
     // - first message, participants list
-    var msg, iMsg, firstMsgName = null, iFirstMsg = null, msgClientData;
+    var msg, iMsg, firstMsgName = null, iFirstMsg = null, msgClientData,
+        mostRecentActivity;
     for (iMsg = 1; iMsg <= numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
       if (!iFirstMsg && msg.type === 'message') {
@@ -403,6 +404,8 @@ LocalStore.prototype = {
           firstUnreadMsgName = msgClientData.localName;
         }
       }
+
+      mostRecentActivity = msg.receivedAt;
     }
 
     return {
@@ -411,6 +414,7 @@ LocalStore.prototype = {
       firstUnreadMessage: firstUnreadMsgName,
       pinned: false,
       numUnread: numUnreadTextMessages,
+      mostRecentActivity: mostRecentActivity,
     };
   },
 
@@ -438,6 +442,7 @@ LocalStore.prototype = {
                                          msgRec, msgNum).localName;
       clientData.data.first = msgNum;
     }
+    outDeltaRep.mostRecentActivity = msgRec.receivedAt;
 
     // - If we have no unread messages, and this is unread...
     // XXX unread logic; will get complicated in the 'takeback' if we get a meta

@@ -257,10 +257,10 @@ ModaBackside.prototype = {
   },
 
   _cmd_cloneQuery: function(clonedQueryName, sourceQueryInfo) {
-    var ns = sourceQueryInfo.ns, sliced = sourceQueryInfo.sliced;
+    var ns = sourceQueryInfo.ns, sliced = sourceQueryInfo.sliced,
+        querySource = this._querySource;
     var queryHandle = this._notif.newTrackedQuery(
-                        this._querySource, clonedQueryName, ns, 'CLONE'),
-        querySource = queryHandle.owner;
+                        querySource, clonedQueryName, ns, 'CLONE');
 
     // we need a test function that only returns true for already present items
     queryHandle.testFunc = function(baseCells, mutatedCells, fullName) {

@@ -11,7 +11,6 @@
         {
           baseUrl: '../web/deps',
           paths: {
-            'microtime': '../../addon/js/microtime',
             'path': '../../addon/js/path',
             //'browserId': 'include'
             'browserId': 'https://browserid.org/include'
@@ -95,7 +94,7 @@
           <div class="subHeader hbox">
             <div class="peepInfo">
               <img class="peepInfoPic" data-bind="pic" data-attr="src"
-                   src="i/face2.png" />
+                   data-missing="OMIT" src="i/face2.png" />
               <span data-bind="displayName" class="peepInfoName"></span>
             </div>
           </div>
@@ -126,6 +125,10 @@
           </div>
           <!-- scrolling messages -->
           <div class="scroller">
+            <div class="conversation">
+            </div>
+            <form class="compose" data-class="compose">
+            </form>
           </div>
         </div>
 
@@ -134,12 +137,13 @@
           <div class="scroller">
             <div class="peepInfo">
               <img class="peepInfoPic" data-bind="pic" data-attr="src"
-                   src="i/face2.png" />
+                   data-missing="OMIT" src="i/face2.png" />
               <span data-bind="displayName" class="peepInfoName"></span>
             </div>
-            <div class="peepConversations" data-childclass="convListItem">
+            <div class="pocoContainer">
             </div>
-            <form data-class="compose"></form>
+            <!-- we can put the list of involved conversations here -->
+            <!-- this contingent adding stuff needs to be hooked up -->
             <span class="addToChatMessage hidden">
               This person needs to add you before you can chat with them.
             </span>
@@ -189,8 +193,9 @@
               <div class="hbox">
                 <div>
                   <div class="avatar">
-                    <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
-                      src="i/face2.png" />
+                    <img class="peepInfoPic" data-bind="peep.pic"
+                         data-attr="src" data-missing="OMIT"
+                         src="i/face2.png" />
                   </div>
                 </div>
                 <div>
@@ -250,17 +255,19 @@
       </a>
 
       <form data-classimpl="compose" class="compose">
-        <input type="hidden" name="from" value="">
-        <input type="hidden" name="to" value="">
-        <input type="hidden" name="convId" value="">
-        <input type="text" name="text">
+        <div class="hbox">
+          <div class="boxFlex">
+            <input type="text" placeholder="say hello" />
+          </div>
+          <button>send</button>
+        </div>
       </form>
 
       <a href="#conversation?id=" data-classimpl="newConversation"
          class="newConversation">
         <span class="avatar">
           <img src="i/face2.png" class="avatar"
-               data-bind="author.pic" data-attr="src" />
+               data-bind="author.pic" data-attr="src" data-missing="OMIT" />
         </span>
         <span class="newConversationPeep" data-bind="author.displayName"></span>
         <span class="newConversationTime"></span>
@@ -284,7 +291,8 @@
 
       <a data-classimpl="personLink" class="item" href="#user">
         <img class="peepInfoPic" src="i/face2.png"
-             data-bind="pic" data-attr="src" align="absmiddle" />
+             data-bind="pic" data-attr="src" data-missing="OMIT"
+             align="absmiddle" />
         <span class="personName" data-bind="displayName"></span>
       </a>
 
@@ -306,7 +314,7 @@
          href="#askFriend">
         <div class="peepInfo">
           <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
-               src="i/face2.png" />
+               data-missing="OMIT" src="i/face2.png" />
           <span data-bind="peep.selfPoco.displayName" class="peepInfoName">
           </span>
         </div>
@@ -318,7 +326,7 @@
           <div>
             <div class="avatar">
               <img class="peepInfoPic" data-bind="pic" data-attr="src"
-                   src="i/face2.png" />
+                   data-missing="OMIT" src="i/face2.png" />
             </div>
           </div>
           <div class="vbox center">
@@ -343,7 +351,8 @@
       <a class="private unread hbox" data-classimpl="peepPrivate" href="#user">
           <div>
               <div class="avatar">
-                  <img src="i/face2.png" data-bind="peep.pic" data-attr="src" />
+                  <img src="i/face2.png" data-bind="peep.pic" data-attr="src"
+                       data-missing="OMIT" />
               </div>
           </div>
           <div class="msgPreview boxFlex">
@@ -355,7 +364,8 @@
                     (<span data-bind="conv.numUnreadMessages"></span>)
                   </span>
                   <span class="boxFlexStrong"></span>
-                  <span class="time">X min</span>
+                  <span class="time" data-bind="conv.mostRecentActivity"
+                        data-attr="data-time" data-missing="never"></span>
               </div>
               <div class="hbox">
                   <span class="snippet boxFlex overflow"
@@ -370,7 +380,7 @@
       <!-- === Group Conversation List === -->
 
       <!-- convBlurb: group conversation blurb -->
-      <a class="private unread hbox" data-classimpl="convBlurb"
+      <a class="unread hbox" data-classimpl="convBlurb"
          href="#groupConv">
           <div>
               <div class="avatar">
@@ -383,10 +393,11 @@
                         data-childclass="namecheck">
                   </span>
                   <span class="new">
-                    (<span data-bind="conv.numUnreadMessages"></span>)
+                    (<span data-bind="numUnreadMessages"></span>)
                   </span>
                   <span class="boxFlexStrong"></span>
-                  <span class="time">X min</span>
+                  <span class="time" data-bind="mostRecentActivity"
+                        data-attr="data-time"></span>
               </div>
               <div class="hbox">
                   <span class="snippet boxFlex overflow"
@@ -409,34 +420,35 @@
       </span>
 
       <!-- Group messaging join message -->
-      <div data-classimpl="join" class="bubble">
-        <a href='#user?id=' class="sender">
-          <span class="avatar">
-            <img src="i/face2.png" class="avatar"
-                 data-bind="from.pic" data-attr="src" />
-          </span>
-          <span class="name" data-bind="author.displayName"></span>
-        </a>
-        <div class="body">
-          <div class="meta">
-          </div>
+      <div data-classimpl="join" class="sender hbox">
+        <div class="boxFlex">
+          <span class="name" data-bind="inviter.displayName"></span>
+          <span>invited</span>
+          <span class="name" data-bind="invitee.displayName"></span>
         </div>
+        <div class="time" data-bind="receivedAt" data-attr="data-time"></div>
       </div>
 
       <!-- Group messaging human message -->
-      <div data-classimpl="message" class="bubble">
-        <a href='#user?id=' class="sender">
-          <span class="avatar">
-            <img src="i/face2.png" class="avatar"
-                 data-bind="from.pic" data-attr="src" />
-          </span>
-          <span class="name" data-bind="author.displayName"></span>
-        </a>
-        <div class="body">
-          <div class="meta">
+      <a data-classimpl="message" class="sender hbox" href="#user">
+        <div>
+          <div class="avatar">
+            <img src="i/face2.png" data-bind="author.pic" data-attr="src"
+                 data-missing="OMIT" />
           </div>
         </div>
-      </div>
+        <div class="msg boxFlex">
+          <div class="msgHeader hbox">
+            <span class="author boxFlex overflow"
+                  data-bind="author.displayName"></span>
+            <span class="time" data-bind="receivedAt" data-attr="data-time">
+            </span>
+          </div>
+          <ul class="messages">
+            <li class="message" data-bind="text"></li>
+          </ul>
+        </div>
+      </a>
 
     </div>
     <!-- =================================================================== -->
