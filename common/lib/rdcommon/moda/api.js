@@ -1028,7 +1028,7 @@ ModaBridge.prototype = {
               // - generate 'change' notification
               if (!inst._eventMap)
                 continue;
-              var changeFunc = instances[i]._eventMap.change;
+              var changeFunc = inst._eventMap.change;
               if (changeFunc)
                 changeFunc(inst, liveset, explained);
             }

@@ -378,6 +378,17 @@ input[type=text]#search {
   font-weight: bold;
 }
 
+.checked {
+    background-color: yellow;
+}
+
+.namecheck:after, .participant:after {
+    content: ", ";
+}
+.namecheck:last-child:after, .participant:last-child:after {
+    content: "";
+}
+
 .conversations,
 .conversation {
 }

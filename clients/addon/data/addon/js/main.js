@@ -1,4 +1,4 @@
-/****** BEGIN LICENSE BLOCK *****
+/* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -405,6 +405,11 @@ define(function (require) {
         }
         fuser.rep[piece.name] = item;
 
+        item.on('change', fuser.onChange);
+        // (in theory, we should only remove for required removals, and just
+        //  update in other cases.)
+        item.on('remove', fuser.onRemove);
+
         if (piece.required) {
           fuser.togo--;
           if (fuser.togo === 0) {
@@ -427,10 +432,6 @@ define(function (require) {
           fuser.onChange();
         }
       });
-      piece.query.on('change', fuser.onChange);
-      // (in theory, we should only remove for required removals, and just
-      //  update in other cases.)
-      piece.query.on('remove', fuser.onRemove);
       piece.query.on('complete', function() {
         if (!frag)
           return;
@@ -716,7 +717,183 @@ define(function (require) {
       data.query);
   };
   remove['groupConv'] = commonQueryKill;
+  /* add more peeps to the conversation */
+  jqBody.delegate('[data-cardid="groupConv"] .add', 'click',
+    function(evt) {
+      var jqCard = $(evt.target).closest('[data-cardid="groupConv"]'),
+          data = jqCard[0].cardData,
+          participants = data.query.blurb.participants,
+          peepsQuery = moda.queryPeeps({ by: 'alphabet' });
 
+      function doInvitePeeps(toInvite) {
+        toInvite.forEach(function(peep) {
+          data.query.blurb.inviteToConversation(peep);
+        });
+        cleanup();
+      }
+      function cleanup() {
+        peepsQuery.destroy();
+      }
+
+      // wait until we get our query
+      peepsQuery.on('complete', function() {
+        // - filter out the already-added peeps
+        var candidates = peepsQuery.items.filter(function(candPeep) {
+                           return !participants.some(function(xpeep) {
+                             return xpeep.id === candPeep.id;
+                           });
+                         });
+
+        cards.terseNav('pickPeeps',
+              {
+                candidates: candidates,
+                appendTo: null,
+                callback: doInvitePeeps,
+                cleanup: cleanup,
+              });
+        }
+      );
+    }
+  );
+  jqBody.delegate('[data-cardid="groupConv"] .compose', 'submit',
+    function(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      var jqCard = $(evt.target).closest('[data-cardid="groupConv"]');
+      var convBlurb = jqCard[0].cardData.query.blurb;
+
+      var jqText = $(evt.target).find('[type="text"]');
+
+      convBlurb.replyToConversation({
+        text: jqText.val(),
+      });
+
+      // - clear the text they entered so they can write more!
+      jqText.val('');
+    }
+  );
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Modification (New, Add Person, etc.)
+
+  /*
+   * Create a new conversation!
+   */
+  update['newConv'] = function(data, dom) {
+    // get a list of all known peeps
+    var query = data.query = moda.queryPeeps({ by: 'alphabet' });
+    // maintain a list of participants that is a subset of/kept alive by the
+    //  above query.
+    data.participants = [];
+
+
+    var jqPartRoot = dom.find('.participants'),
+        partClonable = getChildCloneNode(jqPartRoot[0]);
+    data.updateParticipantsUI = function() {
+      jqPartRoot.empty();
+      data.participants.forEach(function(peepBlurb) {
+        var jqPartNode = $(partClonable.cloneNode(true));
+        updateDom(jqPartNode, peepBlurb);
+        jqPartRoot.append(jqPartNode);
+      });
+    };
+  };
+  remove['newConv'] = commonQueryKill;
+  /* add more peeps to the conversation */
+  jqBody.delegate('[data-cardid="newConv"] .add', 'click',
+    function(evt) {
+      var jqCard = $(evt.target).closest('[data-cardid="newConv"]'),
+          data = jqCard[0].cardData,
+          participants = data.participants;
+
+      // - filter out the already-added peeps
+      var candidates = data.query.items.filter(function(candPeep) {
+                           return participants.indexOf(candPeep) === -1;
+                         });
+
+      // - open a pickPeeps tab that uses the static list
+      cards.terseNav('pickPeeps',
+            {
+              candidates: candidates,
+              appendTo: participants,
+              callback: data.updateParticipantsUI
+            });
+    }
+  );
+  /* send the new conversation */
+  jqBody.delegate('[data-cardid="newConv"] .compose', 'submit',
+    function(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      var jqCard = $(evt.target).closest('[data-cardid="newConv"]'),
+          data = jqCard[0].cardData;
+
+      var jqText = $(evt.target).find('[type="text"]'),
+          text = jqText.val();
+
+      // ignore clicks if there are no participants or no text
+      // XXX provide some type of alert about something being missing
+      if (!text || !data.participants.length)
+        return;
+
+      moda.createConversation({
+        peeps: data.participants,
+        text: text,
+      });
+
+      // okay, conversation created, kill the card.
+      history.back();
+    }
+  );
+
+  /*
+   * Pick peeps; select one or more peeps from a full-page list of peeps.
+   *  Picking is concluded once a big "done" button is hit (for now).
+   *
+   * @param data.candidates
+   * @param [data.appendTo] optional list for us to append our selected results
+   *                        to.
+   * @param data.callback callback to invoke when completed.  The callback is
+   *                      passed the list of selected peeps.
+   */
+  update['pickPeeps'] = function(data, dom) {
+    var scroller = dom.find('.scroller'),
+        clonable = getChildCloneNode(scroller[0]);
+
+    data.candidates.forEach(function(peep) {
+      var node = clonable.cloneNode(true);
+      node.peep = peep;
+      updateDom($(node), peep);
+      scroller.append(node);
+    });
+  };
+  // no cleanup; we don't issue queries
+  remove['pickPeeps'] = null;
+  /* clicking a peep toggles their checked state */
+  jqBody.delegate('[data-cardid="pickPeeps"] .checkable', 'click',
+    function(evt) {
+      $(evt.target).closest('.checkable').toggleClass('checked');
+    }
+  );
+  /* clicking the done button updates the list and triggers the callback */
+  jqBody.delegate('[data-cardid="pickPeeps"] .done', 'click',
+    function(evt) {
+      var jqCard = $(evt.target).closest('[data-cardid="pickPeeps"]'),
+          data = jqCard[0].cardData;
+
+      var toAdd = jqCard
+                    .find('.checked')
+                    .map(function(i, x) { return x.peep; })
+                    .get();
+      if (data.appendTo)
+        data.appendTo.push.apply(data.appendTo, toAdd);
+      data.callback(toAdd);
+      // make our card go away
+      history.back();
+    }
+  );
 
   //////////////////////////////////////////////////////////////////////////////
   // User details
@@ -921,11 +1098,21 @@ define(function (require) {
       }
     };
 
+    /**
+     * Generate a navigation that does not do any query paramater stuff but
+     *  does update the history.
+     */
+    cards.terseNav = function terseNav(templateId, data, linkNode) {
+      cards.onNav(templateId, data, linkNode);
+      var href = "#" + templateId;
+      history.pushState({}, cards.getTitle(), href);
+    };
+
     cards.onRemove = function (cardNode) {
       var cardData = cardNode.cardData;
 
       var templateId = cardNode.getAttribute('data-cardid');
-      if (templateId in remove)
+      if (remove[templateId])
         remove[templateId](cardData, cardNode);
     };
 

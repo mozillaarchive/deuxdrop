@@ -110,7 +110,7 @@
               <input id="search" type="text" placeholder="search people">
             </div>
             <button class="search">search</button>
-            <button class="button" data-href="#new">new</button>
+            <button class="button" data-href="#newConv">new</button>
           </div>
           <div class="scroller" data-childclass="convBlurb">
           </div>
@@ -120,8 +120,9 @@
         <div data-cardid="groupConv" class="card">
           <!-- non-scrolling reminder of the participants... -->
           <div class="subHeader hbox">
-            <div class="participants" data-childclass="participant">
+            <div class="participants boxFlex" data-childclass="participant">
             </div>
+            <button class="add">Add</button>
           </div>
           <!-- scrolling messages -->
           <div class="scroller">
@@ -129,6 +130,28 @@
             </div>
             <form class="compose" data-class="compose">
             </form>
+          </div>
+        </div>
+
+        <!-- newConv: Create a new group conversation -->
+        <div data-cardid="newConv" class="card">
+          <!-- non-scrolling reminder of the participants... -->
+          Chat with:
+          <div class="hbox">
+            <div class="participants boxFlex" data-childclass="participant">
+            </div>
+            <button class="add">Add</button>
+          </div>
+          <form class="compose" data-class="compose">
+          </form>
+        </div>
+
+        <!-- pickPeeps: Multi-select from a list of peeps -->
+        <div data-cardid="pickPeeps" class="card">
+          <div class="subHeader hbox">
+            <button class="done">Done</button>
+          </div>
+          <div class="scroller" data-childclass="togglePeep">
           </div>
         </div>
 
@@ -308,6 +331,20 @@
         + Add Peep
       </a>
 
+      <div class="hbox checkable" data-classimpl="togglePeep">
+        <div>
+          <div class="avatar">
+            <img class="peepInfoPic" data-bind="pic" data-attr="src"
+                 data-missing="OMIT" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="vbox center">
+          <div>
+            <span data-bind="displayName" class="peepInfoName">
+            </span>
+          </div>
+        </div>
+      </div>
 
       <!-- peepPhonebook: A peep from the phonebook -->
       <a class="phonebookItem hbox" data-classimpl="peepPhonebook"
@@ -408,7 +445,8 @@
       </a>
 
       <!-- namecheck: Cite a participant in a convBlurb -->
-      <span data-classimpl="namecheck" data-bind="displayName">
+      <span data-classimpl="namecheck" data-bind="displayName"
+            class="namecheck">
       </span>
 
 
@@ -416,7 +454,8 @@
       <!-- === Group Conversation Display === -->
 
       <!-- participant: Cite a participant in a conversation display card -->
-      <span data-classimpl="participant" data-bind="displayName">
+      <span data-classimpl="participant" data-bind="displayName"
+            class="participant">
       </span>
 
       <!-- Group messaging join message -->

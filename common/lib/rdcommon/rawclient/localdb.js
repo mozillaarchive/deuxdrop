@@ -441,6 +441,12 @@ LocalStore.prototype = {
         this._convertConversationMessage(querySource, clientData.fullName,
                                          msgRec, msgNum).localName;
       clientData.data.first = msgNum;
+
+      // send this as the first unread too if we ain't got one yet
+      if (!clientData.data.unread) {
+        outDeltaRep.firstUnreadMessage = outDeltaRep.firstMessage;
+        clientData.data.unread = msgNum;
+      }
     }
     outDeltaRep.mostRecentActivity = msgRec.receivedAt;
 
@@ -1100,8 +1106,8 @@ LocalStore.prototype = {
 
             querySource.dataMap[NS_CONNREQS][clientData.localName] =
               self._convertConnectRequest(reqRep, fullName,
-                                          queryHandle, clientData);
-            viewItems.push(localName);
+                                          queryHandle.owner, clientData);
+            viewItems.push(clientData.localName);
             clientDataItems.push(clientData);
             reqRep = null;
           }
