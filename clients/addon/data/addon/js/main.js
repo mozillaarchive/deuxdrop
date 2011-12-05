@@ -738,8 +738,16 @@ define(function (require) {
    * Provides an affordance to create a new conversation.
    */
   update['groups'] = function(data, dom) {
+    var clonable = getChildCloneNode(dom[0]);
     commonQueryBind(
-      dom.find('.scroller'), getChildCloneNode(dom[0]), 'conv',
+      dom.find('.scroller'),
+      function makeClone(convBlurb) {
+        // XXX poor man's filtration of private chats
+        if (convBlurb.firstMessage && convBlurb.firstMessage.text === 'PRIVATE')
+          return null;
+        return clonable.cloneNode(true);
+      },
+      'conv',
       (data.query = moda.queryAllConversations({ by: 'all' })), null,
       function updom(jqNode, convBlurb, whatChanged) {
         // okay, so whatChanged knows all kinds of useful stuff, but in order
