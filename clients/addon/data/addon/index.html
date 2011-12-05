@@ -91,15 +91,21 @@
         <!-- privateConv: Private conversation with a friend peep. -->
         <div data-cardid="privateConv" class="card">
           <!-- non-scrolling reminder of who our friend is... -->
-          <div class="subHeader hbox">
-            <div class="peepInfo">
-              <img class="peepInfoPic" data-bind="pic" data-attr="src"
+          <div class="bigSubHeader hbox">
+            <div style="boxFlex">
+              <span data-bind="peep.displayName" class="peepInfoName"></span>
+            </div>
+            <div class="avatar">
+              <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
                    data-missing="OMIT" src="i/face2.png" />
-              <span data-bind="displayName" class="peepInfoName"></span>
             </div>
           </div>
           <!-- scrolling messages -->
-          <div class="scroller" data-childclass="privateMessage">
+          <div class="scroller">
+            <div class="conversation" data-childclass="privateMessage">
+            </div>
+            <form class="compose" data-class="compose">
+            </form>
           </div>
         </div>
 
@@ -385,7 +391,8 @@
       </a>
 
       <!-- peepPrivate: Identities the peep, provides most recent message -->
-      <a class="private unread hbox" data-classimpl="peepPrivate" href="#user">
+      <a class="private unread hbox" data-classimpl="peepPrivate"
+         href="#privateConv">
           <div>
               <div class="avatar">
                   <img src="i/face2.png" data-bind="peep.pic" data-attr="src"
@@ -411,6 +418,19 @@
               </div>
           </div>
       </a>
+
+      <!-- Group messaging human message -->
+      <div data-classimpl="privateMessage" class="privateMessage hbox">
+        <div class="leftPad"></div>
+        <div class="boxFlex">
+          <span class="message" data-bind="text"></span>
+        </div>
+        <div class="rightPad"></div>
+        <div>
+          <span class="time" data-bind="receivedAt" data-attr="data-time">
+          </span>
+        </div>
+      </div>
 
 
       <!-- =============================== -->

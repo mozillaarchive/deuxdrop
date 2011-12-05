@@ -321,7 +321,11 @@ define(function (require) {
       };
     }
     query.on('add', function(itemObj, addedAtIndex) {
-      var node = cloneFunc(itemObj), jqNode = $(node);
+      var node = cloneFunc(itemObj);
+      // bail if no node was produced; (poor man's stopgap filtering)
+      if (!node)
+        return;
+      var jqNode = $(node);
 
       updateDomFunc(jqNode, itemObj, null);
       //node.href += '?id=' + encodeURIComponent(itemObj.id);
@@ -367,8 +371,9 @@ define(function (require) {
    *  with the peep blurb.
    */
   function compositeQueryBind(listNode, clonable, propName, data, pieces,
-                              frag) {
-    var fusionMap = {}, requiredCount = 0;
+                              onAllComplete, frag) {
+    var fusionMap = {}, requiredCount = 0, queriesLeft = pieces.length,
+        reps = [];
     data.pieces = pieces;
     function chewPiece(piece, iPiece) {
       if (piece.required)
@@ -394,8 +399,10 @@ define(function (require) {
                 return;
               $(fuser.node).remove();
               fuser.node = null;
+              reps.splice(reps.indexOf(fuser.rep), 1);
             }
           };
+          reps.push(fuser.rep);
         }
         else {
           fuser = fusionMap[mappedKey];
@@ -433,6 +440,10 @@ define(function (require) {
         }
       });
       piece.query.on('complete', function() {
+        if (--queriesLeft === 0 && onAllComplete) {
+          onAllComplete(reps);
+        }
+
         if (!frag)
           return;
 
@@ -606,9 +617,6 @@ define(function (require) {
     var clonable = getChildCloneNode(dom[0]),
         frag = document.createDocumentFragment();
 
-    // Put in the Add button.
-    frag.appendChild(commonNodes.addPersonLink.cloneNode(true));
-
     compositeQueryBind(
       dom.find('.scroller'), clonable, 'privBundle', data,
       [
@@ -637,9 +645,93 @@ define(function (require) {
           },
         }
       ],
+      function allComplete(bundles) {
+        // Create private conversations where none currently exist.
+        // (We don't create them on demand because creating a conversation does
+        //  not immediately return a blurb; instead we need to wait for server
+        //  round-tripping, so it behooves us to get them created NOW.)
+        for (var i = 0; i < bundles.length; i++) {
+          var bundle = bundles[i];
+          if (bundle.conv)
+            continue;
+
+          moda.createConversation({
+            peeps: [bundle.peep],
+            text: 'PRIVATE',
+          });
+        }
+      },
       frag);
   };
   remove['private'] = compositeQueryKill;
+
+  /*
+   * Private chat conversation display.
+   */
+  update['privateConv'] = function(data, dom, clickedBundleNode) {
+    var bundle = clickedBundleNode.privBundle;
+
+    // - jerkily bail if the conversation has not shown up yet.
+    if (!bundle.conv) {
+      alert("waiting for the server to acknowledge stuffs, try again laterz");
+      history.back();
+      return;
+    }
+
+    var query = data.query = moda.queryConversationMessages(bundle.conv);
+    var conv = query.blurb,
+        peep = conv.participants[conv.participants[0].isMe ? 1 : 0],
+        composite = { conv: conv, peep: peep },
+        jqHeader = dom.find('.bigSubHeader');
+
+    function updom() {
+      updateDom(jqHeader, composite);
+    }
+    conv.on('change', updom);
+    peep.on('change', updom);
+    updom();
+
+    // - messages
+    var jqContainerNode = dom.find('.conversation'),
+        cloneNode = getChildCloneNode(jqContainerNode[0]);
+    commonQueryBind(
+      jqContainerNode,
+      function cloner(message) {
+        // ignore joins in private conversations (although our failure mode
+        //  under jerk-phenomenon where the other party looks someone else into
+        //  your conversation is off the charts then...)
+        if (message.type === 'join')
+          return null;
+        var clone = cloneNode.cloneNode(true);
+        if (message.author.isMe)
+          $(clone).addClass('fromMe');
+        else
+          $(clone).addClass('toMe');
+        return clone;
+      },
+      'conv',
+      data.query);
+  };
+  remove['privateConv'] = commonQueryKill;
+  // XXX this is exactly the logic from groupConv, copy-paste-modified.
+  jqBody.delegate('[data-cardid="privateConv"] .compose', 'submit',
+    function(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      var jqCard = $(evt.target).closest('[data-cardid="privateConv"]');
+      var convBlurb = jqCard[0].cardData.query.blurb;
+
+      var jqText = $(evt.target).find('[type="text"]');
+
+      convBlurb.replyToConversation({
+        text: jqText.val(),
+      });
+
+      // - clear the text they entered so they can write more!
+      jqText.val('');
+    }
+  );
 
   /*
    * Lists all existing conversations; not filtered to a specific person.

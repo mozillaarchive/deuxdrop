@@ -473,6 +473,29 @@ input[type=text]#search {
         border-bottom: none;
     }
 
+.privateMessage {
+  width: 100%;
+}
+
+.privateMessage > .container {
+  width: 80%;
+  min-width: 80%;
+  max-width: 80%;
+}
+
+.fromMe > .leftPad {
+  width: 0;
+}
+.fromMe > .rightPad {
+  width: 80px;
+}
+.toMe > .leftPad {
+  width: 80px;
+}
+.toMe > .rightPad {
+  width: 0px;
+}
+
 .settings {
     padding: 10px 5px;
 }
