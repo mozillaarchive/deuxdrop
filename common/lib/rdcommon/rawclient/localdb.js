@@ -108,6 +108,8 @@ function LocalStore(dbConn, keyring, pubring, isFirstRun, _logger) {
   this._pubring = pubring;
   this._notif = new $notifking.NotificationKing(this, this._log);
 
+  this._queryFillPromise = false;
+
   /**
    * The set of root keys of pinned peeps.
    */
@@ -265,14 +267,33 @@ LocalStore.prototype = {
    *  and re-run, otherwise send the query results.
    */
   _fillOutQueryDepsAndSend: function(queryHandle, querySource) {
+    var self = this;
     if (!querySource)
       querySource = queryHandle.owner;
+
+    // If we are currently waiting on dependencies to be loaded (because
+    //  of a separate, parallel call to _fillOutQueryDepsAndSend), then wait
+    //  on that before resolving us.
+    if (this._queryFillPromise)
+      return (when(
+        this._queryFillPromise,
+          function() {
+            return self._fillOutQueryDepsAndSend(queryHandle, querySource);
+          }));
+
     // fetch blurbs before peeps because blurbs can generate peep deps
     if (querySource.dataNeeded[NS_CONVBLURBS].length) {
       var convIds = querySource.dataNeeded[NS_CONVBLURBS].splice(0,
                       querySource.dataNeeded[NS_CONVBLURBS].length);
-      return this._fetchAndReportConversationBlurbsById(
-               querySource, queryHandle, null, null, convIds);
+      this._queryFillPromise = when(
+        this._lookupMultipleItemsById(
+          querySource, null, this._fetchConversationBlurb, NS_CONVBLURBS,
+          null, null, convIds),
+        function() {
+          self._queryFillPromise = null;
+          return self._fillOutQueryDepsAndSend(queryHandle, querySource);
+        });
+      return this._queryFillPromise;
     }
     // fetch peep deps last-ish because they can't generate deps
     if (querySource.dataNeeded[NS_PEEPS].length) {
@@ -280,56 +301,105 @@ LocalStore.prototype = {
                            querySource.dataNeeded[NS_PEEPS].length);
       // we never pass index/indexparam because a query on peeps would always
       //  get its data directly, not by our dependency loading logic.
-      return this._fetchAndReportPeepBlurbsById(
-               querySource, queryHandle, null, null, peepRootKeys);
+      this._queryFillPromise = when(
+        this._lookupMultipleItemsById(
+          querySource, null, this._fetchPeepBlurb, NS_PEEPS,
+          null, null, peepRootKeys),
+        function() {
+          self._queryFillPromise = null;
+          return self._fillOutQueryDepsAndSend(queryHandle, querySource);
+        });
+      return this._queryFillPromise;
     }
     return this._notif.sendQueryResults(queryHandle, querySource);
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Conversation Lookup
+  // Common lookup logic
 
-  _fetchAndReportConversationBlurbsById: function(querySource, queryHandle,
-                                                  usingIndex, indexParam,
-                                                  conversationIds) {
+  /**
+   * Perform an index scan, use the results to perform lookups on items not
+   *  already loaded, then send the query results when done.
+   */
+  _indexScanLookupAndReport: function(writeQueryHandle, namespace, fetchFunc,
+                                      table, index, indexParam, scanDir,
+                                      scanFunc) {
+    // XXX fix up gendb redis impl to not need separate string signature
+    if (!scanFunc)
+      scanFunc = 'scanIndex';
+
+    var self = this;
+    return when(
+      this._db[scanFunc](table, index, indexParam, scanDir,
+                         null, null, null, null, null, null),
+      function(ids) {
+        return when(
+          self._lookupMultipleItemsById(
+            writeQueryHandle.owner, writeQueryHandle,
+            fetchFunc, namespace,
+            index, indexParam, ids),
+          function() {
+            self._fillOutQueryDepsAndSend(writeQueryHandle);
+          });
+      });
+  },
+
+  _lookupMultipleItemsById: function(querySource, writeQueryHandle,
+                                     fetchFunc, namespace,
+                                     usingIndex, indexParam, ids) {
     var deferred = $Q.defer();
-    var iConv = 0, stride = 1, self = this,
+    var i = 0, stride = 1, self = this,
         viewItems = [], clientDataItems = null;
     if (usingIndex) {
-      queryHandle.items = clientDataItems = [];
-      queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
+      writeQueryHandle.items = clientDataItems = [];
+      writeQueryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
       stride = 2;
     }
     function getNextMaybeGot() {
-      while (iConv < conversationIds.length) {
-        var convId = conversationIds[iConv], clientData;
-        // - attempt cache re-use
+      while (i < ids.length) {
+        var convId = ids[i], clientData;
+        // - attempt cache re-use (if valid)
         if ((clientData = self._notif.reuseIfAlreadyKnown(querySource,
-                                                          NS_CONVBLURBS,
+                                                          namespace,
                                                           convId))) {
-          viewItems.push(clientData.localName);
-          if (clientDataItems)
-            clientDataItems.push(clientData);
-          iConv += stride;
-          continue;
+          // It's possible this was a speculative naming entry (data == null),
+          //  ignore if so.
+          if (clientData.data) {
+            // insert the appropriate index entry in the rep if using one
+            if (usingIndex) {
+              setIndexValue(clientData.indexValues, usingIndex, indexParam,
+                            ids[i + 1]);
+            }
+            viewItems.push(clientData.localName);
+            if (clientDataItems)
+              clientDataItems.push(clientData);
+            i += stride;
+            continue;
+          }
         }
 
-        return when(self._fetchConversationBlurb(querySource,
-                                                 conversationIds[iConv]),
+        return when(fetchFunc.call(self, querySource, ids[i], clientData),
                     function(clientData) {
+          if (usingIndex) {
+            setIndexValue(clientData.indexValues, usingIndex, indexParam,
+                          ids[i + 1]);
+          }
           viewItems.push(clientData.localName);
           if (clientDataItems)
             clientDataItems.push(clientData);
-          iConv += 2;
+          i += stride;
           return getNextMaybeGot();
         });
       }
 
-      return self._fillOutQueryDepsAndSend(queryHandle, querySource);
+      return null;
     }
 
     return getNextMaybeGot();
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Lookup
 
   /**
    * Retrieve a converation blurb from the datastore for inclusion in the
@@ -769,10 +839,9 @@ LocalStore.prototype = {
     };
 
     // - generate an index scan, netting us the conversation id's, hand-off
-    return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, peepRootKey, -1,
-                                   null, null, null, null, null, null),
-      this._fetchAndReportConversationBlurbsById.bind(this,
-        queryHandle.owner, queryHandle, index, peepRootKey));
+    return this._indexScanLookupAndReport(
+             queryHandle, NS_CONVBLURBS, this._fetchConversationBlurb,
+             $lss.TBL_CONV_DATA, index, peepRootKey, -1);
   },
 
   /**
@@ -802,11 +871,9 @@ LocalStore.prototype = {
       return true;
     };
 
-    // - generate an index scan, netting us the conversation id's, hand-off
-    return when(this._db.scanIndex($lss.TBL_CONV_DATA, index, '', -1,
-                                   null, null, null, null, null, null),
-      this._fetchAndReportConversationBlurbsById.bind(this,
-        queryHandle.owner, queryHandle, index, indexParam));
+    return this._indexScanLookupAndReport(
+             queryHandle, NS_CONVBLURBS, this._fetchConversationBlurb,
+             $lss.TBL_CONV_DATA, index, '', -1);
   },
 
 
@@ -1329,10 +1396,9 @@ LocalStore.prototype = {
       };
     }
 
-    return when(this._db[scanFunc]($lss.TBL_PEEP_DATA, idx, indexParam, scanDir,
-                                   null, null, null, null, null, null),
-      this._fetchAndReportPeepBlurbsById.bind(this,
-        queryHandle.owner, queryHandle, idx, indexParam));
+    return this._indexScanLookupAndReport(
+             queryHandle, NS_PEEPS, this._fetchPeepBlurb,
+             $lss.TBL_PEEP_DATA, idx, indexParam, scanDir, scanFunc);
   },
 
   /**
@@ -1465,61 +1531,6 @@ LocalStore.prototype = {
           NS_PEEPS, recipRootKeys[i], null, null, peepIndexValues);
       }
     }
-  },
-
-  _fetchAndReportPeepBlurbsById: function(querySource, queryHandle,
-                                          usingIndex, indexParam,
-                                          peepRootKeys) {
-    var deferred = $Q.defer();
-    var iPeep = 0, stride = 1, self = this,
-        viewItems = [], clientDataItems = null;
-
-    if (usingIndex) {
-      queryHandle.items = clientDataItems = [];
-      queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
-      stride = 2;
-    }
-    function getNextMaybeGot() {
-      while (iPeep < peepRootKeys.length) {
-        var peepRootKey = peepRootKeys[iPeep], clientData;
-        // - perform cache lookup, reuse only if valid
-        // (_deferringPeepQueryResolve creates speculative entries and we are
-        //  the logic that actually fulfills them.)
-        if ((clientData = self._notif.reuseIfAlreadyKnown(querySource,
-                                                          NS_PEEPS,
-                                                          peepRootKey))) {
-          if (clientData.data) {
-            if (usingIndex) {
-              setIndexValue(clientData.indexValues, usingIndex, indexParam,
-                            peepRootKeys[iPeep + 1]);
-            }
-            viewItems.push(clientData.localName);
-            if (clientDataItems)
-              clientDataItems.push(clientData);
-            iPeep += stride;
-            continue;
-          }
-        }
-
-        return when(self._fetchPeepBlurb(querySource, peepRootKeys[iPeep],
-                                         clientData),
-                    function(resultClientData) {
-          if (usingIndex) {
-            setIndexValue(resultClientData.indexValues, usingIndex, indexParam,
-                          peepRootKeys[iPeep + 1]);
-          }
-          viewItems.push(resultClientData.localName);
-          if (clientDataItems)
-            clientDataItems.push(resultClientData);
-          iPeep += stride;
-          getNextMaybeGot();
-        });
-      }
-
-      return self._fillOutQueryDepsAndSend(queryHandle, querySource);
-    }
-
-    return getNextMaybeGot();
   },
 
   _fetchPeepBlurb: function(querySource, peepRootKey, clientData) {
