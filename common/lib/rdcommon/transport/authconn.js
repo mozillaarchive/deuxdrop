@@ -753,8 +753,10 @@ function AuthorizingServer(_logger, extraNaming) {
     httpServer: httpServer,
     // XXX see the client for our logic on using a zero close timeout.
     closeTimeout: 0,
-    // default was 64KiB, we quadruple to 256KiB (firefox...)
-    maxReceivedFrameSize: 0x40000,
+    // default was 64KiB, we up it to 2 MiB now
+    maxReceivedFrameSize:   0x200000,
+    // default was 1MiB we up it to 8 MiB now
+    maxReceivedMessageSize: 0x800000
   });
   server.on('request', this._onRequest.bind(this));
 
