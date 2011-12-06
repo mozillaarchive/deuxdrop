@@ -498,7 +498,7 @@ define(function (require) {
               audience: location.hostname +
                         (location.port ? ':' + location.port : '')
             });
-            cards.onNav('pickServer', {});
+            cards.terseNav('pickServer', {});
           } else {
             // Do not do anything. User stays on sign in screen.
           }
@@ -590,20 +590,23 @@ define(function (require) {
 
         // Remove the sign in/server setup cards
         // XXX this does not result in onRemove being invoked
-/*
+        /*
         $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
           '[data-cardid="enterServer"], [data-cardid="needServer"]',
           '#cardContainer').remove();
- */
+        */
 
+        // We are now in a design hole in cards.js.  We want to get rid of all
+        //  the other cards and show only our cards.
+
+        // Let's just re-establish our UI from scratch.
+        document.location = 'about:dd';
+
+        /*
         // Show the start card
         cards.onNav('start', {});
         moda.connect();
-
-        // we are currently scrolled off to the right, so we need to do
-        //  history.back() to lose the current server state and to cause a scroll
-        //  event to get us back home.
-        history.back();
+        */
       }
     });
   };
@@ -685,7 +688,8 @@ define(function (require) {
     var query = data.query = moda.queryConversationMessages(bundle.conv);
     var conv = query.blurb,
         peep = conv.participants[conv.participants[0].isMe ? 1 : 0],
-        composite = { conv: conv, peep: peep },
+        me = conv.participants[conv.participants[0].isMe ? 0 : 1],
+        composite = { conv: conv, peep: peep, me: me },
         jqHeader = dom.find('.bigSubHeader');
 
     function updom() {
@@ -696,7 +700,7 @@ define(function (require) {
     updom();
 
     // - messages
-    var jqContainerNode = dom.find('.conversation'),
+    var jqContainerNode = dom.find('.privateConversation'),
         cloneNode = getChildCloneNode(jqContainerNode[0]);
     commonQueryBind(
       jqContainerNode,

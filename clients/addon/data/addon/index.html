@@ -89,20 +89,35 @@
         </div>
 
         <!-- privateConv: Private conversation with a friend peep. -->
-        <div data-cardid="privateConv" class="card">
+        <div data-cardid="privateConv" title="Private Conv" 
+             class="card privateConv">
           <!-- non-scrolling reminder of who our friend is... -->
-          <div class="bigSubHeader hbox">
-            <div style="boxFlex">
-              <span data-bind="peep.displayName" class="peepInfoName"></span>
-            </div>
-            <div class="avatar">
-              <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
-                   data-missing="OMIT" src="i/face2.png" />
+          <div class="bigSubHeader vbox center">
+            <div class="hbox">
+              <div class="hbox bgFromMe">
+                <div class="avatar">
+                  <img class="peepInfoPic" data-bind="me.pic" data-attr="src"
+                       data-missing="OMIT" src="i/face2.png" />
+                </div>
+                <div class="vbox center">
+                  <span class="peepInfoName">You</span>
+                </div>
+              </div>
+              <div class="boxFlex"></div>
+              <div class="hbox bgToMe">
+                <div class="vbox center">
+                  <span data-bind="peep.displayName" class="peepInfoName"></span>
+                </div>
+                <div class="avatar">
+                  <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
+                       data-missing="OMIT" src="i/face2.png" />
+                </div>
+              </div>
             </div>
           </div>
           <!-- scrolling messages -->
           <div class="scroller">
-            <div class="conversation" data-childclass="privateMessage">
+            <div class="privateConversation" data-childclass="privateMessage">
             </div>
             <form class="compose" data-class="compose">
             </form>
@@ -141,15 +156,19 @@
 
         <!-- newConv: Create a new group conversation -->
         <div data-cardid="newConv" class="card">
-          <!-- non-scrolling reminder of the participants... -->
-          Chat with:
-          <div class="hbox">
-            <div class="participants boxFlex" data-childclass="participant">
+          <div class="scroller">
+            Chat with:
+            <div class="hbox">
+              <div class="participants boxFlex" data-childclass="participant">
+              </div>
+              <button class="add">Add</button>
             </div>
-            <button class="add">Add</button>
+            <div>
+              &nbsp;
+            </div>
+            <form class="compose" data-class="compose">
+            </form>
           </div>
-          <form class="compose" data-class="compose">
-          </form>
         </div>
 
         <!-- pickPeeps: Multi-select from a list of peeps -->

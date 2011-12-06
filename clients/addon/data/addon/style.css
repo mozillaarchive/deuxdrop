@@ -473,8 +473,31 @@ input[type=text]#search {
         border-bottom: none;
     }
 
+.card.privateConv {
+  background-color: black;
+  color: white;
+}
+
+.card.privateConv .compose {
+  background-color: black;
+  color: white;
+}
+
+.peepInfoName {
+  padding: 8px;
+}
+
+.bigSubHeader {
+    height: 64px;
+}
+
+
 .privateMessage {
   width: 100%;
+  height: 2.4em;
+}
+.privateMessage:hover {
+  background-color: #111;
 }
 
 .privateMessage > .container {
@@ -482,6 +505,35 @@ input[type=text]#search {
   min-width: 80%;
   max-width: 80%;
 }
+
+.bgFromMe {
+  border: 1px solid #444;
+  background-color: #222;
+}
+.fromMe .message {
+  border: 1px solid #444;
+  background-color: #222;
+  padding: 4px;
+}
+
+.bgToMe {
+  border: 1px solid #448;
+  background-color: #224;
+}
+.toMe .message {
+  border: 1px solid #448;
+  background-color: #224;
+  padding: 4px;
+}
+
+/*
+.fromMe + .toMe {
+  margin-bottom: 0.5em;
+}
+.toMe + .fromMe {
+  margin-bottom: 0.5em;
+}
+*/
 
 .fromMe > .leftPad {
   width: 0;
