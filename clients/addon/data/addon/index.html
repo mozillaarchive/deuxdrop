@@ -191,8 +191,27 @@
         </div>
 
         <!-- askFriend: Confirm connecting to someone, provide a message -->
-        <div data-cardid="askFriend" title="Make a friend!" class="card">
+        <div data-cardid="askFriend" title="Request a connection" class="card">
           <div class="scroller">
+            <div>
+              Connect to the person identifying themselves as:
+              <div class="hbox">
+                <div>
+                  <div class="avatar">
+                    <img class="peepInfoPic" data-bind="pic"
+                         data-attr="src" data-missing="OMIT"
+                         src="i/face2.png" />
+                  </div>
+                </div>
+                <div>
+                  <span class="untrustedData"
+                      data-bind="selfPoco.displayName"></span>
+                </div>
+              </div>
+            </div>
+            <div class="pocoContainer">
+              with the additional contact information:
+            </div>
             <form class="askFriendForm standardForm">
               <div>
                 I call this person: <input type="text" name="displayName">
@@ -279,7 +298,7 @@
       </a>
 
       <a data-classimpl="serverLink" class="item" data-nonav="nonav"
-         href="#connectToServer?id=">
+         href="#connectToServer">
         <span data-bind="displayName"></span> (<span data-bind="url"></span>)
       </a>
 
@@ -307,7 +326,7 @@
       </ul>
 
       <li class="hbox" data-classimpl="menuItem">
-        <label></label>
+        <label class="boxFlex"></label>
         <div class="value">
         </div>
       </li>
@@ -368,7 +387,7 @@
         <div class="hbox">
           <div>
             <div class="avatar">
-              <img class="peepInfoPic" data-bind="pic" data-attr="src"
+              <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
                    data-missing="OMIT" src="i/face2.png" />
             </div>
           </div>

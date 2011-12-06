@@ -100,12 +100,12 @@ define(function (require) {
           if (value != null)
             value = value[part];
         });
-        if (value == null)
-          missing = true;
       }
       else {
         value = model[bindName];
       }
+      if (value == null)
+        missing = true;
 
       if (missing && (missingAction = node.getAttribute('data-missing'))) {
         if (missingAction === "OMIT")
@@ -276,7 +276,7 @@ define(function (require) {
         var valueObj = values[i],
             id = genUniqueId();
 
-        var itemNode = itemTemplate.cloneNode(), jqItem = $(itemNode);
+        var itemNode = itemTemplate.cloneNode(true), jqItem = $(itemNode);
         jqItem.find('label').attr('for', id).text(label);
         jqItem.find('.value').attr('id', id).text(valueObj.value);
 
@@ -590,15 +590,19 @@ define(function (require) {
 
         // Remove the sign in/server setup cards
         // XXX this does not result in onRemove being invoked
+/*
         $('[data-cardid="signIn"], [data-cardid="pickServer"], ' +
           '[data-cardid="enterServer"], [data-cardid="needServer"]',
           '#cardContainer').remove();
+ */
 
         // Show the start card
         cards.onNav('start', {});
         moda.connect();
 
-        // Go back one to see the start card.
+        // we are currently scrolled off to the right, so we need to do
+        //  history.back() to lose the current server state and to cause a scroll
+        //  event to get us back home.
         history.back();
       }
     });
@@ -1102,8 +1106,11 @@ define(function (require) {
       // because the query should automatically update for us and that should
       // be triggering the animation.
     }
+    updateDom(dom, peep);
     dom.find('.askFriendForm').submit(handleSubmit);
     dom.find('[name="displayName"]').val(peep.selfPoco.displayName);
+    dom.find('.pocoContainer').append(
+        generatePocoListNode(peep.selfPoco));
   };
 
   //////////////////////////////////////////////////////////////////////////////

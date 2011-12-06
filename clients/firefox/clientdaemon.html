@@ -257,22 +257,19 @@ function annotateLogFragWithNames(logFrag) {
 
     var queryHandles = querySource.allQueryHandles;
 
-    for (var iQuery = 0; iQuery < queryHandles.length; iQuery++) {
-      var queryHandle = queryHandles[iQuery];
-      for (var iNS = 0; iNS < NAMEABLE_NAMESPACES.length; iNS++) {
-        var namespace = NAMEABLE_NAMESPACES[iNS],
-            namerFunc = NAMERS_BY_NAMESPACE[namespace];
+    for (var iNS = 0; iNS < NAMEABLE_NAMESPACES.length; iNS++) {
+      var namespace = NAMEABLE_NAMESPACES[iNS],
+          namerFunc = NAMERS_BY_NAMESPACE[namespace];
 
-        var membersByFull = queryHandle.membersByFull[namespace];
-        for (var fullName in membersByFull) {
-          if (namedAlready.hasOwnProperty(fullName))
-            continue;
+      var membersByFull = querySource.membersByFull[namespace];
+      for (var fullName in membersByFull) {
+        if (namedAlready.hasOwnProperty(fullName))
+          continue;
 
-          namerFunc(membersByFull[fullName], namedAlready, logFrag, nextFamily);
-          nextFamily = String.fromCharCode(nextFamily.charCodeAt(0) + 1);
-          if (nextFamily > 'z')
-            nextFamily = 'b';
-        }
+        namerFunc(membersByFull[fullName], namedAlready, logFrag, nextFamily);
+        nextFamily = String.fromCharCode(nextFamily.charCodeAt(0) + 1);
+        if (nextFamily > 'z')
+          nextFamily = 'b';
       }
     }
   }

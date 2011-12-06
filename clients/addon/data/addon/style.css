@@ -529,6 +529,10 @@ input[type=text]#search {
     font-weight: bold;
 }
 
+.pocoContainer {
+  margin: 1em 0em;
+}
+
 .menu {
     list-style-type: none;
     background-color: white;

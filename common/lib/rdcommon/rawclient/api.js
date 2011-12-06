@@ -670,8 +670,8 @@ RawClientAPI.prototype = {
       var mePromise = when(this._fetchGravatarImageAsDataUrl(email, 48),
         function gotGravatar(dataUrl) {
           // - update poco with email, gravatar
-          this._poco.emails = [{ value: email }];
-          this._poco.photos = [{ value: dataUrl }];
+          self._poco.emails = [{ value: email }];
+          self._poco.photos = [{ value: dataUrl }];
 
           // I was going to have us remove ourselves from the signup list,
           //  but realistically, the promise is not a burden and will be
@@ -695,12 +695,14 @@ RawClientAPI.prototype = {
         ".jpg?d=wavatar&s=" + imageSize;
 
     request.open('GET', url, true);
+    request.overrideMimeType('text/plain; charset=x-user-defined');
     request.onreadystatechange = function(evt) {
       if (request.readyState == 4) {
         if (request.status == 200) {
           self._log.fetchGravatar(url);
+
           var base64Jpeg = $snafu.xhrResponseToBase64(request.responseText);
-          var dataUrl = 'data:image/jpg;base64,' + base64Jpeg;
+          var dataUrl = 'data:image/jpeg;base64,' + base64Jpeg;
           deferred.resolve(dataUrl);
         } else {
           self._log.fetchGravatarFailure(url);
@@ -708,7 +710,7 @@ RawClientAPI.prototype = {
         }
       }
     };
-    request.send(data);
+    request.send();
 
     return deferred.promise;
   },
@@ -1316,7 +1318,12 @@ RawClientAPI.prototype = {
     }
   },
 
+  /**
+   * Error watching.
+   */
   queryAndWatchErrors: function(queryHandle) {
+    var querySource = queryHandle.owner;
+
     queryHandle.index = 'firstReported';
     queryHandle.indexParam = '';
     queryHandle.testFunc = function() { return true; };
@@ -1328,25 +1335,18 @@ RawClientAPI.prototype = {
     queryHandle.items = clientDataItems = [];
     queryHandle.splices.push({index: 0, howMany: 0, items: viewItems});
 
-    var errs = this._publishedErrors,
-        querySource = queryHandle.owner;
+    var errs = this._publishedErrors;
     for (var i = 0; i < errs.length; i++) {
       var curErr = errs[i];
-      var clientData = this._notif.reuseIfAlreadyKnown(queryHandle, NS_ERRORS,
+      var clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_ERRORS,
                                                        curErr.uniqueId);
       if (!clientData) {
-        var localName = "" + (querySource.nextUniqueIdAlloc++);
-        clientData = {
-          localName: localName,
-          fullName: curErr.uniqueId,
-          count: 1,
-          data: curErr,
-          indexValues: [],
-          deps: null,
-        };
-        queryHandle.membersByLocal[NS_ERRORS][localName] = clientData;
-        queryHandle.membersByFull[NS_ERRORS][curErr.uniqueId] = clientData;
-        queryHandle.dataMap[NS_ERRORS][localName] = curErr;
+        clientData = this._notif.generateClientData(
+          querySource, NS_ERRORS, curError.uniqueId,
+          function(clientData) {
+            clientData.data = curErr;
+            return curErr;
+          });
       }
 
       viewItems.push(clientData.localName);
