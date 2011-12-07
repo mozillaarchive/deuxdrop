@@ -84,7 +84,8 @@ var $serverlist = require('rdcommon/serverlist');
 
 var $testwrap_sender = require('rdservers/mailsender/testwrappers'),
     // the mailstore is not wrapping an API so does not go in the clobber ns.
-    $testwrap_mailstore = require('rdservers/mailstore/testwrappers');
+    $testwrap_mailstore = require('rdservers/mailstore/testwrappers'),
+    $testwrap_crypto = require('rdcommon/crypto/testwrappers');
 
 var gClobberNamespace = {
   senderApi: $testwrap_sender,
@@ -133,6 +134,14 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
    * ]
    */
   __constructor: function(self, opts) {
+    // -- wrapping
+    // for our unit tests we want to account for crypto usage and make the
+    //  log traces more useful
+    if (!self.RT.blackboard.hasOwnProperty('clobberedKeyops')) {
+      $testwrap_crypto.clobberKeyopsWithWrapper();
+      self.RT.blackboard.clobberedKeyops = true;
+    }
+
     // -- define the raw client and its setup step
     self._eRawClient = self.T.actor('rawClient', self.__name, null, self);
     self._eLocalStore = self.T.actor('localStore', self.__name, null, self);
@@ -1593,6 +1602,8 @@ exports.TESTHELPER = {
     $mailsender_local_api.LOGFAB,
 
     $mailstore_uproc.LOGFAB,
+
+    $testwrap_crypto.LOGFAB,
   ],
 
   actorMixins: {

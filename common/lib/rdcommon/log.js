@@ -1593,6 +1593,7 @@ exports.CLIENT = 'client';
 exports.TASK = 'task';
 exports.DAEMON = 'daemon';
 exports.DATABASE = 'database';
+exports.CRYPTO = 'crypto';
 
 exports.TEST_DRIVER = 'testdriver';
 exports.TEST_GROUP = 'testgroup';
