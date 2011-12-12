@@ -221,6 +221,10 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     type: $log.CRYPTO,
     topBilling: false,
 
+    LAYER_MAPPING: {
+      layer: 'crypto',
+    },
+
     asyncJobs: {
       // - higher level primitives we provide
       keypairGeneration: {},
