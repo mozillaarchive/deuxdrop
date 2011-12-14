@@ -158,6 +158,13 @@ PeepBlurb.prototype = {
   on: itemOnImpl,
 };
 
+function msgCommonMarkAsLastReadMessage() {
+  this._liveset._bridge._send(
+    'publicConvUserMetaDelta',
+    this._liveset.blurb._localName,
+    { lastRead: this._localName });
+}
+
 /**
  * A message indicating that the `invitee` who was invited by the `inviter` has
  *  joined the conversation.
@@ -169,13 +176,15 @@ PeepBlurb.prototype = {
  *   @param[receivedAt Date]
  * ]
  */
-function JoinMessage(_liveset, _localName, inviter, invitee, receivedAt) {
+function JoinMessage(_liveset, _localName, inviter, invitee, receivedAt,
+                     mostRecentReadMessageBy) {
   this._eventMap = null;
   this._liveset = _liveset;
   this._localName = _localName;
   this.inviter = inviter;
   this.invitee = invitee;
   this.receivedAt = receivedAt;
+  this.mostRecentReadMessageBy = mostRecentReadMessageBy;
 }
 JoinMessage.prototype = {
   __namespace: 'convmsgs',
@@ -194,6 +203,8 @@ JoinMessage.prototype = {
   },
 
   type: 'join',
+  markAsLastReadMessage: msgCommonMarkAsLastReadMessage,
+
   on: itemOnImpl,
 };
 
@@ -213,7 +224,7 @@ JoinMessage.prototype = {
  * ]
  */
 function HumanMessage(_liveset, _localName, author, composedAt, receivedAt,
-                      text) {
+                      text, mostRecentReadMessageBy) {
   this._eventMap = null;
   this._liveset = _liveset;
   this._localName = _localName,
@@ -221,6 +232,7 @@ function HumanMessage(_liveset, _localName, author, composedAt, receivedAt,
   this.composedAt = composedAt;
   this.receivedAt = receivedAt;
   this.text = text;
+  this.mostRecentReadMessageBy = mostRecentReadMessageBy;
 }
 HumanMessage.prototype = {
   __namespace: 'convmsgs',
@@ -237,11 +249,7 @@ HumanMessage.prototype = {
   },
 
   type: 'message',
-  markAsLastSeenMessage: function() {
-  },
-
-  markAsLastReadMessage: function() {
-  },
+  markAsLastReadMessage: msgCommonMarkAsLastReadMessage,
 
   on: itemOnImpl,
 };
@@ -1240,17 +1248,19 @@ ModaBridge.prototype = {
   },
 
   _delta_convblurbs: function(curRep, delta, lookupClone, forgetHelper) {
+    var i, idx, peep;
     var explainDelta = {
       participants: false,
       firstMessage: false,
       firstUnreadMessage: false,
+      mostRecentReadMessageBy: false,
     };
     for (var attr in delta) {
       switch (attr) {
         case 'participants':
-          for (var i = 0; i < delta.participants.length; i++) {
-            var participant = lookupClone(NS_PEEPS, delta.participants[i]);
-            curRep.participants.push(participant);
+          for (i = 0; i < delta.participants.length; i++) {
+            peep = lookupClone(NS_PEEPS, delta.participants[i]);
+            curRep.participants.push(peep);
           }
           explainDelta.participants = true;
           break;
@@ -1266,12 +1276,38 @@ ModaBridge.prototype = {
         case 'mostRecentActivity':
           curRep._mostRecentActivity = new Date(delta.mostRecentActivity);
           break;
+        case 'mark':
+          for (i = 0; i < delta.mark.length; i++) {
+            peep = lookupClone(NS_PEEPS, delta.mark[i]);
+            curRep.mostRecentReadMessageBy.push(peep);
+          }
+          explainDelta.mostRecentReadMessageBy = true;
+          break;
+        case 'unmark':
+          for (i = 0; i < delta.unmark.length; i++) {
+            var peepName = delta.unmark[i];
+            for (var j = 0; j < curRep.mostRecentReadMessageBy.length; j++) {
+              if (curRep.mostRecentReadMessageBy[j]._localName === peepName) {
+                curRep.mostRecentReadMessageBy.splice(j, 1);
+                break;
+              }
+            }
+          }
+          explainDelta.mostRecentReadMessageBy = true;
+          break;
       }
     }
     return explainDelta;
   },
 
   _transform_convmsgs: function(localName, msg) {
+    var mostRecentReadMessageBy = [];
+    if (msg.mark) {
+      for (var i = 0; i < msg.mark.length; i++) {
+        mostRecentReadMessageBy.push(this._dataByNS[NS_PEEPS][msg.mark[i]]);
+      }
+    }
+
     switch (msg.type) {
       case 'message':
         return new HumanMessage(
@@ -1280,7 +1316,8 @@ ModaBridge.prototype = {
           this._dataByNS[NS_PEEPS][msg.author],
           new Date(msg.composedAt),
           new Date(msg.receivedAt),
-          msg.text
+          msg.text,
+          mostRecentReadMessageBy
         );
       case 'join':
         return new JoinMessage(
@@ -1288,7 +1325,8 @@ ModaBridge.prototype = {
           localName,
           this._dataByNS[NS_PEEPS][msg.inviter],
           this._dataByNS[NS_PEEPS][msg.invitee],
-          new Date(msg.receivedAt)
+          new Date(msg.receivedAt),
+          mostRecentReadMessageBy
         );
       default:
         throw new Error("Unhandled message type: '" + msg.type + "'");

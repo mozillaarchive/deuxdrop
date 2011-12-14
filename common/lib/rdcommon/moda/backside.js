@@ -256,6 +256,27 @@ ModaBackside.prototype = {
         peepOurData.sident));
   },
 
+  _cmd_publishConvUserMetaDelta: function(convLocalName, userMetaDelta) {
+    var convClientData = this._notif.mapLocalNameToClientData(
+                           this._querySource, NS_CONVBLURBS, convLocalName);
+    var curMeta = convClientData.pubMeta;
+    for (var key in userMetaDelta) {
+      switch (key) {
+        case 'lastRead':
+          curMeta.lastRead = this._notif.mapLocalNameToClientData(
+                               this._querySource, NS_CONVMSGS,
+                               userMetaDelta.lastRead).data.index;
+          break;
+        default:
+          // ignore things not specifically understood for now
+          break;
+      }
+    }
+
+    return this._rawClient.publishConvUserMeta(convClientData.data.meta,
+                                               curMeta);
+  },
+
   _cmd_cloneQuery: function(clonedQueryName, sourceQueryInfo) {
     var ns = sourceQueryInfo.ns, sliced = sourceQueryInfo.sliced,
         querySource = this._querySource;

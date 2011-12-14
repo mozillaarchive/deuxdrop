@@ -736,6 +736,45 @@ exports.createConversationHumanMessage = function(bodyString, authorKeyring,
   return {nonce: nonce, payload: envelopeEncrypted};
 };
 
+/**
+ * Create a metadata message.
+ */
+exports.createConversationMetaMessage = function(userMeta, authorKeyring,
+                                                 convMeta) {
+  // (for the conversation participants)
+  var now = Date.now();
+  var bodyObj = {
+    author: authorKeyring.getPublicKeyFor('messaging', 'announceSign'),
+    convId: convMeta.id,
+    composedAt: now,
+    userMeta: userMeta,
+  };
+  var bodyJsonStr = JSON.stringify(bodyObj);
+  var bodySigned = authorKeyring.signUtf8With(bodyJsonStr,
+                                              'messaging', 'announceSign');
+
+  var nonce = $keyops.makeSecretBoxNonce();
+  var bodyEncrypted = $keyops.secretBox(bodySigned, nonce,
+                                        convMeta.bodySharedSecretKey);
+
+  var envelopeObj = {
+    // so, ideally there would be something interesting that could go in here,
+    //  but it's not clear what would be useful, especially because we don't
+    //  really authenticate the envelope.
+    body: bodyEncrypted,
+  };
+  var envelopeJsonStr = JSON.stringify(envelopeObj);
+  var envelopeEncrypted = $keyops.secretBoxUtf8(
+                            envelopeJsonStr, nonce,
+                            convMeta.envelopeSharedSecretKey);
+
+  return {nonce: nonce, payload: envelopeEncrypted};
+};
+
+
+/**
+ * Open the conversation envelope message.
+ */
 exports.assertGetConversationHumanMessageEnvelope = function(envelopeEncrypted,
                                                              nonce,
                                                              convMeta) {
@@ -744,8 +783,12 @@ exports.assertGetConversationHumanMessageEnvelope = function(envelopeEncrypted,
                           convMeta.envelopeSharedSecretKey);
   return JSON.parse(envelopeJsonStr);
 };
+exports.assertGetConversationMetaMessageEnvelope =
+  exports.assertGetConversationHumanMessageEnvelope;
 
 /**
+ * Open the conversation body message.
+ *
  * @args[
  *   @param[bodyEncrypted]
  *   @param[nonce]
@@ -772,6 +815,8 @@ exports.assertGetConversationHumanMessageBody = function(bodyEncrypted,
                                      'messaging', 'announceSign');
   return peekedBodyObj;
 };
+exports.assertGetConversationMetaMessageBody =
+  exports.assertGetConversationHumanMessageBody;
 
 exports.encryptHumanToHuman = function(obj, nonce,
                                        authorKeyring, recipPubring) {

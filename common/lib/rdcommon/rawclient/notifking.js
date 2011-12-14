@@ -189,10 +189,15 @@
  *     the set might become large and the UI doesn't need to know about it all
  *     at once.
  *   }
+ *   @param[deps @listof[LocallyNamedClientData]]{
+ *     Dependencies strongly bound to the query.  For example, this is used by
+ *     a conversation messages query to maintain a strong reference on the
+ *     conversation blurb that the messages exist for.
+ *   }
  *   @param[items @listof[LocallyNamedClientData]]{
  *     The items in the view in their sorted order.
  *   }
- *   @param[lastItems @listof[LocallyNamedClientData]]{
+ *   @param[lastSentItems @listof[LocallyNamedClientData]]{
  *     The list of the last set of items that was sent across the wire.  This
  *     is used to detect no-op splice shuffles.
  *   }
@@ -639,6 +644,7 @@ NotificationKing.prototype = {
         low: null,
         high: null,
       },
+      deps: [],
       items: [],
       lastSentItems: null,
       testFunc: funcThatJustReturnsFalse,
@@ -662,8 +668,20 @@ NotificationKing.prototype = {
   },
 
   forgetTrackedQuery: function(queryHandle) {
-    var querySource = queryHandle.owner;
+    var querySource = queryHandle.owner, i;
 
+    // -- cleanup references
+    // - query deps
+    for (i = 0; i < queryHandle.deps.length; i++) {
+      this.decrefClientData(querySource, queryHandle.deps[i]);
+    }
+
+    // - the items
+    for (i = 0; i < queryHandle.items.length; i++) {
+      this.decrefClientData(querySource, queryHandle.items[i]);
+    }
+
+    // -- forget about the query
     // remove from per-namespace list
     var qhList = querySource.queryHandlesByNS[queryHandle.namespace];
     var qhIndex = qhList.indexOf(queryHandle);
@@ -827,6 +845,25 @@ NotificationKing.prototype = {
   },
 
   /**
+   * Find a dependency of an existing clientData structure, remove it from the
+   *  list of deps, decrement its reference, and return it.  This is to be used
+   *  when processing deltas.
+   */
+  findAndForgetDep: function(querySource, clientData, depNS, depFullId) {
+    if (querySource.membersByFull[depNS].hasOwnProperty(depFullId)) {
+      var depData = querySource.membersByFull[depNS][depFullId];
+      var idx = clientData.deps.indexOf(depData);
+      if (idx === -1)
+        throw new Error("dependency not tracked as a dependency!");
+      clientData.deps.splice(idx, 1);
+      this.decrefClientData(querySource, depData, 1);
+      return depData;
+    }
+
+    throw new Error("Dependency does not exist in namespace!");
+  },
+
+  /**
    * Decrease the reference count of the given clientData instance in the
    *  context of the given query source.  If its reference hits zero,
    *  recursively decrement its dependencies.  Tell the query source about
@@ -963,7 +1000,6 @@ NotificationKing.prototype = {
       while (querySource.pending.length) {
         // (we need to use shift to avoid inverting the ordering)
         var queryHandle = querySource.pending.shift();
-
         // - handle no-op splice shuffles
         // It is possible that our splices end up things to end up back as
         //  they originally started.  We want to suppress this mainly because
@@ -979,8 +1015,11 @@ NotificationKing.prototype = {
             }
           }
           // they match exactly; eat the transmission of this handle!
-          if (match)
+          if (match) {
+            // be sure to clear out the pending bit, though!
+            queryHandle.pending = PENDING_NONE;
             continue;
+          }
         }
 
         // a promise is returned if we go async

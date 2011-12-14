@@ -1206,6 +1206,8 @@ RawClientAPI.prototype = {
 
   /**
    * Pin/unpin a conversation.
+   *
+   * This updates user-private metadata about the conversation.
    */
   pinConversation: function(convId, pinned) {
     var replicaBlock = this.store.generateAndPerformReplicaAuthBlock(
@@ -1218,17 +1220,43 @@ RawClientAPI.prototype = {
       replicaBlock: replicaBlock,
     });
   },
-  /**
-   * Update our read watermark for the conversation, updating both our unread
-   *  counts and relaying to the rest of the participants in a conversation so
-   *  they can know we have read the message.
-   *
-   * This logic will always generate a message, even if the data provided is
-   *  equal to the already-broadcast data, so callers should be sure to not
-   *  invoke us redundantly.
-   */
-  updateWatermarkForConversation: function(conversation, seenMarkValue) {
 
+  /**
+   * Publish meta-data authored by our user for the given conversation.  A
+   *  conversation only ever has one meta-data blob per user at any given time,
+   *  with more recent messages overwriting previous messages.
+   */
+  publishConvUserMeta: function(convMeta, userMeta) {
+    // - create the signed message wrapped in conversation crypto (body+env)
+    var msgInfo = $msg_gen.createConversationMetaMessage(
+                    userMeta, this._keyring, convMeta);
+
+    // - box it for transit to the fanout server
+    // this is what makes the fanout server agree to re-publish it
+    // (it can't see the payload)
+    var psInnerEnvelope = {
+      type: 'convmeta',
+      convId: convMeta.id,
+      payload: msgInfo.payload,
+    };
+    var psOuterEnvelope = {
+      senderKey: this._keyring.getPublicKeyFor('messaging', 'tellBox'),
+      nonce: msgInfo.nonce,
+      innerEnvelope: this._keyring.boxUtf8With(
+                       JSON.stringify(psInnerEnvelope),
+                       msgInfo.nonce, // we can reuse the nonce
+                       convMeta.transitServerKey,
+                       'messaging', 'tellBox'),
+    };
+    this._enqueuePersistentAction({
+      type: 'convMessage',
+      toTransit: psOuterEnvelope,
+      toServer: convMeta.transitServerKey,
+    });
+
+    return {
+      msgNonce: msgInfo.nonce,
+    };
   },
 
   /*

@@ -581,6 +581,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     // XXX need an all-conv-queries thing
     self._dynamicConvMsgsQueries = [];
     self._dynPendingQueries = [];
+    self._dynImmediateQueries = [];
     self._dynamicPossFriendsQueries = [];
     self._dynamicConnReqQueries = [];
     self._dynamicServerQueries = [];
@@ -663,7 +664,8 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // (this changes when we start slicing)
 
       var deltaRep = DeltaHelper.possFriendDelta_delta(lqt, otherClient, -1);
-      this._ensureExpectedQuery(lqt);
+      // this event happens immediately
+      this._ensureExpectedQuery(lqt, false);
     }
   },
 
@@ -675,7 +677,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // (this changes when we start slicing)
 
       var deltaRep = DeltaHelper.connReqDelta_delta(lqt, reqInfo, 1);
-      this._ensureExpectedQuery(lqt);
+      this._ensureExpectedQuery(lqt, true);
     }
   },
 
@@ -701,7 +703,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // (this changes when we start slicing)
 
       var deltaRep = DeltaHelper.connReqDelta_delta(lqt, mootedReq, -1);
-      this._ensureExpectedQuery(lqt);
+      this._ensureExpectedQuery(lqt, true);
     }
   },
 
@@ -721,7 +723,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // in the case of an addition we expect a positioned splice followed
       //  by a completion notification
       var deltaRep = DeltaHelper.peepExpDelta_added(lqt, newCinfo);
-      this._ensureExpectedQuery(lqt);
+      this._ensureExpectedQuery(lqt, true);
     }
   },
 
@@ -750,7 +752,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       var deltaRep = DeltaHelper.peepExpMaybeDelta_newmsg(lqt, cinfo);
       if (deltaRep)
-        this._ensureExpectedQuery(lqt);
+        this._ensureExpectedQuery(lqt, true);
     }
 
   },
@@ -794,7 +796,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       var deltaRep = DeltaHelper.convBlurbsExpMaybeDelta_newmsg(lqt, convInfo);
       if (deltaRep)
-        this._ensureExpectedQuery(lqt);
+        this._ensureExpectedQuery(lqt, true);
     }
   },
 
@@ -814,7 +816,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         continue;
 
       var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
-      this._ensureExpectedQuery(lqt);
+      this._ensureExpectedQuery(lqt, true);
     }
   },
 
@@ -851,7 +853,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           // these are all 1-based indices, so this works out.
           seenMsgs = backlog.slice(0, convInfo.highestMsgSeen);
       var deltaRep = DeltaHelper.convMsgsDelta_nop(lqt, seenMsgs);
-      this._ensureExpectedQuery(lqt);
+      this._ensureExpectedQuery(lqt, true);
     }
 
     // - convblurbs queries
@@ -865,7 +867,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
                           })) {
         // it does, give it a dependent dep.
         DeltaHelper.convBlurbsDelta_nop(lqt);
-        this._ensureExpectedQuery(lqt);
+        this._ensureExpectedQuery(lqt, true);
       }
     }
   },
@@ -879,9 +881,21 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    *  object around (on lqt._pendingExpDelta) so we can mutate that accordingly,
    *  and our __updatePhaseComplete implementation knows how to clean that out
    *  as well as our list we push onto here.
+   *
+   * @args[
+   *   @param[affectedByUpdatePhase]{
+   *     If true, indicates that this query will only be released when the
+   *     update phase completes (as opposed to when its database lookups
+   *     complete).  Since such queries can have their transmission suppressed
+   *     because reorderings occur that have no net effect, we do not issue
+   *     their expectations until the update phase completes, at which time
+   *     we check if there is a net change or not.
+   *   }
+   * ]
    */
-  _ensureExpectedQuery: function(lqt) {
-    if (this._dynPendingQueries.indexOf(lqt) !== -1)
+  _ensureExpectedQuery: function(lqt, affectedByUpdatePhase) {
+    if (this._dynPendingQueries.indexOf(lqt) !== -1 ||
+        this._dynImmediateQueries.indexOf(lqt) !== -1)
       return;
     // put our actor into 'set' expectations mode for this step since the
     //  query ordering is proving to be intractable to mirror and we don't
@@ -889,8 +903,14 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this.RT.reportActiveActorThisStep(this);
     this.expectUseSetMatching();
 
-    this._dynPendingQueries.push(lqt);
-    this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
+    if (affectedByUpdatePhase) {
+      this._dynPendingQueries.push(lqt);
+    }
+    else {
+      this._dynImmediateQueries.push(lqt);
+      lqt._lastState = lqt._pendingExpDelta.state;
+      this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
+    }
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -996,9 +1016,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       convAuthIndices.write = tMsg.data.seq;
       convAuthIndices.any = tMsg.data.seq;
 
-      // - peep notifications
       self._notifyPeepChanged(authorInfo);
 
+      // - peep notifications
       var iPart, pinfo;
       for (iPart = 0; iPart < participantInfos.length; iPart++) {
         pinfo = participantInfos[iPart];
@@ -1030,6 +1050,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         self._notifyPeepConvTimestampsChanged(
           pinfo, convPartIndices, convInfo);
       }
+
     }
 
     if (tMsg.data.type === 'message') {
@@ -1077,12 +1098,28 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     }
     pendingConvInfos.splice(0, pendingConvInfos.length);
 
-    // -- clear the delta on the pending query expectations
-    var pendingExpQueries = this._dynPendingQueries;
-    for (var i = 0; i < pendingExpQueries.length; i++) {
-      pendingExpQueries[i]._pendingExpDelta = null;
+    // -- generate query expectations if not no-ops, clear the deltas
+    var pendingExpQueries = this._dynPendingQueries, i;
+    for (i = 0; i < pendingExpQueries.length; i++) {
+      var lqt = pendingExpQueries[i];
+      // (if we had no last state) or
+      // (our last state is different from our current state) then send
+      if (!lqt._lastState ||
+          !$log.smartCompareEquiv(lqt._lastState, lqt._pendingExpDelta.state,
+                                  10)) {
+        this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
+        lqt._lastState = lqt._pendingExpDelta.state;
+      }
+      lqt._pendingExpDelta = null;
     }
     pendingExpQueries.splice(0, pendingExpQueries.length);
+
+    // -- clear the deltas on immediate query expectations
+    var immedQueries = this._dynImmediateQueries;
+    for (i = 0; i < immedQueries.length; i++) {
+      immedQueries[i]._pendingExpDelta = null;
+    }
+    immedQueries.splice(0, immedQueries.length);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1242,6 +1279,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     lqt._pendingExpDelta = null;
+    lqt._lastState = null;
 
     this.T.action(this, 'create', lqt, function() {
       // -- generate the expectation
@@ -1249,7 +1287,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       //  this.
       var delta = DeltaHelper.peepExpDelta_base(
                     lqt, self._getDynContactInfos(), query.by);
-      self._ensureExpectedQuery(lqt);
+      self._ensureExpectedQuery(lqt, false);
       lqt._pendingExpDelta = null;
 
       lqt._liveset = self._bridge.queryPeeps(query, self, lqt);
@@ -1275,7 +1313,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       var delta = DeltaHelper.convBlurbsExpDelta_base(
         lqt, cinfo, self._dynamicConvInfos, query.by);
-      self._ensureExpectedQuery(lqt);
+      self._ensureExpectedQuery(lqt, false);
       lqt._pendingExpDelta = null;
 
       lqt.data = {
@@ -1300,10 +1338,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     lqt._pendingExpDelta = null;
+    lqt._lastState = null;
     this.T.action(this, 'create', lqt, function() {
       var delta = DeltaHelper.convBlurbsExpDelta_base(
         lqt, null, self._dynamicConvInfos, query.by);
-      self._ensureExpectedQuery(lqt);
+      self._ensureExpectedQuery(lqt, false);
       lqt._pendingExpDelta = null;
 
       lqt.data = {
@@ -1326,6 +1365,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     lqt._pendingExpDelta = null;
+    lqt._lastState = null;
     this.T.action(this, 'create', lqt, function() {
       var convBlurb = self._grabConvBlurbFromQueryUsingConvThing(
                         usingQuery, tConv),
@@ -1352,6 +1392,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     lqt._pendingExpDelta = null;
+    lqt._lastState = null;
     this.T.action(this, 'create', lqt, function() {
       var delta = DeltaHelper.connReqDelta_base(lqt, self._dynConnReqInfos);
       self.expect_queryCompleted(lqt.__name, delta);
@@ -1380,6 +1421,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     lqt._pendingExpDelta = null;
+    lqt._lastState = null;
     this.T.action('moda sends request for possible friends to', this._eBackside,
                   function() {
       self.holdAllModaCommands();
@@ -1419,6 +1461,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     var lqt = this.T.thing('livequery', thingName), self = this;
     lqt._pendingDelta = null;
     lqt._pendingExpDelta = null;
+    lqt._lastState = null;
 
     this.T.action(this, 'create', lqt, 'query', function() {
       var delta = DeltaHelper.serversDelta_base(lqt,

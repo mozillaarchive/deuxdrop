@@ -145,7 +145,7 @@ exports.IDX_CONNREQ_SENT = "idxSent";
  * - d:p### - Maps participant tell key to their root key.
  * - d:m - High message number
  * - d:m# - Message number #.  Fully decrypted rep.
- * - d:u### - Per-user metadata by tell key, primarily used for watermarks.
+ * - d:u### - Per-user metadata by root key, primarily used for watermarks.
  * - d:ourmeta - Our user's metadata about the conversation, primarily used
  *                for pinned status.
  */

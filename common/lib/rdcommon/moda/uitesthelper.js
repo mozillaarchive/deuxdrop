@@ -195,6 +195,7 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._dynamicConvBlurbQueries = [];
   this._dynamicConvMsgsQueries = [];
   this._dynPendingQueries = [];
+  this._dynImmediateQueries = [];
   this._dynamicPossFriendsQueries = [];
   this._dynamicConnReqQueries = [];
   this._dynamicServerQueries = [];

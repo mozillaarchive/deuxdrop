@@ -446,7 +446,7 @@ ClientServicingConnection.prototype = {
   },
 
   /**
-   * Set meta-data on a conversation/messages.
+   * Set user-private meta-data on a conversation/messages.
    */
   _msg_root_convMeta: function(msg) {
   },

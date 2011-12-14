@@ -404,6 +404,7 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
   name: 'convMessage',
   args: ['store', 'convMeta', 'fanoutEnv', 'cells'],
   steps: {
+    // lookup the author so we can get their pubring for consultation
     lookup_peep_data: function() {
       var fanoutEnv = this.fanoutEnv, cells = this.cells;
       var authorTellKey = fanoutEnv.sentBy;
@@ -516,20 +517,154 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
 });
 
 /**
- * Meta-data about a conversation from other participants.
+ * Meta-data about a conversation from participants, potentially including us.
+ *
+ * We generate many fewer notifiations and byproducts than message receipt.
+ *  Namely, we:
+ * - Update live message representations with the read watermark fallout
+ *    (removal from previously last read, addition for newly last read.)
+ * - If it is our user, update blurbs' unread tallies and unread message
+ *    reference (if appropriate).
+ *
+ * We do not:
+ * - Touch conversation timestamps and thereby do not affect ordering.
  */
 var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
   name: 'convMeta',
   args: ['store', 'convMeta', 'fanoutEnv', 'cells'],
   steps: {
-    all: function() {
-    // -- update anyone subscribed to the full conversation
+    lookup_peep_data: function() {
+      var fanoutEnv = this.fanoutEnv, cells = this.cells;
+      var authorTellKey = fanoutEnv.sentBy;
+      var authorCellName = "d:p" + authorTellKey;
+      if (!cells.hasOwnProperty(authorCellName))
+        throw new $taskerror.UnauthorizedUserDataLeakError();
+      var authorRootKey = cells[authorCellName];
+      var authorIsOurUser = (authorRootKey ===
+                             this.store._keyring.rootPublicKey);
+      if (authorIsOurUser)
+        return this.store._pubring;
+      return this.store._db.getRowCell($lss.TBL_PEEP_DATA,
+                                       authorRootKey, 'd:sident');
+    },
+    got_peep_data: function(authorSelfIdentOrPubring) {
+      var fanoutEnv = this.fanoutEnv, cells = this.cells,
+          convMeta = this.convMeta;
+      var authorPubring, authorIsOurUser;
+      if (authorSelfIdentOrPubring instanceof $pubring.PersonPubring) {
+        authorPubring = authorSelfIdentOrPubring;
+        authorIsOurUser = true;
+      }
+      else {
+        authorPubring = $pubring.createPersonPubringFromSelfIdentDO_NOT_VERIFY(
+                          authorSelfIdentOrPubring);
+        authorIsOurUser = false;
+      }
+      var authorRootKey = this.authorRootKey = authorPubring.rootPublicKey;
+
+      // - decrypt conversation envelope
+      var convEnv = $msg_gen.assertGetConversationMetaMessageEnvelope(
+                      fanoutEnv.payload, fanoutEnv.nonce, convMeta);
+
+      // - decrypt conversation body
+      var convBody = $msg_gen.assertGetConversationMetaMessageBody(
+                       convEnv.body, fanoutEnv.nonce, convMeta,
+                       fanoutEnv.receivedAt, authorPubring);
+
+      // - prepare to persist the revised metadata
+      var writeCells = {};
+      var postMeta = writeCells["d:u" + authorRootKey] =
+        convBody.userMeta;
+
+      var highReadMsg = postMeta.lastRead || 0;
+
+      // --- notifications
+      var preMeta = cells["d:u" + authorRootKey];
+
+      // -- us!
+      if (authorIsOurUser) {
+        var highMsg = cells["d:m"];
+
+        // - find the first unread human message
+        var unreadRep = null, unreadIndex = 0;
+        for (var iMsg = highReadMsg + 1; iMsg <= highMsg; iMsg++) {
+          if (cells["d:m" + iMsg].type === 'message') {
+            unreadRep = cells["d:m" + iMsg];
+            unreadIndex = iMsg;
+            break;
+          }
+        }
 
 
-    // --- metadata message
-    // -- write
-    // -- posit latched notification for active subscribers
-    // -- nuke pending new message notification if our user saw something...
+        // - update blurb unread
+        var store = this.store;
+        this.store._notif.namespaceItemModified(
+          NS_CONVBLURBS, convMeta.id, null, null, null, null,
+          function deltaBlurb(clientData, querySource, frontDataDelta) {
+            // - client data rep
+            clientData.data.pubMeta = postMeta;
+
+            // - number of unread
+            frontDataDelta.numUnread = highMsg - highReadMsg;
+
+            // - forget old unread human message rep
+            if (clientData.data.unread) {
+              store._notif.findAndForgetDep(querySource, clientData,
+                                            NS_CONVMSGS,
+                                            convId + clientData.data.unread);
+            }
+
+            // - new unread human message rep
+            if (unreadRep) {
+              clientData.data.unread = unreadIndex;
+              frontDataDelta.firstUnreadMessage =
+                store._convertConversationMessage(
+                  querySource, convId, unreadRep, unreadIndex);
+            }
+            else {
+              clientData.data.unread = null;
+              frontDataDelta.firstUnreadMessage = null;
+            }
+          });
+      }
+      // -- not us!
+      else {
+        // - update read watermarks
+        // remove read watermark if applicable
+        if (preMeta && typeof(preMeta.lastRead) === 'integer') {
+          this.store._notif.namespaceItemModified(
+            NS_CONVMSGS, convId + preMeta.lastRead, null, null, null, null,
+            function deltaOld(clientData, querySource, frontDataDelta, msgId) {
+              if (!frontDataDelta.hasOwnProperty("unmark"))
+                frontDataDelta.unmark = [];
+
+              var peepData = store._notif.findAndForgetDep(
+                               querySource, clientData, NS_PEEPS,
+                               authorRootKey);
+              frontDataDelta.unmark.push(peepData.localName);
+            });
+        }
+        // generate read watermark
+        if (postMeta && typeof(postMeta.lastRead) === 'integer') {
+          this.store._notif.namespaceItemModified(
+            NS_CONVMSGS, convId + postMeta.lastRead, null, null, null, null,
+            function deltaNew(clientData, querySource, frontDataDelta, msgId) {
+              if (!frontDataDelta.hasOwnProperty("mark"))
+                frontDataDelta.mark = [];
+
+              var peepData = store._deferringPeepQueryResolve(
+                               querySource, authorRootKey, clientData.deps);
+              frontDataDelta.mark.push(peepData.localName);
+            });
+        }
+      }
+
+      return this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id,
+                                     writeCells);
+    },
+    all_done: function() {
+      this.store._log.conversationMessage(this.convMeta.id,
+                                          this.fanoutEnv.nonce);
     },
   }
 });

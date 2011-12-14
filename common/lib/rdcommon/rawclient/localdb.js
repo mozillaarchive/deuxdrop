@@ -415,12 +415,6 @@ LocalStore.prototype = {
 
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
-      // we need the meta on our side...
-      clientData.data = {
-        meta: cells['d:meta'],
-        first: null,
-        unread: null,
-      };
 
       // -- build the client rep
       querySource.dataMap[NS_CONVBLURBS][clientData.localName] =
@@ -437,6 +431,27 @@ LocalStore.prototype = {
     var numMessages = cells['d:m'], convId = clientData.fullName;
     var participants = [];
 
+    clientData.data = {
+      // The crypto keys/transit server info for this conversation.  Needed so
+      //  we can send messages to the conversation without a db lookup.
+      meta: cells['d:meta'],
+      // Our user's publicly exposed meta about this conversation.  Needed so
+      //  we can compute state deltas without a db lookup.
+      pubMeta: cells['d:u' + this._keyring.rootPublicKey] || {},
+      // Our user's private meta about this conversation.  Likewise required for
+      //  delta computation.
+      privMeta: cells['d:ourmeta'] || {},
+      // The index of the first human messages, used to suppress subsequent
+      //  notifications once we have seen the first. (1-based!)
+      first: null,
+      // The index of the first unread human message, used to suppress
+      //  subsequent notifications. (1-based!)
+      unread: null,
+    };
+
+    var highReadMsg = clientData.data.pubMeta.lastRead || 0;
+
+    // -- process messages
     // - first message, participants list
     var msg, iMsg, firstMsgName = null, iFirstMsg = null, msgClientData,
         mostRecentActivity;
@@ -444,7 +459,7 @@ LocalStore.prototype = {
       msg = cells['d:m' + iMsg];
       if (!iFirstMsg && msg.type === 'message') {
         msgClientData = this._convertConversationMessage(
-                          querySource, convId, msg, iMsg);
+                          querySource, convId, iMsg, cells);
         clientData.deps.push(msgClientData);
         firstMsgName = msgClientData.localName;
         iFirstMsg = clientData.data.first = iMsg;
@@ -459,17 +474,17 @@ LocalStore.prototype = {
       iFirstMsg = 1;
 
     // - number of unread
-    // XXX unread status not yet dealt with. pragmatism!
-    var numUnreadTextMessages = 1, firstUnreadMsgName = null;
-    for (iMsg = iFirstMsg; iMsg <= numMessages; iMsg++) {
+    var firstUnreadMsgName = null;
+    for (iMsg = highReadMsg + 1; iMsg <= numMessages; iMsg++) {
       msg = cells['d:m' + iMsg];
       if (msg.type === 'message') {
-        numUnreadTextMessages++;
+        // (we used to count the number of unread human messages; currently
+        //  bailing on that so we can show join activity as something unread.)
         // - first unread (non-join) message...
         if (!firstUnreadMsgName) {
           clientData.data.unread = iMsg;
           msgClientData = this._convertConversationMessage(
-                            querySource, convId, msg, iMsg);
+                            querySource, convId, iMsg, cells);
           clientData.deps.push(msgClientData);
           firstUnreadMsgName = msgClientData.localName;
         }
@@ -482,8 +497,8 @@ LocalStore.prototype = {
       participants: participants,
       firstMessage: firstMsgName,
       firstUnreadMessage: firstUnreadMsgName,
-      pinned: false,
-      numUnread: numUnreadTextMessages,
+      pinned: clientData.data.privMeta.pinned || false,
+      numUnread: numMessages - highReadMsg,
       mostRecentActivity: mostRecentActivity,
     };
   },
@@ -507,13 +522,20 @@ LocalStore.prototype = {
     // - If this is our first human message, populate.
     var msgNum = mutatedCells['d:m'], msgRec = mutatedCells['d:m' + msgNum];
     if (msgRec.type === 'message' && !clientData.data.first) {
-      outDeltaRep.firstMessage =
-        this._convertConversationMessage(querySource, clientData.fullName,
-                                         msgRec, msgNum).localName;
+      var mergedCells = $notifking.mergeCells(cells, mutatedCells);
+      var msgClientData = this._convertConversationMessage(
+                            querySource, clientData.fullName, msgNum,
+                            mergedCells);
+      clientData.deps.push(msgClientData);
+      outDeltaRep.firstMessage = msgClientData.localName;
       clientData.data.first = msgNum;
 
       // send this as the first unread too if we ain't got one yet
       if (!clientData.data.unread) {
+        // track the dependency separately
+        msgClientData.count++;
+        clientData.deps.push(msgClientData);
+
         outDeltaRep.firstUnreadMessage = outDeltaRep.firstMessage;
         clientData.data.unread = msgNum;
       }
@@ -570,12 +592,6 @@ LocalStore.prototype = {
       function buildReps(clientData, querySource) {
         if (!mergedCells) // merge only the first time needed
           mergedCells = $notifking.mergeCells(cells, mutatedCells);
-        // back data
-        clientData.data = {
-          meta: mergedCells['d:meta'],
-          first: null,
-          unread: null,
-        };
         return self._convertConversationBlurb(
           clientData, querySource, mergedCells
         );
@@ -607,7 +623,9 @@ LocalStore.prototype = {
         ],
         function(clientData, querySource) {
           return self._convertConversationMessage(
-                   querySource, convId, msgRec, msgNum, clientData);
+                   querySource, convId, msgNum,
+                   $notifking.mergeCells(cells, mutatedCells),
+                   clientData);
         });
     }
 
@@ -621,12 +639,6 @@ LocalStore.prototype = {
       function genFullReps(clientData, querySource) {
         if (!mergedCells) // merge only the first time needed
           mergedCells = $notifking.mergeCells(cells, mutatedCells);
-        // back data
-        clientData.data = {
-          meta: mergedCells['d:meta'],
-          first: null,
-          unread: null,
-        };
         return self._convertConversationBlurb(
           clientData, querySource, mergedCells
         );
@@ -654,6 +666,7 @@ LocalStore.prototype = {
     if (!blurbClientData) {
       throw this._notifking.badQuery(queryHandle, "Conv blurb does not exist!");
     }
+    queryHandle.deps.push(blurbClientData);
 
     queryHandle.index = 'order';
     queryHandle.cmpFunc = function(aClientData, bClientData) {
@@ -688,9 +701,13 @@ LocalStore.prototype = {
    *  (cell) format.  Also supports a mode of operation where it updates an
    *  existing clientData structure, in which case the return value is the
    *  frontData (which does not get directly set either.)
+   *
+   * If no clientData is provided (and so one is created), the caller is
+   *  responsible for adding it to the appropriate deps list.
    */
-  _convertConversationMessage: function(querySource, convId, msg, msgIndex,
+  _convertConversationMessage: function(querySource, convId, msgIndex, cells,
                                         clientData) {
+    var msg = cells['d:m' + msgIndex];
     var fullName = convId + msgIndex, reuseMode;
     if (!clientData) {
       reuseMode = false;
@@ -720,6 +737,7 @@ LocalStore.prototype = {
         composedAt: msg.composedAt,
         receivedAt: msg.receivedAt,
         text: msg.text,
+        mark: null,
       };
     }
     else if (msg.type === 'join') {
@@ -731,10 +749,27 @@ LocalStore.prototype = {
                                                  clientData.deps),
         receivedAt: msg.receivedAt,
         text: msg.text,
+        mark: null,
       };
     }
     else {
       throw new Error("Unknown message type '" + msg.type + "'");
+    }
+
+    // -- look for metadata annotations
+    for (var key in cells) {
+      if (/^d:u/.test(key)) {
+        var userRootKey = cells.substring(3);
+        var userMeta = cells[key];
+        // - user's read watermark
+        if (userMeta.lastRead && userMeta.lastRead === msgIndex &&
+            userRootKey !== this._pubring.rootPublicKey) {
+          if (!frontData.mark)
+            frontData.mark = [];
+          frontData.mark.push(this._deferringPeepQueryResolve(
+                                querySource, userRootKey, clientData.deps));
+        }
+      }
     }
 
     if (reuseMode)
@@ -768,10 +803,8 @@ LocalStore.prototype = {
 
       // - all messages
       for (var iMsg = 1; iMsg <= numMessages; iMsg++) {
-        var msgRec = cells['d:m' + iMsg];
-
         var clientData = self._convertConversationMessage(
-                           querySource, convId, msgRec, iMsg);
+                           querySource, convId, iMsg, cells);
         queryHandle.items.push(clientData);
         viewItems.push(clientData.localName);
       }
@@ -1065,6 +1098,9 @@ LocalStore.prototype = {
    * Create a peepClientData rep from a self-ident blob; for use in creating
    *  connection requests and possible friend structures (when we don't already
    *  know about the person via some other means).
+   *
+   * The caller is responsible for adding the returned object to the appropriate
+   *  deps list.
    */
   _convertSynthPeep: function(querySource, fullName, selfIdentBlob,
                               selfIdentPayload) {
@@ -1371,7 +1407,7 @@ LocalStore.prototype = {
     }
     queryHandle.indexParam = indexParam;
 
-    if (idx === 'alphabet') {
+    if (idx === $lss.IDX_PEEP_CONTACT_NAME) {
       queryHandle.cmpFunc = function(aClientData, bClientData) {
         var aVal = assertGetIndexValue(aClientData.indexValues, idx, indexParam),
             bVal = assertGetIndexValue(bClientData.indexValues, idx, indexParam);
@@ -1556,8 +1592,10 @@ LocalStore.prototype = {
   _deferringPeepQueryResolve: function(querySource, peepRootKey, addToDeps) {
     var clientData = this._notif.reuseIfAlreadyKnown(querySource, NS_PEEPS,
                                                      peepRootKey);
-    if (clientData)
+    if (clientData) {
+      addToDeps.push(clientData);
       return clientData.localName;
+    }
 
     querySource.dataNeeded[NS_PEEPS].push(peepRootKey);
     clientData = this._notif.generateClientData(querySource, NS_PEEPS,
@@ -1656,6 +1694,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       newConversation: {convId: true},
       conversationMessage: {convId: true, nonce: true},
+      conversationMeta: {convId: true, nonce: true},
     },
     TEST_ONLY_events: {
     },

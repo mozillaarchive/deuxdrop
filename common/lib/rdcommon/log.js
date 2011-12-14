@@ -838,6 +838,7 @@ function smartCompareEquiv(a, b, depthLeft) {
   }
   return boundedCmpObjs(a, b, depthLeft);
 }
+exports.smartCompareEquiv = smartCompareEquiv;
 
 /**
  * Builds the logging and testing helper classes for the `register` driver.
