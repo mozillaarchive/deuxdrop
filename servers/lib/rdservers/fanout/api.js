@@ -133,9 +133,9 @@ FanoutApi.prototype = {
   /**
    * Update a user's metadata on a conversation (watermarks, etc.)
    */
-  updateConvPerUserMetadata: function(convId, userKey, userMeta) {
+  updateConvPerUserMetadata: function(convId, userKey, fanoutMessage) {
     var cells = {};
-    cells["m:u" + userMeta] = userMeta;
+    cells["m:u" + userKey] = fanoutMessage;
     return this._db.putCells(TBL_CONV_DATA, convId, cells);
   },
 
@@ -149,21 +149,19 @@ FanoutApi.prototype = {
   getAllConversationData: function(convId) {
     return when(this._db.getRow(TBL_CONV_DATA, convId, ["m"]),
       function(cells) {
-        var msgs = [];
+        var msgs = [], metaMsgs = [];
         var last = parseInt(cells["m:m"]);
-        // accumulate the non-meta messages
+        // accumulate the non-meta messages and the meta messages in join order.
+        // (we use join order for meta adding for determinism for unit tests)
         for (var i = 1; i <= last; i++) {
           var msg = cells["m:m" + i];
+          if (msg.type === 'join')
+            if (cells.hasOwnProperty("m:u" + msg.invitee))
+              metaMsgs.push(cells["m:u" + msg.invitee]);
           msgs.push(msg);
         }
-        // now add all the meta messages
-        for (var key in cells) {
-          if (key[2] === "u") {
-            msgs.push(cells[key]);
-          }
-        }
 
-        return msgs;
+        return msgs.concat(metaMsgs);
       }
       // rejection pass-through is fine
     );

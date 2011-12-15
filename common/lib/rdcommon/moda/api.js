@@ -160,7 +160,7 @@ PeepBlurb.prototype = {
 
 function msgCommonMarkAsLastReadMessage() {
   this._liveset._bridge._send(
-    'publicConvUserMetaDelta',
+    'publishConvUserMetaDelta',
     this._liveset.blurb._localName,
     { lastRead: this._localName });
 }
@@ -1293,8 +1293,11 @@ ModaBridge.prototype = {
           explainDelta.firstMessage = true;
           break;
         case 'firstUnreadMessage':
-          curRep.firstUnreadMessage = lookupClone(NS_CONVMSGS,
-                                                  delta.firstUnreadMessage);
+          if (delta.firstUnreadMessage)
+            curRep.firstUnreadMessage = lookupClone(NS_CONVMSGS,
+                                                    delta.firstUnreadMessage);
+          else
+            curRep.firstUnreadMessage = null;
           explainDelta.firstUnreadMessage = true;
           break;
         case 'mostRecentActivity':

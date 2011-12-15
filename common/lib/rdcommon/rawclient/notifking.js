@@ -1242,8 +1242,9 @@ NotificationKing.prototype = {
 
         // - find the right new location for us
         if (!queryHandle.index ||
-            transferIndexValue(indexValuesUpdated, clientData.indexValues,
-                               queryHandle.index, queryHandle.indexParam)) {
+            (indexValuesUpdated &&
+             transferIndexValue(indexValuesUpdated, clientData.indexValues,
+                                queryHandle.index, queryHandle.indexParam))) {
           // - check for and possibly generate splices to perform a move.
           // remove the entry if it's in there right now so we can bsearch
           //  without tripping ourselves up

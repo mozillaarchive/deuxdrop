@@ -367,6 +367,11 @@ var ConversationJoinTask = taskMaster.defineTask({
   },
 });
 
+/**
+ * Fan-in conversation join completion; the user we invited has responded back
+ *  that they have performed the join steps on their end, so we can now re-send
+ *  our original packet to the conversation fan-out server to complete the add.
+ */
 var ConversationJoinedTask = taskMaster.defineTask({
   name: "conversationJoined",
   args: ['config', 'envelope', 'otherServerKey'],
@@ -603,7 +608,7 @@ var ConversationMetaTask = taskMaster.defineTask({
   args: ['config', 'innerEnvelope', 'outerEnvelope', 'otherServerKey'],
   steps: {
     check_already_in_on_conversation: function() {
-      return this.config.authApi.convAssertServerConversation(
+      return this.config.authApi.convAssertServerUser(
         this.innerEnvelope.convId, this.otherServerKey,
         this.outerEnvelope.senderKey);
     },
@@ -618,7 +623,8 @@ var ConversationMetaTask = taskMaster.defineTask({
         payload: this.innerEnvelope.payload,
       };
       return this.config.fanoutApi.updateConvPerUserMetadata(
-               this.innerEnvelope.convId, this.fanoutMessage);
+               this.innerEnvelope.convId, this.outerEnvelope.senderKey,
+               this.fanoutMessage);
     },
     get_recipients: function() {
       return this.config.authApi.convGetParticipants(

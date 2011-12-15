@@ -519,24 +519,32 @@ LocalStore.prototype = {
                                           clientData.deps));
       }
     }
-    // - If this is our first human message, populate.
+    // - If this is our first/first unread human message, populate.
     var msgNum = mutatedCells['d:m'], msgRec = mutatedCells['d:m' + msgNum];
-    if (msgRec.type === 'message' && !clientData.data.first) {
+    if (msgRec.type === 'message' &&
+        (!clientData.data.first || !clientData.data.unread)) {
       var mergedCells = $notifking.mergeCells(cells, mutatedCells);
       var msgClientData = this._convertConversationMessage(
                             querySource, clientData.fullName, msgNum,
                             mergedCells);
       clientData.deps.push(msgClientData);
-      outDeltaRep.firstMessage = msgClientData.localName;
-      clientData.data.first = msgNum;
 
-      // send this as the first unread too if we ain't got one yet
-      if (!clientData.data.unread) {
-        // track the dependency separately
-        msgClientData.count++;
-        clientData.deps.push(msgClientData);
+      if (!clientData.data.first) {
+        outDeltaRep.firstMessage = msgClientData.localName;
+        clientData.data.first = msgNum;
 
-        outDeltaRep.firstUnreadMessage = outDeltaRep.firstMessage;
+        // send this as the first unread too if we ain't got one yet
+        if (!clientData.data.unread) {
+          // track the dependency separately
+          msgClientData.count++;
+          clientData.deps.push(msgClientData);
+
+          outDeltaRep.firstUnreadMessage = outDeltaRep.firstMessage;
+          clientData.data.unread = msgNum;
+        }
+      }
+      else { // !clientData.data.unread
+        outDeltaRep.firstUnreadMessage = msgClientData.localName;
         clientData.data.unread = msgNum;
       }
     }
@@ -765,7 +773,7 @@ LocalStore.prototype = {
     // -- look for metadata annotations
     for (var key in cells) {
       if (/^d:u/.test(key)) {
-        var userRootKey = cells.substring(3);
+        var userRootKey = key.substring(3);
         var userMeta = cells[key];
         // - user's read watermark
         if (userMeta.lastRead && userMeta.lastRead === msgIndex &&

@@ -203,6 +203,10 @@ TD.commonCase('moda basics', function(T) {
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
 
+  T.group('A, B mark conv #1 read');
+  moda_a.do_markAsRead(lqConv1Msgs, tConv1);
+  client_b.do_metaToConversation(tConv1, { lastRead: 4 });
+
   T.group('A replies (moda)');
   var tConv1_msg3 = T.thing('message', 'c1:2:a');
   moda_a.do_replyToConversationWith(tConv1, tConv1_msg3, lqBconvBlurbs);

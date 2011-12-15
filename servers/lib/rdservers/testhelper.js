@@ -792,6 +792,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       convMeta: convCreationInfo.convMeta,
       participants: youAndMeBoth.concat(),
       pubMetaByName: {},
+      numPubMetas: 0,
     };
 
     tConv.digitalName = convCreationInfo.convId;
@@ -893,6 +894,27 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     }
   },
 
+  do_metaToConversation: function(tConv, metaValues) {
+    var self = this,
+        tMeta = self.T.thing('meta',
+                             'meta:' + self.__name);
+
+    this.T.action(this._eRawClient, 'sends metadata to', tConv, function() {
+      self._expect_metaToConversation_prep(tConv);
+
+      var msgInfo = self._rawClient.publishConvUserMeta(
+                      tConv.data.convMeta, metaValues);
+      self._expect_metaToConversation_rawclient_to_server(
+        tConv, tMeta, msgInfo, metaValues.lastRead);
+    });
+    this._expdo_metaToConversation_fanout_onwards(tConv, tMeta);
+  },
+  _expect_metaToConversation_prep: function(tConv, tNewMsg) {
+    this._eRawClient.expect_allActionsProcessed();
+    this._usingServer.holdAllMailSenderMessages();
+    this._usingServer.expectPSMessageToServerFrom(tConv.sdata.fanoutServer,
+                                                  this);
+  },
   _expect_metaToConversation_rawclient_to_server: function(tConv, tMetaMsg,
                                                            msgInfo, lastRead) {
     tMetaMsg.data = {
@@ -902,9 +924,11 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       lastRead: lastRead
     };
     tMetaMsg.digitalName = msgInfo.msgNonce;
+    if (!tConv.data.pubMetaByName.hasOwnProperty(this.__name))
+      tConv.data.numPubMetas++;
     tConv.data.pubMetaByName[this.__name] = tMetaMsg;
   },
-  _expdo_metaToConversation_fanout_onwards: function(tConv, tMetaMsg) {
+  _expdo_metaToConversation_fanout_onwards: function(tConv, tMeta) {
     var self = this;
     // -- sender releases to fanout maildrop, gated for all recipients
     this.T.action('conversation hosting server', tConv.sdata.fanoutServer,
@@ -1082,8 +1106,8 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
 
       self._usingServer.holdAllReplicaBlocksForUser(self);
       // welcome + backlog
-      self._usingServer.expectReplicaBlocksForUser(self,
-                                               1 + tConv.data.backlog.length);
+      self._usingServer.expectReplicaBlocksForUser(
+        self, 1 + tConv.data.backlog.length + tConv.data.numPubMetas);
 
       tConv.sdata.fanoutServer.releaseSSMessageToServerUser(
         isInitial ? 'initialfan' : 'fannedmsg', self._usingServer, self);
@@ -1116,12 +1140,28 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       });
     els.expect_newConversation(tConv.data.id); // (unreported 'welcome')
 
-    for (var iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
-      var tMsg = tConv.data.backlog[iMsg];
+    // - expect non-meta messages, accumulate meta-msgs
+    // Accumulate these in join order for consistency with the implementation
+    //  that does this so the order is consistent for us.
+    var metaMsgs = [], iMsg, tMsg;
+    for (iMsg = 0; iMsg < tConv.data.backlog.length; iMsg++) {
+      tMsg = tConv.data.backlog[iMsg];
+      this.expectLocalStoreTaskToRun(
+        this._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
+      els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
+      if (tMsg.data.type === 'join') {
+        if (tConv.data.pubMetaByName.hasOwnProperty(tMsg.data.who.__name))
+          metaMsgs.push(tConv.data.pubMetaByName[tMsg.data.who.__name]);
+      }
+    }
+    // - meta messages
+    for (iMsg = 0; iMsg < metaMsgs.length; iMsg++) {
+      tMsg = metaMsgs[iMsg];
       this.expectLocalStoreTaskToRun(
         this._MSG_TYPE_TO_LOCAL_STORE_TASK[tMsg.data.type]);
       els.expect_conversationMessage(tConv.data.id, tMsg.digitalName);
     }
+
     this._eRawClient.expect_replicaCaughtUp();
   },
 

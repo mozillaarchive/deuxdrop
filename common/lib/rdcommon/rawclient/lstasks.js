@@ -591,8 +591,6 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
       if (authorIsOurUser) {
         var highMsg = cells["d:m"];
 
-
-
         // - find the first unread human message
         var unreadRep = null, unreadIndex = 0;
         for (var iMsg = highReadMsg + 1; iMsg <= highMsg; iMsg++) {
@@ -607,7 +605,7 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
         var store = this.store;
         this.store._notif.namespaceItemModified(
           NS_CONVBLURBS, convMeta.id, null, null, null, null,
-          function deltaBlurb(clientData, querySource, frontDataDelta) {
+          function deltaBlurb(clientData, querySource, frontDataDelta, convId) {
             // - client data rep
             clientData.data.pubMeta = postMeta;
 
@@ -648,6 +646,10 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
 
           // joins do not count for per-peep unread counts
           if (unreadRep.type === 'message') {
+            // Ignore messages that our user authored; we don't track our own
+            //  unread count.
+            if (unreadRep.authorId === authorRootKey)
+              continue;
             if (!rootKeysAndTallies.hasOwnProperty(unreadRep.authorId))
               rootKeysAndTallies[unreadRep.authorId] = 0;
             rootKeysAndTallies[unreadRep.authorId]++;

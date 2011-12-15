@@ -259,7 +259,7 @@ ModaBackside.prototype = {
   _cmd_publishConvUserMetaDelta: function(convLocalName, userMetaDelta) {
     var convClientData = this._notif.mapLocalNameToClientData(
                            this._querySource, NS_CONVBLURBS, convLocalName);
-    var curMeta = convClientData.pubMeta;
+    var curMeta = convClientData.data.pubMeta;
     for (var key in userMetaDelta) {
       switch (key) {
         case 'lastRead':

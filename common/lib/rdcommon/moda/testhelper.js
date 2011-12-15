@@ -103,10 +103,15 @@
  *   @key[highestMsgSeen Number]{
  *     The index of the last message in `tConv`'s backlog that we have seen.
  *     This allows us to reuse backlog to get at the message representations
- *     without assuming we have seen all the messages in the backlog.
+ *     without assuming we have seen all the messages in the backlog.  So
+ *     backlog[highestMsgSeen]
  *   }
  *   @key[highestMsgReported Number]{
- *     The highest message number that has been reported to convmsgs queries.
+ *     The index of the highest message that has been reported to convmsgs
+ *     queries.  This lags behind highestMsgSeen because it is only updated when
+ *     we release the query update via `_notifyConvGainedMessages`.  That
+ *     mechanism might now be mootable thanks to _ensureExpectedQuery and its
+ *     hookup to `__updatePhaseComplete` (with minor refactoring).
  *   }
  *   @key[peepSeqsByName @dictof[
  *     @key["peep name"]
@@ -641,7 +646,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // (we want to know about ourselves for participant mapping purposes, but
       //  peep queries should never return us in their results.)
       var nowSeq = self.RT.testDomainSeq;
-      self._contactMetaInfoByName[self._testClient.__name] = {
+      self._ourCinfo = self._contactMetaInfoByName[self._testClient.__name] = {
         isUs: true,
         rootKey: self._testClient._rawClient.rootPublicKey,
         name: self._testClient.__name,
@@ -824,7 +829,15 @@ console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
         // these are all 1-based indices, so this works out.
         seenMsgs = backlog.slice(0, convInfo.highestMsgSeen),
         addedMsgs = backlog.slice(convInfo.highestMsgReported,
-                                  convInfo.highestMsgSeen);
+                                  convInfo.highestMsgSeen),
+        ourMeta = convInfo.userMetaByName[this._testClient.__name] ||
+                  { lastRead: 0 },
+        // we need to report a new first unread message if we were all read up
+        //  (and one of the added messages is a text message)
+        newFirstUnread = ourMeta.lastRead === convInfo.highestMsgReported;
+console.error("NFU", newFirstUnread, ourMeta.lastRead, convInfo.highestMsgSeen,
+              convInfo.highestMsgReported);
+    // - convmsgs query updates
     convInfo.highestMsgReported = convInfo.highestMsgSeen;
     for (iQuery = 0; iQuery < queries.length; iQuery++) {
       lqt = queries[iQuery];
@@ -837,15 +850,22 @@ console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
       this._ensureExpectedQuery(lqt, true);
     }
 
-    var ourMeta = convInfo.userMetaByName[this._testClient.__name] ||
-      { lastRead: 0 };
+    // - blurb delta
+    var blurbDelta = {
+      numUnread: convInfo.highestMsgReported - ourMeta.lastRead,
+      mostRecentActivity: true,
+    };
+
+    if (newFirstUnread) {
+      for (var iAdded = 0; iAdded < addedMsgs.length; iAdded++) {
+        if (addedMsgs[iAdded].data.type === 'message') {
+          blurbDelta.firstUnreadMessage = addedMsgs[iAdded].data.text;
+        }
+      }
+    }
 
     this._commonChangeNotifyHelper(
-      NS_CONVBLURBS, convInfo.tConv.digitalName,
-      {
-        numUnread: convInfo.highestMsgReported - ourMeta.lastRead,
-        mostRecentActivity: true,
-      });
+      NS_CONVBLURBS, convInfo.tConv.digitalName, blurbDelta);
   },
 
   _mapFullNameToLocal: function(namespace, fullName) {
@@ -1113,24 +1133,43 @@ console.error("--still here", affectedByUpdatePhase);
 
       // - if us, expect an unread change on the blurb and now read peeps
       if (userInfo.isUs) {
-        // decrease unread count on the blurb
-       this._commonChangeNotifyHelper(
-         NS_CONVBLURBS, tConv.digitalName,
-         { numUnread: newMeta.lastRead - convInfo.highestMsgSeen });
-
-        // walk the read messages to decrease unread count on peeps
         var idxFirstNowRead = oldMeta.lastRead || 0,
-            idxLastNowRead = newMeta.lastRead - 1;
-        for (var iMsg = idxFirstNowRead; iMsg <= idxLastNowRead; iMsg++) {
-          var msg = tConv.data.backlog[iMsg];
+            idxLastNowRead = newMeta.lastRead - 1, iMsg, msg;
+
+        // - decrease unread count on conv blurb, perhaps new first unread
+        var blurbDelta = {
+          numUnread: convInfo.highestMsgReported - newMeta.lastRead,
+          firstUnreadMessage: null,
+        };
+        // look for an unread text message to report, otherwise leave it nulled
+        if (blurbDelta.numUnread) {
+          // (highestMsgReported is 1-based)
+          for (iMsg = idxLastNowRead + 1; iMsg < convInfo.highestMsgReported;
+               iMsg++) {
+            msg = tConv.data.backlog[iMsg];
+            if (msg.data.type === 'message') {
+              blurbDelta.firstUnreadMessage = msg.data.text;
+              break;
+            }
+          }
+        }
+        this._commonChangeNotifyHelper(
+          NS_CONVBLURBS, tConv.digitalName, blurbDelta);
+
+        // - decrease unread counts on peeps
+        for (iMsg = idxFirstNowRead; iMsg <= idxLastNowRead; iMsg++) {
+          msg = tConv.data.backlog[iMsg];
           if (msg.data.type === 'message') {
             var readAuthorInfo =
               this._contactMetaInfoByName[msg.data.author.__name];
-            // it's okay if this happens multiple times for one person in the
-            //  loop; the effect nets out to be the same.
-            this._commonChangeNotifyHelper(
-              NS_PEEPS, readAuthorInfo.rootKey,
-              { numUnread: --readAuthorInfo.numUnread });
+            // we don't track unreads for ourself
+            if (!readAuthorInfo.isUs) {
+              // it's okay if this happens multiple times for one person in the
+              //  loop; the effect nets out to be the same.
+              this._commonChangeNotifyHelper(
+                NS_PEEPS, readAuthorInfo.rootKey,
+                { numUnread: --readAuthorInfo.numUnread });
+            }
           }
         }
 
@@ -1230,8 +1269,12 @@ console.error("  gen!");
           return peep.ourPoco.displayName;
         });
       },
-      firstMessage: '',
-      firstUnreadMessage: '',
+      firstMessage: function(blurb) {
+        return blurb.firstMessage && blurb.firstMessage.text;
+      },
+      firstUnreadMessage: function(blurb) {
+        return blurb.firstUnreadMessage && blurb.firstUnreadMessage.text;
+      },
       // we aren't able to easily figure out the right value right now, so
       //  just be happy that it's there at all.
       mostRecentActivity: function() { return true; },
@@ -1707,8 +1750,7 @@ console.error("  gen!");
     return {
       participants: blurb.participants.map(this._peepBlurbToLoggable),
       firstMessage: this._msgBlurbToLoggable(blurb.firstMessage),
-      // XXX no unread stuff yet
-      //firstUnreadMessage: this._msgBlurbToLoggable(blurb.firstUnreadMessage),
+      firstUnreadMessage: this._msgBlurbToLoggable(blurb.firstUnreadMessage),
       // XXX no pinned stuff yet
       //pinned: blurb._pinned,
     };
@@ -1757,10 +1799,19 @@ console.error("  gen!");
     var convInfo = this._convInfoByName[tConv.__name];
 
     var seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen);
-    var firstThingMsg = null;
-    for (var i = 0; i < seenMsgs.length; i++) {
+    var firstThingMsg = null, i;
+    for (i = 0; i < seenMsgs.length; i++) {
       if (seenMsgs[i].data.type === 'message') {
         firstThingMsg = seenMsgs[i];
+        break;
+      }
+    }
+    var firstUnreadThingMsg = null;
+    var ourMeta = convInfo.userMetaByName[this._ourCinfo.name] || {},
+        lastRead = ourMeta.lastRead || 0;
+    for (i = lastRead; i < seenMsgs.length; i++) {
+      if (seenMsgs[i].data.type === 'message') {
+        firstUnreadThingMsg = seenMsgs[i];
         break;
       }
     }
@@ -1769,6 +1820,8 @@ console.error("  gen!");
       participants: convInfo.participantInfos.map(
                       this._dynContactInfoToLoggable.bind(this)),
       firstMessage: this._thingMsgToLoggable(firstThingMsg),
+      firstUnreadMessage: firstUnreadThingMsg &&
+                          this._thingMsgToLoggable(firstUnreadThingMsg),
       // XXX no pinned stuff yet
     };
   },
@@ -2148,17 +2201,16 @@ console.error("  gen!");
    *  users will instead see the `mostRecentReadMessageBy` list lose and gain
    *  our user as appropriate.
    */
-  do_markAsRead: function(convMsgsQuery) {
-    var self = this,
-        tMeta = this.T.thing('meta',
-                             this._testClient.__name + ':' +
-                               this.RT.testDomainSeq),
-        lastReadMsgNum;
+  do_markAsRead: function(convMsgsQuery, tConv) {
+    var self = this, lastReadMsgNum,
+        tMeta = self.T.thing('meta',
+                             'meta:' + self._testClient.__name);
     // - moda api transmission to bridge
     this.T.action('moda sends mark as read meta to', this._eBackside,
                   function() {
+
       self.holdAllModaCommands();
-      self.expectModaCommand('publicConvUserMetaDelta');
+      self.expectModaCommand('publishConvUserMetaDelta');
 
       var messages = convMsgsQuery._liveset.items;
       lastReadMsgNum = messages.length; // one based, yeah.
@@ -2167,12 +2219,11 @@ console.error("  gen!");
     });
     // - bridge processes it
     this.T.action(this._eBackside,
-                  'processes publicConvUserMetaDelta, invokes on',
+                  'processes publishConvUserMetaDelta, invokes on',
                   this._testClient._eRawClient, function() {
-      self._testClient._expect_inviteToConversation_invitePrep(
-        invitedTestClient);
+      self._testClient._expect_metaToConversation_prep(tConv, tMeta);
 
-      var msgInfo = self.releaseAndPeekAtModaCommand('publicConvUserMetaDelta');
+      var msgInfo = self.releaseAndPeekAtModaCommand('publishConvUserMetaDelta');
       self.stopHoldingAndAssertNoHeldModaCommands();
 
       self._testClient._expect_metaToConversation_rawclient_to_server(
