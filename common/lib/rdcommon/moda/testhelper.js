@@ -842,7 +842,10 @@ console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
 
     this._commonChangeNotifyHelper(
       NS_CONVBLURBS, convInfo.tConv.digitalName,
-      { numUnread: convInfo.highestMsgReported - ourMeta.lastRead });
+      {
+        numUnread: convInfo.highestMsgReported - ourMeta.lastRead,
+        mostRecentActivity: true,
+      });
   },
 
   _mapFullNameToLocal: function(namespace, fullName) {
@@ -884,6 +887,7 @@ console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
       }
       return;
     }
+    this._pendingChangeNotifications[localName] = values;
 
     // log a new event!
     this.expect_itemChanged(namespace, fullName, values);
@@ -1077,8 +1081,11 @@ console.error("--still here", affectedByUpdatePhase);
       var authorInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
       goNotify(authorInfo, convInfo.participantInfos, null);
 
-      this._commonChangeNotifyHelper(
-        NS_PEEPS, authorInfo.rootKey, { numUnread: ++authorInfo.numUnread });
+      // we don't bother with unread tracking for our own user.
+      if (!authorInfo.isUs) {
+        this._commonChangeNotifyHelper(
+          NS_PEEPS, authorInfo.rootKey, { numUnread: ++authorInfo.numUnread });
+      }
     }
     else if (tMsg.data.type === 'join') {
       var joinerName = tMsg.data.inviter.__name,
@@ -1095,6 +1102,9 @@ console.error("--still here", affectedByUpdatePhase);
       this._commonChangeNotifyHelper(
         NS_PEEPS, joineeInfo.rootKey,
         { numConvs: joineeInfo.involvedConvs.length });
+      this._commonChangeNotifyHelper(
+        NS_CONVBLURBS, convInfo.tConv.digitalName,
+        { participants: [joineeInfo.name] });
     }
     else if (tMsg.data.type === 'meta') {
       var userInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
@@ -1214,11 +1224,17 @@ console.error("  gen!");
       ourPoco: function(item) { return item.ourPoco.displayName; },
     },
     convblurbs: {
-      numUnread: '',
-      participants: '',
+      numUnread: 'numUnreadMessages',
+      participants: function(blurb, addedPeeps) {
+        return addedPeeps.map(function(peep) {
+          return peep.ourPoco.displayName;
+        });
+      },
       firstMessage: '',
       firstUnreadMessage: '',
-      mostRecentActivity: 'mostRecentActivity',
+      // we aren't able to easily figure out the right value right now, so
+      //  just be happy that it's there at all.
+      mostRecentActivity: function() { return true; },
     },
     convmsgs: {
       mark: function(item, marked) {

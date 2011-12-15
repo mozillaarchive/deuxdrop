@@ -540,7 +540,13 @@ LocalStore.prototype = {
         clientData.data.unread = msgNum;
       }
     }
+    // - mostRecentActivity
     outDeltaRep.mostRecentActivity = msgRec.receivedAt;
+
+    // - numUnread
+    var highReadMsg = clientData.data.pubMeta.lastRead || 0,
+        numMessages = mutatedCells['d:m'];
+    outDeltaRep.numUnread = numMessages - highReadMsg;
 
     // - If we have no unread messages, and this is unread...
     // XXX unread logic; will get complicated in the 'takeback' if we get a meta

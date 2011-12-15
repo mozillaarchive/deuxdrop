@@ -1281,11 +1281,12 @@ ModaBridge.prototype = {
           explainDelta.numUnread = true;
           break;
         case 'participants':
+          explainDelta.participants = [];
           for (i = 0; i < delta.participants.length; i++) {
             peep = lookupClone(NS_PEEPS, delta.participants[i]);
             curRep.participants.push(peep);
+            explainDelta.participants.push(peep);
           }
-          explainDelta.participants = true;
           break;
         case 'firstMessage':
           curRep.firstMessage = lookupClone(NS_CONVMSGS, delta.firstMessage);
