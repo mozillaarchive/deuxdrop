@@ -366,7 +366,8 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
   };
   this._listener = listener;
   this._itemsHaveListeners = false;
-  this._eventMap = { add: null, complete: null, remove: null, reorder: null };
+  this._eventMap = { add: null, change: null, complete: null, remove: null,
+                     reorder: null };
   this.data = data;
 }
 LiveOrderedSet.prototype = {
@@ -377,6 +378,7 @@ LiveOrderedSet.prototype = {
     var listeners;
     switch (event) {
       case 'add':
+      case 'change':
       case 'complete':
       case 'remove':
       case 'reorder':
@@ -1026,6 +1028,7 @@ ModaBridge.prototype = {
           instMap = liveset._instancesByNS[namespace];
 
           if (instMap.hasOwnProperty(key)) {
+            var lsetChangeFunc = liveset._eventMap.change;
             instances = instMap[key];
             for (iInst = 0; iInst < instances.length; iInst++) {
               var inst = instances[iInst];
@@ -1033,7 +1036,10 @@ ModaBridge.prototype = {
               var explained =
                 deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
 
-              // - generate 'change' notification
+              // - generate 'change' notifications
+              if (lsetChangeFunc)
+                lsetChangeFunc(inst, liveset, explained);
+
               if (!inst._eventMap)
                 continue;
               var changeFunc = inst._eventMap.change;
@@ -1215,16 +1221,28 @@ ModaBridge.prototype = {
   },
 
   _delta_peeps: function(curRep, delta, liveset, forgetHelper) {
+    var explainDelta = {
+      numConvs: false,
+      numUnread: false,
+      ourPoco: false,
+    };
     for (var attr in delta) {
       switch (attr) {
         case 'numConvs':
           curRep._numConvs = delta.numConvs;
+          explainDelta.numConvs = true;
+          break;
+        case 'numUnread':
+          curRep._numUnread = delta.numUnread;
+          explainDelta.numUnread = true;
           break;
         case 'ourPoco':
           curRep.ourPoco = delta.ourPoco;
+          explainDelta.ourPoco = true;
           break;
       }
     }
+    return explainDelta;
   },
 
   /**
@@ -1250,13 +1268,18 @@ ModaBridge.prototype = {
   _delta_convblurbs: function(curRep, delta, lookupClone, forgetHelper) {
     var i, idx, peep;
     var explainDelta = {
+      numUnread: false,
       participants: false,
       firstMessage: false,
       firstUnreadMessage: false,
-      mostRecentReadMessageBy: false,
+      mostRecentActivity: false,
     };
     for (var attr in delta) {
       switch (attr) {
+        case 'numUnread':
+          curRep._numUnread = delta.numUnread;
+          explainDelta.numUnread = true;
+          break;
         case 'participants':
           for (i = 0; i < delta.participants.length; i++) {
             peep = lookupClone(NS_PEEPS, delta.participants[i]);
@@ -1275,25 +1298,7 @@ ModaBridge.prototype = {
           break;
         case 'mostRecentActivity':
           curRep._mostRecentActivity = new Date(delta.mostRecentActivity);
-          break;
-        case 'mark':
-          for (i = 0; i < delta.mark.length; i++) {
-            peep = lookupClone(NS_PEEPS, delta.mark[i]);
-            curRep.mostRecentReadMessageBy.push(peep);
-          }
-          explainDelta.mostRecentReadMessageBy = true;
-          break;
-        case 'unmark':
-          for (i = 0; i < delta.unmark.length; i++) {
-            var peepName = delta.unmark[i];
-            for (var j = 0; j < curRep.mostRecentReadMessageBy.length; j++) {
-              if (curRep.mostRecentReadMessageBy[j]._localName === peepName) {
-                curRep.mostRecentReadMessageBy.splice(j, 1);
-                break;
-              }
-            }
-          }
-          explainDelta.mostRecentReadMessageBy = true;
+          explainDelta.mostRecentActivity = true;
           break;
       }
     }
@@ -1334,7 +1339,36 @@ ModaBridge.prototype = {
   },
 
   _delta_convmsgs: function(curRep, delta, lookup, forget) {
-    // nothing to do right now; messages are currently immutable
+    var i, peep;
+    var explainDelta = {
+      mark: null,
+      unmark: null,
+    };
+    for (var attr in delta) {
+      switch (attr) {
+        case 'mark':
+          explainDelta.mark = [];
+          for (i = 0; i < delta.mark.length; i++) {
+            peep = lookupClone(NS_PEEPS, delta.mark[i]);
+            curRep.mostRecentReadMessageBy.push(peep);
+            explainDelta.mark.push(peep);
+          }
+          break;
+        case 'unmark':
+          explainDelta.unmark = [];
+          for (i = 0; i < delta.unmark.length; i++) {
+            var peepName = delta.unmark[i];
+            for (var j = 0; j < curRep.mostRecentReadMessageBy.length; j++) {
+              if (curRep.mostRecentReadMessageBy[j]._localName === peepName) {
+                unmark.push(curRep.mostRecentReadMessageBy.splice(j, 1)[0]);
+                break;
+              }
+            }
+          }
+          break;
+      }
+    }
+    return explainDelta;
   },
 
   _transform_possfriends: function(localName, wireRep, lookup) {

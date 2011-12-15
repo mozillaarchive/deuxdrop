@@ -585,9 +585,25 @@ var UserConvMessageTask = taskMaster.defineTask({
  */
 var UserConvMetaTask = taskMaster.defineTask({
   name: "userConvMeta",
+  args: ['effigy', 'store', 'uproc', 'convId',
+         'fanoutMsg', 'fanoutNonce', 'fanoutMsgRaw', 'transitServerKey'],
   steps: {
-    // XXX yes, we should implement the metadata bit too!
-    explode: function() {throw new Error("XXX I DID NOT DO THIS BIT YET");},
+    load_conversation_root: commonLoadConversationRoot,
+    proc_conversation_root: commonProcessConversationRoot,
+    persist: function() {
+      this.replicaBlock = {
+        nonce: this.fanoutNonce,
+        fanmsg: this.fanoutMsgRaw,
+        convId: this.convId,
+        transit: this.transitServerKey,
+      };
+      return this.store.setConversationPerUserMetadata(this.convId,
+                                                       this.fanoutMsg.sentBy,
+                                                       this.replicaBlock);
+    },
+    relay_to_subscribed_clients: function() {
+      return this.uproc.relayMessageToAllClients(this.replicaBlock);
+    },
   },
 });
 

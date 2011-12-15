@@ -328,7 +328,7 @@ UserBehalfDataStore.prototype = {
   },
 
   /**
-   * Retrieve the
+   * Retrieve the metadata about the conversation
    */
   getConversationRootMeta: function(conversationId) {
     return this._db.getRow(TBL_CONVERSATIONS,

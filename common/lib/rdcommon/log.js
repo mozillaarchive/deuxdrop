@@ -554,7 +554,8 @@ var TestActorProtoBase = {
     if (!this._logger)
       testRuntimeContext.reportPendingActor(this);
     // we should have no expectations going into a test step.
-    this.__resetExpectations();
+    if (this._activeForTestStep)
+      this.__resetExpectations();
     this._activeForTestStep = true;
     // and also all current entries should not be considered for expectations
     // (We originally considered that we could let loggers accumulate entries
@@ -582,7 +583,21 @@ var TestActorProtoBase = {
     return this._deferred.promise;
   },
 
+  __stepCleanup: null,
+
+  /**
+   * Cleanup state at the end of the step; also, check if we moved into a
+   *  failure state after resolving our promise.
+   *
+   * @return["success" Boolean]{
+   *   True if everything is (still) satisfied, false if a failure occurred
+   *   at some point.
+   * }
+   */
   __resetExpectations: function() {
+    if (this.__stepCleanup)
+      this.__stepCleanup();
+
     var expectationsWereMet = this._expectationsMetSoFar;
     this._expectationsMetSoFar = true;
     // kill all processed entries.

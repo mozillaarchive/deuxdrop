@@ -150,6 +150,13 @@ var $testwrap_backside = require('rdcommon/moda/testwrappers');
 
 var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 
+const NS_PEEPS = 'peeps',
+      NS_CONVBLURBS = 'convblurbs',
+      NS_CONVMSGS = 'convmsgs',
+      NS_SERVERS = 'servers',
+      NS_POSSFRIENDS = 'possfriends',
+      NS_CONNREQS = 'connreqs',
+      NS_ERRORS = 'errors';
 
 /**
  * Traverse `list`, using the "id" values of the items in the list as keys in
@@ -546,6 +553,42 @@ var DeltaHelper = exports.DeltaHelper = {
   },
 };
 
+var modaInstanceCommonInit = exports.modaInstanceCommonInit =
+      function modaInstanceCommonInit(self) {
+  /** @listof[TestClient] */
+  self._dynamicContacts = [];
+  /** @listof[DynamicContactInfo] */
+  self._dynamicContactInfos = [];
+  /** @dictof["client name" DynamicContactInfo] */
+  self._contactMetaInfoByName = {};
+
+  /** @listof[DynamicConvInfo] */
+  self._dynamicConvInfos = [];
+  /** @dictof["conv thing human name" DynamicConvInfo] */
+  self._convInfoByName = {};
+
+  /** @listof[DynamicConnReqInfo] */
+  self._dynConnReqInfos = [];
+  // convinfos queries awaiting a __updatePhaseComplete notification to occur
+  //  before generating their added messages expectations
+  self._dynPendingConvMsgs = [];
+
+  self._dynamicPeepQueries = [];
+  self._dynamicConvBlurbQueries = [];
+  // XXX need an all-conv-queries thing
+  self._dynamicConvMsgsQueries = [];
+  self._dynPendingQueries = [];
+  self._dynImmediateQueries = [];
+  self._dynamicPossFriendsQueries = [];
+  self._dynamicConnReqQueries = [];
+  self._dynamicServerQueries = [];
+
+  // already expected change notifications
+  self._pendingChangeNotifications = {};
+  // suppress multiple change notifications for the same item.
+  self._suppressedChangeNotifications = [];
+};
+
 /**
  * There should be one moda-actor per moda-bridge.  So if we are simulating
  *  a desktop client UI that implements multiple tabs, each with their own
@@ -558,34 +601,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     self._testClient = opts.client;
     self._testClient._staticModaActors.push(self);
 
-    /** @listof[TestClient] */
-    self._dynamicContacts = [];
-    /** @listof[DynamicContactInfo] */
-    self._dynamicContactInfos = [];
-    /** @dictof["client name" DynamicContactInfo] */
-    self._contactMetaInfoByName = {};
+    modaInstanceCommonInit(self);
 
-    /** @listof[DynamicConvInfo] */
-    self._dynamicConvInfos = [];
-    /** @dictof["conv thing human name" DynamicConvInfo] */
-    self._convInfoByName = {};
-
-    /** @listof[DynamicConnReqInfo] */
-    self._dynConnReqInfos = [];
-    // convinfos queries awaiting a __updatePhaseComplete notification to occur
-    //  before generating their added messages expectations
-    self._dynPendingConvMsgs = [];
-
-    self._dynamicPeepQueries = [];
-    self._dynamicConvBlurbQueries = [];
-    // XXX need an all-conv-queries thing
-    self._dynamicConvMsgsQueries = [];
-    self._dynPendingQueries = [];
-    self._dynImmediateQueries = [];
-    self._dynamicPossFriendsQueries = [];
-    self._dynamicConnReqQueries = [];
-    self._dynamicServerQueries = [];
-
+    self.onChange_bound = self.onChange_needsBind.bind(self);
 
     self._eBackside = self.T.actor('modaBackside', self.__name, null, self);
 
@@ -631,8 +649,14 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         any: nowSeq,
         write: nowSeq,
         recip: nowSeq,
+        numUnread: 0,
       };
     });
+  },
+
+  __stepCleanup: function() {
+    this._commonChangeNotifyCleanup();
+    this._onChangeCleanup();
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -731,13 +755,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    * Conversation activity has (possibly) affected a peep's indices.
    */
   _notifyPeepChanged: function(cinfo) {
-    // -- dependent (indirect) queries
-    // queries that know about this peep for dependency reasons will also
-    //  receive a notification
-    // XXX potentially bring back dependent updates, but recognize they won't
-    //  trigger a query complete directly
-    //this._notifyDepConvQueries(cinfo, cinfo.involvedConvs);
-
     // -- direct queries
     // ignore changes about our own peep for direct queries.
     // XXX should we filter ourselves out?
@@ -795,6 +812,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       }
 
       var deltaRep = DeltaHelper.convBlurbsExpMaybeDelta_newmsg(lqt, convInfo);
+console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
       if (deltaRep)
         this._ensureExpectedQuery(lqt, true);
     }
@@ -818,58 +836,60 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
       this._ensureExpectedQuery(lqt, true);
     }
+
+    var ourMeta = convInfo.userMetaByName[this._testClient.__name] ||
+      { lastRead: 0 };
+
+    this._commonChangeNotifyHelper(
+      NS_CONVBLURBS, convInfo.tConv.digitalName,
+      { numUnread: convInfo.highestMsgReported - ourMeta.lastRead });
+  },
+
+  _mapFullNameToLocal: function(namespace, fullName) {
+    var members = this._backside._querySource.membersByFull[namespace];
+    if (members.hasOwnProperty(fullName))
+      return members[fullName].localName;
+    return null;
   },
 
   /**
-   * Generate dependent notifications about affected 'convblurbs' and 'convmsgs'
-   *  queries given a list of affected conversations.
+   * Indicate an expected delta for the moda representation of an object.  If
+   *  the object is known to moda, we make sure to generate an expectation
+   *  for this step.  If the object is not known, no expectation is generated.
+   *  Multiple calls to this function merge the expectations.
    *
-   * @args[
-   *   @param[source @oneof[DynamicContactInfo]]
-   *   @param[@listof[DynamicConvInfo]]{
-   *     The conversations the source is involved in and for which
-   *     notifications should be generated.
-   *   }
-   * ]
+   * While moda will actually generate a change notification for every instance
+   *  in every query, we only generate a single notification and leave it up
+   *  to our `onChange_needsBind` change handler to only output a single log
+   *  entry.  We do this because there is no benefit to the repetition; if we
+   *  are experiencing refcount failures/etc., this implementation can't detect
+   *  them.
    */
-  _notifyDepConvQueries: function(source, touchesConvInfos) {
-    // map the dynamic conversation info to the tConv reps
-    var tConvs = [];
-    for (var i = 0; i < touchesConvInfos.length; i++) {
-      tConvs.push(touchesConvInfos[i].tConv);
-    }
+  _commonChangeNotifyHelper: function(namespace, fullName, values) {
+    this.RT.reportActiveActorThisStep(this);
+    this.expectUseSetMatching();
 
-    // - convmsgs queries
-    var queries = this._dynamicConvMsgsQueries, iQuery, lqt;
-    for (iQuery = 0; iQuery < queries.length; iQuery++) {
-      lqt = queries[iQuery];
+    // map the full name to its local name
+    var localName = this._mapFullNameToLocal(namespace, fullName);
+    // nothing to do if moda doesn't know about the item
+    if (!localName)
+      return;
 
-      var idxAffected = tConvs.indexOf(lqt.data.tConv);
-      if (idxAffected === -1)
-        continue;
-
-      var convInfo = touchesConvInfos[idxAffected],
-          backlog = convInfo.tConv.data.backlog,
-          // these are all 1-based indices, so this works out.
-          seenMsgs = backlog.slice(0, convInfo.highestMsgSeen);
-      var deltaRep = DeltaHelper.convMsgsDelta_nop(lqt, seenMsgs);
-      this._ensureExpectedQuery(lqt, true);
-    }
-
-    // - convblurbs queries
-    queries = this._dynamicConvBlurbQueries;
-    for (iQuery = 0; iQuery < queries.length; iQuery++) {
-      lqt = queries[iQuery];
-
-      // find if the query currently includes any of `touchesConvInfos`
-      if (lqt._convs.some(function(x) {
-                            return touchesConvInfos.indexOf(x) !== -1;
-                          })) {
-        // it does, give it a dependent dep.
-        DeltaHelper.convBlurbsDelta_nop(lqt);
-        this._ensureExpectedQuery(lqt, true);
+    // if an event has already been logged, just mutate the expectation's
+    //  payload in place.
+    if (this._pendingChangeNotifications.hasOwnProperty(localName)) {
+      var existing = this._pendingChangeNotifications[localName];
+      for (var key in values) {
+        existing[key] = values[key];
       }
+      return;
     }
+
+    // log a new event!
+    this.expect_itemChanged(namespace, fullName, values);
+  },
+  _commonChangeNotifyCleanup: function() {
+    this._pendingChangeNotifications = {};
   },
 
   /**
@@ -894,9 +914,10 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    * ]
    */
   _ensureExpectedQuery: function(lqt, affectedByUpdatePhase) {
-    if (this._dynPendingQueries.indexOf(lqt) !== -1 ||
-        this._dynImmediateQueries.indexOf(lqt) !== -1)
+console.error("EEQ", lqt._liveset._handle);
+    if (this._dynPendingQueries.indexOf(lqt) !== -1)
       return;
+console.error("--still here", affectedByUpdatePhase);
     // put our actor into 'set' expectations mode for this step since the
     //  query ordering is proving to be intractable to mirror and we don't
     //  really care.
@@ -907,9 +928,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       this._dynPendingQueries.push(lqt);
     }
     else {
-      this._dynImmediateQueries.push(lqt);
       lqt._lastState = lqt._pendingExpDelta.state;
       this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
+      lqt._pendingExpDelta = null;
     }
   },
 
@@ -953,6 +974,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       any: nowSeq,
       write: nowSeq,
       recip: nowSeq,
+      numUnread: 0,
     };
     this._dynamicContactInfos.push(newCinfo);
 
@@ -976,6 +998,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       peepSeqsByName: {},
       seq: 0,
       participantInfos: [],
+      userMetaByName: {},
     };
     this._dynamicConvInfos.push(convInfo);
     this._convInfoByName[tConv.__name] = convInfo;
@@ -994,19 +1017,16 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
   __receiveConvMessage: function(tConv, tMsg) {
     var convInfo = this._convInfoByName[tConv.__name];
-    if (this._dynPendingConvMsgs.indexOf(convInfo) === -1)
-      this._dynPendingConvMsgs.push(convInfo);
+    if (tMsg.data.type !== 'meta') {
+      if (this._dynPendingConvMsgs.indexOf(convInfo) === -1)
+        this._dynPendingConvMsgs.push(convInfo);
 
-    convInfo.highestMsgSeen++;
-    convInfo.seq = tMsg.data.seq;
+      convInfo.highestMsgSeen++;
+      convInfo.seq = tMsg.data.seq;
+    }
 
     var self = this;
-    // joineeInfo: we previously passed this in to be able to force generation
-    //  of notifications when the splice order did not change because it was
-    //  clear a join was happening which would affect their peep blurb and
-    //  accordingly generate dependent notifications.  This is moot now, but
-    //  I'll leave it around for a bit just in case.
-    function goNotify(authorInfo, participantInfos, joineeInfo) {
+    function goNotify(authorInfo, participantInfos) {
       var convAuthIndices = convInfo.peepSeqsByName[authorInfo.name],
           ourInfo = self._contactMetaInfoByName[self._testClient.__name];
 
@@ -1056,6 +1076,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     if (tMsg.data.type === 'message') {
       var authorInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
       goNotify(authorInfo, convInfo.participantInfos, null);
+
+      this._commonChangeNotifyHelper(
+        NS_PEEPS, authorInfo.rootKey, { numUnread: ++authorInfo.numUnread });
     }
     else if (tMsg.data.type === 'join') {
       var joinerName = tMsg.data.inviter.__name,
@@ -1067,7 +1090,50 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       joineeInfo.involvedConvs.push(convInfo);
       convInfo.participantInfos.push(joineeInfo);
 
-      goNotify(joinerInfo, convInfo.participantInfos, joineeInfo);
+      goNotify(joinerInfo, convInfo.participantInfos);
+
+      this._commonChangeNotifyHelper(
+        NS_PEEPS, joineeInfo.rootKey,
+        { numConvs: joineeInfo.involvedConvs.length });
+    }
+    else if (tMsg.data.type === 'meta') {
+      var userInfo = this._contactMetaInfoByName[tMsg.data.author.__name];
+      var oldMeta = convInfo.userMetaByName[userInfo.name] || {};
+      var newMeta = convInfo.userMetaByName[userInfo.name] = tMsg.data;
+
+      // - if us, expect an unread change on the blurb and now read peeps
+      if (userInfo.isUs) {
+        // decrease unread count on the blurb
+       this._commonChangeNotifyHelper(
+         NS_CONVBLURBS, tConv.digitalName,
+         { numUnread: newMeta.lastRead - convInfo.highestMsgSeen });
+
+        // walk the read messages to decrease unread count on peeps
+        var idxFirstNowRead = oldMeta.lastRead || 0,
+            idxLastNowRead = newMeta.lastRead - 1;
+        for (var iMsg = idxFirstNowRead; iMsg <= idxLastNowRead; iMsg++) {
+          var msg = tConv.data.backlog[iMsg];
+          if (msg.data.type === 'message') {
+            var readAuthorInfo =
+              this._contactMetaInfoByName[msg.data.author.__name];
+            // it's okay if this happens multiple times for one person in the
+            //  loop; the effect nets out to be the same.
+            this._commonChangeNotifyHelper(
+              NS_PEEPS, readAuthorInfo.rootKey,
+              { numUnread: --readAuthorInfo.numUnread });
+          }
+        }
+
+      }
+      // - if someone else, expect a metadata change on the unread marker
+      else {
+        if (oldMeta.lastRead)
+          this._commonChangeNotifyHelper(
+            NS_CONVMSGS, tConv.data.backlog[oldMeta.lastRead - 1].digitalName,
+            { unmark: [userInfo.name] });
+        this._commonChangeNotifyHelper(
+          NS_CONVMSGS, tMsg.digitalName, { mark: [userInfo.name] });
+      }
     }
   },
 
@@ -1090,6 +1156,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    *  next round.
    */
   __updatePhaseComplete: function() {
+console.error("UPC!");
     // -- flush out pending message addition NS_CONVMSGS queries
     var pendingConvInfos = this._dynPendingConvMsgs;
     for (var iConv = 0; iConv < pendingConvInfos.length; iConv++) {
@@ -1104,9 +1171,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       var lqt = pendingExpQueries[i];
       // (if we had no last state) or
       // (our last state is different from our current state) then send
+console.error("UPC check", lqt._handle);
       if (!lqt._lastState ||
           !$log.smartCompareEquiv(lqt._lastState, lqt._pendingExpDelta.state,
                                   10)) {
+console.error("  gen!");
         this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
         lqt._lastState = lqt._pendingExpDelta.state;
       }
@@ -1117,7 +1186,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     // -- clear the deltas on immediate query expectations
     var immedQueries = this._dynImmediateQueries;
     for (i = 0; i < immedQueries.length; i++) {
-      immedQueries[i]._pendingExpDelta = null;
+      //immedQueries[i]._pendingExpDelta = null;
     }
     immedQueries.splice(0, immedQueries.length);
   },
@@ -1132,6 +1201,60 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     return this._notif.mapLocalNameToFullName(this._backside._querySource,
                                               namespace,
                                               localName);
+  },
+
+  /**
+   * Mappings for use by `onChange_needsBind` to map from the explained
+   *  changes into the value to log (which should map the expectation.)
+   */
+  DELTA_MAPPINGS: {
+    peeps: {
+      numUnread: 'numUnreadAuthoredMessages',
+      numConvs: 'numInvolvedConversations',
+      ourPoco: function(item) { return item.ourPoco.displayName; },
+    },
+    convblurbs: {
+      numUnread: '',
+      participants: '',
+      firstMessage: '',
+      firstUnreadMessage: '',
+      mostRecentActivity: 'mostRecentActivity',
+    },
+    convmsgs: {
+      mark: function(item, marked) {
+        return marked.map(function(peep) {
+          return peep.displayName;
+        });
+      },
+      unmark: function(item, unmarked) {
+        return marked.map(function(peep) {
+          return peep.displayName;
+        });
+      }
+    },
+  },
+  onChange_needsBind: function(item, liveset, explained) {
+    if (this._suppressedChangeNotifications.indexOf(item._localName) !== -1)
+      return;
+    this._suppressedChangeNotifications.push(item._localName);
+
+    var name = this._notif.mapLocalNameToFullName(this._backside._querySource,
+                                                  item.__namespace,
+                                                  item._localName);
+    var values = {}, mapping = this.DELTA_MAPPINGS[item.__namespace];
+    for (var key in explained) {
+      if (!explained[key])
+        continue;
+      var mapper = mapping[key];
+      if (typeof(mapper) === 'function')
+        values[key] = mapper(item, explained[key]);
+      else
+        values[key] = item[mapper];
+    }
+    this._logger.itemChanged(item.__namespace, name, values);
+  },
+  _onChangeCleanup: function() {
+    this._suppressedChangeNotifications = [];;
   },
 
   onSplice: function(index, howMany, addedItems, liveSet) {
@@ -1287,11 +1410,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       //  this.
       var delta = DeltaHelper.peepExpDelta_base(
                     lqt, self._getDynContactInfos(), query.by);
-      self._ensureExpectedQuery(lqt, false);
-      lqt._pendingExpDelta = null;
-
       lqt._liveset = self._bridge.queryPeeps(query, self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
       self._dynamicPeepQueries.push(lqt);
+
+      self._ensureExpectedQuery(lqt, false);
     });
 
     return lqt;
@@ -1313,8 +1436,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       var delta = DeltaHelper.convBlurbsExpDelta_base(
         lqt, cinfo, self._dynamicConvInfos, query.by);
-      self._ensureExpectedQuery(lqt, false);
-      lqt._pendingExpDelta = null;
 
       lqt.data = {
         by: query.by,
@@ -1323,7 +1444,10 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       lqt._liveset = self._bridge.queryPeepConversations(peep, query,
                                                          self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
       self._dynamicConvBlurbQueries.push(lqt);
+
+      self._ensureExpectedQuery(lqt, false);
     });
 
     return lqt;
@@ -1342,15 +1466,16 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this.T.action(this, 'create', lqt, function() {
       var delta = DeltaHelper.convBlurbsExpDelta_base(
         lqt, null, self._dynamicConvInfos, query.by);
-      self._ensureExpectedQuery(lqt, false);
-      lqt._pendingExpDelta = null;
 
       lqt.data = {
         by: 'all',
       };
 
       lqt._liveset = self._bridge.queryAllConversations(query, self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
       self._dynamicConvBlurbQueries.push(lqt);
+
+      self._ensureExpectedQuery(lqt, false);
     });
 
     return lqt;
@@ -1373,16 +1498,17 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           seenMsgs = tConv.data.backlog.slice(0, convInfo.highestMsgSeen);
 
       var delta = DeltaHelper.convMsgsDelta_base(lqt, seenMsgs);
-      self.expect_queryCompleted(lqt.__name, delta);
-      lqt._pendingExpDelta = null;
-
       lqt._liveset = self._bridge.queryConversationMessages(convBlurb,
                                                             self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
       lqt.data = {
         tConv: tConv,
       };
 
       self._dynamicConvMsgsQueries.push(lqt);
+
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
     });
 
     return lqt;
@@ -1395,12 +1521,14 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     lqt._lastState = null;
     this.T.action(this, 'create', lqt, function() {
       var delta = DeltaHelper.connReqDelta_base(lqt, self._dynConnReqInfos);
-      self.expect_queryCompleted(lqt.__name, delta);
-      lqt._pendingExpDelta = null;
 
       lqt._liveset = self._bridge.queryConnectRequests(self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
 
       self._dynamicConnReqQueries.push(lqt);
+
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
     });
 
     return lqt;
@@ -1428,6 +1556,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       self.expectModaCommand('queryPossibleFriends');
 
       lqt._liveset = self._bridge.queryPossibleFriends(self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
       self._dynamicPossFriendsQueries.push(lqt);
     });
     this.T.action(this._eBackside,
@@ -1466,11 +1595,13 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this.T.action(this, 'create', lqt, 'query', function() {
       var delta = DeltaHelper.serversDelta_base(lqt,
                                                 self.RT.blackboard.testServers);
-      self.expect_queryCompleted(lqt.__name, delta);
-      lqt._pendingExpDelta = null;
 
       lqt._liveset = self._bridge.queryServers(self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
       self._dynamicServerQueries.push(lqt);
+
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
     });
     return lqt;
   },
@@ -1944,7 +2075,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       });
     });
     // - bridge processes it
-    this.T.action(this._eBackside, 'processes createConversation, invokes on',
+    this.T.action(this._eBackside, 'processes replyToConv, invokes on',
                   this._testClient._eRawClient, function() {
       self._testClient._expect_replyToConversation_replyPrep(tConv, tNewMsg);
 
@@ -1977,7 +2108,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
                                            invitedTestClient));
     });
     // - bridge processes it
-    this.T.action(this._eBackside, 'processes createConversation, invokes on',
+    this.T.action(this._eBackside, 'processes inviteToConv, invokes on',
                   this._testClient._eRawClient, function() {
       self._testClient._expect_inviteToConversation_invitePrep(
         invitedTestClient);
@@ -1991,6 +2122,48 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
     this._testClient._expdo_inviteToConversation_sender_onwards(
       invitedTestClient, tConv, tJoin);
+  },
+
+  /**
+   * Mark the last message in a conversation as read.  This will result in
+   *  a metadata blob being published to the conversation which will be
+   *  received by all participants.  For our own user, when the blob comes
+   *  back, it will affect the unread message count in the conversation.  Other
+   *  users will instead see the `mostRecentReadMessageBy` list lose and gain
+   *  our user as appropriate.
+   */
+  do_markAsRead: function(convMsgsQuery) {
+    var self = this,
+        tMeta = this.T.thing('meta',
+                             this._testClient.__name + ':' +
+                               this.RT.testDomainSeq),
+        lastReadMsgNum;
+    // - moda api transmission to bridge
+    this.T.action('moda sends mark as read meta to', this._eBackside,
+                  function() {
+      self.holdAllModaCommands();
+      self.expectModaCommand('publicConvUserMetaDelta');
+
+      var messages = convMsgsQuery._liveset.items;
+      lastReadMsgNum = messages.length; // one based, yeah.
+      var lastMessage = messages[lastReadMsgNum - 1];
+      lastMessage.markAsLastReadMessage();
+    });
+    // - bridge processes it
+    this.T.action(this._eBackside,
+                  'processes publicConvUserMetaDelta, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._testClient._expect_inviteToConversation_invitePrep(
+        invitedTestClient);
+
+      var msgInfo = self.releaseAndPeekAtModaCommand('publicConvUserMetaDelta');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+
+      self._testClient._expect_metaToConversation_rawclient_to_server(
+        tConv, tMeta, msgInfo, lastReadMsgNum);
+    });
+
+    this._testClient._expdo_metaToConversation_fanout_onwards(tConv, tMeta);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -2046,6 +2219,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
 
       // - do_query* helpers (does not cover servers right now)
       queryCompleted: { name: true, state: true },
+
+      itemChanged: { ns: true, name: true, values: true },
 
       // - query contents detailed results checkers (delta rep is very terse)
       convBlurbCheck: { blurbRep: true },

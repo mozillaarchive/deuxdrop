@@ -179,26 +179,8 @@ function DummyTestClient(owningUiTester, name, RT, T) {
   this._testClient = this; // hopefully just used for the client's name
   // (moda helper instances get their own name, like mA while the client is A)
 
-  this._dynamicContacts = [];
-  this._dynamicContactInfos = [];
-  this._contactMetaInfoByName = {};
-  this._dynamicConvInfos = [];
-  this._convInfoByName = {};
-  this._dynConnReqInfos = [];
-  this._dynPendingConvMsgs = [];
-
-  // - testModa live queries that we never populate
-  // We don't use the ability to know about deltas; we just issue new full
-  //  checks every time.  So we can leave these empty, but iteration logic
-  //  really needs them to exist.
-  this._dynamicPeepQueries = [];
-  this._dynamicConvBlurbQueries = [];
-  this._dynamicConvMsgsQueries = [];
-  this._dynPendingQueries = [];
-  this._dynImmediateQueries = [];
-  this._dynamicPossFriendsQueries = [];
-  this._dynamicConnReqQueries = [];
-  this._dynamicServerQueries = [];
+  // initialize all the instance variables moda needs
+  $th_moda.modaInstanceCommonInit(this);
 
   // - hacked state tracking
   // we lack an expectation representation for this, so we have to save off
@@ -336,6 +318,12 @@ DummyTestClient.prototype = {
   _notifyConvGainedMessages: function(convInfo) {
     if (this.uiTester._uid.canSee_conversation(convInfo))
       this.uiTester._verifySingleConversation(convInfo, true);
+  },
+
+  _commonChangeNotifyHelper: function() {
+    // Ignore these notifications; we don't check that specific pieces of
+    //  widgets changed.  It might be worth setting a dirty bit and re-checking
+    //  a page if we get more detailed about inspecting widget state.
   },
 
   //////////////////////////////////////////////////////////////////////////////

@@ -596,6 +596,44 @@ var ConversationMessageTask = taskMaster.defineTask({
 });
 
 /**
+ * A user has sent a metadata message to the conversation...
+ */
+var ConversationMetaTask = taskMaster.defineTask({
+  name: "conversationMeta",
+  args: ['config', 'innerEnvelope', 'outerEnvelope', 'otherServerKey'],
+  steps: {
+    check_already_in_on_conversation: function() {
+      return this.config.authApi.convAssertServerConversation(
+        this.innerEnvelope.convId, this.otherServerKey,
+        this.outerEnvelope.senderKey);
+    },
+    formulate_fanout_message_and_persist: function() {
+      this.fanoutMessage = {
+        type: 'meta',
+        sentBy: this.outerEnvelope.senderKey,
+        receivedAt: Date.now(),
+        // the message/envelope are encrypted with the same nonce as what we
+        //  received.
+        nonce: this.outerEnvelope.nonce,
+        payload: this.innerEnvelope.payload,
+      };
+      return this.config.fanoutApi.updateConvPerUserMetadata(
+               this.innerEnvelope.convId, this.fanoutMessage);
+    },
+    get_recipients: function() {
+      return this.config.authApi.convGetParticipants(
+               this.innerEnvelope.convId);
+    },
+    send_to_all_recipients: function(usersAndServers) {
+      return conversationSendToAllRecipients(this.config,
+                                             this.innerEnvelope.convId,
+                                             this.fanoutMessage,
+                                             usersAndServers);
+    },
+  },
+});
+
+/**
  * Process the final step of the "add a user to a conversation" process; the
  *  inviter should have already gotten confirmation from the invitee that they
  *  have added the authorization on their server to receive messages from this
@@ -655,41 +693,6 @@ var ConversationAddTask = taskMaster.defineTask({
         payload: this.innerEnvelope.payload.attestationPayload,
       };
       return this.config.fanoutApi.addMessageToConversation(
-               this.innerEnvelope.convId, this.fanoutMessage);
-    },
-    get_recipients: function() {
-      return this.config.authApi.convGetParticipants(
-               this.innerEnvelope.convId);
-    },
-    send_to_all_recipients: function(usersAndServers) {
-      return conversationSendToAllRecipients(this.config,
-                                             this.innerEnvelope.convId,
-                                             this.fanoutMessage,
-                                             usersAndServers);
-    },
-  },
-});
-
-var ConversationMetaTask = taskMaster.defineTask({
-  name: "conversationMeta",
-  args: ['config', 'innerEnvelope', 'outerEnvelope', 'otherServerKey'],
-  steps: {
-    check_already_in_on_conversation: function() {
-      return this.config.authApi.convAssertServerConversation(
-        this.innerEnvelope.convId, this.otherServerKey,
-        this.outerEnvelope.senderKey);
-    },
-    formulate_fanout_message_and_persist: function() {
-      this.fanoutMessage = {
-        type: 'meta',
-        sentBy: this.outerEnvelope.senderKey,
-        receivedAt: Date.now(),
-        // the message/envelope are encrypted with the same nonce as what we
-        //  received.
-        nonce: this.outerEnvelope.nonce,
-        payload: this.innerEnvelope.payload,
-      };
-      return this.config.fanoutApi.updateConvPerUserMetadata(
                this.innerEnvelope.convId, this.fanoutMessage);
     },
     get_recipients: function() {

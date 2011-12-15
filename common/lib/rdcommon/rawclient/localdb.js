@@ -1448,6 +1448,9 @@ LocalStore.prototype = {
     clientData.data = {
       oident: signedOident,
       sident: cells['d:sident'],
+      // right now we could also just wait for the db increment manipulations
+      //  to return and see what the value comes out to.
+      numUnread: cells['d:nunread'],
       numConvs: cells['d:nconvs'],
     };
 
@@ -1478,6 +1481,7 @@ LocalStore.prototype = {
     clientData.data = {
       oident: null,
       sident: selfIdentBlob,
+      numUnread: 0,
       numConvs: 0,
     };
     return {
@@ -1535,14 +1539,24 @@ LocalStore.prototype = {
 
   /**
    * Generate notifications for peep blurbs due to new messages in
-   *  conversations.
+   *  conversations.  Specifically, modifications for:
+   * - the author (write index, any index, optional numUnread delta)
+   * - (optional) invitee (any index, may recip, numConvs delta)
+   * - the (non-invitee) recipients (any index, maybe recip index)
    */
-  _notifyPeepConvDeltas: function(authorRootKey, recipRootKeys,
-                                  peepIndexValues,
+  _notifyPeepConvDeltas: function(authorRootKey, authorDeltaRep,
+                                  recipRootKeys, peepIndexValues,
                                   inviteeRootKey, inviteeDeltaRep) {
     // - notify for the author
+    function authorDeltaGen(clientData, querySource, outDeltaRep) {
+      if (authorDeltaRep.hasOwnProperty('numUnread')) {
+        clientData.data.numUnread += authorDeltaRep.numUnread;
+        outDeltaRep.numUnread = clientData.data.numUnread;
+      }
+    }
     this._notif.namespaceItemModified(
-      NS_PEEPS, authorRootKey, null, null, peepIndexValues);
+      NS_PEEPS, authorRootKey, null, null, peepIndexValues, null,
+      authorDeltaRep ? authorDeltaGen : null);
     // - notify for the invitee with a delta if we have
     if (inviteeRootKey) {
       this._notif.namespaceItemModified(

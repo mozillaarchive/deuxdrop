@@ -556,6 +556,9 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
         'delivers contact request to', '*PARAM*', function(paramClient) {
       paramClient._recip_expect_closeContactRequest(self);
       other._usingServer.releaseAllReplicaBlocksForClient(paramClient);
+
+      // XXX maybe track explicit update phases better?
+      paramClient._dynamicNotifyModaActors('updatePhaseComplete');
     });
 
   },
@@ -593,9 +596,6 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
 
   },
 
-  /**
-   * Generate test steps for
-   */
   _expdo_rejectContactRequest_everything_else: function(otherClient) {
     var self = this;
     this._T_otherClientsStep(this._usingServer,
@@ -791,6 +791,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       //  sketchy for us to be extracting and storing.
       convMeta: convCreationInfo.convMeta,
       participants: youAndMeBoth.concat(),
+      pubMetaByName: {},
     };
 
     tConv.digitalName = convCreationInfo.convId;
@@ -873,7 +874,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
                   'receives the message and processes it', function() {
       tConv.sdata.fanoutServer.expectServerTaskToRun('conversationMessage');
 
-      // expect one welcome message per participant (which we will hold)
+      // expect one message per participant (which we will hold)
       for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
         var recipTestClient = tConv.data.participants[iRecip];
 
@@ -891,6 +892,44 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       recipTestClient.do_expectConvMessage(tConv, tNewMsg);
     }
   },
+
+  _expect_metaToConversation_rawclient_to_server: function(tConv, tMetaMsg,
+                                                           msgInfo, lastRead) {
+    tMetaMsg.data = {
+      type: 'meta',
+      seq: this.RT.testDomainSeq++,
+      author: this,
+      lastRead: lastRead
+    };
+    tMetaMsg.digitalName = msgInfo.msgNonce;
+    tConv.data.pubMetaByName[this.__name] = tMetaMsg;
+  },
+  _expdo_metaToConversation_fanout_onwards: function(tConv, tMetaMsg) {
+    var self = this;
+    // -- sender releases to fanout maildrop, gated for all recipients
+    this.T.action('conversation hosting server', tConv.sdata.fanoutServer,
+                  'receives the meta and processes it', function() {
+      tConv.sdata.fanoutServer.expectServerTaskToRun('conversationMeta');
+
+      // expect one meta message per participant (which we will hold)
+      for (var iRecip = 0; iRecip < tConv.data.participants.length; iRecip++) {
+        var recipTestClient = tConv.data.participants[iRecip];
+
+        tConv.sdata.fanoutServer.expectSSMessageToServerUser(
+          'fannedmsg', recipTestClient._usingServer, recipTestClient);
+      }
+
+      // release the message to the fanout maildrop
+      self._usingServer.releasePSMessageToServerFrom(tConv.sdata.fanoutServer,
+                                                     self);
+    });
+    // -- per-client receipt steps
+    for (var iRecip = 0; iRecip < tConv.sdata.participants.length; iRecip++) {
+      var recipTestClient = tConv.sdata.participants[iRecip];
+      recipTestClient.do_expectConvMessage(tConv, tMeta);
+    }
+  },
+
 
   do_inviteToConversation: function(invitedTestClient, tConv) {
     var self = this;
@@ -1086,6 +1125,12 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     this._eRawClient.expect_replicaCaughtUp();
   },
 
+  _MSG_TYPE_TO_MAILSTORE_UPROC_TASK: {
+    'join': 'userConvJoin',
+    'message': 'userConvMessage',
+    'meta': 'userConvMeta',
+  },
+
   _MSG_TYPE_TO_LOCAL_STORE_TASK: {
     'join': 'convJoin',
     'message': 'convMessage',
@@ -1096,7 +1141,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
    * Expect a message for the given conversation.
    *
    * This is broken intwo two steps:
-   * - Mailstore receipt/processing, with replica blocks gated.
+   * - Maildrop/Mailstore receipt/processing, with replica blocks gated.
    * - Replica block delivery to the client.
    *
    * XXX handle disconnected clients, cloned clients
@@ -1106,7 +1151,11 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     self.T.action(self._usingServer,
         'receives message for', self,
         'and the mailstore processes it.', function() {
+      // the maildrop does its thing
       self.expectServerTaskToRunOnOwnersBehalf('fanoutToUserMessage');
+      // which hands it off to the mailstore to do its thing
+      self.expectServerTaskToRunOnOwnersBehalf(
+        self._MSG_TYPE_TO_MAILSTORE_UPROC_TASK[tMsg.data.type]);
 
       self._usingServer.holdAllReplicaBlocksForUser(self);
       // just the one message

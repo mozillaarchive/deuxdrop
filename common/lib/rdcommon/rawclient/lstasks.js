@@ -373,7 +373,8 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
     generate_notifications: function() {
       // - peep notifications
       this.store._notifyPeepConvDeltas(
-        this.inviterPubring.rootPublicKey, this.recipRootKeys,
+        this.inviterPubring.rootPublicKey, null,
+        this.recipRootKeys,
         this.peepIndexMaxes,
         this.inviteeRootKey, { numConvs: 1 });
 
@@ -490,8 +491,11 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
       if (!authorIsOurUser) {
         // - boost unread message count
         promises.push(this.store._db.incrementCell(
-          $lss.TBL_PEEP_DATA, authorRootKey, 'd:nunread',
-          authorIsOurUser ? 0 : 1));
+          $lss.TBL_PEEP_DATA, authorRootKey, 'd:nunread', 1));
+        this.authorDelta = { numUnread: 1 };
+      }
+      else {
+        this.authorDelta = null;
       }
 
       return $Q.all(promises);
@@ -499,7 +503,8 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
     generate_notifications: function(resolvedPromises) {
       // - peep notifications
       this.store._notifyPeepConvDeltas(
-        this.authorRootKey, this.recipRootKeys, this.peepIndexMaxes);
+        this.authorRootKey, this.authorDelta,
+        this.recipRootKeys, this.peepIndexMaxes);
 
       // - conversation notifications
       this.store._notifyModifiedConversation(
@@ -579,11 +584,14 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
       var highReadMsg = postMeta.lastRead || 0;
 
       // --- notifications
+      var promises = [];
       var preMeta = cells["d:u" + authorRootKey];
 
       // -- us!
       if (authorIsOurUser) {
         var highMsg = cells["d:m"];
+
+
 
         // - find the first unread human message
         var unreadRep = null, unreadIndex = 0;
@@ -595,8 +603,7 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
           }
         }
 
-
-        // - update blurb unread
+        // - update conv blurb unread
         var store = this.store;
         this.store._notif.namespaceItemModified(
           NS_CONVBLURBS, convMeta.id, null, null, null, null,
@@ -626,6 +633,39 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
               frontDataDelta.firstUnreadMessage = null;
             }
           });
+
+        // - update peep blurb unreads (disk and queries)
+        // Figure out what messages that were unread that are now considered
+        //  read, issue the appropriate deltas against the peep cell and the
+        //  in-memory blurb.  Build up an in-memory tally for this.
+        var firstUnread = 1;
+        if (preMeta && typeof(preMeta.lastRead) === 'integer') {
+          firstUnread = preMeta.lastRead + 1;
+        }
+        var rootKeysAndTallies = {};
+        for (var iUnread = firstUnread; iUnread <= highReadMsg; iUnread++) {
+          unreadRep = cells["d:m" + iUnread];
+
+          // joins do not count for per-peep unread counts
+          if (unreadRep.type === 'message') {
+            if (!rootKeysAndTallies.hasOwnProperty(unreadRep.authorId))
+              rootKeysAndTallies[unreadRep.authorId] = 0;
+            rootKeysAndTallies[unreadRep.authorId]++;
+          }
+        }
+        var nowreadRootKey, readCount;
+        function genReadDelta(clientData, querySource, outDeltaRep) {
+          clientData.data.numUnread -= readCount;
+          outDeltaRep.numUnread = clientData.data.numUnread;
+        }
+        for (nowreadRootKey in rootKeysAndTallies) {
+          readCount = rootKeysAndTallies[nowreadRootKey];
+
+          promises.push(this.store._db.incrementCell(
+            $lss.TBL_PEEP_DATA, nowreadRootKey, 'd:nunread', -readCount));
+          this.store._notif.namespaceItemModified(
+            NS_PEEPS, nowreadRootKey, null, null, null, null, genReadDelta);
+        }
       }
       // -- not us!
       else {
@@ -659,8 +699,9 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
         }
       }
 
-      return this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id,
-                                     writeCells);
+      promises.push(this.store._db.putCells($lss.TBL_CONV_DATA, convMeta.id,
+                                            writeCells));
+      return $Q.all(promises);
     },
     all_done: function() {
       this.store._log.conversationMessage(this.convMeta.id,

@@ -273,7 +273,7 @@
  *       `sentBy` contains the tell key of the inviter, `invitee` contains the
  *       tell key of the invited.
  *     }
- *     @case["usermeta"]{
+ *     @case["meta"]{
  *       User metadata about the conversation as a whole, likely their
  *       watermarks.  This is made known to the fan-out server as an
  *       optimization so that it does not need to replay meta-data to joining
