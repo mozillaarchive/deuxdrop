@@ -500,6 +500,10 @@ input[type=text]#search {
   background-color: #111;
 }
 
+.privateMessage[watermark="true"] {
+  border-bottom: 2px solid #448;
+}
+
 .privateMessage > .container {
   width: 80%;
   min-width: 80%;

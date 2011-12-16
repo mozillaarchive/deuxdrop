@@ -700,6 +700,14 @@ NotificationKing.prototype = {
       qhIndex = qhList.indexOf(queryHandle);
       qhList.splice(qhIndex, 1);
     }
+
+    // we may have caused some refcounts to go to zero, so if our source is
+    //  dirty, we will need to generate an update.
+    if (querySource.dirty) {
+      // use the store's fill to make sure we're not flushing anything in a
+      //  non-coherent fashion.
+      this._store._fillOutQueryDepsAndSend(null, querySource);
+    }
   },
 
   /**
@@ -877,6 +885,7 @@ NotificationKing.prototype = {
     if (clientData.count > 0)
       return;
 
+    querySource.dirty = true;
     var namespace = clientData.ns;
 
     // forget about it in our mapping
@@ -1292,15 +1301,6 @@ NotificationKing.prototype = {
         var preDeltaDeps = clientData.deps.concat();
         deltaPopulater(clientData, querySource, frontDataDelta, fullName);
         var postDeltaDeps = clientData.deps, iDep, depData;
-
-        // - removals
-        // only removals need to be processed; additions are naturally
-        //  taken care of as part of the dependency creation process
-        for (iDep = 0; iDep < preDeltaDeps.length; iDep++) {
-          depData = preDeltaDeps[iDep];
-          if (postDeltaDeps.indexOf(depData) === -1)
-            this.decrefClientData(querySource, depData);
-        }
 
         querySource.dirty = true;
       }

@@ -328,7 +328,6 @@ define(function (require) {
       var jqNode = $(node);
 
       updateDomFunc(jqNode, itemObj, null);
-      //node.href += '?id=' + encodeURIComponent(itemObj.id);
 
       node[propName] = itemObj;
 
@@ -461,6 +460,15 @@ define(function (require) {
     data.pieces.forEach(function(piece) {
       piece.query.destroy();
       piece.query = null;
+    });
+  }
+
+  /**
+   * Cause a convmsgs query to mark the last message in it as read.
+   */
+  function hookupMsgsQueryToMarkAsRead(query) {
+    query.on('complete', function() {
+      query.items[query.items.length - 1].markAsLastReadMessage();
     });
   }
 
@@ -686,6 +694,7 @@ define(function (require) {
     }
 
     var query = data.query = moda.queryConversationMessages(bundle.conv);
+    hookupMsgsQueryToMarkAsRead(query);
     var conv = query.blurb,
         peep = conv.participants[conv.participants[0].isMe ? 1 : 0],
         me = conv.participants[conv.participants[0].isMe ? 0 : 1],
@@ -718,7 +727,21 @@ define(function (require) {
         return clone;
       },
       'conv',
-      data.query);
+      data.query, null,
+      function updomMessage(jqNode, item, whatChanged) {
+        // update for the straighforward stuff
+        updateDom(jqNode, item);
+        // remove the DOM attr if anything got unmarked
+        if (whatChanged && whatChanged.unmark) {
+          jqNode.removeAttr('watermark');
+        }
+        // set the watermark DOM attr if it's the other guy
+        for (var i = 0; i < item.mostRecentReadMessageBy.length; i++) {
+          var peep = item.mostRecentReadMessageBy[i];
+          if (!peep.isMe)
+            jqNode.attr('watermark', 'true');
+        }
+      });
   };
   remove['privateConv'] = commonQueryKill;
   // XXX this is exactly the logic from groupConv, copy-paste-modified.
@@ -792,6 +815,7 @@ define(function (require) {
    */
   update['groupConv'] = function(data, dom, convNode) {
     data.query = moda.queryConversationMessages(convNode.conv);
+    hookupMsgsQueryToMarkAsRead(data.query);
 
     // - convblurb header
     // (a lot of this logic is similar to the groups items)

@@ -259,13 +259,18 @@ ModaBackside.prototype = {
   _cmd_publishConvUserMetaDelta: function(convLocalName, userMetaDelta) {
     var convClientData = this._notif.mapLocalNameToClientData(
                            this._querySource, NS_CONVBLURBS, convLocalName);
-    var curMeta = convClientData.data.pubMeta;
+    var curMeta = convClientData.data.pubMeta,
+        anyChange = false;
     for (var key in userMetaDelta) {
       switch (key) {
         case 'lastRead':
-          curMeta.lastRead = this._notif.mapLocalNameToClientData(
-                               this._querySource, NS_CONVMSGS,
-                               userMetaDelta.lastRead).data.index;
+          var newlyRead = this._notif.mapLocalNameToClientData(
+                            this._querySource, NS_CONVMSGS,
+                            userMetaDelta.lastRead).data.index;
+          if (newlyRead !== curMeta.lastRead) {
+            curMeta.lastRead = newlyRead;
+            anyChange = true;
+          }
           break;
         default:
           // ignore things not specifically understood for now
@@ -273,6 +278,9 @@ ModaBackside.prototype = {
       }
     }
 
+    // if there was no change, just eat this request
+    if (!anyChange)
+      return null;
     return this._rawClient.publishConvUserMeta(convClientData.data.meta,
                                                curMeta);
   },

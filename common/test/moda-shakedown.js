@@ -203,8 +203,10 @@ TD.commonCase('moda basics', function(T) {
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
 
-  T.group('A, B mark conv #1 read');
+  T.group('A marks conv #1 read');
   moda_a.do_markAsRead(lqConv1Msgs, tConv1);
+
+  T.group('B marks conv #1 read');
   client_b.do_metaToConversation(tConv1, { lastRead: 4 });
 
   T.group('A replies (moda)');
@@ -213,6 +215,11 @@ TD.commonCase('moda basics', function(T) {
 
   moda_a.check_queryContainsConvBlurbs(lqBconvBlurbs, [tConv1]);
   moda_a.check_queryContainsConvBlurbs(lqCconvBlurbs, []);
+
+  T.group('A marks conv #1 read (again)');
+  moda_a.do_markAsRead(lqConv1Msgs, tConv1);
+  T.group('B marks conv #1 read (again)');
+  client_b.do_metaToConversation(tConv1, { lastRead: 5 });
 
   // - A invites C to the conversation (using moda)
   T.group('A invites C');

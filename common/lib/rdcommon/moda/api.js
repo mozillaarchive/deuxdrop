@@ -239,7 +239,8 @@ HumanMessage.prototype = {
   __clone: function(liveset, cloneHelper) {
     return new HumanMessage(
       liveset, this._localName, cloneHelper(this.author),
-      this.composedAt, this.receivedAt, this.text);
+      this.composedAt, this.receivedAt, this.text,
+      this.mostRecentReadMessageBy.map(cloneHelper));
   },
   __forget: function(forgetHelper) {
     forgetHelper(this.author);
@@ -377,12 +378,18 @@ LiveOrderedSet.prototype = {
   on: function(event, listener) {
     var listeners;
     switch (event) {
-      case 'add':
       case 'change':
+        this._eventMap[event] = listener;
+        break;
+      case 'add':
       case 'complete':
       case 'remove':
       case 'reorder':
-        this._eventMap[event] = listener;
+        // promote
+        if (this._eventMap[event] === null)
+          this._eventMap[event] = [listener];
+        else
+          this._eventMap[event].push(listener);
         break;
       default:
         throw new Error("Unsupported event type: '" + event + "'");
@@ -453,23 +460,29 @@ LiveOrderedSet.prototype = {
    * ]
    */
   _notifyCompleted: function(added, addedAtIndex, moved, movedToIndex, removed) {
-    var i, item;
+    var i, item, iListener;
     if (this._eventMap.add && added.length) {
-      var addCall = this._eventMap.add;
+      var addCalls = this._eventMap.add;
       for (i = 0; i < added.length; i++) {
-        addCall(added[i], addedAtIndex[i], this);
+        for (iListener = 0; iListener < addCalls.length; iListener++) {
+          addCalls[iListener](added[i], addedAtIndex[i], this);
+        }
       }
     }
     if (this._eventMap.reorder && moved.length) {
-      var moveCall = this._eventMap.reorder;
+      var moveCalls = this._eventMap.reorder;
       for (i = 0; i < moved.length; i++) {
-        moveCall(moved[i], movedToIndex[i], this);
+        for (iListener = 0; iListener < moveCalls.length; iListener++) {
+          moveCalls[iListener](moved[i], movedToIndex[i], this);
+        }
       }
     }
     if (this._eventMap.remove && removed.length) {
-      var removeCall = this._eventMap.remove;
+      var removeCalls = this._eventMap.remove;
       for (i = 0; i < removed.length; i++) {
-        removeCall(removed[i], this);
+        for (iListener = 0; iListener < removeCalls.length; iListener++) {
+          removeCalls[iListener](removed[i], this);
+        }
       }
     }
     if (this._itemsHaveListeners) {
@@ -491,8 +504,12 @@ LiveOrderedSet.prototype = {
     this.completed = true;
     if (this._listener && this._listener.onCompleted)
       this._listener.onCompleted(this);
-    if (this._eventMap.complete)
-      this._eventMap.complete(this);
+    if (this._eventMap.complete) {
+      var completeCalls = this._eventMap.complete;
+      for (iListener = 0; iListener < completeCalls.length; iListener++) {
+        completeCalls[iListener](this);
+      }
+    }
   },
 
   /**
@@ -1074,10 +1091,6 @@ ModaBridge.prototype = {
                         msg.handle);
       liveset = this._handleMap[msg.handle];
       if (liveset === null) {
-        // if this is the other side confirming the death of the query, delete
-        //  it from our table
-        if (msg.op === 'dead')
-          delete this._handleMap[msg.handle];
         // (otherwise this is a notifcation we no longer care about)
         if (this._mootedMessageReceivedListener)
           this._mootedMessageReceivedListener(msg);
@@ -1353,7 +1366,7 @@ ModaBridge.prototype = {
         case 'mark':
           explainDelta.mark = [];
           for (i = 0; i < delta.mark.length; i++) {
-            peep = lookupClone(NS_PEEPS, delta.mark[i]);
+            peep = lookup(NS_PEEPS, delta.mark[i]);
             curRep.mostRecentReadMessageBy.push(peep);
             explainDelta.mark.push(peep);
           }
@@ -1364,7 +1377,8 @@ ModaBridge.prototype = {
             var peepName = delta.unmark[i];
             for (var j = 0; j < curRep.mostRecentReadMessageBy.length; j++) {
               if (curRep.mostRecentReadMessageBy[j]._localName === peepName) {
-                unmark.push(curRep.mostRecentReadMessageBy.splice(j, 1)[0]);
+                explainDelta.unmark.push(
+                  curRep.mostRecentReadMessageBy.splice(j, 1)[0]);
                 break;
               }
             }

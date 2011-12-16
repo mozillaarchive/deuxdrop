@@ -900,7 +900,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
                              'meta:' + self.__name);
 
     this.T.action(this._eRawClient, 'sends metadata to', tConv, function() {
-      self._expect_metaToConversation_prep(tConv);
+      self._expect_metaToConversation_prep(tConv, tMeta);
 
       var msgInfo = self._rawClient.publishConvUserMeta(
                       tConv.data.convMeta, metaValues);
@@ -909,7 +909,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     });
     this._expdo_metaToConversation_fanout_onwards(tConv, tMeta);
   },
-  _expect_metaToConversation_prep: function(tConv, tNewMsg) {
+  _expect_metaToConversation_prep: function(tConv, tMetaMsg) {
     this._eRawClient.expect_allActionsProcessed();
     this._usingServer.holdAllMailSenderMessages();
     this._usingServer.expectPSMessageToServerFrom(tConv.sdata.fanoutServer,

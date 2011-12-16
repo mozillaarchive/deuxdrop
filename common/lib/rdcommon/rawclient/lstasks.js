@@ -584,7 +584,7 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
       var highReadMsg = postMeta.lastRead || 0;
 
       // --- notifications
-      var promises = [];
+      var promises = [], store = this.store;
       var preMeta = cells["d:u" + authorRootKey];
 
       // -- us!
@@ -602,7 +602,6 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
         }
 
         // - update conv blurb unread
-        var store = this.store;
         this.store._notif.namespaceItemModified(
           NS_CONVBLURBS, convMeta.id, null, null, null, null,
           function deltaBlurb(clientData, querySource, frontDataDelta, convId) {
@@ -637,7 +636,7 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
         //  read, issue the appropriate deltas against the peep cell and the
         //  in-memory blurb.  Build up an in-memory tally for this.
         var firstUnread = 1;
-        if (preMeta && typeof(preMeta.lastRead) === 'integer') {
+        if (preMeta && typeof(preMeta.lastRead) === 'number') {
           firstUnread = preMeta.lastRead + 1;
         }
         var rootKeysAndTallies = {};
@@ -673,9 +672,9 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
       else {
         // - update read watermarks
         // remove read watermark if applicable
-        if (preMeta && typeof(preMeta.lastRead) === 'integer') {
+        if (preMeta && typeof(preMeta.lastRead) === 'number') {
           this.store._notif.namespaceItemModified(
-            NS_CONVMSGS, convId + preMeta.lastRead, null, null, null, null,
+            NS_CONVMSGS, convMeta.id + preMeta.lastRead, null, null, null, null,
             function deltaOld(clientData, querySource, frontDataDelta, msgId) {
               if (!frontDataDelta.hasOwnProperty("unmark"))
                 frontDataDelta.unmark = [];
@@ -687,16 +686,16 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
             });
         }
         // generate read watermark
-        if (postMeta && typeof(postMeta.lastRead) === 'integer') {
+        if (postMeta && typeof(postMeta.lastRead) === 'number') {
           this.store._notif.namespaceItemModified(
-            NS_CONVMSGS, convId + postMeta.lastRead, null, null, null, null,
+            NS_CONVMSGS, convMeta.id + postMeta.lastRead, null, null, null, null,
             function deltaNew(clientData, querySource, frontDataDelta, msgId) {
               if (!frontDataDelta.hasOwnProperty("mark"))
                 frontDataDelta.mark = [];
 
-              var peepData = store._deferringPeepQueryResolve(
-                               querySource, authorRootKey, clientData.deps);
-              frontDataDelta.mark.push(peepData.localName);
+              frontDataDelta.mark.push(
+                store._deferringPeepQueryResolve(
+                  querySource, authorRootKey, clientData.deps));
             });
         }
       }

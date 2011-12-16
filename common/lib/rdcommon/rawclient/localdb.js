@@ -469,6 +469,7 @@ LocalStore.prototype = {
                                                           msg.id,
                                                           clientData.deps));
       }
+      mostRecentActivity = msg.receivedAt;
     }
     if (!iFirstMsg)
       iFirstMsg = 1;
@@ -489,8 +490,6 @@ LocalStore.prototype = {
           firstUnreadMsgName = msgClientData.localName;
         }
       }
-
-      mostRecentActivity = msg.receivedAt;
     }
 
     return {
@@ -530,12 +529,13 @@ LocalStore.prototype = {
       clientData.deps.push(msgClientData);
 
       if (!clientData.data.first) {
+        // (use the recount provided by the conversion and dep-ing above)
         outDeltaRep.firstMessage = msgClientData.localName;
         clientData.data.first = msgNum;
 
         // send this as the first unread too if we ain't got one yet
         if (!clientData.data.unread) {
-          // track the dependency separately
+          // track the dependency separately, we don't own the above refcount
           msgClientData.count++;
           clientData.deps.push(msgClientData);
 
@@ -544,6 +544,7 @@ LocalStore.prototype = {
         }
       }
       else { // !clientData.data.unread
+        // (we have ownership of the refcount provided by the conversion)
         outDeltaRep.firstUnreadMessage = msgClientData.localName;
         clientData.data.unread = msgNum;
       }
@@ -1629,6 +1630,7 @@ LocalStore.prototype = {
     clientData = this._notif.generateClientData(querySource, NS_PEEPS,
                                                 peepRootKey);
     addToDeps.push(clientData);
+    querySource.dirty = true;
 
     return clientData.localName;
   },

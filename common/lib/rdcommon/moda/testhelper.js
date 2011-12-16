@@ -817,7 +817,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       }
 
       var deltaRep = DeltaHelper.convBlurbsExpMaybeDelta_newmsg(lqt, convInfo);
-console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
       if (deltaRep)
         this._ensureExpectedQuery(lqt, true);
     }
@@ -835,8 +834,7 @@ console.error("PCT: ", !!deltaRep, lqt._liveset._handle);
         // we need to report a new first unread message if we were all read up
         //  (and one of the added messages is a text message)
         newFirstUnread = ourMeta.lastRead === convInfo.highestMsgReported;
-console.error("NFU", newFirstUnread, ourMeta.lastRead, convInfo.highestMsgSeen,
-              convInfo.highestMsgReported);
+
     // - convmsgs query updates
     convInfo.highestMsgReported = convInfo.highestMsgSeen;
     for (iQuery = 0; iQuery < queries.length; iQuery++) {
@@ -938,10 +936,9 @@ console.error("NFU", newFirstUnread, ourMeta.lastRead, convInfo.highestMsgSeen,
    * ]
    */
   _ensureExpectedQuery: function(lqt, affectedByUpdatePhase) {
-console.error("EEQ", lqt._liveset._handle);
     if (this._dynPendingQueries.indexOf(lqt) !== -1)
       return;
-console.error("--still here", affectedByUpdatePhase);
+
     // put our actor into 'set' expectations mode for this step since the
     //  query ordering is proving to be intractable to mirror and we don't
     //  really care.
@@ -1178,10 +1175,11 @@ console.error("--still here", affectedByUpdatePhase);
       else {
         if (oldMeta.lastRead)
           this._commonChangeNotifyHelper(
-            NS_CONVMSGS, tConv.data.backlog[oldMeta.lastRead - 1].digitalName,
+            NS_CONVMSGS, tConv.digitalName + oldMeta.lastRead,
             { unmark: [userInfo.name] });
         this._commonChangeNotifyHelper(
-          NS_CONVMSGS, tMsg.digitalName, { mark: [userInfo.name] });
+          NS_CONVMSGS, tConv.digitalName + newMeta.lastRead,
+          { mark: [userInfo.name] });
       }
     }
   },
@@ -1205,7 +1203,6 @@ console.error("--still here", affectedByUpdatePhase);
    *  next round.
    */
   __updatePhaseComplete: function() {
-console.error("UPC!");
     // -- flush out pending message addition NS_CONVMSGS queries
     var pendingConvInfos = this._dynPendingConvMsgs;
     for (var iConv = 0; iConv < pendingConvInfos.length; iConv++) {
@@ -1220,11 +1217,9 @@ console.error("UPC!");
       var lqt = pendingExpQueries[i];
       // (if we had no last state) or
       // (our last state is different from our current state) then send
-console.error("UPC check", lqt._handle);
       if (!lqt._lastState ||
           !$log.smartCompareEquiv(lqt._lastState, lqt._pendingExpDelta.state,
                                   10)) {
-console.error("  gen!");
         this.expect_queryCompleted(lqt.__name, lqt._pendingExpDelta);
         lqt._lastState = lqt._pendingExpDelta.state;
       }
@@ -1286,7 +1281,7 @@ console.error("  gen!");
         });
       },
       unmark: function(item, unmarked) {
-        return marked.map(function(peep) {
+        return unmarked.map(function(peep) {
           return peep.displayName;
         });
       }
@@ -1684,6 +1679,10 @@ console.error("  gen!");
   do_killQuery: function(lqt) {
     var self = this;
     this.T.action('close query', lqt, function() {
+      // XXX we want to expect a queryCompleted notification here if reference
+      //  counts hit zero.  Unfortunately, we don't have reference count
+      //  checkers right now.
+
       // - remove from our list of queries
       switch (lqt._liveset._ns) {
         case 'peeps':
