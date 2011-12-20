@@ -137,6 +137,14 @@ exports.TBL_CONNREQ_SENT = "connRequestsSent";
 exports.IDX_CONNREQ_SENT = "idxSent";
 
 /**
+ * Table for tracking
+ */
+exports.TBL_NEW_TRACKING = "newness";
+exports.ROW_NEW_CONVERSATIONS = "convs";
+exports.ROW_NEW_PEEPS = "peeps";
+exports.ROW_NEW_CONNREQS =  "connreqs";
+
+/**
  * Conversation data.
  *
  * row id: conversation id
@@ -198,6 +206,11 @@ exports.dbSchemaDef = {
         exports.IDX_CONV_PEEP_RECIP_INVOLVEMENT,
         exports.IDX_CONV_PEEP_ANY_INVOLVEMENT,
       ],
+    },
+    {
+      name: exports.TBL_NEW_TRACKING,
+      columnFamilies: ['d'],
+      indices: [],
     },
   ],
 

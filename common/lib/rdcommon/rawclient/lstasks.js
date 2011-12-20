@@ -389,9 +389,9 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
           this.convIndexUpdates);
 
       // - "new" notifications, conv messages notifications
-      this.store._notif.trackNewishMessage(this.convMeta.id, this.msgNum,
-                                           this.msgRec,
-                                           this.cells, this.writeCells);
+      this.store._trackNewishMessage(this.convMeta.id, this.msgNum,
+                                     this.msgRec,
+                                     this.cells, this.writeCells);
       this.store._log.conversationMessage(this.convMeta.id,
                                           this.fanoutEnv.nonce);
     },
@@ -512,8 +512,9 @@ var ConvMessageTask = exports.ConvMessageTask = taskMaster.defineTask({
         this.convIndexUpdates);
 
       // - "new" notification / convmsgs notification
-      this.store._notif.trackNewishMessage(
-        this.convMeta.id, this.msgNum, this.msgRec);
+      this.store._trackNewishMessage(
+        this.convMeta.id, this.msgNum, this.msgRec,
+        this.cells, this.writeCells);
 
       this.store._log.conversationMessage(this.convMeta.id,
                                           this.fanoutEnv.nonce);

@@ -73,6 +73,7 @@ const PINNED = 'pinned';
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
+      NS_CONVNEW = 'convnew',
       NS_SERVERS = 'servers',
       NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
@@ -108,14 +109,72 @@ function LocalStore(dbConn, keyring, pubring, isFirstRun, _logger) {
   this._pubring = pubring;
   this._notif = new $notifking.NotificationKing(this, this._log);
 
+  /**
+   * Used by `_fillOutQueryDepsAndSend` to track any pending dependent database
+   *  lookups which all other query send requests need to block on in order
+   *  to ensure coherency in what we send over the moda bridges.
+   */
   this._queryFillPromise = false;
 
+
+
   /**
-   * The set of root keys of pinned peeps.
+   * @dictof[
+   *   @key["conversation id"]
+   *   @value[@dict[
+   *     @key[firstNewMessage Number]{
+   *       The one-based name of the first new message.
+   *     }
+   *     @key[lastNewMessage Number]{
+   *       The one-based name of the last new message; this is used to
+   *       determine when a conversation is completely caught up without having
+   *       to source the data from elsewhere.  This is mainly useful for
+   *       newness nuking replica blocks, as in the case of processing a meta
+   *       message we will have the data in memory already.
+   *     }
+   *     @key[mostRecentActivity DateMS]{
+   *       The timestamp of the most recent activity.
+   *     }
+   *   ]]
+   * ]{
+   *   In-memory representation for tracking new conversations/messages.
+   * }
    */
-  this._pinnedPeepRootKeys = null;
+  this._newConversations = null;
+  /**
+   * Stores references to a subset of the data from `_newConversations` that
+   *  needs to be written to disk.  Flushed on update phase completion.  Exists
+   *  to reduce write turnover.  Nulls indicate cells to be deleted.
+   */
+  this._newConversationsDirty = null;
+  /**
+   * Stores flags indicating whether anything has been written to the disk
+   *  for the given value so we know whether we have to issue a delete.
+   */
+  this._newConversationsWritten = null;
+
+  /**
+   * Is a function being run by `runMutexed` notionally holding our conceptual
+   *  mutex?
+   */
+  this._mutexActive = false;
+  /**
+   * @listof[@dict[
+   *   @key[func Function]{
+   *     The function to run inside the mutex.
+   *   }
+   *   @key[deferred Deferred]{
+   *     The deferred that owns the promise we returned when the call to
+   *     `runMutexed` was made and we could not immediately service it.
+   *   }
+   * ]]{
+   *   The list of functions yet to run that want to run mutexed.
+   * }
+   */
+  this._mutexQueue = null;
 
   // initialize the db schema and kickoff the bootstrap once the db is happy
+  this.ready = false;
   var self = this;
   when(this._db.defineSchema($lss.dbSchemaDef), function() {
     self._bootstrap(isFirstRun);
@@ -133,9 +192,6 @@ LocalStore.prototype = {
   //////////////////////////////////////////////////////////////////////////////
   // Bootstrap
   _bootstrap: function(isFirstRun) {
-    // - load our list of pinned peeps by root key
-    // XXX actually load after we actually support pinned peeps
-
     // populate our fake self-peep data that `saveOurOwnSelfIdents` doesn't
     //  address
     if (isFirstRun) {
@@ -145,6 +201,62 @@ LocalStore.prototype = {
         'd:nconvs': 0,
       });
     }
+
+    // - load our list of pinned peeps by root key
+    // XXX actually load after we actually support pinned peeps
+
+    // - newness tracking
+    this._loadNewConversationActivity();
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Exclusive Database Access
+
+  /**
+   * Invoke a function when no other calls gated by this function are running.
+   *  If the function returns a promise, we do not run the next mutexed function
+   *  until the promise is resolved/rejected.
+   *
+   * This function is intended to serialize all visible-state-mutating functions
+   *  and any state-exposing functions that could be impacted by the operation
+   *  of a mutating function.  In other words, writes are serialized but reads
+   *  don't have to be if their view of data will always be sufficiently
+   *  coherent no matter what the writes get up to.
+   *
+   * It's probably safest to err on the side of serializing most things.  For
+   *  example, our index scans will return a coherent list of items from a
+   *  single point in time and the data rows are usually atomic and consistent.
+   *  However, in the event that a mutation occurs on an index while we are
+   *  still loading the data for the index, the net result is going to be
+   *  unreliable.  We could defer processing modifications against queries
+   *  in their initial phase, but then we need to make sure the processing
+   *  happens later (which is ugly/complex).  We could ignore modifications
+   *  against queries in their initial phase, but then we are entirely weakening
+   *  our guarantees.
+   *
+   * Additionally, if any I/O is required, in most cases it's probably better
+   *  to avoid inter-mingling I/O of two separate tasks.
+   */
+  runMutexed: function(thingToRun) {
+    if (this._mutexActive) {
+      if (this._mutexQueue == null)
+        this._mutexQueue = [];
+
+      var deferred = $Q.defer();
+      this._mutexQueue.push({ func: thingToRun, deferred: deferred });
+      return deferred.promise;
+    }
+
+    var result = thingToRun();
+    this._mutexActive = true;
+    if (!$Q.isPromise(result)) {
+      this._mutexActive = false;
+      return result;
+    }
+
+    return (this._mutexPromise = when(result,
+      XXX
+      ));
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -980,6 +1092,243 @@ LocalStore.prototype = {
         convUpdates.push([$lss.IDX_CONV_PEEP_RECIP_INVOLVEMENT, rootKey,
                       convId, timestamp]);
       }
+    }
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // New Conversation Activity
+  //
+  // A conversation/messages are eligible for being treated as "new" if they are
+  //  being processed as a result of a 'live' replica block feed (rather than a
+  //  backfill / on-demand retrieval).  They are determined non-new if
+  //  metadata marks them as already read or a replica block explicitly clears
+  //  the new status.
+
+  /**
+   * Query conversations with new activity.  We require that this call only
+   *  be issued after the database has successfully bootstrapped itself, meaning
+   *  that `_loadNewConversationActivity` has been run and its returned promise
+   *  has been resolved.
+   *
+   * This operation must not operate concurrently with processing that could
+   *  alter the newness state of messages, and so it does not.  We use our
+   *
+   *
+   * Ordering is based on most recent activity in the conversation, although it
+   *  is expected that UIs will maintain a stable ordering while the results
+   *  are being looked at.
+   */
+  queryAndWatchNewConversationActivity: function(queryHandle) {
+    // -- query setup
+    var index = queryHandle.index = 'recency',
+        indexParam = queryHandle.indexParam = null, self = this;
+
+    // comparison predicate is keyed off the index
+    queryHandle.cmpFunc = function(aClientData, bClientData) {
+      var aVal = assertGetIndexValue(aClientData.indexValues,
+                                     index, indexParam),
+          bVal = assertGetIndexValue(aClientData.indexValues,
+                                     index, indexParam);
+      return aVal - bVal;
+    };
+
+    queryHandle.testFunc = function(baseCells, mutatedCells, convId) {
+      // all conversations match
+      return true;
+    };
+
+
+    // -- trigger
+    return this.runMutexed(function() {
+      // -- compute
+      return when(
+        this._lookupMultipleItemsById(
+          queryHandle.owner, queryHandle,
+          self._fetchPopulateConversationActivity, NS_CONVNEW,
+          'recency', null, convIdsAndRecency),
+        function() {
+          self._fillOutQueryDepsAndSend(queryHandle);
+        });
+    });
+  },
+
+  /**
+   * The basic idea is to fetch the row for each conversation so we can
+   *  populate the list of new messages.  For simplicity, we assume that the
+   *  messages are not currently exposed to the moda bridge and so we need to
+   *  do the db read.  Correctness is handled under the hood by the message
+   *  conversion logic which knows to reuse an existing rep if one exists.
+   */
+  _fetchPopulateConversationActivity: function(querySource, convId) {
+    var self = this;
+
+    return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
+                function(cells) {
+
+    });
+
+  },
+
+  /**
+   * Load our newness state from the database into our in-memory structure.
+   *  Our database and in-memory representations are identical.
+   */
+  _loadNewConversationActivity: function() {
+    var self = this;
+    return when(this._db.getRow($lss.TBL_NEW_TRACKING,
+                                $lss.ROW_NEW_CONVERSATIONS, null),
+      function(cells) {
+        var newReps = self._newConversations = {};
+        var written = self._newConversationsWritten = {};
+        for (var key in cells) {
+          var convId = key.substring(2);
+          newReps[convId] = cells[key];
+          written[convId] = true;
+        }
+      });
+  },
+
+  /**
+   * Issue database writes/deletions for the new conversation activity as
+   *  needed.
+   */
+  _writeDirtyNewConversationActivity: function() {
+    if (!this._newConversationsDirty)
+      return;
+
+    var toWrite = this._newConversationsDirty, writeCells = {},
+        written = this._newConversationsWritten, anyWrites = false;
+    for (var convId in toWrite) {
+      var val = toWrite[convId];
+      if (val == null) {
+        delete written[convId];
+        this._db.deleteRowCell($lss.TBL_NEW_TRACKING,
+                               $lss.ROW_NEW_CONVERSATIONS,
+                               'd:' + convId);
+      }
+      else {
+        // nb: we are relying on the database implementation to snapshot the
+        //  value by the time we return; if the snapshotting gets delayed,
+        //  correctness could be compromised because `val` is shared and can
+        //  change.
+        writeCells['d:' + convId] = val;
+        anyWrites = true;
+        written[convId] = true;
+      }
+    }
+
+    if (anyWrites) {
+      this._db.store.putCells($lss.TBL_NEW_TRACKING, $lss.ROW_NEW_CONVERSATIONS,
+                              writeCells);
+    }
+
+    this._newConversationsDirty = null;
+  },
+
+  /**
+   * Invoked as new-eligible messages are added to the system.
+   */
+  _trackNewishMessage: function(convId, msgNum, msgRec, baseCells,
+                                mutatedCells) {
+    var newRec, self = this, mergedCells = mutatedCells ? null : baseCells;
+
+    if (this._newConversations.hasOwnProperty(convId)) {
+      newRec = this._newConversations[convId];
+      newRec.mostRecentActivity = msgRec.receiveAt;
+      newRec.lastNewMessage = msgNum;
+
+      this._notif.namespaceItemAdded(
+        NS_CONVNEW, convId, null, null,
+        [['recency', null, null, newRec.mostRecentActivity]],
+        function newConvPopulate(clientData, querySource, convId) {
+          if (!mergedCells)
+            mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
+          var msgClientData = self._convertConversationMessage(
+                                querySource, convId, msgNum, mergedCells);
+          clientData.deps.push(msgClientData);
+          return {
+            messages: [msgClientData.localName],
+          };
+        });
+    }
+    else {
+      newRec = this._newConversations[convId] = {
+        firstNewMessage: msgNum,
+        lastNewMessage: msgNum,
+        mostRecentActivity: msgRec.receivedAt,
+      };
+      this._notif.namespaceItemModified(
+        NS_CONVNEW, convId, null, null,
+        [['recency', null, null, newRec.mostRecentActivity]],
+        null,
+        function newConvDeltaAdd(clientData, querySource, outDeltaRep) {
+          if (!mergedCells)
+            mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
+          var msgClientData = self._convertConversationMessage(
+                                querySource, convId, msgNum, mergedCells);
+          clientData.deps.push(msgClientData);
+
+          if (!outDeltaRep.hasOwnProperty("add"))
+            outDeltaRep.add = [];
+          outDeltaRep.add.push(msgClientData.localName);
+        });
+    }
+    if (!this._newConversationsDirty)
+      this._newConversationsDirty = {};
+    this._newConversationsDirty[convId] = newRec;
+  },
+
+  /**
+   * Invoked as watermarks are received for our user or if explicit replica
+   *  blocks are received.
+   */
+  _mootNewForMessages: function(convId, lastReadMessage) {
+    if (!this._newConversations.hasOwnProperty(convId))
+      return;
+
+    var newRec = this._newConversations[convId];
+    // - no effect (if the mootness does not touch the newness at all)
+    if (lastReadMessage < newRec.firstNewMessage)
+      return;
+    // - partial update, still something new present
+    if (lastReadMessage < newRec.lastNewMessage) {
+
+      var self = this;
+      this._notif.namespaceItemModified(
+        NS_CONVNEW, convId, null, null, null,
+        function newConvDeltaMoot(clientData, querySource, outDeltaRep) {
+          if (!outDeltaRep.hasOwnProperty("moot"))
+            outDeltaRep.moot = 0;
+          // tell it how many to splice out
+          var mootdex = newRec.firstNewMessage;
+          outDeltaRep.moot += lastReadMessage - mootDex;
+          // forget the messages as dependencies
+          while (mootDex <= lastReadMessage) {
+            self._notif.findAndForgetDep(querySource, clientData, NS_CONVMSGS,
+                                         convId + (mootdex++));
+          }
+        });
+      newRec.firstNewMessage = lastReadMessage + 1;
+      return;
+    }
+
+    // - fully read up handling
+    this._notif.namespaceItemDeleted(NS_CONVNEW, convId);
+
+    delete this._newConversations[convId];
+    // do we have a pending write for this conversation?
+    if (this._newConversationsDirty &&
+        this._newConversationsDirty.hasOwnProperty(convId)) {
+      // if there's anything written, use a null to mark a delete
+      if (this._newConversationsWritten.hasOwnProperty(convId))
+        this._newConversationsDirty[convId] = null;
+      // otherwise, any pending writes can just be nuked
+      else
+        delete this._newConversationsDirty[convId];
+    }
+    // if it's not dirty, then there must be writes to nuke...
+    else {
+      this._newConversationsDirty[convId] = null;
     }
   },
 

@@ -273,6 +273,7 @@ const when = $Q.when;
 const NS_PEEPS = exports.NS_PEEPS = 'peeps',
       NS_CONVBLURBS = exports.NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = exports.NS_CONVMSGS = 'convmsgs',
+      NS_CONVNEW = exports.NS_CONVNEW = 'convnew',
       NS_SERVERS = exports.NS_SERVERS = 'servers',
       NS_POSSFRIENDS = exports.NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = exports.NS_CONNREQS = 'connreqs',
@@ -313,6 +314,7 @@ function makeEmptyListsByNS() {
     peeps: [],
     convblurbs: [],
     convmsgs: [],
+    convnew: [],
     servers: [],
     possfriends: [],
     connreqs: [],
@@ -325,6 +327,7 @@ function makeEmptyMapsByNS() {
     peeps: {},
     convblurbs: {},
     convmsgs: {},
+    convnew: {},
     servers: {},
     possfriends: {},
     connreqs: {},
@@ -548,8 +551,6 @@ function NotificationKing(store, _logger) {
   this._store = store;
 
   this._highPrefixNum = 0;
-
-  this._newishMessagesByConvId = {};
 
   // sources and their queries
   this._activeQuerySources = {};
@@ -931,53 +932,6 @@ NotificationKing.prototype = {
 
 
   //////////////////////////////////////////////////////////////////////////////
-  // Message Notifications from LocalStore
-  //
-  // Specialized message notification handling; required because the aggregation
-  //  of messages into conversations is unique within our system.
-
-  /**
-   * Omnibus generation of message-related notifications based on being told
-   *  about all conversation messages (both joins and human messages).
-   *
-   * The following namespaces derive their notifications from us:
-   * - newness: XXX notyet; notifications about new messages/conversations
-   */
-  trackNewishMessage: function(convId, msgNum, msgRec, baseCells,
-                               mutatedCells) {
-    var newishForConv;
-    // -- newness tracking
-// this is speculative logic...
-/*
-    if (!this._newishMessagesByConvId.hasOwnProperty(convId))
-      newishForConv = this._newishMessagesByConvId[convId] = [];
-    else
-      newishForConv = this._newishMessagesByConvId[convId];
-    newishForConv.push({index: msgIndex, rec: msgRec});
-*/
-  },
-
-  /**
-   * XXX speculative, probably should be nuked or moved
-   *
-   * Moot potential new message events in the given conversation.
-   */
-  mootNewForMessages: function(convId, firstUnreadMessage) {
-    return;
-    if (!this._newishMessagesByConvId.hasOwnProperty(convId))
-      return;
-    var newishForConv = this._newishMessagesByConvId[convId];
-    var killUntil = 0;
-    while (newishForConv[killUntil].index < firstUnreadMessage) {
-      killUntil++;
-    }
-    if (killUntil === newishForConv.length)
-      delete this._newishMessagesByConvId[convId];
-    else if (killUntil)
-      newishForConv.splice(0, killUntil);
-  },
-
-  //////////////////////////////////////////////////////////////////////////////
   // Generic Notifications from LocalStore
   //
   // Basic strategy (for each query source):
@@ -1053,6 +1007,11 @@ NotificationKing.prototype = {
         return this._store._fillOutQueryDepsAndSend(null, querySource);
       }
     }
+    //  (reaching this point means we have sent all pending notifications!)
+
+    // - flush newness tracking data to disk
+    this._store._writeDirtyNewConversationActivity();
+
     return undefined;
   },
 

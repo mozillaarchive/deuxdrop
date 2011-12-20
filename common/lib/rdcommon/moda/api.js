@@ -55,6 +55,7 @@ define(
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
+      NS_CONVNEW = 'convnew',
       NS_SERVERS = 'servers',
       NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
@@ -768,20 +769,41 @@ ErrorRep.prototype = {
 ////////////////////////////////////////////////////////////////////////////////
 // Notification Representations
 
-function ConversationNotification() {
+function NewConversationActivity(_liveset, _localName,
+                                 convBlurb, numNewMessages, newMessageAuthors,
+                                 boundedNewMessages) {
+  this._eventMap = null;
+  this._liveset = _liveset;
+  this._localName = _localName;
+  this.convBlurb = convBlurb;
+  this.numNewMessages = numNewMessages;
+  this.authors = newMessageAuthors;
+  this.newMessages = boundedNewMessages;
 }
-ConversationNotification.prototype = {
+NewConversationActivity.prototype = {
+  __namespace: 'convnew',
+  __clone: function(liveset, cloneHelper) {
+    return new NewConversationActivity(
+      liveset, this._localName, cloneHelper(this.convBlurb),
+      this.numNewMessages, this.authors.map(cloneHelper),
+      this.newMessages.map(cloneHelper));
+  },
+  __forget: function(forgetHelper) {
+    forgetHelper(this.convBlurb);
+    this.authors.map(forgetHelper);
+    this.newMessages.map(forgetHelper);
+  },
+  toString: function() {
+    return '[NewConversationActivity ' + this._localName + ']';
+  },
+
+  get id() {
+    return this._localName;
+  },
+
+  on: itemOnImpl,
 };
 
-function ContactAddedNotification() {
-}
-ContactAddedNotification.prototype = {
-};
-
-function ContactRequestNotification() {
-}
-ContactRequestNotification.prototype = {
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -803,6 +825,7 @@ function ModaBridge() {
     peeps: {},
     convblurbs: {},
     convmsgs: {},
+    convnew: {},
     servers: {},
     possfriends: {},
     connreqs: {},
@@ -1116,6 +1139,8 @@ ModaBridge.prototype = {
     this._commonProcess(NS_CONVMSGS, msg);
     // conv blurbs depend on messages, peeps
     this._commonProcess(NS_CONVBLURBS, msg);
+    // conv activity depends on conv blurbs, messages, peeps
+    this._commonProcess(NS_CONVNEW, msg);
     // possible friends depend on peeps
     this._commonProcess(NS_POSSFRIENDS, msg);
     // connection requests depend on peeps
@@ -1386,6 +1411,26 @@ ModaBridge.prototype = {
           break;
       }
     }
+    return explainDelta;
+  },
+
+  _transform_convnew: function(localName, wireRep, lookup) {
+    var authors = [], messages = [], i;
+    for (i = 0; i < wireRep.authors.length; i++) {
+      authors.push(this._dataByNS.peeps[wireConv.authors[i]]);
+    }
+    for (i = 0; i < wireRep.messages.length; i++) {
+      messages.push(this._dataByNS.convmsgs[wireConv.messages[i]]);
+    }
+    return new NewConversationActivity(null,
+      localName, this._dataByNS.convnew[wireRep.conv],
+      wireRep.numNew, authors, messages);
+  },
+
+  _delta_convnew: function(curRep, delta, lookup, forget) {
+    var explainDelta = {
+    };
+
     return explainDelta;
   },
 
@@ -1669,7 +1714,7 @@ ModaBridge.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Notification Queries
+  // Notifications
   //
   // These are posed as queries rather than straight-up change notifications
   //  because in the world of multiple clients we want to be able to take back
@@ -1677,11 +1722,15 @@ ModaBridge.prototype = {
   //  in.
 
   /**
-   * @args[
-   *   @param[listenerMap @dictof["event name" Function]]
-   * ]
    */
-  queryNotifications: function() {
+  queryNewConversationActivity: function() {
+    var handle = this._nextHandle++;
+    var liveset = new LiveOrderedSet(this, handle, NS_CONVNEW, query, listener,
+                                     data);
+    this._handleMap[handle] = liveset;
+    this._sets.push(liveset);
+    this._send('queryNewConversationActivity', handle, query);
+    return liveset;
   },
 
   //////////////////////////////////////////////////////////////////////////////

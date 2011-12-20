@@ -463,6 +463,14 @@ ModaBackside.prototype = {
          this._needsbind_queryProblem.bind(this, queryHandle));
   },
 
+  _cmd_queryNewConversationActivity: function(bridgeQueryName, queryDef) {
+    var queryHandle = this._notif.newTrackedQuery(
+                        this._querySource, bridgeQueryName,
+                        NS_CONVNEW, {});
+    when(this._store.queryAndWatchNewConversationActivity(queryHandle), null,
+         this._needsbind_queryProblem.bind(this, queryHandle));
+  },
+
   _cmd_queryErrors: function(bridgeQueryName, queryDef) {
     var queryHandle = this._notif.newTrackedQuery(
                         this._querySource, bridgeQueryName,
