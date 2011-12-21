@@ -154,10 +154,10 @@ function LocalStore(dbConn, keyring, pubring, isFirstRun, _logger) {
   this._newConversationsWritten = null;
 
   /**
-   * Is a function being run by `runMutexed` notionally holding our conceptual
-   *  mutex?
+   * If a function is currently `runMutexed`, the deferred to be resolved once
+   *  it completes.
    */
-  this._mutexActive = false;
+  this._mutexDeferred = false;
   /**
    * @listof[@dict[
    *   @key[func Function]{
@@ -171,7 +171,10 @@ function LocalStore(dbConn, keyring, pubring, isFirstRun, _logger) {
    *   The list of functions yet to run that want to run mutexed.
    * }
    */
-  this._mutexQueue = null;
+  this._mutexQueue = [];
+
+  this._mutexRunSuccess = this._mutexRunCompleted.bind(this, true);
+  this._mutexRunFailure = this._mutexRunCompleted.bind(this, false);
 
   // initialize the db schema and kickoff the bootstrap once the db is happy
   this.ready = false;
@@ -238,10 +241,7 @@ LocalStore.prototype = {
    *  to avoid inter-mingling I/O of two separate tasks.
    */
   runMutexed: function(thingToRun) {
-    if (this._mutexActive) {
-      if (this._mutexQueue == null)
-        this._mutexQueue = [];
-
+    if (this._mutexDeferred) {
       var deferred = $Q.defer();
       this._mutexQueue.push({ func: thingToRun, deferred: deferred });
       return deferred.promise;
@@ -254,9 +254,28 @@ LocalStore.prototype = {
       return result;
     }
 
-    return (this._mutexPromise = when(result,
-      XXX
-      ));
+    this._mutexDeferred = $Q.defer();
+    when(result, this._mutexRunSuccess, this._mutexRunFailure);
+    return this._mutexDeferred.promise;
+  },
+
+  _mutexRunCompleted: function(success, result) {
+    if (success) {
+      this._mutexDeferred.resolve(result);
+    }
+    else {
+      this._mutexDeferred.reject(result);
+    }
+
+    if (this._mutexQueue.length === 0) {
+      this._mutexDeferred = null;
+      return;
+    }
+
+    var toRun = this._mutexQueue.shift();
+    this._mutexDeferred = toRun.deferred;
+    // (not bothering with fast-pathing here)
+    when(toRun.func(), this._mutexRunSuccess, this._mutexRunFailure);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -296,28 +315,31 @@ LocalStore.prototype = {
    * - connect/contact request
    */
   consumeReplicaBlock: function(serialized) {
-    // (we used to JSON.stringify, now we don't)
-    var mform = serialized,
-        authed, block;
-    if (mform.hasOwnProperty("fanmsg")) {
-      return this._proc_fanmsg(mform);
-    }
-    // explicitly typed, currently implies contact request
-    else if(mform.hasOwnProperty("type")) {
-      return this._proc_reqmsg(mform);
-    }
-    else {
-      if (mform.hasOwnProperty("nonce")) {
-        block = JSON.parse(this._keyring.openSecretBoxUtf8With(
-                    mform.sboxed, mform.nonce, 'replicaSbox'));
+    var self = this;
+    this.runMutexed(function() {
+      // (we used to JSON.stringify, now we don't)
+      var mform = serialized,
+          authed, block;
+      if (mform.hasOwnProperty("fanmsg")) {
+        return self._proc_fanmsg(mform);
+      }
+      // explicitly typed, currently implies contact request
+      else if(mform.hasOwnProperty("type")) {
+        return self._proc_reqmsg(mform);
       }
       else {
-        this._keyring.verifyAuthUtf8With(mform.auth, mform.block,
-                                         'replicaAuth');
-        block = JSON.parse(mform.block);
+        if (mform.hasOwnProperty("nonce")) {
+          block = JSON.parse(self._keyring.openSecretBoxUtf8With(
+                      mform.sboxed, mform.nonce, 'replicaSbox'));
+        }
+        else {
+          self._keyring.verifyAuthUtf8With(mform.auth, mform.block,
+                                           'replicaAuth');
+          block = JSON.parse(mform.block);
+        }
+        return self._performReplicaCommand(block.cmd, block.id, block.data);
       }
-      return this._performReplicaCommand(block.cmd, block.id, block.data);
-    }
+    });
   },
 
   /**
@@ -336,25 +358,51 @@ LocalStore.prototype = {
                                  id, payload);
   },
 
+  /**
+   * Generate a replica block and immediately return it, while asynchronously
+   *  triggering the processing of the crypto block.  No notification is
+   *  provided when the crypto block is fully processed, so beware.
+   *
+   * An encrypted replica block is generated which the mailstore cannot read.
+   *  However, do keep in mind that there may be a lot of explicit context to
+   *  the means by which we provide the replica block to the mailstore.
+   *  Additionally, there may be some context that is inferrable from recent
+   *  activity between the server and us which is explicit.
+   */
   generateAndPerformReplicaCryptoBlock: function(command, id, payload) {
     var serialized = this.generateReplicaCryptoBlock(command, id, payload),
         self = this;
-    when(this._performReplicaCommand(command, id, payload),
-         function() {
-           // we want to make sure any database effects of the above are relayed
-           self._notif.updatePhaseDoneReleaseNotifications();
-         });
+    this.runMutexed(function() {
+      when(self._performReplicaCommand(command, id, payload),
+           function() {
+             // we want to make sure any database effects of the above are relayed
+             self._notif.updatePhaseDoneReleaseNotifications();
+           });
+    });
     return serialized;
   },
 
+  /**
+   * Generate a replica block and immediately return it, while asynchronously
+   *  triggering the processing of the crypto block.  No notification is
+   *  provided when the crypto block is fully processed, so beware.
+   *
+   * A (shared-secret) authenticated replica block that can be authenticated by
+   *  other clients is generated whose contents are exposed.  This should be
+   *  used when the mailstore needs to be able to see the contents but we still
+   *  want other clients to be able to tell things the mailstore made apart
+   *  from things a valid client said.
+   */
   generateAndPerformReplicaAuthBlock: function(command, id, payload) {
     var serialized = this.generateReplicaAuthBlock(command, id, payload),
         self = this;
-    when(this._performReplicaCommand(command, id, payload),
-         function() {
-           // we want to make sure any database effects of the above are relayed
-           self._notif.updatePhaseDoneReleaseNotifications();
-         });
+    this.runMutexed(function() {
+      when(self._performReplicaCommand(command, id, payload),
+           function() {
+             // we want to make sure any database effects of the above are relayed
+             self._notif.updatePhaseDoneReleaseNotifications();
+           });
+    });
     return serialized;
   },
 
@@ -369,10 +417,6 @@ LocalStore.prototype = {
 
   //////////////////////////////////////////////////////////////////////////////
   // Notifications
-
-  _notifyNewMessagesInConversation: function(convId, msgDataItems) {
-
-  },
 
   /**
    * If there are any required dataDeps for the queryHandle, then retrieve them
@@ -431,7 +475,9 @@ LocalStore.prototype = {
 
   /**
    * Perform an index scan, use the results to perform lookups on items not
-   *  already loaded, then send the query results when done.
+   *  already loaded, then send the query results when done.  This is run
+   *  mutexed to avoid potential inconsistency relating to the ordering of the
+   *  index or the index values associated with an item.
    */
   _indexScanLookupAndReport: function(writeQueryHandle, namespace, fetchFunc,
                                       table, index, indexParam, scanDir,
@@ -441,19 +487,21 @@ LocalStore.prototype = {
       scanFunc = 'scanIndex';
 
     var self = this;
-    return when(
-      this._db[scanFunc](table, index, indexParam, scanDir,
-                         null, null, null, null, null, null),
-      function(ids) {
-        return when(
-          self._lookupMultipleItemsById(
-            writeQueryHandle.owner, writeQueryHandle,
-            fetchFunc, namespace,
-            index, indexParam, ids),
-          function() {
-            self._fillOutQueryDepsAndSend(writeQueryHandle);
-          });
-      });
+    return this.runMutexed(function() {
+      return when(
+        self._db[scanFunc](table, index, indexParam, scanDir,
+                           null, null, null, null, null, null),
+        function(ids) {
+          return when(
+            self._lookupMultipleItemsById(
+              writeQueryHandle.owner, writeQueryHandle,
+              fetchFunc, namespace,
+              index, indexParam, ids),
+            function() {
+              self._fillOutQueryDepsAndSend(writeQueryHandle);
+            });
+        });
+    });
   },
 
   _lookupMultipleItemsById: function(querySource, writeQueryHandle,
@@ -1137,10 +1185,27 @@ LocalStore.prototype = {
       return true;
     };
 
-
     // -- trigger
     return this.runMutexed(function() {
-      // -- compute
+      // -- compute new convs sorted by recency (descending)
+      var newConvsArray = [];
+      // put them in an array
+      for (var key in self._newConversations) {
+        newConvsArray.push(self._newConversations[key]);
+      }
+      // sort them
+      newConvsArray.sort(function(a, b) {
+        return b.mostRecentActivity - a.mostRecentActivity;
+      });
+      // convert to (flattened) pairs of [convId, mostRecentActivity]
+      var convIdsAndRecency = [];
+      for (var i = 0; i < newConvsArray.length; i++) {
+        var newConvInfo = newConvsArray[i];
+        // XXX XXX hats
+        //convIdsAndRecency.push(newConvInfo
+      }
+
+
       return when(
         this._lookupMultipleItemsById(
           queryHandle.owner, queryHandle,
@@ -1164,7 +1229,9 @@ LocalStore.prototype = {
 
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
+      // we gots the row; create messages for all the new ones
 
+      // XXX XXX XXX
     });
 
   },
@@ -1551,7 +1618,9 @@ LocalStore.prototype = {
     queryHandle.cmpFunc = function(a, b) {
       return b.receivedAt - a.receivedAt;
     };
-    return when(this._db.scanIndex(
+    return this.runMutexed(function() {
+     // XXX try and rejigger this to use _indexScanLookupAndReport
+     return when(self._db.scanIndex(
                   $lss.TBL_CONNREQ_RECV, $lss.IDX_CONNREQ_RECEIVED, '', -1),
       function(results) {
         var rootKeys = [];
@@ -1602,6 +1671,7 @@ LocalStore.prototype = {
 
         return getNextMaybeGot();
       }); // rejection pass-through is desired
+    });
   },
 
   //////////////////////////////////////////////////////////////////////////////
