@@ -770,15 +770,17 @@ ErrorRep.prototype = {
 // Notification Representations
 
 function NewConversationActivity(_liveset, _localName,
-                                 convBlurb, numNewMessages, newMessageAuthors,
+                                 convBlurb, numNewMessages,
                                  boundedNewMessages) {
   this._eventMap = null;
   this._liveset = _liveset;
   this._localName = _localName;
   this.convBlurb = convBlurb;
   this.numNewMessages = numNewMessages;
-  this.authors = newMessageAuthors;
+  this.authors = null;
   this.newMessages = boundedNewMessages;
+
+  this._deriveAuthors();
 }
 NewConversationActivity.prototype = {
   __namespace: 'convnew',
@@ -802,6 +804,23 @@ NewConversationActivity.prototype = {
   },
 
   on: itemOnImpl,
+
+  _deriveAuthors: function() {
+    var authors = this.authors = [];
+    for (var i = 0; i < this.newMessages; i++) {
+      var msg = this.newMessages[i];
+      if (msg.type === 'message') {
+        if (authors.indexOf(msg.author) === -1)
+          authors.push(msg.author);
+      }
+      else {
+        if (authors.indexOf(msg.inviter) === -1)
+          authors.push(msg.inviter);
+        if (authors.indexOf(msg.invitee) === -1)
+          authors.push(msg.invitee);
+      }
+    }
+  },
 };
 
 
@@ -1415,21 +1434,45 @@ ModaBridge.prototype = {
   },
 
   _transform_convnew: function(localName, wireRep, lookup) {
-    var authors = [], messages = [], i;
-    for (i = 0; i < wireRep.authors.length; i++) {
-      authors.push(this._dataByNS.peeps[wireConv.authors[i]]);
-    }
+    var messages = [], i;
     for (i = 0; i < wireRep.messages.length; i++) {
       messages.push(this._dataByNS.convmsgs[wireConv.messages[i]]);
     }
     return new NewConversationActivity(null,
       localName, this._dataByNS.convnew[wireRep.conv],
-      wireRep.numNew, authors, messages);
+      wireRep.numNew, messages);
   },
 
   _delta_convnew: function(curRep, delta, lookup, forget) {
+    var msg, i;
     var explainDelta = {
+      addedMessages: null,
+      removedMessages: null,
     };
+    for (var attr in delta) {
+      switch (attr) {
+        case 'add':
+          explainDelta.addedMessages = [];
+          for (i = 0; i < delta.add.length; i++) {
+            msg = lookup(NS_CONVMSGS, delta.add[i]);
+            curRep.newMessages.push(msg);
+            explainDelta.addedMessages.push(msg);
+            curRep.numNewMessages++;
+          }
+          break;
+        case 'moot':
+          explainDelta.removedMessages =
+            curRep.newMessages.splice(0, delta.moot);
+          curRep.numNewMessages -= delta.moot;
+          break;
+      }
+    }
+    // - always recompute authors
+    // (because both messages and moot can affect this)
+    // We don't generate an explicit delta list right now, but we could if it
+    //  turns out consumers would benefit and their UI helpers don't already
+    //  cover it sufficiently well.
+    curRep._deriveAuthors();
 
     return explainDelta;
   },

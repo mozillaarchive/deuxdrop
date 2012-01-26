@@ -1159,8 +1159,8 @@ LocalStore.prototype = {
    *  has been resolved.
    *
    * This operation must not operate concurrently with processing that could
-   *  alter the newness state of messages, and so it does not.  We use our
-   *
+   *  alter the newness state of messages, and so it does not.  We use
+   *  `runMutexed` to ensure this.
    *
    * Ordering is based on most recent activity in the conversation, although it
    *  is expected that UIs will maintain a stable ordering while the results
@@ -1191,20 +1191,19 @@ LocalStore.prototype = {
       var newConvsArray = [];
       // put them in an array
       for (var key in self._newConversations) {
-        newConvsArray.push(self._newConversations[key]);
+        newConvsArray.push([key, self._newConversations[key]]);
       }
       // sort them
       newConvsArray.sort(function(a, b) {
-        return b.mostRecentActivity - a.mostRecentActivity;
+        return b[1].mostRecentActivity - a[1].mostRecentActivity;
       });
       // convert to (flattened) pairs of [convId, mostRecentActivity]
       var convIdsAndRecency = [];
       for (var i = 0; i < newConvsArray.length; i++) {
-        var newConvInfo = newConvsArray[i];
-        // XXX XXX hats
-        //convIdsAndRecency.push(newConvInfo
+        var newConvPair = newConvsArray[i];
+        convIdsAndRecency.push(newConvPair[0]);
+        convIdsAndRecency.push(newConvPair[1].mostRecentActivity);
       }
-
 
       return when(
         this._lookupMultipleItemsById(
@@ -1225,15 +1224,28 @@ LocalStore.prototype = {
    *  conversion logic which knows to reuse an existing rep if one exists.
    */
   _fetchPopulateConversationActivity: function(querySource, convId) {
-    var self = this;
+    var self = this,
+        clientData = this._notif.generateClientData(querySource, NS_CONVNEW,
+                                                    convId);
 
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
       // we gots the row; create messages for all the new ones
+      var newRec = self._newConversations[convId],
+          dataRep = querySource.dataMap[NS_CONVNEW][clientData.localName] = {
+            messages: [],
+          };
 
-      // XXX XXX XXX
+      for (var iNew = newRec.firstNewMessage;
+           iNew <= newRec.lastNewMessage; iNew++) {
+        var msgClientData = self._convertConversationMessage(
+                              querySource, convId, iNew, cells);
+        clientData.deps.push(msgClientData);
+        dataRep.messages.push(msgClientData.localName);
+      }
+
+      return clientData;
     });
-
   },
 
   /**
@@ -1299,6 +1311,7 @@ LocalStore.prototype = {
                                 mutatedCells) {
     var newRec, self = this, mergedCells = mutatedCells ? null : baseCells;
 
+    // - new message in an already new-tracked conversation
     if (this._newConversations.hasOwnProperty(convId)) {
       newRec = this._newConversations[convId];
       newRec.mostRecentActivity = msgRec.receiveAt;
@@ -1318,6 +1331,7 @@ LocalStore.prototype = {
           };
         });
     }
+    // - first new-tracked message for this conversation
     else {
       newRec = this._newConversations[convId] = {
         firstNewMessage: msgNum,
