@@ -646,12 +646,14 @@ RawClientAPI.prototype = {
 
       // - extract the e-mail address
       // extract the bundled assertion
-      var bundled = JSON.parse($snafu.atob(proof.assertion));
+      var arr = proof.assertion.split('~');
+      var assertion = arr.pop();
+      var certificates = arr;
       // iterate over the identity certificates, stopping when we find one whose
       //  principal is an email.
       var email = null;
-      for (var iCert = 0; iCert < bundled.certificates.length; iCert++) {
-        var jwt = bundled.certificates[iCert];
+      for (var iCert = 0; iCert < certificates.length; iCert++) {
+        var jwt = certificates[iCert];
         var idxFirstPeriod = jwt.indexOf('.'),
             idxSecondPeriod = jwt.indexOf('.', idxFirstPeriod + 1),
             secondClause = jwt.substring(idxFirstPeriod + 1, idxSecondPeriod);

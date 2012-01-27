@@ -370,9 +370,12 @@ define(function (require) {
    *  with the peep blurb.
    */
   function compositeQueryBind(listNode, clonable, propName, data, pieces,
-                              onAllComplete, frag) {
+                              onAllComplete, updateDomFunc) {
     var fusionMap = {}, requiredCount = 0, queriesLeft = pieces.length,
-        reps = [];
+        reps = [], newReps = [], pendingFlush = false, frag;
+    if (!updateDomFunc)
+      updateDomFunc = updateDom;
+
     data.pieces = pieces;
     function chewPiece(piece, iPiece) {
       if (piece.required)
@@ -391,7 +394,7 @@ define(function (require) {
             node: null,
             onChange: function(thing) {
               if (fuser.node)
-                updateDom($(fuser.node), rep);
+                updateDomFunc($(fuser.node), rep);
             },
             onRemove: function(thing) {
               if (!fuser.node)
@@ -402,12 +405,14 @@ define(function (require) {
             }
           };
           reps.push(fuser.rep);
+          newReps.push(fuser.rep);
         }
         else {
           fuser = fusionMap[mappedKey];
-          if (fuser.rep.hasOwnProperty(piece.name))
-            throw new Error("Map collision for piece '" + piece.name +
-                            "' on key '" + mappedKey + "'");
+          if (fuser.rep.hasOwnProperty(piece.name)) {
+            console.error("Map collision", piece.name, mappedKey);
+            return;
+          }
         }
         fuser.rep[piece.name] = item;
 
@@ -422,7 +427,7 @@ define(function (require) {
             var node = fuser.node = clonable.cloneNode(true),
                 rep = fuser.rep;
 
-            updateDom($(node), rep);
+            updateDomFunc($(node), rep);
             node[propName] = rep;
 
             // XXX currently we are append-only and ignoring ordering hints;
@@ -438,10 +443,19 @@ define(function (require) {
           fuser.onChange();
         }
       });
-      piece.query.on('complete', function() {
-        if (--queriesLeft === 0 && onAllComplete) {
-          onAllComplete(reps);
+      function handleComplete() {
+        pendingFlush = false;
+
+        // generate the completion notification:
+        if (onAllComplete) {
+          try {
+            onAllComplete(newReps);
+          }
+          catch (ex) {
+            console.error("onAllComplete threw", ex);
+          }
         }
+        newReps = [];
 
         if (!frag)
           return;
@@ -452,6 +466,30 @@ define(function (require) {
 
         // Refresh card sizes.
         cards.adjustCardSizes();
+      };
+      piece.query.on('complete', function() {
+        // - Incremental Update?
+        if (queriesLeft === 0) {
+          // It's possible there are more query results coming, and they
+          //  should be happening real soon now, so let's give them some time
+          //  to happen.  We would probably be better off waiting for a
+          //  replica update complete notification if we generated one, but
+          //  our current usage is a hack in general right now, so this is fine.
+          //  (Which is to say, a mutating event triggered by a view is a fairly
+          //  horrible idea, especially with the inherent race.  The private
+          //  conversation needs to move down the stack if we keep it.)
+          if (!pendingFlush) {
+            setTimeout(handleComplete, 200);
+            pendingFlush = true;
+          }
+          return;
+        }
+        // If we are still waiting on queries, keep waiting.
+        if (--queriesLeft > 0) {
+          return;
+        }
+        // Last query just completed, so process immediately.
+        handleComplete();
       });
     }
     pieces.forEach(chewPiece);
@@ -629,8 +667,7 @@ define(function (require) {
    */
   update['private'] = function (data, dom) {
     // Get the node to use for each peep.
-    var clonable = getChildCloneNode(dom[0]),
-        frag = document.createDocumentFragment();
+    var clonable = getChildCloneNode(dom[0]);
 
     compositeQueryBind(
       dom.find('.scroller'), clonable, 'privBundle', data,
@@ -676,7 +713,11 @@ define(function (require) {
           });
         }
       },
-      frag);
+      function updom(jqNode, bundle) {
+        updateDom(jqNode, bundle);
+        if (bundle.conv)
+          jqNode.toggleClass("unread", bundle.conv.numUnreadMessages > 0);
+      });
   };
   remove['private'] = compositeQueryKill;
 

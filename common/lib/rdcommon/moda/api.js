@@ -462,54 +462,64 @@ LiveOrderedSet.prototype = {
    */
   _notifyCompleted: function(added, addedAtIndex, moved, movedToIndex, removed) {
     var i, item, iListener;
-    if (this._eventMap.add && added.length) {
-      var addCalls = this._eventMap.add;
-      for (i = 0; i < added.length; i++) {
-        for (iListener = 0; iListener < addCalls.length; iListener++) {
-          addCalls[iListener](added[i], addedAtIndex[i], this);
+    try {
+      if (this._eventMap.add && added.length) {
+        var addCalls = this._eventMap.add;
+        for (i = 0; i < added.length; i++) {
+          for (iListener = 0; iListener < addCalls.length; iListener++) {
+            addCalls[iListener](added[i], addedAtIndex[i], this);
+          }
+        }
+      }
+      if (this._eventMap.reorder && moved.length) {
+        var moveCalls = this._eventMap.reorder;
+        for (i = 0; i < moved.length; i++) {
+          for (iListener = 0; iListener < moveCalls.length; iListener++) {
+            moveCalls[iListener](moved[i], movedToIndex[i], this);
+          }
+        }
+      }
+      if (this._eventMap.remove && removed.length) {
+        var removeCalls = this._eventMap.remove;
+        for (i = 0; i < removed.length; i++) {
+          for (iListener = 0; iListener < removeCalls.length; iListener++) {
+            removeCalls[iListener](removed[i], this);
+          }
+        }
+      }
+      if (this._itemsHaveListeners) {
+        var itemEvents;
+        for (i = 0; i < moved.length; i++) {
+          item = moved[i];
+          itemEvents = item._eventMap;
+          if (itemEvents && itemEvents.reorder)
+            itemEvents.reorder(item, movedToIndex[i], this);
+        }
+        for (i = 0; i < removed.length; i++) {
+          item = removed[i];
+          itemEvents = item._eventMap;
+          if (itemEvents && itemEvents.remove)
+            itemEvents.remove(item, this);
         }
       }
     }
-    if (this._eventMap.reorder && moved.length) {
-      var moveCalls = this._eventMap.reorder;
-      for (i = 0; i < moved.length; i++) {
-        for (iListener = 0; iListener < moveCalls.length; iListener++) {
-          moveCalls[iListener](moved[i], movedToIndex[i], this);
-        }
-      }
-    }
-    if (this._eventMap.remove && removed.length) {
-      var removeCalls = this._eventMap.remove;
-      for (i = 0; i < removed.length; i++) {
-        for (iListener = 0; iListener < removeCalls.length; iListener++) {
-          removeCalls[iListener](removed[i], this);
-        }
-      }
-    }
-    if (this._itemsHaveListeners) {
-      var itemEvents;
-      for (i = 0; i < moved.length; i++) {
-        item = moved[i];
-        itemEvents = item._eventMap;
-        if (itemEvents && itemEvents.reorder)
-          itemEvents.reorder(item, movedToIndex[i], this);
-      }
-      for (i = 0; i < removed.length; i++) {
-        item = removed[i];
-        itemEvents = item._eventMap;
-        if (itemEvents && itemEvents.remove)
-          itemEvents.remove(item, this);
-      }
+    catch (ex) {
+      console.error("Exception during completion delta notifications:", ex);
     }
 
     this.completed = true;
-    if (this._listener && this._listener.onCompleted)
-      this._listener.onCompleted(this);
-    if (this._eventMap.complete) {
-      var completeCalls = this._eventMap.complete;
-      for (iListener = 0; iListener < completeCalls.length; iListener++) {
-        completeCalls[iListener](this);
+    try {
+      if (this._listener && this._listener.onCompleted)
+        this._listener.onCompleted(this);
+      if (this._eventMap.complete) {
+        var completeCalls = this._eventMap.complete;
+        for (iListener = 0; iListener < completeCalls.length; iListener++) {
+          completeCalls[iListener](this);
+        }
       }
+    }
+    catch (ex) {
+      console.error("Exception during completion notification:", ex);
     }
   },
 
@@ -1096,14 +1106,19 @@ ModaBridge.prototype = {
                 deltaFunc.call(this, inst, delta, lookupClone, forgetHelper);
 
               // - generate 'change' notifications
-              if (lsetChangeFunc)
-                lsetChangeFunc(inst, liveset, explained);
+              try {
+                if (lsetChangeFunc)
+                  lsetChangeFunc(inst, liveset, explained);
 
-              if (!inst._eventMap)
-                continue;
-              var changeFunc = inst._eventMap.change;
-              if (changeFunc)
-                changeFunc(inst, liveset, explained);
+                if (!inst._eventMap)
+                  continue;
+                var changeFunc = inst._eventMap.change;
+                if (changeFunc)
+                  changeFunc(inst, liveset, explained);
+              }
+              catch (ex) {
+                console.error("Exception during change processing:", ex);
+              }
             }
           }
         }
