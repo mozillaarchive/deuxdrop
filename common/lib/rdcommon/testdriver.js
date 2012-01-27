@@ -192,6 +192,11 @@ function TestDefinerRunner(testDefiner, superDebug, exposeToTestOptions) {
   this._superDebug = Boolean(superDebug);
 
   this._logBadThingsToLogger = null;
+
+  // If Q has the (currently speculative) functionality to report unhandled
+  //  rejections and track live promises so that we can report outstanding ones,
+  //  then let's remember that.
+  this._fancyQ = 'loggingEnableFriendly' in $Q;
 }
 TestDefinerRunner.prototype = {
   toString: function() {
@@ -274,11 +279,8 @@ TestDefinerRunner.prototype = {
     else {
       // create a deferred so we can generate a timeout.
       var deferred = $Q.defer(), self = this;
-      // -- timeout handler
-      var countdownTimer = $timers.setTimeout(function() {
-        if (self._superDebug)
-          console.error("!! timeout fired, deferred?", deferred !== null);
-        if (!deferred) return;
+
+      function failStep() {
         // - tell the actors to fail any remaining expectations
         for (var iActor = 0; iActor < liveActors.length; iActor++) {
           actor = liveActors[iActor];
@@ -290,10 +292,27 @@ TestDefinerRunner.prototype = {
         }
         self._runtimeContext._liveActors = null;
 
+        // - generate errors for outstanding promises...
+        if (self._fancyQ) {
+          var unresolved = $Q.friendlyUnresolvedDeferreds();
+          for (var iUnres = 0; iUnres < unresolved.length; iUnres++) {
+            var annotation = unresolved[iUnres];
+            step.log.unresolvedPromise(annotation);
+          }
+        }
+
         step.log.timeout();
         step.log.result('fail');
         deferred.resolve(false);
         deferred = null;
+      }
+
+      // -- timeout handler
+      var countdownTimer = $timers.setTimeout(function() {
+        if (self._superDebug)
+          console.error("!! timeout fired, deferred?", deferred !== null);
+        if (!deferred) return;
+        failStep();
       }, step.timeoutMS || DEFAULT_STEP_TIMEOUT_MS);
       // -- promise resolution/rejection handler
       if (this._superDebug)
@@ -328,25 +347,7 @@ TestDefinerRunner.prototype = {
         // XXX we should do something with the failed expectation pair...
         clearTimeout(countdownTimer);
 
-        // - tell the actors we are done with this round
-        for (var iActor = 0; iActor < liveActors.length; iActor++) {
-          actor = liveActors[iActor];
-          // let's generate failures so it's clear what might might have yet
-          //  to fail because of some other built-in failures.  This should
-          //  help make all our expectations more explicit.  This is
-          //  particularly helpful in the unordered case where mismatches are
-          //  now reported as unexpected events instead of mismatches (because
-          //  we have no edit distance type algorithm to tell which in a set
-          //  was closest/close at all, etc.).
-          actor.__failUnmetExpectations();
-          actor.__resetExpectations();
-        }
-        self._runtimeContext._liveActors = null;
-
-        step.log.run_end();
-        step.log.result('fail');
-        deferred.resolve(false);
-        deferred = null;
+        failStep();
       });
       return deferred.promise;
     }
@@ -457,8 +458,10 @@ TestDefinerRunner.prototype = {
 
   runAll: function(errorTrapper) {
 //console.error(" runAll()");
-    var deferred = $Q.defer(), iTestCase = 0, definer = this._testDefiner,
+    var deferred = $Q.defer("TestDefinerRunner.runAll"),
+        iTestCase = 0, definer = this._testDefiner,
         self = this;
+
     definer._log.run_begin();
     // -- next case
     function runNextTestCase() {
@@ -471,6 +474,11 @@ TestDefinerRunner.prototype = {
 
         definer._log.run_end();
         self._clearDefinerUnderTest(definer);
+
+        if (self._fancyQ) {
+          $Q.loggingDisable();
+        }
+
 //console.error("   resolving!");
         deferred.resolve(self);
         return;
@@ -500,6 +508,49 @@ TestDefinerRunner.prototype = {
         self._logBadThingsToLogger.uncaughtException(ex);
     }
     errorTrapper.on('uncaughtException', uncaughtExceptionHandler);
+
+    if (self._fancyQ) {
+      const RE_IGNORE_FRAME = /(?:^native)|(?:\/q\.js$)|(?:^node.js$)/,
+            RE_IS_Q = /\/q\.js$/, RE_IS_FAIL = /^(?:exports\.)?fail$/;
+      $Q.loggingEnableFriendly({
+        unhandledRejections: uncaughtExceptionHandler,
+        /**
+         * Track unresolved promises, and try and automatically derive a
+         *  useful name from the caller by finding the first frame that has
+         *  nothing to do with Q.  In many cases, things will just be internal
+         *  Q book-keeping, and we try and handle that too.
+         */
+        trackLive: function fallbackAnnoGenerator() {
+          var e = {}, useFrame = 3;
+          Error.captureStackTrace(e);
+          // book-keeping will involve when (but could also be the user)
+          if (RE_IS_Q.test(e.stack[3].filename)) {
+            useFrame++;
+
+            if (e.stack[3].funcName === 'when') {
+              // Q.all uses .fail for its failure handler...
+              if (RE_IS_Q.test(e.stack[4].filename) &&
+                  RE_IS_FAIL.test(e.stack[4].funcName)) {
+                return "Q:fail?";
+              }
+            }
+            else if (RE_IS_FAIL.test(e.stack[3].funcName)) {
+              // this is coming frmo a backtrace that looks like it is part
+              //  of ALL.
+              return "Q:internals?";
+            }
+          }
+          while ((useFrame < e.stack.length) &&
+                 RE_IGNORE_FRAME.test(e.stack[useFrame].filename)) {
+            useFrame++;
+          }
+          var frame = e.stack[useFrame];
+          if (!frame)
+            return e.stack;
+          return frame.funcName + " @ " + frame.filename + ":" + frame.lineNo;
+        },
+      });
+    }
 
     runNextTestCase();
     return deferred.promise;
@@ -633,7 +684,7 @@ exports.runTestsFromModule = function runTestsFromModule(testModuleName,
                                                          runOptions,
                                                          ErrorTrapper,
                                                          superDebug) {
-  var deferred = $Q.defer();
+  var deferred = $Q.defer("runTestsFromModule:" + testModuleName);
   var runner;
   function itAllGood() {
 //console.error("  itAllGood()");

@@ -590,6 +590,15 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
       result: false,
     }
   },
+  /**
+   * Log container for the execution of the test step that is expected to get
+   *  exposed to the UI, but separately from its descendents which end up
+   *  flattened and (probably) visualized like a sequence diagram.
+   *
+   * For a healthy test run we expect the 'run' async job to bracket the
+   *  stepFunc invocation and that's it.  For an unhealthy run any of the
+   *  errors defined below can show up.
+   */
   testStep: {
     //implClass: TestStep,
     type: $log.TEST_DRIVER,
@@ -607,9 +616,34 @@ var LOGFAB = exports.LOGFAB = $log.register(null, {
       group: false,
     },
     errors: {
+      /**
+       * The test step did not complete (because not all actor expectations
+       *  were fulfilled) within the allowed time duration.  This will also
+       *  be accompanied by 1) expectation failures being generated on all the
+       *  loggers whose actors still had pending expectations, and 2) unresolved
+       *  promise errors for all outstanding promises here on the step as
+       *  "unresolvedPromise" errors.
+       */
       timeout: {},
-      actorNeverGotLogger: {type: false, name: false},
-      uncaughtException: {ex: $log.EXCEPTION},
+      /**
+       * An actor that was expected to be active this test step never had a
+       *  logger get created that ended up associated with it.
+       */
+      actorNeverGotLogger: { type: false, name: false },
+      /**
+       * We heard about an uncaught exception via global means: node's
+       *  "uncaughException" event, RequireJS' "require.onError" handler, or
+       *  a Q (promise) rejection that no one listened for.  The Q case could
+       *  be an explicit rejection or an exception that the Q internals
+       *  converted into a rejection.  We may end up breaking out non-expection
+       *  rejections into their own handler.
+       */
+      uncaughtException: { ex: $log.EXCEPTION },
+      /**
+       * Generated on timeout using Q introspection capabilities (when
+       *  available)
+       */
+      unresolvedPromise: { annotation: false },
     },
   },
 });
