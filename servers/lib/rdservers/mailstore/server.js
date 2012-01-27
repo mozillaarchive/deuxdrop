@@ -381,7 +381,7 @@ ClientServicingConnection.prototype = {
     }
     function phonebookProblem() {
       if (--pendingCount === 0)
-        deferred.resolve(peepSelfIdents);
+        sendAndBeDone();
     }
 
     // -- ask ourselves
