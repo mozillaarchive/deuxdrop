@@ -209,14 +209,14 @@ UserBehalfDataStore.prototype = {
     var cells = {};
     cells['d:' + tellKey] = reqData;
     var lexipadded = lexipadTS(receivedAt);
-    return $Q.wait(
+    return $Q.all([
       this._db.putCells(TBL_REQUESTS_IN,
                         this._userRowBit + lexipadded,
                         cells),
       this._db.putCells(TBL_REQUESTS_SUPPRESS,
                         this._userRowBit + tellKey,
                         {'d:why': lexipadded})
-    );
+    ]);
   },
 
   getIncomingContactRequest: function(tellKey) {
@@ -238,14 +238,14 @@ UserBehalfDataStore.prototype = {
    *  specifically marking the suppression table with a rejection notice.
    */
   rejectContactRequest: function(receivedAt, tellKey) {
-    return $Q.wait(
+    return $Q.all([
       this._db.deleteRowCell(TBL_REQUESTS_IN,
                              this._userRowBit + lexipadTS(receivedAt),
                              'd:' + tellKey),
       this._db.putCells(TBL_REQUESTS_SUPPRESS,
                         this._userRowBit + tellKey,
                         {'d:why': 'r'})
-    );
+    ]);
   },
 
   banServerForContacts: function(serverBoxKey) {
@@ -261,14 +261,14 @@ UserBehalfDataStore.prototype = {
    * }
    */
   checkForSuppressedContactRequest: function(userTellKey, serverBoxKey) {
-    return $Q.join(
+    return $Q.all([
       this._db.getRowCell(TBL_REQUESTS_SUPPRESS,
                           this._userRowBit + serverBoxKey,
                           'd:why'),
       this._db.getRowCell(TBL_REQUESTS_SUPPRESS,
                           this._userRotBit + userTellKey,
-                          'd:why'),
-      function(serverSuppress, userSuppress) {
+                          'd:why')
+      ]).spread(function(serverSuppress, userSuppress) {
         return userSuppress || serverSuppress || null;
       });
   },

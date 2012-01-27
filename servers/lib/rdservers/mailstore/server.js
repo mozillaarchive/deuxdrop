@@ -419,15 +419,13 @@ ClientServicingConnection.prototype = {
    *  our initial fullpub configuration.
    */
   _msg_root_createConversation: function(msg) {
-    return $Q.join(
+    return when(
       this.config.senderApi.sendPersonEnvelopeToServer(
         this.userEffigy.rootPublicKey,
         msg.toTransit,
         // is there a better way to know this?
         this.userEffigy.pubring.transitServerPublicKey),
-      // create a new conversation with the metadata
-      this._bound_ackAction
-    );
+      this._bound_ackAction);
   },
 
   /**
@@ -435,14 +433,13 @@ ClientServicingConnection.prototype = {
    *  a ghost for the outgoing message.
    */
   _msg_root_convMessage: function(msg) {
-    return $Q.join(
+    return when(
       this.config.senderApi.sendPersonEnvelopeToServer(
         this.userEffigy.rootPublicKey,
         msg.toTransit,
         msg.toServer),
       // create a new conversation with the metadata
-      this._bound_ackAction
-    );
+      this._bound_ackAction);
   },
 
   /**
@@ -548,8 +545,8 @@ ClientServicingConnection.prototype = {
    */
   _msg_root_rejectContact: function(msg) {
     return when(
-      $Q.wait(this.sendReplicaBlockToOtherClients(msg.replicaBlock),
-              this.uproc.rejectContactRequest(msg)),
+      $Q.all([this.sendReplicaBlockToOtherClients(msg.replicaBlock),
+              this.uproc.rejectContactRequest(msg)]),
       this._bound_ackAction);
   },
 
@@ -557,7 +554,7 @@ ClientServicingConnection.prototype = {
    * Modify the metadata associated with a contact.
    */
   _msg_root_metaContact: function(msg) {
-    return $Q.join(
+    return when(
       this.store.metaContact(msg.userRootKey, msg.replicaBlock),
       this._bound_ackAction);
   },

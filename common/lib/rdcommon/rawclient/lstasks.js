@@ -360,14 +360,14 @@ var ConvJoinTask = exports.ConvJoinTask = taskMaster.defineTask({
 
 
       var self = this;
-      return $Q.wait(
+      return $Q.all([
         this.store._db.putCells($lss.TBL_CONV_DATA, this.convMeta.id,
                                 writeCells),
         this.store._db.updateMultipleIndexValues(
           $lss.TBL_CONV_DATA, convIndexUpdates),
         this.store._db.maximizeMultipleIndexValues(
           $lss.TBL_PEEP_DATA, peepIndexMaxes)
-      );
+      ]);
     },
     // this has to happen after we perform the db maxification
     generate_notifications: function() {

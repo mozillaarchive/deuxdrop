@@ -1471,12 +1471,12 @@ LocalStore.prototype = {
     //  duplicate suppression is keyed off of the tell key rather than the
     //  root key.
     var self = this;
-    return when($Q.wait(
+    return when($Q.all([
         this._db.putCells($lss.TBL_CONNREQ_RECV, othPubring.rootPublicKey,
                           cells),
         this._db.updateMultipleIndexValues($lss.TBL_CONNREQ_RECV,
                                            indexValues)
-      ),
+      ]),
       function() {
         // - notify
         self._notif.namespaceItemAdded(
@@ -1494,9 +1494,9 @@ LocalStore.prototype = {
       [$lss.IDX_CONNREQ_SENT, '', recipRootKey, details.sentAt],
     ], self = this;
     return when(
-      $Q.wait(this._db.putCells($lss.TBL_CONNREQ_SENT, recipRootKey, details),
+      $Q.all([this._db.putCells($lss.TBL_CONNREQ_SENT, recipRootKey, details),
               this._db.updateMultipleIndexValues($lss.TBL_CONNREQ_SENT,
-                                                 indexValues)),
+                                                 indexValues)]),
       function() {
         // if there is a phonebook result for this person, let us remove it.
         self._notif.namespaceItemDeleted(NS_POSSFRIENDS, recipRootKey);
@@ -1531,11 +1531,11 @@ LocalStore.prototype = {
       //  delete it.  This may need to be revisited.
       [$lss.IDX_CONNREQ_RECEIVED, '', peepRootKey, null],
     ];
-    return $Q.wait(
+    return $Q.all([
       this._notif.namespaceItemDeleted(NS_CONNREQS, peepRootKey),
       this._db.deleteMultipleIndexValues($lss.TBL_CONNREQ_RECV, delIndices),
       this._db.deleteRowCell($lss.TBL_CONNREQ_RECV, peepRootKey)
-    );
+    ]);
   },
 
 
@@ -2089,7 +2089,7 @@ LocalStore.prototype = {
     var arg = {
       store: this, peepOident: signedOident, othPubring: this._pubring,
     };
-    return $Q.wait(
+    return $Q.all([
       // contact addition mode
       (new $ls_tasks.PeepNameTrackTask(arg, this._log)).run(),
       // update indices per the design call
@@ -2103,7 +2103,7 @@ LocalStore.prototype = {
                                 peepRootKey, now),
       // delete any existing connection request from the database
       this._nukeConnectRequest(peepRootKey)
-    );
+    ]);
   },
 
   /**

@@ -240,13 +240,13 @@ UserMessageProcessor.prototype = {
    *  outgoing request.
    */
   _completeContactAdd: function(incoming, outgoing) {
-    return $Q.wait(
+    return $Q.all([
       // persist contact replica block to our random-access store
       this.store.newContact(outgoing.userRootKey, outgoing.replicaBlock),
       // send replica block to all clients
       this.relayMessageToAllClients(outgoing.replicaBlock),
       // delete out our outgoing contact request
-      this.store.deleteOutgoingContactRequest(outgoing.userTellKey));
+      this.store.deleteOutgoingContactRequest(outgoing.userTellKey)]);
   },
 
   //////////////////////////////////////////////////////////////////////////////
@@ -283,14 +283,14 @@ var UserOutgoingContactRequestTask = taskMaster.defineEarlyReturnTask({
       var serverKey =
         $pubident.peekServerSelfIdentBoxingKeyNOVERIFY(
           this.msg.serverSelfIdent);
-      return $Q.wait(
+      return $Q.all([
         // - issue maildrop/fanout authorization
         this.config.dropApi.authorizeServerUserForContact(
           this.effigy.rootPublicKey, serverKey, this.msg.userTellKey),
         // - ensure the sending layer knows how to talk to that user too
         this.config.senderApi.setServerUrlUsingSelfIdent(
           this.msg.serverSelfIdent)
-      );
+      ]);
     },
     send_outgoing: function() {
       return this.config.senderApi.sendContactEstablishmentMessage(
@@ -359,12 +359,12 @@ var UserIncomingContactRequestTask = taskMaster.defineEarlyReturnTask({
       return undefined;
     },
     persist: function() {
-      return $Q.wait(
+      return $Q.all([
         this.store.putIncomingContactRequest(this.receivedBundle.receivedAt,
                                              this.receivedBundle.senderKey,
                                              this.receivedBundle)
 
-      );
+      ]);
     },
     relay_request_to_clients: function() {
       return this.uproc.relayMessageToAllClients(this.receivedBundle);
@@ -559,7 +559,7 @@ var UserConvMessageTask = taskMaster.defineTask({
         convId: this.convId,
         transit: this.transitServerKey,
       };
-      return $Q.wait(null,
+      return $Q.all([
         this.store.addConversationMessage(this.convId,
                                           this.highMessageNumber,
                                           this.replicaBlock),
@@ -567,7 +567,7 @@ var UserConvMessageTask = taskMaster.defineTask({
                                           this.fanoutMsg.receivedAt,
                                           this.fanoutMsg.sentBy,
                                           this.participants)
-      );
+      ]);
     },
     relay_to_subscribed_clients: function() {
       return this.uproc.relayMessageToAllClients(this.replicaBlock);
