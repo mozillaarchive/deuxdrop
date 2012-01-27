@@ -316,7 +316,7 @@ LocalStore.prototype = {
    */
   consumeReplicaBlock: function(serialized) {
     var self = this;
-    this.runMutexed(function() {
+    return this.runMutexed(function() {
       // (we used to JSON.stringify, now we don't)
       var mform = serialized,
           authed, block;
@@ -1297,8 +1297,8 @@ LocalStore.prototype = {
     }
 
     if (anyWrites) {
-      this._db.store.putCells($lss.TBL_NEW_TRACKING, $lss.ROW_NEW_CONVERSATIONS,
-                              writeCells);
+      this._db.putCells($lss.TBL_NEW_TRACKING, $lss.ROW_NEW_CONVERSATIONS,
+                        writeCells);
     }
 
     this._newConversationsDirty = null;
