@@ -242,6 +242,34 @@ parser.command('define-server')
     });
   });
 
+parser.command('alter-server')
+  .help("Alter an existing server configuration; all options clobber.")
+  .opts({
+    configDir: OPT_CONFIG_DIR,
+    serverType: OPT_SERVER_TYPE,
+    dbServer: OPT_DB_SERVER,
+    dbPort: OPT_DB_PORT,
+    dbPrefix: OPT_DB_PREFIX,
+    dnsName: OPT_DNS_NAME,
+    humanName: OPT_HUMAN_NAME,
+    listenIP: OPT_LISTEN_IP,
+    listenPort: OPT_LISTEN_PORT,
+    announcePort: OPT_ANNOUNCE_PORT,
+  })
+  .callback(function(options) {
+    require(['rdservers/configurer'], function($configurer) {
+      applyGlobalOptions(options);
+      try {
+        $configurer.cmdAlterConfig(options.configDir, options);
+      }
+      catch (ex) {
+        console.error(ex);
+        process.exit(2);
+      }
+    });
+  });
+
+
 var OPT_LOGGEST_WEB_DEBUG = {
   string: "--loggest-web-debug",
   default: false,

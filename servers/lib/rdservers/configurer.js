@@ -343,6 +343,53 @@ exports.cmdCreateConfig = function createConfig(configDir, opts) {
   saveSelfIdentOff(signedSelfIdent, configDir);
 };
 
+/**
+ * Alter an existing configuration; basically, the same as `cmdCreateConfig`
+ *  but we reuse the keys.
+ */
+exports.cmdAlterConfig = function alterConfig(configDir, opts) {
+  configDir = normalizeConfigPath(configDir);
+
+  if (opts.announcePort === 0)
+    opts.announcePort = opts.listenPort;
+
+  // - depersist the keyring, config
+  var rootKeyData = loadConfigFileFromDir(ROOTKEY_FILE_NAME, configDir),
+      serializedConfig = loadConfigFileFromDir(CONFIG_FILE_NAME, configDir);
+
+  var rootKeyring = $keyring.loadServerRootKeyring(rootKeyData),
+      keyring = $keyring.loadLongtermBoxingKeyring(serializedConfig.keyring);
+
+  // - apply changes
+  // details for the self-ident
+  var details = {
+    tag: 'server:full',
+    meta: {
+      displayName: opts.humanName,
+    },
+    url: 'ws://' + opts.dnsName + ':' + opts.announcePort + '/',
+  };
+
+  var signedSelfIdent =
+    $pubident.generateServerSelfIdent(rootKeyring, keyring, details);
+
+  serializedConfig = {
+    keyring: keyring.data,
+    signedSelfIdent: signedSelfIdent,
+    dbKind: 'redis',
+    dbServer: opts.dbServer,
+    dbPort: opts.dbPort,
+    dbPrefix: opts.dbPrefix,
+    listenIP: opts.listenIP,
+    listenPort: opts.listenPort,
+    announcePort: opts.announcePort,
+  };
+
+  // - persist
+  saveConfigFileToDir(serializedConfig, CONFIG_FILE_NAME, configDir);
+  saveSelfIdentOff(signedSelfIdent, configDir);
+};
+
 var ALIVE_LIST = [];
 
 /**

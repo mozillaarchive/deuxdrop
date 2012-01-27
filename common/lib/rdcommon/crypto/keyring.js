@@ -654,6 +654,10 @@ exports.createNewServerRootKeyring = function() {
   return new ServerRootSigningKeyring();
 };
 
+exports.loadServerRootKeyring = function(persistedForm) {
+  return new ServerRootSigningKeyring(persistedForm);
+};
+
 exports.loadSimpleBoxingKeyring = function(persistedForm) {
   return new ExposedSimpleBoxingKeyring(persistedForm.rootPublicKey,
                                         persistedForm.keypair);
