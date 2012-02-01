@@ -321,8 +321,6 @@ AuthApi.prototype = {
     return when(this._db.scanStringIndex(
                   TBL_USER_ACCOUNT, IDX_PUB_FRIEND_PEEPS_NAME, '', 1),
       function(results) {
-        var deferred = $Q.defer();
-
         // - map the root keys to self idents
         var rootKeys = [];
         for (var iResult = 0; iResult < results.length; iResult += 2) {

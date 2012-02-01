@@ -64,7 +64,8 @@ var TD = exports.TD = $tc.defineTestsFor($module, null,
 TD.commonCase('moda friending', function(T) {
   T.group('setup');
 
-  // only A needs to use moda for our tests.
+  // Use moda for both so we can see both sides of the equation and thereby cut
+  //  the number of required steps in half.
   var client_a = T.actor('testClient', 'A', {moda: true}),
       moda_a = T.actor('testModa', 'mA', {client: client_a}, client_a),
       client_b = T.actor('testClient', 'B', {moda: true}),
@@ -119,7 +120,8 @@ TD.commonCase('moda friending', function(T) {
 TD.commonCase('moda rejection', function(T) {
   T.group('setup');
 
-  // only A needs to use moda for our tests.
+  // Use moda for both so we can see both sides of the equation and thereby cut
+  //  the number of required steps in half.
   var client_a = T.actor('testClient', 'A', {moda: true}),
       moda_a = T.actor('testModa', 'mA', {client: client_a}, client_a),
       client_b = T.actor('testClient', 'B', {moda: true}),

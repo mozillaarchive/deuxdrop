@@ -1267,6 +1267,40 @@ RawClientAPI.prototype = {
   */
 
   //////////////////////////////////////////////////////////////////////////////
+  // Newness Tracking
+
+  /**
+   * @args[
+   *   @param[convNewnessDetails @listof[@dict[
+   *     @key[convId]
+   *     @key[lastNonNewMessage Number]
+   *   ]]]
+   * ]
+   */
+  clearNewness: function(convNewnessDetails) {
+    var now = Date.now();
+    // We generate this replica block without an identifier because it's an
+    //  aggregate.  We generate as an aggregate because the concept of 'newness'
+    //  always applies to recent things, and recent things are usually relevant
+    //  to all devices.  In the future it might be worth us trying to break
+    //  the aggregate into multiple aggregates along subscription lines to avoid
+    //  providing small devices with details on things they don't care about.
+    //  Currently it seems better to err on the side of aggregating too much
+    //  data rather than issuing N requests so they can be tightly bound to
+    //  subscriptions.
+    var clearingReplicaBlock = this.store.generateAndPerformReplicaCryptoBlock(
+      'clearNewness', null,
+      {
+        sentAt: now,
+        convNewnessDetails: convNewnessDetails,
+      });
+    this._enqueuePersistentAction({
+      type: 'broadcastReplicaBlock',
+      replicaBlock: clearingReplicaBlock,
+    });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Error Tracking
 
   _findPublishedError: function(errorId, errorParam) {

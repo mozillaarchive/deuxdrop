@@ -105,32 +105,35 @@
  *    all invitees:
  *   - The maildrop/mailsender information to use to contact the fanout node
  *      (much like for contacting a person).
- *   - The criteria used to define eligible membership in the group.  This would
- *      usually be an attestation that all of the initial participants are
- *      authorized and have delegation rights.
+ *   - The creator of the conversation, providing them with the authority to
+ *      invite participants (with all new participants transitively authorized.)
  *
  * - Conversation inviting.
+ *   - In order to avoid race conditions in the authorization of 1) the invitee
+ *      to participate in the conversation as perceived by the fanout server and
+ *      2) the receipt of messages from the fanout server by the invitee's
+ *      server, invitations are issued as an onion.
+ *   - The outermost layer of the onion
  *   - The person inviting someone (if authorized) writes an attestation that
- *      they are inviting some identity (per public key) and clarified by that
- *      user's most recent self-attestation (providing contact endpoints) to the
- *      explicitly named conversation (per public key).  They include the
- *      attestation chain that authorized them to join the conversation and sign
- *      the whole thing as a block.  They then verify their own attestation to
- *      verify they truly are authorized.  The rationale for using a public
- *      key signature for the attestation is that the group needs to be able
- *      to determine who invited the person.
- *   - Tentatively, no content message (ex: "hey Jon, thought I'd add you") is
- *      associated with the invitation; instead the user is expected to just
- *      send a message to the list that the user will (eventually) see so that
- *      everyone can know why the user is being added.  I have no UX sign-off
- *      on this though, so no assumptions.
- *   - The inviter formulates a message with two or more notable parts and sends
- *      it to the fanout server to re-transmit once it has authorized the user
- *      to participate in the conversation.
+ *      they are inviting some identity (per public key).  They include their
+ *      own 'other person ident' attestation for the invitee which includes
+ *      (some revision of) the invitee's own self-ident plus any annotations
+ *      the inviter made.  For example, invitee "John Smith"'s self-ident
+ *      may have a displayName of "John Smith", but the inviter may have
+ *      provided a displayName of "Jimbo" which describes how he refers to him.
+ *      This message is exposed to the conversation as a "join" message.
+ *   - No content message (ex: "hey Jon, thought I'd add you") is associated
+ *      with the invitation; instead the user is expected to just send a message
+ *      to the list that the user will (eventually) see so that everyone can
+ *      know why the user is being added.  I have no UX sign-off on this though,
+ *      so no assumptions.
+ *   - The inviter formulates a message with two notable parts and sends it to
+ *      the fanout server to re-transmit once it has authorized the user to
+ *      participate in the conversation.
  *     - The secret key for the conversation, encrypted with message body-level
  *        encryption so that the recipient and only the recipient can decrypt
  *        the messages.
- *     - The signed attestation chain, encrypted with envelope-level encryption
+ *     - The signed attestation encrypted with body-level encryption
  *        so that the user's mailstore can automatically subscribe to the
  *        conversation on their behalf.
  *
@@ -226,21 +229,6 @@
  * - Human message in the conversation (from participant).
  * - Machine message (from participant)
  * - Join message (machine message from fanout server itself)
- *
- * ## hbase data model: conversations
- * - row id: [owner id, conversation epoch, conversation id]
- * - column family: "x": the index of the conversations known to the server
- *   - "n": The next message sequence number.
- *   - "p:#...": Authorized identity public key => contact info.
- * - column family: "c": the actual conversation data.
- *   - "o": The current conversation self-attestation.
- *   - "m:####": strictly ordered message with given sequence number.  Human or
- *      machine messages that fit into the timeline from the perspective of
- *      the fanout node (including join notifications which include the
- *      attestation chains).
- *   - "r:#...": Latched per-recipient meta-data for storing watermarks where
- *      new data clobbers existing data.  All other meta-data should go under
- *      "m".
  **/
 
 define(
@@ -251,98 +239,9 @@ define(
     exports
   ) {
 
-/**
- * Process a conversation creation request from an account-holding user,
- *  creating the conversation and sending out the initial set of messages as
- *  duly authorized. Logic upstream of us is responsible for ensuring the
- *  account-holding-ness.
+/*
+ * All the logic that logically belongs here currently lives in
+ *  maildrop/server.js.
  */
-var CreateConversationTask = taskMaster.defineTask({
-  name: "createConversation",
-  steps: {
-    /**
-     * Make sure all the crypto checks out for creating the conversation.
-     */
-    validateRequestCrypto: function() {
-    },
-    /**
-     * Make sure the recipients are all known to us (and presumably we have a
-     *  mutual relationship).
-     */
-    validateRequestRecipients: function() {
-    },
-    /**
-     * Create the root database record if it does not exist, failing if it
-     *  already does.  This is a race only in the event of a failure upstream or
-     *  a badly behaved client and is a failure we accordingly want to draw
-     *  attention to.  (If this were less rare, we would check this further
-     *  upstream before we do some other db checks like recipient verification.)
-     *
-     * Note that because we do not have/require higher-level transactions, we
-     *  use an expiring lock that will let through an identical task in the
-     *  future if we have not marked the conversation as fully started before
-     *  the expiration.
-     */
-    createConversationRootRace: function() {
-    },
-    /**
-     * Send the messages to all the recipients, wait for the send layer to have
-     *  reliably taken on their delivery.
-     */
-    sendMessages: function() {
-    },
-    /**
-     * Mark the conversation as fully started.
-     */
-    finalizeConversationRoot: function() {
-    },
-  }
-});
-
-/**
- * Make sure the author of this message is in on the conversation.
- */
-function commonVerifySenderIsAuthorized() {
-}
-
-/**
- * Add a human or machine-message to the conversation.  Machine-messages, such
- *  as per-user metadata blobs, may replace previous messages of the same type.
- */
-var AddMessageToConversationTask = taskMaster.defineTask({
-  name: "addMessageToConversation",
-  steps: {
-    verifySenderIsAuthorized: commonVerifySenderIsAuthorized,
-    persistMessage: function() {
-    },
-    sendMessageToAll: function() {
-    },
-  }
-});
-
-var ServerInviteTask = taskMaster.defineTask({
-  name: "serverInvite",
-  steps: {
-    verifySenderIsAuthorized: commonVerifySenderIsAuthorized,
-    /**
-     * Add the user to the conversation data structure, including creating and
-     *  persisting the join notification message.
-     */
-    addUserToConversation: function() {
-    },
-    /**
-     * Send the joining user all of the conversation backlog.
-     */
-    sendConversationBacklogToUser: function() {
-    },
-    /**
-     * Send the join notification to all users on the conversation.
-     */
-    sendJoinMessageToAll: function() {
-    },
-  },
-});
-
-
 
 }); // end define

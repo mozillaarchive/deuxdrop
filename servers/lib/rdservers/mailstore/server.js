@@ -298,12 +298,32 @@ ClientServicingConnection.prototype = {
       promises.push(this.store.clientQueuePush(clientKey, block));
     }
 
-    // - notify any lives ones about the enqueueing
+    // - notify any live ones about the enqueueing
     var self = this;
     return when($Q.all(promises), function() {
                   self.config.userConnTracker.notifyOthersOfReplicaBlock(
                     self, block);
                 });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Broad replica functionality exposure
+
+  /**
+   * Send a replica block to all the other clients that we, the server, do not
+   *  need to know anything about.
+   *
+   * This is currently used to clear newness meta-data that is not a side-effect
+   *  of reading messages but rather explicit clearing of the newness state.
+   *  This does not need to be persisted because the state of newness has little
+   *  historical relevance.
+   * XXX consider stashing this in a time-bounded queue that we can play to
+   *  new clients...
+   */
+  _msg_root_broadcastReplicaBlock: function(msg) {
+    return when(
+      this.sendReplicaBlockToOtherClients(msg.replicaBlock),
+      this._bound_ackAction);
   },
 
   //////////////////////////////////////////////////////////////////////////////

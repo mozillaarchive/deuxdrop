@@ -70,6 +70,7 @@ const when = $Q.when;
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
+      NS_CONVNEW = 'convnew',
       NS_SERVERS = 'servers',
       NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
@@ -156,7 +157,7 @@ ModaBackside.prototype = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
-  // Receive from the ModaBridge, boss around NotificationKing, LocalStore
+  // ModaBridge command routing
 
   /**
    * Handle messages from the `ModaBridge`, re-dispatching to helper methods
@@ -184,6 +185,9 @@ ModaBackside.prototype = {
     return rval;
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Connection Management
+
   _cmd_connect: function() {
     this._rawClient.connect();
   },
@@ -191,6 +195,9 @@ ModaBackside.prototype = {
   _cmd_disconnect: function() {
     this._rawClient.disconnect();
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Connection Requests
 
   _cmd_connectToPeep: function(_ignored, payload) {
     var clientData = this._notif.mapLocalNameToClientData(
@@ -211,6 +218,9 @@ ModaBackside.prototype = {
       pubring.rootPublicKey, pubring.getPublicKeyFor('messaging', 'tellBox'),
       reqData.data.receivedAt, payload.reportAs);
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Conversation Actions
 
   _cmd_createConversation: function(_ignored, convData) {
     var peepOIdents = [], peepPubrings = [];
@@ -284,6 +294,21 @@ ModaBackside.prototype = {
     return this._rawClient.publishConvUserMeta(convClientData.data.meta,
                                                curMeta);
   },
+
+  _cmd_clearNewness: function(_ignored, details) {
+    var msgLocalNames = details.messages, convNewnessDetails = [];
+    for (var i = 0; i < msgLocalNames.length; i++) {
+      var msgData = this._notif.mapLocalNameToClientData(
+                      this._querySource, NS_CONVMSGS, msgLocalNames[i]);
+      convNewnessDetails.push({
+          convId: msgData.convId, lastNonNewMessage: msgData.index
+        });
+    }
+    return this._rawClient.clearNewness(convNewnessDetails);
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Queries
 
   _cmd_cloneQuery: function(clonedQueryName, sourceQueryInfo) {
     var ns = sourceQueryInfo.ns, sliced = sourceQueryInfo.sliced,
@@ -486,6 +511,9 @@ ModaBackside.prototype = {
     this._notif.forgetTrackedQuery(queryHandle);
   },
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Self-Identity
+
   _cmd_whoAmI: function() {
     var serverInfo = null;
     // XXX our use of serverInfo needs to integrate with the caching scheme
@@ -516,6 +544,9 @@ ModaBackside.prototype = {
 
     this._rawClient.updatePoco(poco);
   },
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Signup
 
   _cmd_provideProofOfIdentity: function(_ignored, proof) {
     this._rawClient.provideProofOfIdentity(proof);

@@ -1073,6 +1073,29 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Meta-data Actions
+
+  // do_clearNewness would go here if we cared outside of moda
+  _expect_clearNewness_prep: function() {
+    // (have this step wait until the server acks the request)
+    this._eRawClient.expect_allActionsProcessed();
+    // (hold the replica blocks for release by
+    //  `_expdo_clearNewness_server_onwards`)
+    this._usingServer.holdAllReplicaBlocksForOtherClients(self);
+  },
+  _expdo_clearNewness_server_onwards: function(expectedMootings) {
+    var self = this;
+    this._T_otherClientsStep(self._usingServer,
+      'delivers replica block to', '*PARAM*',
+      function(paramClient) {
+        self._dynamicNotifyModaActors('clearNewness', expectedMootings);
+
+        self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
+    });
+  },
+
+
+  //////////////////////////////////////////////////////////////////////////////
   // Conversation Expectations
 
   // XXX this needs more thought about who to attribute it to

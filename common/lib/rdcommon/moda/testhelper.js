@@ -101,17 +101,24 @@
  *     perspective.)
  *   }
  *   @key[highestMsgSeen Number]{
- *     The index of the last message in `tConv`'s backlog that we have seen.
- *     This allows us to reuse backlog to get at the message representations
- *     without assuming we have seen all the messages in the backlog.  So
- *     backlog[highestMsgSeen]
+ *     The one-based message number of the last message in `tConv`'s backlog
+ *     that we have told about.  This allows us to reuse backlog to get at the
+ *     message representations without assuming we have seen all the messages in
+ *     the backlog.  It may be easier to think of this as a length value.
  *   }
  *   @key[highestMsgReported Number]{
- *     The index of the highest message that has been reported to convmsgs
- *     queries.  This lags behind highestMsgSeen because it is only updated when
- *     we release the query update via `_notifyConvGainedMessages`.  That
- *     mechanism might now be mootable thanks to _ensureExpectedQuery and its
- *     hookup to `__updatePhaseComplete` (with minor refactoring).
+ *     The one-based message number of the highest message that has been
+ *     reported to convmsgs queries.  This lags behind highestMsgSeen because it
+ *     is only updated when we release the query update via
+ *     `_notifyConvGainedMessages`.  That mechanism might now be mootable thanks
+ *     to _ensureExpectedQuery and its hookup to `__updatePhaseComplete` (with
+ *     minor refactoring).  It may be easier to think of this as a length value.
+ *   }
+ *   @key[highestNonNewMessage]{
+ *     The one-based message number of the last message that is not being
+ *     treated as new in this conversation.  If this value is less than
+ *     `highestMsgSeen` then the implication is that the conversation has new
+ *     messages.
  *   }
  *   @key[peepSeqsByName @dictof[
  *     @key["peep name"]
@@ -125,6 +132,15 @@
  *     Sequence of the most recent (message) event for the conversation.
  *   }
  *   @key[participantInfos @listof[DynamicContactInfo]]
+ *   @key[userMetaByName @dict[
+ *     @key[lastRead Number]{
+ *       The one-based message number of the highest message that has been read
+ *       by the user.  It may be easier to think of this as a length value.
+ *     }
+ *   ]]{
+ *     The latest meta-data from each conversation participant as received by
+ *     this client.
+ *   }
  * ]]{
  *   Information about conversations, created as the moda testhelper hears about
  *   them via __receiveConvWelcome.  They become associated with contacts as
@@ -158,6 +174,7 @@ var fakeDataMaker = $testdata.gimmeSingletonFakeDataMaker();
 const NS_PEEPS = 'peeps',
       NS_CONVBLURBS = 'convblurbs',
       NS_CONVMSGS = 'convmsgs',
+      NS_CONVNEW = 'convnew',
       NS_SERVERS = 'servers',
       NS_POSSFRIENDS = 'possfriends',
       NS_CONNREQS = 'connreqs',
@@ -265,6 +282,10 @@ var DeltaHelper = exports.DeltaHelper = {
 
   _CONVBLURB_QUERY_KEYFUNC: function(x) { return x.tConv.digitalName; },
   _THINGMSG_KEYFUNC: function(x) { return x.digitalName; },
+  /**
+   * For message queries: dreate a textual representation of a message in a
+   *  conversation for use where the conversation context is implicit.
+   */
   _THINGMSG_TEXTFUNC: function(t) {
     var data = t.data;
     switch (data.type) {
@@ -473,28 +494,6 @@ var DeltaHelper = exports.DeltaHelper = {
     return delta;
   },
 
-// nop-ing out in conjunction with nop-ing _notifyPeepJoinedConv which should
-//  not be required now that `convBlurbsExpMaybeDelta_newmsg` is smarter.
-  /**
-   * Generate the delta rep for a peep being added to a conversation for a
-   *  conversations-by-peep query.
-   */
-/*
-  convBlurbsExpDelta_joined: function(lqt, convInfo) {
-    var delta = this.makeEmptyDelta();
-
-    lqt._convs.push(convInfo);
-    lqt._convs.sort(lqt._sorter);
-
-    markListIntoObj(lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC),
-                    delta.state, null);
-
-    delta.postAnno[this._CONVBLURB_QUERY_KEYFUNC(convInfo)] = 1;
-
-    return delta;
-  },
-*/
-
   /**
    * Check whether a rep delta occurs for a conversations-by-peep query and
    *  generate a delta if so.  A delta may occur because of a new message added
@@ -522,6 +521,87 @@ var DeltaHelper = exports.DeltaHelper = {
     // we used to generate moves; no longer.
     if (added)
       delta.postAnno[convId] = 1;
+    return delta;
+  },
+
+
+  newConvsDelta_base: function(lqt, allConvInfos) {
+    var delta = this.makeOrReuseDelta(lqt);
+
+    lqt._convs = allConvInfos.filter(
+                   function (ci) {
+                     return ci.highestNonNewMessage < ci.highestMsgSeen;
+                   });
+    // Compare the most recent (known) message's timestamp for each conversation
+    //  (which is different from the first new message!)
+    lqt._sorter = function(aci, bci) {
+      var aMsg = aci.tConv.data.backlog[aci.highestMsgSeen - 1],
+          bMsg = bci.tConv.data.backlog[bci.highestMsgSeen - 1];
+      return bMsg.data.seq - aMsg.data.seq;
+    };
+    lqt._convs.sort(lqt._sorter);
+
+    var convIds = lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC);
+    markListIntoObj(convIds, delta.state, MARK_COUNTER);
+    markListIntoObj(convIds, delta.postAnno, 1);
+
+    // XXX we really want value coverage for this one to express the newness
+    //  range.  It's currently covered for item change notifications, but not
+    //  this initial case.
+
+    return delta;
+  },
+
+  newConvsMaybeDelta_newMessagesInConv: function(lqt, convInfo) {
+    // XXX this is basically identical to convBlurbsExpMaybeDelta_newmsg
+    var preIndex = lqt._convs.indexOf(convInfo);
+    var added = (preIndex === -1);
+    if (added)
+      lqt._convs.push(convInfo);
+    lqt._convs.sort(lqt._sorter);
+    var moved = (lqt._convs.indexOf(convInfo) !== preIndex);
+    if (!moved)
+      return null;
+
+    var delta = this.makeOrReuseDelta(lqt);
+
+    markListIntoObj(lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC),
+                    delta.state, MARK_COUNTER);
+    var convId = this._CONVBLURB_QUERY_KEYFUNC(convInfo);
+    // we used to generate moves; no longer.
+    if (added)
+      delta.postAnno[convId] = 1;
+    return delta;
+  },
+
+  /**
+   * Moot (some/all) 'new' messages in the conversation.  We update based on the
+   *  state of `highestNonNewMessage` when we are called, so be sure to update
+   *  it before calling.
+   */
+  newConvsMaybeDelta_mootedMessagesInConv: function(lqt, convInfo) {
+    var preIndex = lqt._convs.indexOf(convInfo), postIndex;
+    if (preIndex === -1)
+      return null;
+
+    if (convInfo.highestNonNewMessage === convInfo.highestMsgSeen) {
+      lqt._convs.splice(preIndex, 1);
+      postIndex = -1;
+    }
+    else {
+      lqt._convs.sort(lqt._sorter);
+      postIndex = lqt._convs.indexOf(convInfo);
+      if (postIndex === preIndex)
+        return null;
+    }
+
+    var convId = this._CONVBLURB_QUERY_KEYFUNC(convInfo);
+    var delta = this.makeOrReuseDelta(lqt);
+
+    markListIntoObj(lqt._convs.map(this._CONVBLURB_QUERY_KEYFUNC),
+                    delta.state, MARK_COUNTER);
+    if (postIndex === -1)
+      delta.preAnno[convId] = -1;
     return delta;
   },
 
@@ -558,8 +638,15 @@ var DeltaHelper = exports.DeltaHelper = {
   },
 };
 
+/**
+ * Create instance variables for `TestModa`/`TestModaActorMixins` instances as
+ *  well as `uitesthelper.js`'s `DummyTestClient` instances which mix-in a lot
+ *  of the contents of `TestModaActorMixins`.
+ */
 var modaInstanceCommonInit = exports.modaInstanceCommonInit =
       function modaInstanceCommonInit(self) {
+  //////////////////////////////////////////////////////////////////////////////
+  // Reps of the believed/expected system state given test operations executed
   /** @listof[TestClient] */
   self._dynamicContacts = [];
   /** @listof[DynamicContactInfo] */
@@ -567,31 +654,41 @@ var modaInstanceCommonInit = exports.modaInstanceCommonInit =
   /** @dictof["client name" DynamicContactInfo] */
   self._contactMetaInfoByName = {};
 
-  /** @listof[DynamicConvInfo] */
+  /** @listof[DynamicConvInfo]{All conversations known to the client.} */
   self._dynamicConvInfos = [];
   /** @dictof["conv thing human name" DynamicConvInfo] */
   self._convInfoByName = {};
 
   /** @listof[DynamicConnReqInfo] */
   self._dynConnReqInfos = [];
-  // convinfos queries awaiting a __updatePhaseComplete notification to occur
-  //  before generating their added messages expectations
-  self._dynPendingConvMsgs = [];
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Active query lists (dynamically maintained)
   self._dynamicPeepQueries = [];
   self._dynamicConvBlurbQueries = [];
   // XXX need an all-conv-queries thing
   self._dynamicConvMsgsQueries = [];
-  self._dynPendingQueries = [];
-  self._dynImmediateQueries = [];
   self._dynamicPossFriendsQueries = [];
   self._dynamicConnReqQueries = [];
   self._dynamicServerQueries = [];
+  self._dynamicNewConvQueries = [];
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Stateful helper function data
+
+  // convinfos queries awaiting a __updatePhaseComplete notification to occur
+  //  before generating their added messages expectations.
+  self._dynPendingConvMsgs = [];
+
+  self._dynPendingQueries = [];
+  self._dynImmediateQueries = [];
 
   // already expected change notifications
   self._pendingChangeNotifications = {};
   // suppress multiple change notifications for the same item.
   self._suppressedChangeNotifications = [];
+
+  //////////////////////////////////////////////////////////////////////////////
 };
 
 /**
@@ -779,27 +876,6 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
   },
 
-// nop-ing out because I believe the timestamp changes cover this notification
-//  as a side-effect.
-/*
-  _notifyPeepJoinedConv: function(cinfo, convInfo) {
-    var queries = this._dynamicConvBlurbQueries;
-    for (var iQuery = 0; iQuery < queries.length; iQuery++) {
-      var lqt = queries[iQuery];
-
-      if (lqt.data.by !== 'all') {
-        // the query only cares if its dude is involved
-        if (convInfo.participantInfos.indexOf(lqt.data.contactInfo) === -1)
-          continue;
-      }
-
-      var deltaRep = DeltaHelper.convBlurbsExpDelta_joined(lqt, convInfo);
-      this.RT.reportActiveActorThisStep(this);
-      this.expect_queryCompleted(lqt.__name, deltaRep);
-    }
-  },
-*/
-
   /**
    * Conversation activity has affected a conversation blurb's indices,
    *  generate expectations for the relevant queries if this has affected
@@ -823,7 +899,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   },
 
   _notifyConvGainedMessages: function(convInfo) {
-    var queries = this._dynamicConvMsgsQueries, iQuery, lqt,
+    var queries = this._dynamicConvMsgsQueries, iQuery, lqt, deltaRep,
         backlog = convInfo.tConv.data.backlog,
         // these are all 1-based indices, so this works out.
         seenMsgs = backlog.slice(0, convInfo.highestMsgSeen),
@@ -835,8 +911,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         //  (and one of the added messages is a text message)
         newFirstUnread = ourMeta.lastRead === convInfo.highestMsgReported;
 
-    // - convmsgs query updates
-    convInfo.highestMsgReported = convInfo.highestMsgSeen;
+    // -- convmsgs query updates
     for (iQuery = 0; iQuery < queries.length; iQuery++) {
       lqt = queries[iQuery];
 
@@ -844,13 +919,13 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       if (convInfo.tConv !== lqt.data.tConv)
         continue;
 
-      var deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
+      deltaRep = DeltaHelper.convMsgsDelta_added(lqt, seenMsgs, addedMsgs);
       this._ensureExpectedQuery(lqt, true);
     }
 
-    // - blurb delta
+    // -- blurb delta
     var blurbDelta = {
-      numUnread: convInfo.highestMsgReported - ourMeta.lastRead,
+      numUnread: convInfo.highestMsgSeen - ourMeta.lastRead,
       mostRecentActivity: true,
     };
 
@@ -861,9 +936,60 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
         }
       }
     }
-
     this._commonChangeNotifyHelper(
       NS_CONVBLURBS, convInfo.tConv.digitalName, blurbDelta);
+
+    // -- convnew
+    queries = this._dynamicNewConvQueries;
+    // - potentially generate ordering updates
+    for (iQuery = 0; iQuery < queries.length; iQuery++) {
+      lqt = queries[iQuery];
+      deltaRep = DeltaHelper.newConvsMaybeDelta_newMessagesInConv(lqt,
+                                                                  convInfo);
+      if (deltaRep)
+        this._ensureExpectedQuery(lqt, true);
+    }
+    // - item updates for new rep
+    // for now, the addition is going to be exactly the added messages
+    var newRepDelta = {
+      addedMessages: addedMsgs.map(DeltaHelper._THINGMSG_TEXTFUNC),
+    };
+    this._commonChangeNotifyHelper(
+      NS_CONVNEW, convInfo.tConv.digitalName, newRepDelta);
+
+    // -- done, update rep
+    convInfo.highestMsgReported = convInfo.highestMsgSeen;
+  },
+
+  _notifyMootedNewInConvs: function(expectedMootings) {
+    var queries = this._dynamicNewConvQueries;
+
+    for (var iMoot = 0; iMoot < expectedMootings.length; iMoot++) {
+      var mooting = expectedMootings[iMoot],
+          convInfo = this._convInfoByName[mooting.conv.__name];
+
+      // update the conv info
+      convInfo.highestNonNewMessage = mooting.markLast;
+
+      // generate the item change if it's not a complete removal
+      if (convInfo.highestNonNewMessage < convInfo.highestMsgSeen) {
+        var removed = convInfo.tConv.data.backlog.slice(
+                        convInfo.highestNonNewMessage, mooting.markLast);
+        this._commonChangeNotifyHelper(
+          NS_CONVNEW, convInfo.tConv.digitalName,
+          { removedMessages: removed.map(DeltaHelper._THINGMSG_TEXTFUNC) });
+      }
+
+      // maybe generate an ordering/removal change
+      for (var iQuery = 0; iQuery < queries.length; iQuery++) {
+        var lqt = queries[iQuery];
+
+        var delta = DeltaHelper.newConvsMaybeDelta_mootedMessagesInConv(
+                      lqt, convInfo);
+        if (delta)
+          this._ensureExpectedQuery(lqt, true);
+      }
+    }
   },
 
   _mapFullNameToLocal: function(namespace, fullName) {
@@ -884,7 +1010,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
    *  to our `onChange_needsBind` change handler to only output a single log
    *  entry.  We do this because there is no benefit to the repetition; if we
    *  are experiencing refcount failures/etc., this implementation can't detect
-   *  them.
+   *  them (because of circular reasoning).
    */
   _commonChangeNotifyHelper: function(namespace, fullName, values) {
     this.RT.reportActiveActorThisStep(this);
@@ -901,7 +1027,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     if (this._pendingChangeNotifications.hasOwnProperty(localName)) {
       var existing = this._pendingChangeNotifications[localName];
       for (var key in values) {
-        existing[key] = values[key];
+        // if it's a list, concat the new thing
+        if (existing.hasOwnProperty(key) && Array.isArray(existing[key]))
+          existing[key] = existing[key].concat(values[key]);
+        else
+          existing[key] = values[key];
       }
       return;
     }
@@ -1016,6 +1146,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       tConv: tConv,
       highestMsgSeen: 0,
       highestMsgReported: 0,
+      highestNonNewMessage: 0,
       peepSeqsByName: {},
       seq: 0,
       participantInfos: [],
@@ -1128,7 +1259,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       var oldMeta = convInfo.userMetaByName[userInfo.name] || {};
       var newMeta = convInfo.userMetaByName[userInfo.name] = tMsg.data;
 
-      // - if us, expect an unread change on the blurb and now read peeps
+      // -- us!
       if (userInfo.isUs) {
         var idxFirstNowRead = oldMeta.lastRead || 0,
             idxLastNowRead = newMeta.lastRead - 1, iMsg, msg;
@@ -1170,9 +1301,13 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           }
         }
 
+        // - newness tracking (potentially) impacted
+        this._notifyMootedNewInConvs([
+          { conv: tConv, markLast: newMeta.lastRead }]);
       }
-      // - if someone else, expect a metadata change on the unread marker
+      // -- someone else!
       else {
+        // expect a metadata change on the unread marker
         if (oldMeta.lastRead)
           this._commonChangeNotifyHelper(
             NS_CONVMSGS, tConv.digitalName + oldMeta.lastRead,
@@ -1182,6 +1317,10 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           { mark: [userInfo.name] });
       }
     }
+  },
+
+  __clearNewness: function(expectedMootings) {
+    this._notifyMootedNewInConvs(expectedMootings);
   },
 
   /**
@@ -1273,6 +1412,24 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       // we aren't able to easily figure out the right value right now, so
       //  just be happy that it's there at all.
       mostRecentActivity: function() { return true; },
+    },
+    convnew: {
+      addedMessages: function(rep, addedMessages) {
+        return addedMessages.map(function(msg) {
+          if (msg.type === "join")
+            return "join:" + msg.author.invitee.displayName;
+          else
+            return msg.author.displayName + ": " + msg.text;
+        });
+      },
+      removedMessages: function(rep, removedMessages) {
+        return removedMessages.map(function(msg) {
+          if (msg.type === "join")
+            return "join:" + msg.author.invitee.displayName;
+          else
+            return msg.author.displayName + ": " + msg.text;
+        });
+      },
     },
     convmsgs: {
       mark: function(item, marked) {
@@ -1508,9 +1665,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   },
 
   /**
-   * Issue and name a moda conversations query on conversations involving a
-   *  given peep.  To make things realistic, you need to provide us with a query
-   *  that contains the peep in question so we can get the right reference.
+   * Issue and name a moda conversations query on all conversations.
    */
   do_queryAllConversations: function(thingName, query)  {
     var lqt = this.T.thing('livequery', thingName), self = this;
@@ -1535,6 +1690,25 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     return lqt;
   },
 
+  do_queryNewConversationActivity: function(thingName) {
+    var lqt = this.T.thing('livequery', thingName), self = this;
+    lqt._pendingDelta = null;
+    lqt._pendingExpDelta = null;
+    lqt._lastState = null;
+    this.T.action(this, 'create', lqt, function() {
+      var delta = DeltaHelper.newConvsDelta_base(lqt, self._dynConnReqInfos);
+
+      lqt._liveset = self._bridge.queryNewConversationActivity(self, lqt);
+      lqt._liveset.on('change', self.onChange_bound);
+
+      self._dynamicNewConvQueries.push(lqt);
+
+      self.expect_queryCompleted(lqt.__name, delta);
+      lqt._pendingExpDelta = null;
+    });
+
+    return lqt;
+  },
 
   do_queryConversations: function(query) {
     throw new Error("XXX no all-conversations query testing support yet");
@@ -1702,6 +1876,9 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
           break;
         case 'servers':
           self._assertRemoveFromList(self._dynamicServerQueries, lqt);
+          break;
+        case 'convnew':
+          self._assertRemoveFromList(self._dynamicNewConvQueries, lqt);
           break;
       }
 
@@ -2232,8 +2409,57 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this._testClient._expdo_metaToConversation_fanout_onwards(tConv, tMeta);
   },
 
-  //////////////////////////////////////////////////////////////////////////////
-  // Notification Queries
+  /**
+   * Clear the newness bits for a specific list of conversations.
+   */
+  do_clearNewness: function(newActivityQuery, tConvs) {
+    var self = this,
+        /* */
+        expectedMootings = [];
+    // - moda api transmission to bridge
+    this.T.action('moda sends clearNewness to', this._eBackside,
+                  function() {
+
+      self.holdAllModaCommands();
+      self.expectModaCommand('clearNewness');
+
+      var newConvReps = [], allReps = newActivityQuery._liveset.items;
+      for (var iThing = 0; iThing < tConvs.length; iThing++) {
+        var firstMessageText = tConvs[iConv].data.firstMessage.data.text;
+        for (var iRep = 0; iRep < allReps.length; iRep++) {
+          var rep = allReps[iRep];
+          if (rep.blurb.firstMessage.text === firstMessageText) {
+            expectedMootings.push({
+              conv: tConv,
+              markLast: self._convInfoByName[tConv.__name].highestMsgReported
+            });
+            newConvReps.push(rep);
+            break;
+          }
+        }
+      }
+      // If a conversation is specified, it must be found; these aren't
+      //  randomly generated tests.
+      if (newConvReps.length !== tConvs.length)
+        throw new Error("Unable to find all the requested conversations");
+      newActivityQuery._liveset.clearNewStatusFor(newConvReps);
+    });
+    // - bridge processes it
+    this.T.action(this._eBackside,
+                  'processes clearNewness, invokes on',
+                  this._testClient._eRawClient, function() {
+      self._expect_clearNewness_prep();
+      self._dynamicNotifyModaActors('clearNewness', expectedMootings);
+
+      self.releaseAndPeekAtModaCommand('clearNewness');
+      self.stopHoldingAndAssertNoHeldModaCommands();
+
+      self._testClient._expect_metaToConversation_rawclient_to_server(
+        tConv, tMeta, msgInfo, lastReadMsgNum);
+    });
+
+    this._testClient._expdo_clearNewness_server_onwards(expectedMootings);
+  },
 
   //////////////////////////////////////////////////////////////////////////////
   // Holding: Backside Communications

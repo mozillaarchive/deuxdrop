@@ -274,6 +274,7 @@ DummyTestClient.prototype = {
   __rejectContact: TestModaActorMixins.__rejectContact,
   __receiveConvWelcome: TestModaActorMixins.__receiveConvWelcome,
   __receiveConvMessage: TestModaActorMixins.__receiveConvMessage,
+  __clearNewness: TestModaActorMixins.__clearNewness,
   __updatePhaseComplete: TestModaActorMixins.__updatePhaseComplete,
 
   //////////////////////////////////////////////////////////////////////////////

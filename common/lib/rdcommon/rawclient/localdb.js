@@ -507,7 +507,6 @@ LocalStore.prototype = {
   _lookupMultipleItemsById: function(querySource, writeQueryHandle,
                                      fetchFunc, namespace,
                                      usingIndex, indexParam, ids) {
-    var deferred = $Q.defer();
     var i = 0, stride = 1, self = this,
         viewItems = [], clientDataItems = null;
     if (usingIndex) {
@@ -1181,7 +1180,8 @@ LocalStore.prototype = {
     };
 
     queryHandle.testFunc = function(baseCells, mutatedCells, convId) {
-      // all conversations match
+      // All conversations *in this namespace* match.  Conversations only get in
+      //  this namespace if they have new messages.
       return true;
     };
 
@@ -1206,7 +1206,7 @@ LocalStore.prototype = {
       }
 
       return when(
-        this._lookupMultipleItemsById(
+        self._lookupMultipleItemsById(
           queryHandle.owner, queryHandle,
           self._fetchPopulateConversationActivity, NS_CONVNEW,
           'recency', null, convIdsAndRecency),
@@ -1317,27 +1317,6 @@ LocalStore.prototype = {
       newRec.mostRecentActivity = msgRec.receiveAt;
       newRec.lastNewMessage = msgNum;
 
-      this._notif.namespaceItemAdded(
-        NS_CONVNEW, convId, null, null,
-        [['recency', null, null, newRec.mostRecentActivity]],
-        function newConvPopulate(clientData, querySource, convId) {
-          if (!mergedCells)
-            mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
-          var msgClientData = self._convertConversationMessage(
-                                querySource, convId, msgNum, mergedCells);
-          clientData.deps.push(msgClientData);
-          return {
-            messages: [msgClientData.localName],
-          };
-        });
-    }
-    // - first new-tracked message for this conversation
-    else {
-      newRec = this._newConversations[convId] = {
-        firstNewMessage: msgNum,
-        lastNewMessage: msgNum,
-        mostRecentActivity: msgRec.receivedAt,
-      };
       this._notif.namespaceItemModified(
         NS_CONVNEW, convId, null, null,
         [['recency', null, null, newRec.mostRecentActivity]],
@@ -1352,6 +1331,27 @@ LocalStore.prototype = {
           if (!outDeltaRep.hasOwnProperty("add"))
             outDeltaRep.add = [];
           outDeltaRep.add.push(msgClientData.localName);
+        });
+    }
+    // - first new-tracked message for this conversation
+    else {
+      newRec = this._newConversations[convId] = {
+        firstNewMessage: msgNum,
+        lastNewMessage: msgNum,
+        mostRecentActivity: msgRec.receivedAt,
+      };
+      this._notif.namespaceItemAdded(
+        NS_CONVNEW, convId, null, null,
+        [['recency', null, null, newRec.mostRecentActivity]],
+        function newConvPopulate(clientData, querySource, convId) {
+          if (!mergedCells)
+            mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
+          var msgClientData = self._convertConversationMessage(
+                                querySource, convId, msgNum, mergedCells);
+          clientData.deps.push(msgClientData);
+          return {
+            messages: [msgClientData.localName],
+          };
         });
     }
     if (!this._newConversationsDirty)
@@ -1371,9 +1371,11 @@ LocalStore.prototype = {
     // - no effect (if the mootness does not touch the newness at all)
     if (lastReadMessage < newRec.firstNewMessage)
       return;
+
+    if (!this._newConversationsDirty)
+      this._newConversationsDirty = {};
     // - partial update, still something new present
     if (lastReadMessage < newRec.lastNewMessage) {
-
       var self = this;
       this._notif.namespaceItemModified(
         NS_CONVNEW, convId, null, null, null,
@@ -1390,6 +1392,8 @@ LocalStore.prototype = {
           }
         });
       newRec.firstNewMessage = lastReadMessage + 1;
+      // dirty write no matter what
+      this._newConversationsDirty[convId] = newRec;
       return;
     }
 
@@ -1398,8 +1402,7 @@ LocalStore.prototype = {
 
     delete this._newConversations[convId];
     // do we have a pending write for this conversation?
-    if (this._newConversationsDirty &&
-        this._newConversationsDirty.hasOwnProperty(convId)) {
+    if (this._newConversationsDirty.hasOwnProperty(convId)) {
       // if there's anything written, use a null to mark a delete
       if (this._newConversationsWritten.hasOwnProperty(convId))
         this._newConversationsDirty[convId] = null;
@@ -1410,6 +1413,13 @@ LocalStore.prototype = {
     // if it's not dirty, then there must be writes to nuke...
     else {
       this._newConversationsDirty[convId] = null;
+    }
+  },
+
+  _cmd_clearNewness: function(_ignored, details) {
+    for (var i = 0; i < details.convNewnessDetails.length; i++) {
+      var convDetail = details.convNewnessDetails[i];
+      this._mootNewForMessages(convDetail.convId, convDetail.lastNonNewMessage);
     }
   },
 

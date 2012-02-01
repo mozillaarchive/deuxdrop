@@ -172,6 +172,8 @@ TD.commonCase('moda basics', function(T) {
   var lqAllConvBlurbs = moda_a.do_queryAllConversations(
                         'allConvBlurbs', { by: 'all' });
 
+  var lqNewConvs = moda_a.do_queryNewConversationActivity('newConvs');
+
   // - create a conversation between A and B
   T.group('new conversation #1 between A, B');
   var tConv1 = T.thing('conversation', 'conv1'),

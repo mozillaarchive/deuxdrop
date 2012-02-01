@@ -361,6 +361,7 @@ function LiveOrderedSet(_bridge, handle, ns, query, listener, data) {
     peeps: {},
     convblurbs: {},
     convmsgs: {},
+    convnew: {},
     servers: {},
     possfriends: {},
     connreqs: {},
@@ -831,6 +832,8 @@ NewConversationActivity.prototype = {
       }
     }
   },
+
+
 };
 
 
@@ -1451,7 +1454,7 @@ ModaBridge.prototype = {
   _transform_convnew: function(localName, wireRep, lookup) {
     var messages = [], i;
     for (i = 0; i < wireRep.messages.length; i++) {
-      messages.push(this._dataByNS.convmsgs[wireConv.messages[i]]);
+      messages.push(this._dataByNS.convmsgs[wireRep.messages[i]]);
     }
     return new NewConversationActivity(null,
       localName, this._dataByNS.convnew[wireRep.conv],
@@ -1781,10 +1784,22 @@ ModaBridge.prototype = {
 
   /**
    */
-  queryNewConversationActivity: function() {
-    var handle = this._nextHandle++;
+  queryNewConversationActivity: function(listener, data) {
+    var handle = this._nextHandle++, query = {};
     var liveset = new LiveOrderedSet(this, handle, NS_CONVNEW, query, listener,
                                      data);
+    liveset.clearNewStatusFor = function(newConvReps) {
+      var msgLocalNames = [];
+      for (var i = 0; i < newConvReps.length; i++) {
+        var newConvRep = newConvReps[i];
+        msgLocalNames.push(
+          newConvRep.newMessages[newConvRep.newMessages.length-1]._localName);
+      }
+      this._bridge.send('clearNewness', null, { messages: msgLocalNames });
+    };
+    liveset.clearNewStatusForAll = function() {
+      this.clearNewStatusFor(this.items);
+    };
     this._handleMap[handle] = liveset;
     this._sets.push(liveset);
     this._send('queryNewConversationActivity', handle, query);

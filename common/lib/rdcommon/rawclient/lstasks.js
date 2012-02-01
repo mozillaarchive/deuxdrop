@@ -668,6 +668,9 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
           this.store._notif.namespaceItemModified(
             NS_PEEPS, nowreadRootKey, null, null, null, null, genReadDelta);
         }
+
+        // - update newness
+        store._mootNewForMessages(convMeta.id, highReadMsg);
       }
       // -- not us!
       else {
