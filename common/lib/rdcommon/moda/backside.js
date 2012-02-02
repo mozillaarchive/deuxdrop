@@ -299,7 +299,7 @@ ModaBackside.prototype = {
     var msgLocalNames = details.messages, convNewnessDetails = [];
     for (var i = 0; i < msgLocalNames.length; i++) {
       var msgData = this._notif.mapLocalNameToClientData(
-                      this._querySource, NS_CONVMSGS, msgLocalNames[i]);
+                      this._querySource, NS_CONVMSGS, msgLocalNames[i]).data;
       convNewnessDetails.push({
           convId: msgData.convId, lastNonNewMessage: msgData.index
         });

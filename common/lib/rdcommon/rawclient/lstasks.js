@@ -622,9 +622,10 @@ var ConvMetaTask = exports.ConvMetaTask = taskMaster.defineTask({
             // - new unread human message rep
             if (unreadRep) {
               clientData.data.unread = unreadIndex;
-              frontDataDelta.firstUnreadMessage =
-                store._convertConversationMessage(
-                  querySource, convId, unreadRep, unreadIndex);
+              var msgClientData = store._convertConversationMessage(
+                                    querySource, convId, unreadIndex, cells);
+              clientData.deps.push(msgClientData);
+              frontDataDelta.firstUnreadMessage = msgClientData.localName;
             }
             else {
               clientData.data.unread = null;

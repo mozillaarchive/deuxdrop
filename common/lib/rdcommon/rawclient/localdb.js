@@ -1230,9 +1230,21 @@ LocalStore.prototype = {
 
     return when(this._db.getRow($lss.TBL_CONV_DATA, convId, null),
                 function(cells) {
-      // we gots the row; create messages for all the new ones
+      // - blurb
+      var blurbClientData = self._notif.reuseIfAlreadyKnown(
+                              querySource, NS_CONVBLURBS, convId);
+      if (!blurbClientData) {
+        blurbClientData = self._notif.generateClientData(
+                            querySource, NS_CONVBLURBS, convId);
+        self._convertConversationBlurb(blurbClientData, querySource,
+                                       mergedCells);
+      }
+      clientData.deps.push(blurbClientData);
+
+      // - (new) messages
       var newRec = self._newConversations[convId],
           dataRep = querySource.dataMap[NS_CONVNEW][clientData.localName] = {
+            conv: blurbClientData.localName,
             messages: [],
           };
 
@@ -1314,7 +1326,7 @@ LocalStore.prototype = {
     // - new message in an already new-tracked conversation
     if (this._newConversations.hasOwnProperty(convId)) {
       newRec = this._newConversations[convId];
-      newRec.mostRecentActivity = msgRec.receiveAt;
+      newRec.mostRecentActivity = msgRec.receivedAt;
       newRec.lastNewMessage = msgNum;
 
       this._notif.namespaceItemModified(
@@ -1346,10 +1358,24 @@ LocalStore.prototype = {
         function newConvPopulate(clientData, querySource, convId) {
           if (!mergedCells)
             mergedCells = $notifking.mergeCells(baseCells, mutatedCells);
+
+          // - we need the blurb
+          var blurbClientData = self._notif.reuseIfAlreadyKnown(
+                                  querySource, NS_CONVBLURBS, convId);
+          if (!blurbClientData) {
+            blurbClientData = self._notif.generateClientData(
+                                querySource, NS_CONVBLURBS, convId);
+            self._convertConversationBlurb(blurbClientData, querySource,
+                                           mergedCells);
+          }
+          clientData.deps.push(blurbClientData);
+
+          // - we need the message
           var msgClientData = self._convertConversationMessage(
                                 querySource, convId, msgNum, mergedCells);
           clientData.deps.push(msgClientData);
           return {
+            conv: blurbClientData.localName,
             messages: [msgClientData.localName],
           };
         });
@@ -1377,18 +1403,20 @@ LocalStore.prototype = {
     // - partial update, still something new present
     if (lastReadMessage < newRec.lastNewMessage) {
       var self = this;
+      // recency is not affected so we don't touch the indices
       this._notif.namespaceItemModified(
         NS_CONVNEW, convId, null, null, null,
+        null,
         function newConvDeltaMoot(clientData, querySource, outDeltaRep) {
           if (!outDeltaRep.hasOwnProperty("moot"))
             outDeltaRep.moot = 0;
           // tell it how many to splice out
-          var mootdex = newRec.firstNewMessage;
-          outDeltaRep.moot += lastReadMessage - mootDex;
+          var mootDex = newRec.firstNewMessage;
+          outDeltaRep.moot += lastReadMessage - mootDex + 1;
           // forget the messages as dependencies
           while (mootDex <= lastReadMessage) {
             self._notif.findAndForgetDep(querySource, clientData, NS_CONVMSGS,
-                                         convId + (mootdex++));
+                                         convId + (mootDex++));
           }
         });
       newRec.firstNewMessage = lastReadMessage + 1;
@@ -2007,6 +2035,14 @@ LocalStore.prototype = {
                                   inviteeRootKey, inviteeDeltaRep) {
     // - notify for the author
     function authorDeltaGen(clientData, querySource, outDeltaRep) {
+      // - bail if deferred
+      // it's possible this is a deferred load representation, in which case
+      //  the query has not been issued, so it's fine to not touch the delta
+      //  because the canonical rep will load it in.
+      if (!clientData.data)
+        return;
+
+      // - update delta
       if (authorDeltaRep.hasOwnProperty('numUnread')) {
         clientData.data.numUnread += authorDeltaRep.numUnread;
         outDeltaRep.numUnread = clientData.data.numUnread;

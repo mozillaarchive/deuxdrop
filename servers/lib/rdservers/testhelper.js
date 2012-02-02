@@ -687,6 +687,112 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
   },
 
   //////////////////////////////////////////////////////////////////////////////
+  // Newness checks
+
+  do_newnessDisablePersistence: function() {
+    var self = this;
+    this.T.action(self, 'disables persistence of newness records', function() {
+      // just put a nop on the instance
+      self._rawClient.store._writeDirtyNewConversationActivity = function() {
+      };
+    });
+  },
+
+  do_newnessEnablePersistence: function() {
+    var self = this;
+    this.T.cleanup(self, 'disables persistence of newness records', function() {
+      // nuke the nop
+      delete self._rawClient.store['_writeDirtyNewConversationActivity'];
+    });
+  },
+
+  do_newnessPersist: function() {
+    var self = this;
+    this.T.action(self, 'forces a write of newness records', function() {
+      // grab the function off the proto
+      self._rawClient.store.__proto__._writeDirtyNewConversationActivity.call(
+        self._rawClient.store);
+    });
+  },
+
+  do_newnessResetAndDepersist: function() {
+    var self = this;
+    this.T.action(self, 'forces a reset and load of newness records',
+                  function() {
+      self.expect_newnessDbLoad();
+
+      var store = self._rawClient.store;
+      store._newConversations = null;
+      store._newConversationsDirty = null;
+      store._newConversationsWritten = null;
+
+      when(store._loadNewConversationActivity(),
+           function() { self._logger.newnessDbLoad(); });
+    });
+  },
+
+  /**
+   * Check the state of one of the newness representations
+   */
+  check_newnessStateRep: function(which, expected) {
+    var self = this;
+    this.T.check(self, 'verifies newness "' + which + '" state', function() {
+      var i, exptupe;
+      // - generate expectations
+      // there are no ordering constraints...
+      self.expectUseSetMatching();
+
+      if (which === 'written') {
+        for (i = 0; i < expected.length; i++) {
+          exptupe = expected[i];
+          self.expect_newnessCheck(exptupe[0].digitalName, true, true);
+        }
+      }
+      else if (expected === null) {
+        self.expect_newnessCheck(null, null, null);
+      }
+      else {
+        for (i = 0; i < expected.length; i++) {
+          exptupe = expected[i];
+          self.expect_newnessCheck(exptupe[0].digitalName,
+                                   exptupe[1], exptupe[2]);
+        }
+      }
+
+      // - log actual
+      var store = self._rawClient.store, actual, convId;
+      switch (which) {
+        case 'state':
+          actual = store._newConversations;
+          break;
+        case 'dirty':
+          actual = store._newConversationsDirty;
+          break;
+        case 'written':
+          actual = store._newConversationsWritten;
+          for (convId in actual) {
+            self._logger.newnessCheck(convId, true, true);
+          }
+          return;
+      }
+
+      if (actual === null) {
+        self._logger.newnessCheck(null, null, null);
+      }
+      else {
+        for (convId in actual) {
+          var newRec = actual[convId];
+          if (newRec === null)
+            self._logger.newnessCheck(convId, null, null);
+          else
+            self._logger.newnessCheck(convId, newRec.firstNewMessage,
+                                      newRec.lastNewMessage);
+        }
+      }
+    });
+  },
+
+  //////////////////////////////////////////////////////////////////////////////
   // Conversation Actions (High-Level)
 
   /**
@@ -1081,7 +1187,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
     this._eRawClient.expect_allActionsProcessed();
     // (hold the replica blocks for release by
     //  `_expdo_clearNewness_server_onwards`)
-    this._usingServer.holdAllReplicaBlocksForOtherClients(self);
+    this._usingServer.holdAllReplicaBlocksForOtherClients(this);
   },
   _expdo_clearNewness_server_onwards: function(expectedMootings) {
     var self = this;
@@ -1089,6 +1195,7 @@ var TestClientActorMixins = exports.TestClientActorMixins = {
       'delivers replica block to', '*PARAM*',
       function(paramClient) {
         self._dynamicNotifyModaActors('clearNewness', expectedMootings);
+        self._dynamicNotifyModaActors('updatePhaseComplete');
 
         self._usingServer.releaseAllReplicaBlocksForClient(paramClient);
     });
@@ -1669,6 +1776,9 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       // - db checks
       localStoreContactCheck: {userRootKey: 'key', otherUserRootKey: 'key',
                                present: true},
+      // - newness checks
+      newnessCheck: { conv: true, lowNew: true, highNew: true },
+      newnessDbLoad: {},
 
       // - hold-related
       insecurelyGetServerSelfIdentUsingDomainName: {}

@@ -84,6 +84,16 @@ function itemOnImpl(event, listener) {
   }
 }
 
+var exceptionLogger = null;
+exports._setExceptionLogger = function(func) {
+  exceptionLogger = func;
+};
+function reportException(msg, ex) {
+  if (exceptionLogger)
+    exceptionLogger(msg, ex);
+  console.error(msg, ex);
+}
+
 /**
  * Provides summary information about the peep's activities as they relate to
  *  our user: # of unread messages from the user, # of conversations involving
@@ -505,7 +515,7 @@ LiveOrderedSet.prototype = {
       }
     }
     catch (ex) {
-      console.error("Exception during completion delta notifications:", ex);
+      reportException("Exception during completion delta notifications:", ex);
     }
 
     this.completed = true;
@@ -520,7 +530,7 @@ LiveOrderedSet.prototype = {
       }
     }
     catch (ex) {
-      console.error("Exception during completion notification:", ex);
+      reportException("Exception during completion notification:", ex);
     }
   },
 
@@ -782,14 +792,15 @@ ErrorRep.prototype = {
 
 function NewConversationActivity(_liveset, _localName,
                                  convBlurb, numNewMessages,
-                                 boundedNewMessages) {
+                                 newMessages) {
   this._eventMap = null;
   this._liveset = _liveset;
   this._localName = _localName;
   this.convBlurb = convBlurb;
   this.numNewMessages = numNewMessages;
   this.authors = null;
-  this.newMessages = boundedNewMessages;
+  // this could eventually end up being a bounded subset
+  this.newMessages = newMessages;
 
   this._deriveAuthors();
 }
@@ -798,8 +809,7 @@ NewConversationActivity.prototype = {
   __clone: function(liveset, cloneHelper) {
     return new NewConversationActivity(
       liveset, this._localName, cloneHelper(this.convBlurb),
-      this.numNewMessages, this.authors.map(cloneHelper),
-      this.newMessages.map(cloneHelper));
+      this.numNewMessages, this.newMessages.map(cloneHelper));
   },
   __forget: function(forgetHelper) {
     forgetHelper(this.convBlurb);
@@ -964,7 +974,7 @@ ModaBridge.prototype = {
         this._ourUser._signupListener.onCompleted(msg.err);
       }
       catch(ex) {
-        console.error("Exception in signup completion handler:", ex);
+        reportException("Exception in signup completion handler:", ex);
       }
       this._ourUser._signupListener = null;
     }
@@ -1120,7 +1130,7 @@ ModaBridge.prototype = {
                   changeFunc(inst, liveset, explained);
               }
               catch (ex) {
-                console.error("Exception during change processing:", ex);
+                reportException("Exception during change processing:", ex);
               }
             }
           }
@@ -1457,8 +1467,8 @@ ModaBridge.prototype = {
       messages.push(this._dataByNS.convmsgs[wireRep.messages[i]]);
     }
     return new NewConversationActivity(null,
-      localName, this._dataByNS.convnew[wireRep.conv],
-      wireRep.numNew, messages);
+      localName, this._dataByNS.convblurbs[wireRep.conv],
+      wireRep.messages.length, messages);
   },
 
   _delta_convnew: function(curRep, delta, lookup, forget) {
@@ -1795,7 +1805,9 @@ ModaBridge.prototype = {
         msgLocalNames.push(
           newConvRep.newMessages[newConvRep.newMessages.length-1]._localName);
       }
-      this._bridge.send('clearNewness', null, { messages: msgLocalNames });
+      // we only need to send the messsages across the wire because they also
+      //  identify their conversation.
+      this._bridge._send('clearNewness', null, { messages: msgLocalNames });
     };
     liveset.clearNewStatusForAll = function() {
       this.clearNewStatusFor(this.items);

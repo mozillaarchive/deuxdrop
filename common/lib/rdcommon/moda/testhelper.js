@@ -728,6 +728,15 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       //   logged by us on our logger.)
       self._bridge = new $moda_api.ModaBridge();
 
+      // register a listener from exceptions that moda internally catches (like
+      //  in event handlers).
+      // This is a module-global, so only the last one of us that registers wins,
+      //  but we don't really care right now.  We can bind it to the bridge
+      //  instance later if required.
+      $moda_api._setExceptionLogger(function(msg, ex) {
+        self._logger.modaException(msg, ex);
+      });
+
       // - link backside and bridge (hackily)
       self._bridge._sendObjFunc = self._backside.XXXcreateBridgeChannel(
                                     self._bridge._receive.bind(self._bridge),
@@ -967,18 +976,17 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     for (var iMoot = 0; iMoot < expectedMootings.length; iMoot++) {
       var mooting = expectedMootings[iMoot],
           convInfo = this._convInfoByName[mooting.conv.__name];
-
-      // update the conv info
-      convInfo.highestNonNewMessage = mooting.markLast;
-
       // generate the item change if it's not a complete removal
-      if (convInfo.highestNonNewMessage < convInfo.highestMsgSeen) {
+      if (mooting.markLast < convInfo.highestMsgSeen) {
         var removed = convInfo.tConv.data.backlog.slice(
                         convInfo.highestNonNewMessage, mooting.markLast);
         this._commonChangeNotifyHelper(
           NS_CONVNEW, convInfo.tConv.digitalName,
           { removedMessages: removed.map(DeltaHelper._THINGMSG_TEXTFUNC) });
       }
+
+      // update the conv info
+      convInfo.highestNonNewMessage = mooting.markLast;
 
       // maybe generate an ordering/removal change
       for (var iQuery = 0; iQuery < queries.length; iQuery++) {
@@ -1417,7 +1425,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       addedMessages: function(rep, addedMessages) {
         return addedMessages.map(function(msg) {
           if (msg.type === "join")
-            return "join:" + msg.author.invitee.displayName;
+            return "join:" + msg.invitee.displayName;
           else
             return msg.author.displayName + ": " + msg.text;
         });
@@ -1425,7 +1433,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       removedMessages: function(rep, removedMessages) {
         return removedMessages.map(function(msg) {
           if (msg.type === "join")
-            return "join:" + msg.author.invitee.displayName;
+            return "join:" + msg.invitee.displayName;
           else
             return msg.author.displayName + ": " + msg.text;
         });
@@ -1696,7 +1704,7 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     lqt._pendingExpDelta = null;
     lqt._lastState = null;
     this.T.action(this, 'create', lqt, function() {
-      var delta = DeltaHelper.newConvsDelta_base(lqt, self._dynConnReqInfos);
+      var delta = DeltaHelper.newConvsDelta_base(lqt, self._dynamicConvInfos);
 
       lqt._liveset = self._bridge.queryNewConversationActivity(self, lqt);
       lqt._liveset.on('change', self.onChange_bound);
@@ -2370,17 +2378,34 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
   },
 
   /**
-   * Mark the last message in a conversation as read.  This will result in
-   *  a metadata blob being published to the conversation which will be
-   *  received by all participants.  For our own user, when the blob comes
+   * Mark up through a given message in a conversation as read.  This will
+   *  result in a metadata blob being published to the conversation which will
+   *  be received by all participants.  For our own user, when the blob comes
    *  back, it will affect the unread message count in the conversation.  Other
    *  users will instead see the `mostRecentReadMessageBy` list lose and gain
    *  our user as appropriate.
+   *
+   * @args[
+   *   @param[convMsgsQuery]{
+   *     The live query from a call to `do_queryConversationMessages` so that
+   *     we can gain access to the messages.
+   *   }
+   *   @param[tConv]
+   *   @param[slicedex #:optional Number]{
+   *     0-based slice index to indicate which message should be the one that
+   *      is marked as read.  Defaults to the last message (-1) if omitted.
+   *      0 would be the very first join message, 2 would be the first human
+   *      message in a 2-person conversation.
+   *   }
+   * ]
    */
-  do_markAsRead: function(convMsgsQuery, tConv) {
+  do_markAsRead: function(convMsgsQuery, tConv, slicedex) {
     var self = this, lastReadMsgNum,
         tMeta = self.T.thing('meta',
                              'meta:' + self._testClient.__name);
+    if (slicedex === undefined)
+      slicedex = -1;
+
     // - moda api transmission to bridge
     this.T.action('moda sends mark as read meta to', this._eBackside,
                   function() {
@@ -2389,7 +2414,10 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
       self.expectModaCommand('publishConvUserMetaDelta');
 
       var messages = convMsgsQuery._liveset.items;
-      lastReadMsgNum = messages.length; // one based, yeah.
+      if (slicedex < 0)
+        lastReadMsgNum = messages.length + slicedex + 1; // one based, yeah.
+      else
+        lastReadMsgNum = slicedex + 0;
       var lastMessage = messages[lastReadMsgNum - 1];
       lastMessage.markAsLastReadMessage();
     });
@@ -2425,10 +2453,11 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
 
       var newConvReps = [], allReps = newActivityQuery._liveset.items;
       for (var iThing = 0; iThing < tConvs.length; iThing++) {
-        var firstMessageText = tConvs[iConv].data.firstMessage.data.text;
+        var tConv = tConvs[iThing];
+        var firstMessageText = tConv.data.firstMessage.data.text;
         for (var iRep = 0; iRep < allReps.length; iRep++) {
           var rep = allReps[iRep];
-          if (rep.blurb.firstMessage.text === firstMessageText) {
+          if (rep.convBlurb.firstMessage.text === firstMessageText) {
             expectedMootings.push({
               conv: tConv,
               markLast: self._convInfoByName[tConv.__name].highestMsgReported
@@ -2448,14 +2477,13 @@ var TestModaActorMixins = exports.TestModaActorMixins = {
     this.T.action(this._eBackside,
                   'processes clearNewness, invokes on',
                   this._testClient._eRawClient, function() {
-      self._expect_clearNewness_prep();
-      self._dynamicNotifyModaActors('clearNewness', expectedMootings);
+      self._testClient._expect_clearNewness_prep();
+      self._testClient._dynamicNotifyModaActors('clearNewness',
+                                                expectedMootings);
+      self._testClient._dynamicNotifyModaActors('updatePhaseComplete');
 
       self.releaseAndPeekAtModaCommand('clearNewness');
       self.stopHoldingAndAssertNoHeldModaCommands();
-
-      self._testClient._expect_metaToConversation_rawclient_to_server(
-        tConv, tMeta, msgInfo, lastReadMsgNum);
     });
 
     this._testClient._expdo_clearNewness_server_onwards(expectedMootings);
@@ -2527,6 +2555,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     errors: {
       mootedMessageReceived: { msg: false },
       messageInvariantViolated: { msg: false },
+
+      modaException: {msg: false, ex: $log.EXCEPTION },
     }
   },
 });

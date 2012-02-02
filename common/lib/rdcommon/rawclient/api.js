@@ -1298,6 +1298,8 @@ RawClientAPI.prototype = {
       type: 'broadcastReplicaBlock',
       replicaBlock: clearingReplicaBlock,
     });
+    // returned for the use of the test framework
+    return convNewnessDetails;
   },
 
   //////////////////////////////////////////////////////////////////////////////
