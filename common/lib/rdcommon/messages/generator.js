@@ -42,338 +42,119 @@
  * be converted into avro representations (or other efficiently packed
  * representations) eventually.
  *
- *
- * @typedef[PSTransitOuterEnvelope @dict[
- *   @key[senderKey]{
- *     The tellBoxPubKey of the sending user.
- *   }
- *   @key[nonce]{
- *     The nonce used for all of the layers of this message composed by the
- *     user.  Consumers should keep this around; re-published layers should
- *     get the nonce attached in a new envelope.
- *   }
- *   @key[innerEnvelope @naclBoxed[PSTransitInnerEnvelope]]
- * ]]{
- *   Person to Server transit outer envelope; this is what the mailsender can
- *   see and hands to the other server's maildrop.
- * }
- * @typedef[PSTransitInnerEnvelope @message[
- *   #:sender PersonAgent
- *   #:recipient Server
- *   @key[type]
- *     @case["convadd"]{
- *       Our fanout server; this is a request to add a user to the conversation.
- *       `convId` will be the name of the conversation.  `payload` will be the
- *       attestation chain.  `name` will be the added user's tell pub key.
- *     }
- *     @case["convmsg"]{
- *       Our fanout server; this is a human message to a conversation.  `name`
- *       will not be present.  `convId` will be the name of the conversation.
- *       `payload` will be the message to relay to the conversation.
- *     }
- *     @case["convmeta"]{
- *       Our fanout server; this is a per-user metadata update for a
- *       conversation.  `name` will not be present.  `convId` will be the name
- *       of the conversation.  `payload` will be the message to relay to the
- *       conversation.
- *     }
- *     @case["createconv"]{
- *       Our fanout server from our user; request to create a conversation.
- *     }
- *     @case["joinconv"]{
- *       Fanin-ish; this is a user asking the target user to join a
- *       conversation.  `name` will hold the root public key of the target user.
- *       `convId` will be the name of the conversation.  `serverName` will be
- *       the public boxing key of the server hosting the conversation. `payload`
- *       will be the message to send back to our server when the operation has
- *       been completed.
- *
- *       This could alternatively have been implemented as an operation a user
- *       dispatches to their own server's conversation server that asks another
- *       server synchronously to perform.  We didn't do this because it would
- *       deviate from all the other one-way stuff we are doing here.  Also,
- *       it does allow the user to optionally decide to intercede in the flow
- *       of the joining process.
- *     }
- *     @case["resend"]{
- *       Retransmit the provided message as part of the "joined" step; this
- *       value is a required value rather than a dispatch value to avoid
- *       weird replay attacks.  Note that because the conversation "joined"
- *       step is currently stateless, a jerk actor can keep telling us the
- *       "joined" message.  This is effect harmless because conversation
- *       adding is idempotent, but can have bandwidth/traffic ramifications.
- *       This can be dealt with by requiring the packet to include an expiration
- *       date and having us use (tupled) nonce-based replay suppression.
- *
- *       `name` and `convId` are not needed since this is just wrapping
- *       a transit message and `serverName` tell us all we need to know.
- *       We add a `nonce` because of the potential for nonce reuse in the
- *       case where we are trying to resend a message to ourself.  In such
- *       a case we could instead special-case self-detection and assume and
- *       require that the nested payload is not encrypted, but for now, this
- *       is simplest.  (Note that nonce reuse in the case of self-nested
- *       payloads is probably safe because the decrypted nested payload is only
- *       exposed to us, but better safe than sorry.)
- *     }
- *   ]]
- *   @key[name]
- *   @key[serverName]
- *   @key[convId]
- *   @key[payload]
- * ]]{
- *   Person to server transit inner envelope; its contents are only for the
- *   receiving maildrop.  It gets boxed by the sending user.
- * }
- *
- * @typedef[UserPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
- *   @key[type "user"]
- *   @key[name UserRootPublicKey]{
- *     Target user's root key.
- *   }
- *   @key[payload BoxedUserToUserEnvelope]{
- *     Boxed message to the user.
- *   }
- * ]]{
- *   User-to-user direct message.
- * }
- *
- * @typedef[ConvAddPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
- *   @key[type "convadd"]
- *   @key[convId]
- * ]]{
- *
- * }
- * @typedef[ConvMsgPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
- *   @key[type "convmsg"]
- *   @key[convId ConversationId]{
- *     The name of the conversation the message is to.
- *   }
- *   @key[payload BoxedConversationEnvelope]
- * ]]{
- *   A human message to a conversation being relayed to the fan-out server.
- * }
- *
- * @typedef[ConvAddPayload @dict[
- *   @key[envelopeKey]{
- *     The user's envelope key for encrypting fanout messages to the user (so
- *     that their mailstore can process the messages).
- *   }
- *   @key[inviteePayload]{
- *     The boxed message containing the conversation metadata from the inviter
- *     to the invitee to be delivered as part of the welcome payload.
- *   }
- *   @key[attestationPayload]{
- *     A conversation encrypted message containing the identity information of
- *     the person being added.  This is unreadable by the fanout server because
- *     it does not need to know the details of who this person is.
- *   }
- * ]]{
- *   Similar to the items in the `ConvCreatePayload` addPayloads entry, but
- *   without fields that are implicit from the containing envelope.
- * }
- *
- * @typedef[ConvCreatePayload @dict[
- *   @key[addPayloads @listof[@dict[
- *     @key[nonce]
- *     @key[tellKey]
- *     @key[envelopeKey]{
- *       The user's envelope key for encrypting fanout messages to the user (so
- *       that their mailstore can process the messages).
- *     }
- *     @key[serverKey]
- *     @key[inviteePayload]{
- *       The boxed message containing the conversation metadata from the inviter
- *       to the invitee to be delivered as part of the welcome payload.
- *     }
- *     @key[attestationPayload]{
- *       A conversation encrypted message containing the identity information of
- *       the person being added.  This is unreadable by the fanout server because
- *       it does not need to know the details of who this person is.
- *     }
- *     @key[inviteProof]{
- *       A boxed message analogus to a join request from the conversation
- *       creator to the transit server of the recipient.
- *     }
- *     @key[proofNonce]{
- *       The nonce the proof was boxed with.
- *     }
- *   ]]]{
- *     Add payloads of the people the creator is adding to the conversation,
- *     but not for the creator themselves.  (The metadata about the creator
- *     comes in the root conversation attestation.)
- *
- *     Note that this dict's fields are assumed by
- *     `convInitialAuthorizeMultipleUsers`.
- *   }
- *   @key[msgNonce]
- *   @key[msgPayload ConversationEnvelopeEncrypted]
- * ]]
- *
- * @typedef[SSTransitEnvelope @dict[
- *   @key[type @oneof[
- *     @case["joined"]{
- *       Fanin-ish; the response to a "joinconv" request once it has been
- *       accomplished.  `payload` will be a message that our user composed to
- *       us as part of the invitation process but we have not previously
- *       seen.  Also note that this will be the first we have heard of this
- *       invitation, as the previous step was a direct message from our user
- *       to the invited user's maildrop/fanout server.  (Accordingly, the
- *       nonce used can be/is the same as the nonce used for the "joinconv"
- *       message.)  `name` names the user who issued the joinconv message by
- *       their tell key and who should be the author of the payload which should
- *       correspond to an (encrypted) `PSTransitInnerEnvelope`.
- *     }
- *     @case["initialfan"]{
- *       A conversation welcome message authenticated on the basis of the
- *       initiating user's relationship with the contact rather than
- *       a pre-existing per-conversation authorization (induced by a "join"
- *       message.)  It will include `senderKey` denoting the sender (tell key)
- *       for this purpose and `proof` which is the conversation id boxed by said
- *       sender to the transit server as proof of it being their request.
- *     }
- *     @case["fannedmsg"]{
- *       A conversation message.  `payload` will be a boxed message from the
- *       fanout server to the `name`d user.  `convId` will name the
- *       conversation.
- *     }
- *   ]]{
- *   }
- *   @key[name]{
- *     The tell public box key of the recipient user.
- *   }
- *   @key[convId]{
- *     The conversation this is a message for.
- *   }
- *   @key[senderKey #:optional]
- *   @key[proof #:optional]
- *   @key[nonce]
- *   @key[payload]
- * ]]{
- *   Server-to-server transit envelope; from the fanout server on the other
- *   server to a user on our server.
- * }
- *
- * @typedef[ConversationWelcomeMessage @dict[
- *   @key[boxedInvite]
- *   @key[backlog @listof[ConversationFanoutEnvelope]]
- * ]]{
- *   Contains the conversation meta-data from the inviter in a boxed message
- *   from the inviter, plus all of the conversation backlog.
- * }
- *
- * @typedef[ConversationFanoutEnvelope @dict[
- *   @key[type @oneof[
- *     @case["message"]{
- *       A human-readable conversation to the message by one of the
- *       participants.
- *     }
- *     @case["join"]{
- *       A join notification for a new participant; contains the attestation
- *       (authored by the inviter) about who the invitee is (to the inviter).
- *       `sentBy` contains the tell key of the inviter, `invitee` contains the
- *       tell key of the invited.
- *     }
- *     @case["meta"]{
- *       User metadata about the conversation as a whole, likely their
- *       watermarks.  This is made known to the fan-out server as an
- *       optimization so that it does not need to replay meta-data to joining
- *       participants that is obsolete.  (This could also contain metadata
- *       about specific messages embedded in it if it wants.)
- *     }
- *     @case["welcome"]{
- *       The recipient is being added to the conversation just now and
- *       `payload` contains an array of `ConversationFanoutEnvelope` instances.
- *
- *       This exists as a hybrid of an optimization (less message traffic, fewer
- *       crypto operations) and an attempt to expose less information about the
- *       conversation to the invitee's server.  Note that without padding, the
- *       size of the aggregate may still reveal a lot of information.  It may
- *       make sense to nuke this special case.
- *     }
- *   ]]
- *   @key[sentBy]{
- *     The tell key of the sending user.
- *   }
- *   @key[invitee #:optional]{Only present for 'join' notifications}
- *   @key[receivedAt DateMS]
- *   @key[nonce]
- *   @key[payload ConversationEnvelopeEncrypted]
- * ]]{
- *   The (boxed) envelope from the fanout server to each participant in the
- *   conversation for things sent to the conversation.  This names the
- *   sender's key rather than having the conversation envelope name it because
- *   only the fanout server is able to perform such a verification (unless we
- *   use a public signature, which is too expensive for us at this time.)
- *
- *   The conversation id is explicitly provided in the wrapping
- *   `SSTransitEnvelope` and should be re-boxed along with the nonce when being
- *   provided to the user, etc.
- * }
- * @typedef[ConversationFanoutEnvelopeEncrypted
- *          @naclBoxed[ConversationFanoutEnvelope serverBox userEnvelopeBox]]
- *
- * @typedef[ConversationEnvelope @dict[
- *   @key[body ConversationBodyEncrypted]
- * ]]{
- *   The conversation envelope is encrypted with the conversation's envelope
- *   (symmetric) secret key using the nonce providing in one the containing
- *   objects.
- *
- *   Although this block is not signed, we have a optimistically reliable
- *   indicator of the author of this message thanks to the enclosing
- *   `ConversationFanoutEnvelope` and its boxing.
- *
- *   XXX This may be an unneeded level of wrapping.  We would put stuff in here
- *   that the participants in the conversation don't want the fan-out server
- *   to see in terms of envelope data.
- * }
- * @typedef[ConversationEnvelopeEncrypted
- *          @naclSecretBoxed[ConversationEnvelope convEnvelopeSecretKey]]
- *
- * @typedef[ConversationBody @dict[
- *   @key[author AnnounceSignPubKey]
- *   @key[convId]
- *   @key[composedAt DateMS]{
- *     Composition date of the message.
- *   }
- *   @key[body String]
- * ]]{
- * }
- *
- * @typedef[ConversationBodySigned @naclSigned[ConversationBodyPayload author]]{
- *   The body signed by the author using
- * }
- *
- * @typedef[ConversationBodyEncrypted
- *          @naclSecretBoxed[ConversationBodySigned convBodySecretKey]]{
- * }
- *
- * @typedef[ConversationAttestation @dict[
- *   @key[id]
- *   @key[createdAt DateMS]
- *   @key[creatorSelfIdent]
- *   @key[transitServer]
- * ]]
- *
- * @typedef[ConverationInviteAttestation @dict[
- *   @key[issuedAt DateMS]
- *   @key[signingKey]{
- *     The announceSign key used by the inviter.
- *   }
- *   @key[convId]
- *   @key[oident]
- * ]]{
- *   The signed attestation provided to the members of a conversation that
- *   serves to name the invitee and say who invited them in a strong way that
- *   a rogue fanout server cannot fake.
- *
- *   Note that the attestation is signed by the 'announceSign' signature key
- *   rather than a longterm key (which *is* used to sign the other person
- *   ident).  This is consistent with our use of the 'announceSign' key to sign
- *   content messages to the conversation issued by the user.  (And that choice
- *   is part of our design decision to keep the longterm key fairly precious and
- *   rarely needed.)
- * }
+@typedef[UserPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
+  @key[type "user"]
+  @key[name UserRootPublicKey]{
+    Target user's root key.
+  }
+  @key[payload BoxedUserToUserEnvelope]{
+    Boxed message to the user.
+  }
+]]{
+  User-to-user direct message.
+}
+
+
+}
+@typedef[ConvMsgPSTransitInnerEnvelope @extend[PSTransitInnerEnvelope
+  @key[type "convmsg"]
+  @key[convId ConversationId]{
+    The name of the conversation the message is to.
+  }
+  @key[payload BoxedConversationEnvelope]
+]]{
+  A human message to a conversation being relayed to the fan-out server.
+}
+
+@typedef[SSTransitEnvelope @dict[
+  @key[type @oneof[
+    @case["joined"]{
+      Fanin-ish; the response to a "joinconv" request once it has been
+      accomplished.  `payload` will be a message that our user composed to
+      us as part of the invitation process but we have not previously
+      seen.  Also note that this will be the first we have heard of this
+      invitation, as the previous step was a direct message from our user
+      to the invited user's maildrop/fanout server.  (Accordingly, the
+      nonce used can be/is the same as the nonce used for the "joinconv"
+      message.)  `name` names the user who issued the joinconv message by
+      their tell key and who should be the author of the payload which should
+      correspond to an (encrypted) `PSTransitInnerEnvelope`.
+    }
+    @case["initialfan"]{
+      A conversation welcome message authenticated on the basis of the
+      initiating user's relationship with the contact rather than
+      a pre-existing per-conversation authorization (induced by a "join"
+      message.)  It will include `senderKey` denoting the sender (tell key)
+      for this purpose and `proof` which is the conversation id boxed by said
+      sender to the transit server as proof of it being their request.
+    }
+    @case["fannedmsg"]{
+      A conversation message.  `payload` will be a boxed message from the
+      fanout server to the `name`d user.  `convId` will name the
+      conversation.
+    }
+  ]]{
+  }
+  @key[name]{
+    The tell public box key of the recipient user.
+  }
+  @key[convId]{
+    The conversation this is a message for.
+  }
+  @key[senderKey #:optional]
+  @key[proof #:optional]
+  @key[nonce]
+  @key[payload]
+]]{
+  Server-to-server transit envelope; from the fanout server on the other
+  server to a user on our server.
+}
+
+@typedef[ConversationWelcomeMessage @dict[
+  @key[boxedInvite]
+  @key[backlog @listof[ConversationFanoutEnvelope]]
+]]{
+  Contains the conversation meta-data from the inviter in a boxed message
+  from the inviter, plus all of the conversation backlog.
+}
+
+
+@typedef[ConversationEnvelope @dict[
+  @key[body ConversationBodyEncrypted]
+]]{
+  The conversation envelope is encrypted with the conversation's envelope
+  (symmetric) secret key using the nonce providing in one the containing
+  objects.
+
+  Although this block is not signed, we have a optimistically reliable
+  indicator of the author of this message thanks to the enclosing
+  `ConversationFanoutEnvelope` and its boxing.
+
+  XXX This may be an unneeded level of wrapping.  We would put stuff in here
+  that the participants in the conversation don't want the fan-out server
+  to see in terms of envelope data.
+}
+@typedef[ConversationEnvelopeEncrypted
+         @naclSecretBoxed[ConversationEnvelope convEnvelopeSecretKey]]
+
+@typedef[ConversationBody @dict[
+  @key[author AnnounceSignPubKey]
+  @key[convId]
+  @key[composedAt DateMS]{
+    Composition date of the message.
+  }
+  @key[body String]
+]]{
+}
+
+@typedef[ConversationBodySigned @naclSigned[ConversationBodyPayload author]]{
+  The body signed by the author using
+}
+
+@typedef[ConversationBodyEncrypted
+         @naclSecretBoxed[ConversationBodySigned convBodySecretKey]]{
+}
+
  **/
 
 define(

@@ -1,4 +1,4 @@
-#lang jstut/interactive
+#lang jstut/interactive jstut/netproto
 
 @section{Realms}
 
@@ -176,24 +176,40 @@ been addressed; the conversation server will currently keep them forever.)
 
 @boxedMessage[PSTransitInnerEnvelope
   #:sender   PersonAgent   #:senderKey    TellKey
-  #:receiver Fanout  #:recipientKey ServerKey
-]
+  #:receiver Fanout        #:recipientKey ServerKey
+  @key[name]
+  @key[serverName]
+  @key[convId]
+  @key[payload]
+]{
+  Person to server transit inner envelope; its contents are only for the
+  receiving maildrop.  It gets boxed by the sending user.
+}
 
 @message[PSTransitOuterEnvelope
   #:sender   PersonAgent
   #:receiver PublicServer
-  @key[senderKey TellKey]
-  @key[nonce BoxNonce]
+  @key[senderKey TellKeyPub]
+  @key[nonce BoxNonce]{
+    The nonce used for all of the layers of this message composed by the
+    user.  Consumers should keep this around; re-published layers should
+    get the nonce attached in a new envelope.
+  }
   @key[innerEnvelope BoxedPSTransitInnerEnvelope]
-]
+]{
+  Person to Server transit outer envelope; this is what the mailsender can
+  see and hands to the other server's maildrop.
+}
+
+
 
 @boxedMessage[GenMailstoreEnvelope
-  #:sender PersonAgent #:senderKey TellKey
-  #:receiver Mailstore #:recipientKey EnvelopeKey
+  #:sender   PersonAgent   #:senderKey    TellKey
+  #:receiver Mailstore     #:recipientKey EnvelopeKey
 ]
 
 @boxedMessage[GenClientBody
-  #:sender PersonAgent #:senderKey TellKey
-  #:receiver Client #:recipientKey BodyKey
+  #:sender   PersonAgent   #:senderKey    TellKey
+  #:receiver Client        #:recipientKey BodyKey
 ]
 

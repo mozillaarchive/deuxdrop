@@ -22,29 +22,20 @@
       {
         baseUrl: "../",
         paths: {
-          text: "clients/deps/text",
-        },
-        // jstut stuff
-        packages: [
+          "text": "clients/deps/text",
           // deuxdrop
-          { name: "rdservers", location: "servers/lib/rdservers" },
-          { name: "rdcommon", location: "common/lib/rdcommon" },
+          "rdservers": "servers/lib/rdservers",
+          "rdcommon": "common/lib/rdcommon",
           // jstut
-          { name: "jstut", location: "clients/deps/jstut/lib/jstut" },
-          { name: "jstut-plat",
-            location: "clients/deps/jstut/lib-requirejs/jstut-plat" },
+          "jstut": "clients/deps/jstut/lib/jstut",
+          "jstut-plat": "clients/deps/jstut/lib-requirejs/jstut-plat",
           // wmsy
-          { name: "wmsy", location: "clients/deps/wmsy/lib/wmsy" },
+          "wmsy": "clients/deps/wmsy/lib/wmsy",
           // ace
-          { name: "ace", location: "clients/deps/jstut/deps/ace/lib/ace" },
-          { name: "cockpit",
-            location: "clients/deps/jstut/deps/ace/support/cockpit/lib/cockpit",
-            main: "index"
-          },
-          { name: "pilot",
-            location: "clients/deps/jstut/deps/ace/support/pilot/lib/pilot",
-            main: "index" },
-        ],
+          "ace": "clients/deps/jstut/deps/ace/lib/ace",
+          "cockpit": "clients/deps/jstut/deps/ace/support/cockpit/lib/cockpit",
+          "pilot": "clients/deps/jstut/deps/ace/support/pilot/lib/pilot",
+        },
       },
       ["text", "jstut-plat/web-loader"],
       function($ignoredText, mainModule) {
