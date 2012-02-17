@@ -14,6 +14,13 @@
   @actor[ConversationServer Fanout]{
     The `ConversationCreator`'s fanout server.
   }
+  @actor[Inviter PersonAgent]{
+    A participant in the conversation who is inviting a non-participant to
+    join.
+  }
+  @actor[InviterServer PersonAgent]{
+    The fanout server of an inviter.
+  }
   @pluralActor[Invitee PersonAgent]{
     Someone invited to join the conversation by any of the existing
     participants in the conversation.
@@ -49,8 +56,6 @@
   `SSTransitEnvelope` and should be re-boxed along with the nonce when being
   provided to the user, etc.
 }
-@typedef[ConversationFanoutEnvelopeEncrypted
-         @naclBoxed[ConversationFanoutEnvelope serverBox userEnvelopeBox]]
 
 @boxedMessage[ConvMessageFanout #:extends ConversationFanoutEnvelope
 ]{
@@ -116,20 +121,10 @@
   rarely needed.)
 }
 
-@protoAction["Create a new Conversation"
-  @send[#:sender ConversationCreator #:recipient ConversationServer
-        #:message ConvCreate]
-  @send[#:sender ConversationServer #:recipient Participant
-        #:message ConvWelcome]
-]
-
-@protoAction["Send a message to the conversation"
-]
-
 @boxedMessage[ConvCreate #:extends PSTransitInnerEnvelope
   @key[type "createconv"]
   @key[payload @dict[
-    @key[addPayloads @listof[@dict[
+    @key[addPayloads @listof["add payload" @dict[
       @key[nonce]
       @key[tellKey]
       @key[envelopeKey]{
@@ -168,6 +163,13 @@
  Our fanout server from our user; request to create a conversation.
 }
 
+@protoAction["Create a new Conversation"
+  @send[#:sender ConversationCreator #:recipient ConversationServer
+        #:message ConvCreate]
+  @send[#:sender ConversationServer #:recipient Participant
+        #:message ConvWelcomeFanout]
+]
+
 @section{Conversation Messages}
 
 @boxedMessage[ConvMsg #:extends PSTransitInnerEnvelope
@@ -189,17 +191,6 @@
 }
 
 @section{Conversation Invitations}
-
-@protoAction["Invite someone to the conversation"
-  @send[#:sender Inviter #:recipient InviteeServer
-        #:message ConvJoin]
-  @send[#:sender InviteeServer #:recipient InviterServer
-        #:message ConvResend]
-  @send[#:sender InviteeServer #:recipient ConversationServer
-        #:message ConvAdd]
-  @send[#:sender ConversationServer Participants
-        #:message ConvJoinFanout]
-]
 
 @boxedMessage[ConvAdd #:extends PSTransitInnerEnvelope
   @key[type "convadd"]
@@ -267,5 +258,16 @@
   payloads is probably safe because the decrypted nested payload is only
   exposed to us, but better safe than sorry.)
 }
+
+@protoAction["Invite someone to the conversation"
+  @send[#:sender Inviter #:recipient InviteeServer
+        #:message ConvJoin]
+  @send[#:sender InviteeServer #:recipient InviterServer
+        #:message ConvResend]
+  @send[#:sender InviteeServer #:recipient ConversationServer
+        #:message ConvAdd]
+  @send[#:sender ConversationServer #:recipient Participant
+        #:message ConvJoinFanout]
+]
 
 }
