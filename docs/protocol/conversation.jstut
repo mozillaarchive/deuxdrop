@@ -125,7 +125,7 @@
 @boxedMessage[ConvCreate #:extends PSTransitInnerEnvelope
   @key[type "createconv"]
   @key[payload @dict[
-    @key[addPayloads @listof["add payload" @dict[
+    @key[addPayloads @listof["add payload" @typedef[CreationAddPayload @dict[
       @key[nonce]
       @key[tellKey]
       @key[envelopeKey]{
@@ -149,7 +149,7 @@
       @key[proofNonce]{
         The nonce the proof was boxed with.
       }
-    ]]]{
+    ]]]]{
       Add payloads of the people the creator is adding to the conversation,
       but not for the creator themselves.  (The metadata about the creator
       comes in the root conversation attestation.)
