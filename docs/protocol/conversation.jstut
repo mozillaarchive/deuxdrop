@@ -8,33 +8,33 @@
 @section{Involved Parties}
 
 @protoParticipants[
-  @actor[ConversationCreator PersonAgent]{
+  @actor[ConversationCreator PersonAgent #:icon person]{
     Creates the conversation which is hosted on their fanout server.
   }
-  @actor[ConversationServer Fanout]{
+  @actor[ConversationServer Fanout #:icon pc]{
     The `ConversationCreator`'s fanout server.
   }
-  @actor[Inviter PersonAgent]{
+  @actor[Inviter PersonAgent #:icon person]{
     A participant in the conversation who is inviting a non-participant to
     join.
   }
-  @actor[InviterServer PersonAgent]{
+  @actor[InviterServer PersonAgent #:icon pc]{
     The fanout server of an inviter.
   }
-  @pluralActor[Invitee PersonAgent]{
+  @pluralActor[Invitee PersonAgent #:singularIcon person #:pluralIcon people]{
     Someone invited to join the conversation by any of the existing
     participants in the conversation.
   }
-  @pluralActor[InviteeServer Fanout]{
+  @pluralActor[InviteeServer Fanout #:singularIcon pc #:pluralIcon cloud]{
     The fanout server of an invitee.
   }
-  @actorGroup[Participants ConversationCreator Invitees]{
+  @actorGroup[Participants ConversationCreator Invitees
+              #:singularIcon person #:pluralIcon people]{
     The people participating in the conversation.
   }
 ]
 
-@section{Base Message Types}
-
+@quiet[
 @boxedMessage[ConversationFanoutEnvelope
   #:sender ConversationServer #:recipient Participant
   @key[type]
@@ -90,10 +90,11 @@
   size of the aggregate may still reveal a lot of information.  It may
   make sense to nuke this special case.
 }
-
+]
 
 @section{Conversation Creation}
 
+@quiet[
 @typedef[ConversationAttestation @dict[
   @key[id]
   @key[createdAt DateMS]
@@ -162,6 +163,7 @@
 ]{
  Our fanout server from our user; request to create a conversation.
 }
+]
 
 @protoAction["Create a new Conversation"
   @send[#:sender ConversationCreator #:recipient ConversationServer
@@ -172,6 +174,7 @@
 
 @section{Conversation Messages}
 
+@quiet[
 @boxedMessage[ConvMsg #:extends PSTransitInnerEnvelope
   @key[type "convmsg"]
   @key[payload BoxedConversationEnvelope]
@@ -189,9 +192,11 @@
   of the conversation.  `payload` will be the message to relay to the
   conversation.
 }
+]
 
 @section{Conversation Invitations}
 
+@quiet[
 @boxedMessage[ConvAdd #:extends PSTransitInnerEnvelope
   @key[type "convadd"]
   @key[payload @dict[
@@ -258,6 +263,7 @@
   payloads is probably safe because the decrypted nested payload is only
   exposed to us, but better safe than sorry.)
 }
+]
 
 @protoAction["Invite someone to the conversation"
   @send[#:sender Inviter #:recipient InviteeServer
