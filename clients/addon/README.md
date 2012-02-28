@@ -15,7 +15,7 @@ Jetpack add-in that works in Firefox and Fennec.  Adds the following URL's:
 
 ## Requirements
 
-Have a trunk build of the addon-sdk.
+Have a trunk build of the addon-sdk and Firefox 11 (or later).
 
 
 ## How to build / run
@@ -23,4 +23,4 @@ Have a trunk build of the addon-sdk.
 * Source "bin/activate" from the addon-sdk (aka Jetpack)
 * Use the "acfx" script to do what you would normally do with "cfx", except
   you will need to specify the path.  ex: "./acfx run", "./acfx xpi", etc.
-
+  You may also need to use "-b /path/to/firefox11/firefox".
