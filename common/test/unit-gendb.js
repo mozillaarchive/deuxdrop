@@ -117,7 +117,9 @@ TD.commonCase('hbase model', function(T) {
 
   T.group('setup');
   T.action(eLazy, 'create connection', function() {
-    conn = $gendb.makeTestDBConnection('');
+    // good news everyone!  our main.js is currently racing us to create a
+    //  database, so we get boned if we use the same empty prefix it uses!
+    conn = $gendb.makeTestDBConnection('hbase');
   });
   T.action(eLazy, 'define schema', function() {
     eLazy.expect_event('schema defined');
@@ -316,7 +318,7 @@ TD.commonCase('reorderable collection index model', function(T) {
 
   T.group('setup');
   T.action(eLazy, 'create connection', function() {
-    conn = $gendb.makeTestDBConnection('');
+    conn = $gendb.makeTestDBConnection('reorderable');
   });
   T.action(eLazy, 'define schema', function() {
     eLazy.expect_event('schema defined');
@@ -587,7 +589,7 @@ TD.commonCase('queue model', function(T) {
 
   T.group('setup');
   T.action(eLazy, 'create connection', function() {
-    conn = $gendb.makeTestDBConnection('');
+    conn = $gendb.makeTestDBConnection('queue');
   });
   T.action(eLazy, 'define schema', function() {
     eLazy.expect_event('schema defined');

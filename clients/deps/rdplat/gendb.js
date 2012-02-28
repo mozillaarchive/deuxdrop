@@ -78,34 +78,20 @@ var IndexedDB = mozIndexedDB;
  * The version to use for now; not a proper version, as we perform no upgrading,
  *  etc. at this time.
  */
-const DB_ONLY_VERSION = "ddp-1";
+const DB_ONLY_VERSION = 1;
 
 const CELL_DELIM = '@', CELL_DELIM_LEN = CELL_DELIM.length,
       INDEX_DELIM = '_', INDEX_PARAM_DELIM = '@';
 
 function IndexedDbConn(nsprefix, _logger) {
-  var dbDeferred = $Q.defer();
-  this._db = dbDeferred.promise;
+  this._nsprefix = nsprefix;
+  this._db = null;
 
   this._log = LOGFAB.gendbConn(this, _logger, [nsprefix]);
 
   var self = this;
 
   self._log.connecting();
-  // XXX firefox 6 hack so we can perform the open with the context of the
-  //  bloody webpage (::Open checks the implicit security context, but its
-  //  helper uses the window so it lacks our 'chrome' context but gets the
-  //  'chrome' URI)
-  var dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix);
-  dbOpenRequest.onerror = function(event) {
-    self._log.dbErr(dbOpenRequest.errorCode);
-    dbDeferred.reject(dbOpenRequest.errorCode);
-  };
-  dbOpenRequest.onsuccess = function(event) {
-    self._log.connected();
-    self._db = dbOpenRequest.result;
-    dbDeferred.resolve(self._db);
-  };
 }
 IndexedDbConn.prototype = {
   toString: function() {
@@ -126,38 +112,41 @@ IndexedDbConn.prototype = {
    * }
    */
   defineSchema: function(schema) {
-    return when(this._db, function(db) {
-      if (db.version == DB_ONLY_VERSION)
-        return true;
+    var dbDeferred = $Q.defer(), self = this, nsprefix = this._nsprefix,
+        dbOpenRequest = IndexedDB.open("deuxdrop-" + nsprefix, DB_ONLY_VERSION);
+    dbOpenRequest.onerror = function(event) {
+      self._log.dbErr(dbOpenRequest.error.name);
+      dbDeferred.reject(dbOpenRequest.error);
+    };
+    dbOpenRequest.onsuccess = function(event) {
+      self._log.connected();
+      self._db = dbOpenRequest.result;
+      dbDeferred.resolve(self._db);
+    };
+    dbOpenRequest.onupgradeneeded = function(event) {
+      var db = dbOpenRequest.result;
 
-      var deferred = $Q.defer();
-      var req = db.setVersion(DB_ONLY_VERSION), self = this;
-      req.onerror = function() {
-        deferred.reject(request.errorCode);
-      };
-      req.onsuccess = function() {
-        for (var iTable = 0; iTable < schema.tables.length; iTable++) {
-          var tableDef = schema.tables[iTable],
-              tableName = tableDef.name;
-          db.createObjectStore(tableName);
+      // XXX if we supported more than one version, we would want to potentially
+      //  perform migration logic here.
+      for (var iTable = 0; iTable < schema.tables.length; iTable++) {
+        var tableDef = schema.tables[iTable],
+            tableName = tableDef.name;
+        db.createObjectStore(tableName);
 
-          for (var iIndex = 0; iIndex < tableDef.indices.length; iIndex++) {
-            var indexName = tableDef.indices[iIndex];
-            var aggrName = tableName + INDEX_DELIM + indexName;
-            db.createObjectStore(aggrName);
-          }
+        for (var iIndex = 0; iIndex < tableDef.indices.length; iIndex++) {
+          var indexName = tableDef.indices[iIndex];
+          var aggrName = tableName + INDEX_DELIM + indexName;
+          db.createObjectStore(aggrName);
         }
-        for (var iQueue = 0; iQueue < schema.queues.length; iQueue++) {
-          var queueDef = schema.queues[iQueue],
-              queueName = queueDef.name;
+      }
+      for (var iQueue = 0; iQueue < schema.queues.length; iQueue++) {
+        var queueDef = schema.queues[iQueue],
+            queueName = queueDef.name;
 
-          db.createObjectStore(queueName);
-        }
-        deferred.resolve();
-      };
-
-      return deferred.promise;
-    });
+        db.createObjectStore(queueName);
+      }
+    };
+    return (this._db = dbDeferred.promise);
   },
 
   //////////////////////////////////////////////////////////////////////////////
