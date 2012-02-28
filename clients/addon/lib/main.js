@@ -53,10 +53,13 @@
  * We additionally provide a user interface to expose the logging data
  **/
 
-define([ 'exports', 'self', 'page-mod', 'hidden-frame', 'chrome', 'nacl',
-         './jetpack-protocol/index', 'timers'],
-function (exports,   self,   pageMod,    hiddenFrame,    chrome,   nacl,
-          protocol, $timers) {
+const self = require('self'),
+      pageMod = require('page-mod'),
+      hiddenFrame = require('hidden-frame'),
+      chrome = require('chrome'),
+      nacl = require('nacl'),
+      protocol = require('./jetpack-protocol/index'),
+      $timers = require('timers');
 
 var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
     jsm = {},
@@ -388,4 +391,3 @@ exports.main = function () {
     },
   });
 };
-});

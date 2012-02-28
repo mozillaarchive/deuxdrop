@@ -53,7 +53,8 @@
  *  wrapping at least ignores the results.
  **/
 
-let $unload = require("unload"), $url = require("url"),
+let $unload = require("unload"),
+    $url = require("url"),
     $self = require("self");
 
 let {Cc, Cu, Ci} = require("chrome");
@@ -411,7 +412,7 @@ let crypto_box = NACL.declare("crypto_box" + BOX_IMPL,
                               BoxNonceBstr,
                               BoxPublicKeyBstr,
                               BoxSecretKeyBstr);
-                              
+
 /**
  * Box a binary message string (*not* utf8), producing a binary string.
  */
@@ -468,7 +469,7 @@ exports.box_utf8 = function(jsm, n, pk, sk) {
   for (let i = crypto_box_ZEROBYTES; i < m_padded_len; i++) {
     m_padded[i] = m[i - crypto_box_ZEROBYTES];
   }
-  
+
   // the output message will accordingly also be padded
   let c_padded = alloc_ustr(m_padded_len);
 
@@ -585,7 +586,7 @@ let crypto_secretbox = NACL.declare("crypto_secretbox" + SECRETBOX_IMPL,
                                     Sizey,
                                     SecretBoxNonceBstr,
                                     SecretBoxKeyBstr);
-                              
+
 /**
  * Secretbox a binary message string (*not* utf8), producing a binary string.
  */
@@ -648,7 +649,7 @@ exports.secretbox_utf8 = function(js_m, n, k) {
   return BinStrToJSStr(c_padded, crypto_secretbox_BOXZEROBYTES, m_padded_len);
 };
 
-let crypto_secretbox_open = 
+let crypto_secretbox_open =
   NACL.declare("crypto_secretbox" + SECRETBOX_IMPL + "_open",
                $ctypes.default_abi,
                $ctypes.int,
@@ -820,7 +821,7 @@ let crypto_hash = NACL.declare("crypto_hash" + HASH_IMPL,
 
 exports.hash512_256 = function(m) {
   let h = HashHashBstr();
-  
+
   if (crypto_hash(h, JSStrToBinStr(m, 0), m.length) !== 0)
     throw new Error("inexplicable hashing failure");
   // truncate to just the first 32 bytes.
@@ -828,7 +829,7 @@ exports.hash512_256 = function(m) {
 };
 exports.hash512_256_utf8 = function(js_m) {
   let h = HashHashBstr();
-  
+
   let m = JSStrToUtf8Str(js_m, 0), m_len = m.length - 1; // ignore nul
 
   if (crypto_hash(h, m, m_len) !== 0)

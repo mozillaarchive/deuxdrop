@@ -5,5 +5,6 @@
     "version": "0.2",
     "fullName": "Deuxdrop",
     "id": "jid1-bjyvSLUajWq9bg",
+    "unpack": true,
     "description": "Deuxdrop: conversation-centric crypto messaging"
 }
