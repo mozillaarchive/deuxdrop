@@ -498,6 +498,9 @@ IndexedDbConn.prototype = {
    * ]
    */
   updateMultipleIndexValues: function(tableName, updates) {
+    // there is nothing to do if there are no updates to perform
+    if (updates.length === 0)
+      return null;
     var deferred = $Q.defer();
 
     var aggrNames = [], iUpdate, update;
@@ -623,6 +626,10 @@ IndexedDbConn.prototype = {
    *  is larger than the provided value, it is updated.
    */
   maximizeMultipleIndexValues: function(tableName, maxdates) {
+    // there is nothing to do if there are no maximizations to perform
+    if (maxdates.length === 0)
+      return null;
+
     var deferred = $Q.defer();
 
     var aggrNames = [], iMaxdate, maxdate;
