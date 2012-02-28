@@ -66,25 +66,26 @@ define(
     $module,
     exports
   ) {
+'use strict';
 var when = $Q.when;
 
-const PINNED = 'pinned';
+var PINNED = 'pinned';
 
-const NS_PEEPS = 'peeps',
-      NS_CONVBLURBS = 'convblurbs',
-      NS_CONVMSGS = 'convmsgs',
-      NS_CONVNEW = 'convnew',
-      NS_SERVERS = 'servers',
-      NS_POSSFRIENDS = 'possfriends',
-      NS_CONNREQS = 'connreqs',
-      NS_ERRORS = 'errors';
+var NS_PEEPS = 'peeps',
+    NS_CONVBLURBS = 'convblurbs',
+    NS_CONVMSGS = 'convmsgs',
+    NS_CONVNEW = 'convnew',
+    NS_SERVERS = 'servers',
+    NS_POSSFRIENDS = 'possfriends',
+    NS_CONNREQS = 'connreqs',
+    NS_ERRORS = 'errors';
 
-const setIndexValue = $notifking.setIndexValue,
-      setReuseIndexValue = $notifking.setReuseIndexValue,
-      transferIndexValue = $notifking.transferIndexValue,
-      assertTransferIndexValue = $notifking.assertTransferIndexValue,
-      getIndexValue = $notifking.getIndexValue,
-      assertGetIndexValue = $notifking.assertGetIndexValue;
+var setIndexValue = $notifking.setIndexValue,
+    setReuseIndexValue = $notifking.setReuseIndexValue,
+    transferIndexValue = $notifking.transferIndexValue,
+    assertTransferIndexValue = $notifking.assertTransferIndexValue,
+    getIndexValue = $notifking.getIndexValue,
+    assertGetIndexValue = $notifking.assertGetIndexValue;
 
 /**
  * An optimization we are capable of performing is that we do not have to store
@@ -1237,7 +1238,7 @@ LocalStore.prototype = {
         blurbClientData = self._notif.generateClientData(
                             querySource, NS_CONVBLURBS, convId);
         self._convertConversationBlurb(blurbClientData, querySource,
-                                       mergedCells);
+                                       cells);
       }
       clientData.deps.push(blurbClientData);
 
