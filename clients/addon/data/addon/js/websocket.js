@@ -57,8 +57,13 @@ exports.helpers = {
   atob: window.atob.bind(window),
 };
 
-if (!MozWebSocket)
-  throw new Error("I need to be loaded in a content page!");
+if (!WebSocket) {
+  // yes, clobber the global namespace if we must.
+  if (MozWebSocket)
+    WebSocket = MozWebSocket;
+  else
+    throw new Error("I need to be loaded in a content page!");
+}
 
 function WebSocketClient(opts) {
   this.ws = null;
@@ -67,7 +72,7 @@ function WebSocketClient(opts) {
 exports.client = WebSocketClient;
 WebSocketClient.prototype = {
   connect: function(url, protocols) {
-    var ws = new MozWebSocket(url, protocols);
+    var ws = new WebSocket(url, protocols);
     var shim = this.shim = new WebSocketConnShim(ws);
 
     if (this.handlers.hasOwnProperty("error"))
