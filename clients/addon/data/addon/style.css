@@ -1,3 +1,7 @@
+/*
+ * The CSS in this file is unhappy.
+ */
+
 * {
     margin: 0;
     padding: 0;
@@ -357,6 +361,79 @@ input[type=text]#search {
     border-width: 1px 0 1px 1px;
 }
 
+.notificationCount {
+  display: inline-block;
+  background-color: red;
+  color: white;
+  font-size: 12px;
+  height: 16px;
+  width: 16px;
+  padding: 0;
+  margin-bottom: 4px;
+  line-height: normal;
+  text-align: center;
+
+  -webkit-border-radius: 8px;
+     -moz-border-radius: 8px;
+          border-radius: 8px;
+}
+
+.newConversationNotifications {
+  display: block;
+  clear: both;
+}
+
+.newConversationScroller {
+  overflow-y: hidden;
+  overflow-x: auto;
+  height: 180px;
+}
+
+
+.peepInfoPic {
+  width: 40px;
+  height: 40px;
+}
+
+.newConversation {
+  float: left;
+  position: relative;
+  margin: 10px;
+  padding: 10px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+  display: inline-block;
+  width: 180px;
+  height: 160px;
+  border-radius: 5px;
+  color: #111;
+  background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
+
+  overflow: hidden;
+  font-size: smaller;
+}
+
+
+.miniPeepInfoPic {
+  width: 16px;
+  height: 16px;
+}
+
+.newConversationPeep {
+}
+.newConversationText {
+}
+
+.newbubMsg {
+  display: block;
+}
+.newConversationTime {
+  color: #777;
+  font-size: smaller;
+}
+
 .connReqItem {
     width: 100%;
     padding-bottom: 0.3em;
@@ -400,11 +477,6 @@ input[type=text]#search {
         border: 1px solid #eee;
         margin: 0 5px 0 0;
         background-color: #fff;
-    }
-
-    .avatar img {
-      width: 40px;
-      height: 40px;
     }
 
     .conversations a,

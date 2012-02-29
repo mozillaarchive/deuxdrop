@@ -91,7 +91,7 @@ exports._setExceptionLogger = function(func) {
 function reportException(msg, ex) {
   if (exceptionLogger)
     exceptionLogger(msg, ex);
-  console.error(msg, ex);
+  console.error(msg, ex, "\n", ex.stack);
 }
 
 /**
@@ -314,6 +314,23 @@ ConversationBlurb.prototype = {
   },
   get mostRecentActivity() {
     return this._mostRecentActivity;
+  },
+
+  /**
+   * Try and provide the effective subject for this conversation by taking a
+   *  snippet of the first line of the first message.  In the future this might
+   *  be potentially overridden by contributed metadata about the conversation.
+   */
+  get effectiveSubject() {
+    if (this.firstMessage) {
+      var text = this.firstMessage.text,
+          idxNewline = text.indexOf('\n');
+      if (idxNewline !== -1)
+        return text;
+      return text.substring(0, idxNewline);
+    }
+    // this is a fallback that should generally not happen.
+    return "(no subject)";
   },
 
   /**
@@ -826,24 +843,27 @@ NewConversationActivity.prototype = {
 
   on: itemOnImpl,
 
+  /**
+   * Compute the set of involved authors in the set of new message that are not
+   *  us.
+   */
   _deriveAuthors: function() {
     var authors = this.authors = [];
     for (var i = 0; i < this.newMessages; i++) {
       var msg = this.newMessages[i];
       if (msg.type === 'message') {
-        if (authors.indexOf(msg.author) === -1)
+        if (!msg.author.isMe &&
+            authors.indexOf(msg.author) === -1)
           authors.push(msg.author);
       }
       else {
-        if (authors.indexOf(msg.inviter) === -1)
+        if (!msg.inviter.isMe && authors.indexOf(msg.inviter) === -1)
           authors.push(msg.inviter);
-        if (authors.indexOf(msg.invitee) === -1)
+        if (!msg.invitee.isMe && authors.indexOf(msg.invitee) === -1)
           authors.push(msg.invitee);
       }
     }
   },
-
-
 };
 
 

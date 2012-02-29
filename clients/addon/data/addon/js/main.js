@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at:
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Raindrop Code.
- *
- * The Initial Developer of the Original Code is
- *   The Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*jslint indent: 2, strict: false, plusplus: false */
 /*global define: false, document: false, setTimeout: false, history: false,
@@ -71,12 +39,16 @@ define(function (require) {
   // Browser ID is not actually a module, get a handle on it now.
   browserId = navigator.id;
 
-  function getChildCloneNode(node) {
+  function getChildCloneNode(node, variant) {
     // Try on the actual node, and if not there, check the scroller node
     var attr = node.getAttribute('data-childclass');
     if (!attr) {
       attr = $('.scroller', node).attr('data-childclass');
     }
+    if (variant)
+      attr += '-' + variant;
+    if (!commonNodes.hasOwnProperty(attr))
+      console.error("Trying to fetch nonexistent common node:", attr);
     return commonNodes[attr];
   }
 
@@ -119,6 +91,12 @@ define(function (require) {
       if (attrName) {
         // special handling for (auto-updating) dates
         if (attrName === 'data-time') {
+          if (!value) {
+            console.error("Bad bind using", bindName);
+            if (bindName === "mostRecentActivity") {
+              console.log("MATCHES:", matches);
+            }
+          }
           $(node).text(friendly.date(value).friendly);
           node.setAttribute(attrName, value.valueOf());
         }
@@ -509,6 +487,102 @@ define(function (require) {
       query.items[query.items.length - 1].markAsLastReadMessage();
     });
   }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Home Page
+  update['start'] = function (data, dom) {
+    newMessageIScroll = new IScroll(
+                          dom.find('.newConversationNotifications')[0],
+                          {
+                            hScrollbar: true,
+                            vScrollbar: false
+                          });
+
+    var jqNotifCount = dom.find('.notificationCount');
+
+    commonQueryBind(
+      dom.find('.newConversationScroller'),
+      function cloner(convAct) {
+        var isPrivate = convAct.convBlurb.firstMessage.text === 'PRIVATE',
+            node;
+        if (isPrivate) {
+          convAct.otherPeep = convAct.authors[0];
+          node = commonNodes['newbubPrivateConv'].cloneNode(true);
+          // create the data the privateConv handler expects
+          node.privBundle = {
+            blurb: convAct.convBlurb,
+          };
+        }
+        else {
+          node = commonNodes['newbubGroupConv'].cloneNode(true);
+          // create the data the groupConv handler expects
+          node.conv = convAct.convBlurb;
+        }
+        return node;
+      },
+      'convAct',
+      (data.newConvsQuery = moda.queryNewConversationActivity()),
+      null,
+      function updom(jqNode, convAct, whatChanged) {
+        var isPrivate = convAct.convBlurb.firstMessage.text === 'PRIVATE';
+        // Constrain the updateDom region to the summary child so we don't
+        //  try and update the message nodes.
+        var jqSummary = jqNode.find('.summary');
+        updateDom(jqSummary, convAct);
+
+        // if this is not a delta, then it's the initial update
+        var addMsgs = null;
+        if (!whatChanged) {
+          addMsgs = convAct.newMessages;
+        }
+        else {
+          addMsgs = whatChanged.addedAtIndex;
+
+          if (whatChanged.removedMessages) {
+            jqNode.find('.newbubMsg')
+              .slice(0, whatChanged.removedMessages.length)
+              .remove();
+          }
+        }
+
+        if (addMsgs) {
+          var msgContainer = jqNode.find('.msgContainer')[0];
+          for (var i = 0; i < addMsgs.length; i++) {
+            var msg = addMsgs[i];
+            // - ignore useless joins...
+            if ((msg.type === "join") &&
+                (msg.inviter.id === msg.invitee.id ||
+                 (isPrivate && msg.id === convAct.convBlurb.firstMessage.id)
+                ))
+              continue;
+
+            var msgNodeClonable = getChildCloneNode(msgContainer, msg.type);
+            // some message types are not desired (joins) and so lack info...
+            if (!msgNodeClonable)
+              continue;
+            var msgNode = msgNodeClonable.cloneNode(true);
+            updateDom($(msgNode), msg);
+            msgContainer.appendChild(msgNode);
+          }
+        }
+      });
+
+    // XXX we only need the total; this is somewhat wasteful unless we use
+    //  this as the basis for notification bubbles that fade away
+    var notifQuery = data.notificationsQuery = moda.queryConnectRequests();
+    function notifCountChanged() {
+      jqNotifCount.text(notifQuery.items.length);
+      jqNotifCount.toggleClass('hidden', notifQuery.items.length === 0);
+    }
+    notifQuery.on('add', notifCountChanged);
+    notifQuery.on('remove', notifCountChanged);
+  };
+  remove['start'] = function(data) {
+    data.newConvsQuery.kill();
+    data.newConvsQuery = null;
+    data.notificationsQuery.kill();
+    data.notificationsQuery = null;
+  };
 
   //////////////////////////////////////////////////////////////////////////////
   // Signup Process
@@ -1307,25 +1381,6 @@ define(function (require) {
 
         // Clear out the form for the next use.
         evt.target.text.value = '';
-      })
-
-      // Handle compose inside a conversation
-      .delegate('[data-cardid="conversation"] .compose', 'submit', function (evt) {
-        evt.preventDefault();
-
-        var form = evt.target,
-            data = formToObject(form);
-
-        // Reset the form
-        form.text.value = '';
-        form.text.focus();
-
-        // Send the message
-        moda.conversation({
-          by: 'id',
-          filter: data.convId
-        }).sendMessage(data);
-
       })
 
       // Handle clicks on new conversation links

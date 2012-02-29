@@ -63,12 +63,16 @@
         <!-- start: The home page (once signed up). -->
         <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
           <div class="scroller">
-            <a class="homeNav" href="#private">Private</a>
-            <a class="homeNav" href="#groups">Group</a>
-            <a class="homeNav" href="#notifications">Notifications</a>
-            <a class="homeNav" href="#add">+</a>
-            <div class="newConversationNotifications"
-                 data-childclass="newConversation">
+            <div class="navButtons">
+              <a class="homeNav" href="#private">Private</a>
+              <a class="homeNav" href="#groups">Group</a>
+              <a class="homeNav" href="#notifications">
+                <span class="notifications">Notifications</span>
+                  <span class="notificationCount hidden"></span>
+              </a>
+              <a class="homeNav" href="#add">+</a>
+            </div>
+            <div class="newConversationNotifications">
               <div class="newConversationScroller">
               </div>
             </div>
@@ -330,16 +334,61 @@
         </div>
       </form>
 
-      <a href="#conversation?id=" data-classimpl="newConversation"
-         class="newConversation">
-        <span class="avatar">
-          <img src="i/face2.png" class="avatar"
-               data-bind="author.pic" data-attr="src" data-missing="OMIT" />
-        </span>
-        <span class="newConversationPeep" data-bind="author.displayName"></span>
-        <span class="newConversationTime"></span>
-        <span class="newConversationText" data-bind="text"></span>
+      <a data-classimpl="newbubPrivateConv" class="newConversation"
+         href="#privateConv">
+        <div class="summary">
+          <img class="miniPeepInfoPic" data-bind="otherPeep.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span class="newConversationPeep" data-bind="otherPeep.displayName">
+          </span>
+        </div>
+        <div data-childclass="newbubPrivateMsg" class="msgContainer" ></div>
       </a>
+
+      <span data-classimpl="newbubPrivateMsg-message" class="newbubPrivateMsg newbubMsg">
+        <div>
+          <span class="newConversationTime" data-bind="receivedAt"
+                data-attr="data-time"></span>
+        </div>
+        <span class="newConversationText" data-bind="text"></span>
+      </span>
+
+      <a data-classimpl="newbubGroupConv" class="newConversation"
+         href="#groupConv">
+        <div class="summary">
+          <span class="convFirstMsgText" data-bind="convBlurb.effectiveSubject">
+          </span>
+        </div>
+        <div data-childclass="newbubGroupMsg" class="msgContainer" ></div>
+      </a>
+
+      <span data-classimpl="newbubGroupMsg-message"
+            class="newbubGroupMsg-message newbubGroupMsg newbubMsg">
+        <div>
+          <img class="miniPeepInfoPic" data-bind="author.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span class="newConversationPeep name" data-bind="author.displayName"></span>
+          <span class="newConversationTime time"
+                data-bind="receivedAt" data-attr="data-time"></span>
+        </div>
+        <span class="newConversationText" data-bind="text"></span>
+      </span>
+
+      <span data-classimpl="newbubGroupMsg-join"
+            class="newbubGroupMsg-join newbubGroupMsg newbubMsg">
+        <div>
+          <img class="miniPeepInfoPic" data-bind="inviter.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span class="name" data-bind="inviter.displayName"></span>
+          <span class="newConversationTime time" data-bind="receivedAt"
+               data-attr="data-time"></span>
+        </div>
+        <span>invited</span>
+        <span class="name" data-bind="invitee.displayName"></span>
+        <img class="miniPeepInfoPic" data-bind="invitee.pic" data-attr="src"
+             data-missing="OMIT" src="i/face2.png" />
+      </span>
+
 
       <ul class="menu" data-classimpl="menuRoot">
       </ul>
