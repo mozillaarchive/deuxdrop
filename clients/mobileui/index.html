@@ -5,18 +5,18 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Deuxdrop</title>
     <link rel="stylesheet" type="text/css" href="style.css">
-    <script src="../web/deps/require.js"></script>
+    <script src="../deps/require.js"></script>
     <script>
       require(
         {
-          baseUrl: '../web/deps',
+          baseUrl: '../deps',
           paths: {
-            'path': '../../addon/js/path',
+            'path': '../../content/js-shims/path',
             //'browserId': 'include'
             'browserId': 'https://browserid.org/include'
           }
         },
-        ['../../addon/js/main']
+        ['../mobileui/js/main']
       );
     </script>
   </head>

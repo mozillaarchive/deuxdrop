@@ -14,17 +14,16 @@ CPCMD="rsync -avL --exclude-from .acfx-exclude"
 ## Copy over UI used by the content part of the addon.
 mkdir -p data/web
 mkdir -p data/web/deps
-mkdir -p data/web/firefox
 
 mkdir -p data/web/deps/rdctests
 
 ## Source Tree Location => jetpack 'data' location
 
 # clients/deps        => web/deps
-# clients/firefox     => web/firefox
+# clients/mobileui    => web/mobileui
 # clients/devui       => web/devui
 # clients/logui       => web/logui
-$CPCMD ../deps ../firefox ../devui ../logui data/web
+$CPCMD ../deps ../mobileui ../devui ../logui data/web
 
 # common/lib/rdcommon => web/deps/rdcommon
 $CPCMD ../../common/lib/rdcommon data/web/deps

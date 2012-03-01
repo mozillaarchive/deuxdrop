@@ -69,11 +69,12 @@ var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
     aboutUrl = data.url('content/about.html'),
     redirectorUrl = data.url('content/redirector.js'),
 
-    // - Application UI
-    // URL to what to actually present
-    userInterfaceUrl = data.url('addon/index.html'),
     // URL for script overlay that provides message sending to the backside
     modaContentUrl = data.url('content/modaContent.js'),
+
+    // - Mobile UI
+    // (the one that is supposed to look pretty and people should use)
+    userInterfaceUrl = data.url('web/mobileui/index.html'),
 
     // - Development UI
     devInterfaceUrl = data.url('web/devui/content/index.html'),
@@ -84,7 +85,7 @@ var Cu = chrome.Cu, Cc = chrome.Cc, Ci = chrome.Ci,
 
     // - Client Daemon (Backside) Logic
     // URL for the webpage that is the actual client/backside, servicing the UI
-    clientDaemonUrl = data.url('web/firefox/clientdaemon.html'),
+    clientDaemonUrl = data.url('content/clientdaemon.html'),
 
     uiRedirectorHandler, devUiRedirectorHandler, logUiRedirectorHandler,
     serverLogUiRedirectorHandler,

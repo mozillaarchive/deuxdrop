@@ -3,7 +3,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Deuxdrop Transport</title>
-    <script src="../deps/require.js"></script>
+    <script src="../web/deps/require.js"></script>
     <script>
 // The built-in console is not useful to us here in a page-worker!
 var log = function() {
@@ -78,24 +78,24 @@ var RAW_CLIENT = null, $backside, $LOG, $PUBIDENT,
 function BOOTSTRAP(callbackWhenLoaded) {
   require(
     {
-      baseUrl: '../deps',
+      baseUrl: '../web/deps',
       paths: {
         // dumb/trivial stubs
-        'child_process': '../../addon/js/child_process',
-        'fs': '../../addon/js/fs',
-        'http': '../../addon/js/http',
-        'microtime': '../../addon/js/microtime',
-        'path': '../../addon/js/path',
-        'timers': '../../addon/js/timers',
-        'util': '../../addon/js/util',
-        'url': '../../addon/js/url',
-        'xmlhttprequest': '../../addon/js/xmlhttprequest',
+        'child_process': '../../content/js-shims/child_process',
+        'fs': '../../content/js-shims/fs',
+        'http': '../../content/js-shims/http',
+        'microtime': '../../content/js-shims/microtime',
+        'path': '../../content/js-shims/path',
+        'timers': '../../content/js-shims/timers',
+        'util': '../../content/js-shims/util',
+        'url': '../../content/js-shims/url',
+        'xmlhttprequest': '../../content/js-shims/xmlhttprequest',
         // testing-informed stubs
-        'event-queue': '../../addon/js/event-queue',
+        'event-queue': '../../content/js-shims/event-queue',
 
         // mozilla shims
-        'nacl': '../../addon/js/nacl',
-        'websocket': '../../addon/js/websocket',
+        'nacl': '../../content/js-shims/nacl',
+        'websocket': '../../content/js-shims/websocket',
       },
       catchError: {
         define: true,
