@@ -148,7 +148,7 @@ function JSUtf8StrToJSStr(u8str) {
  *  binary string.
  */
 function JSStrToBinStr(jsStr, offset) {
-  let binStr = alloc_ustr(jsStr.length), length = jsStr.length;
+  let binStr = alloc_ustr(jsStr.length - offset), length = jsStr.length;
   for (let i = offset; i < length; i++) {
     binStr[i - offset] = jsStr.charCodeAt(i);
   }
