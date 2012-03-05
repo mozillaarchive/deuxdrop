@@ -7,9 +7,9 @@
 
 import os, os.path, subprocess, sys, shutil
 
-IDB_ORIGIN = 'resource+++jid1-bjyvsluajwq9bg-at-jetpack-deuxdrop-data'
+IDB_ORIGIN = 'resource+++jid1-bjyvsluajwq9bg-at-jetpack'
 
-LS_SCOPE = 'atad-pordxued-kcaptej-ta-gb9qwjaulsvyjb-1dij.:resource'
+LS_SCOPE = 'kcaptej-ta-gb9qwjaulsvyjb-1dij.:resource'
 # no escaping required for the above
 NUKE_SQL = "DELETE FROM webappsstore2 WHERE scope = '%s'" % (LS_SCOPE,)
 
