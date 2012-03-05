@@ -11,12 +11,15 @@
         {
           baseUrl: '../deps',
           paths: {
-            'path': '../../content/js-shims/path',
             //'browserId': 'include'
-            'browserId': 'https://browserid.org/include'
+            'browserId': 'https://browserid.org/include',
+            'main': '../mobileui/js/main',
           }
         },
-        ['../mobileui/js/main']
+        ['main'],
+        function(main) {
+          main.main();
+        }
       );
     </script>
   </head>

@@ -721,10 +721,23 @@ AuthServerConn.prototype = {
 };
 exports.AuthServerConn = AuthServerConn;
 
+
+function fallback(statusCode, request, response) {
+  return function next(err) {
+    if (err) {
+      console.log("fallback:", err);
+      if (err.status)
+        statusCode = err.status;
+    }
+    response.writeHead(statusCode);
+    response.end();
+  };
+}
 function serve404s(request, response) {
   response.writeHead(404);
   response.end();
 }
+
 
 /**
  * The server is locally uniquely named by the IP address and port it is
@@ -732,8 +745,14 @@ function serve404s(request, response) {
  *  identifier (which is handled by the logging layer).
  */
 function AuthorizingServer(_logger, extraNaming) {
+  /** map websocket protocols to authconn handlers */
   this._endpoints = {};
+  /** map websocket protocols to non-authconn handlers */
+  this._rawEndpoints = {};
+  /** map full url paths to handlers */
   this._urls = {};
+  /** map root directory paths to handlers */
+  this._rootDirs = {};
 
   this._extraNaming = extraNaming || "server";
   this.log = LOGFAB.server(this, _logger, [this._extraNaming]);
@@ -743,10 +762,23 @@ function AuthorizingServer(_logger, extraNaming) {
 
     var path = $url.parse(request.url).pathname;
 
-    if (this._urls.hasOwnProperty(path))
-      this._urls[path](request, response);
-    else
-      serve404s(request, response);
+    if (this._urls.hasOwnProperty(path)) {
+      this._urls[path](request, response, fallback(404, request, response));
+      return;
+    }
+
+    var idxSlash = path.indexOf('/', 1);
+    if (idxSlash !== -1) {
+      var root = path.substring(1, idxSlash);
+      if (this._rootDirs.hasOwnProperty(root)) {
+        // for consistency, we keep the first slash for the relative path
+        this._rootDirs[root](path.substring(idxSlash), request, response,
+                             fallback(500, request, response));
+        return;
+      }
+    }
+
+    serve404s(request, response);
   }.bind(this));
 
   var server = this._wsServer = new $ws.server({
@@ -778,15 +810,30 @@ AuthorizingServer.prototype = {
     var protocol = request.requestedProtocols[0];
 
     this.log.request(protocol);
+    var rawConn;
     if (this._endpoints.hasOwnProperty(protocol)) {
       var info = this._endpoints[protocol];
 
-      var rawConn = request.accept(protocol, request.origin);
+      rawConn = request.accept(protocol, request.origin);
       var authConn = new AuthServerConn(info.serverConfig, protocol,
                                         rawConn, info.authVerifier,
                                         info.implClass, this, this.log);
       return;
     }
+
+    if (this._rawEndpoints.hasOwnProperty(protocol)) {
+      var rawInfo = this._rawEndpoints[protocol];
+
+      if (rawInfo.checkRequest(protocol, request)) {
+        rawConn = request.accept(protocol, request.origin);
+        rawInfo.processRequest(protocol, request, rawConn);
+      }
+      else {
+        request.reject(500, 'invalid request');
+      }
+      return;
+    }
+
     this.log.badRequest("['" + protocol + "']");
     request.reject(404, "NO SUCH ENDPOINT.");
   },
@@ -806,9 +853,19 @@ AuthorizingServer.prototype = {
     this.log.endpointRegistered(path);
   },
 
+  _registerRawEndpoint: function registerRawEndpoint(path, endpointDef) {
+    this._rawEndpoints[path] = endpointDef;
+    this.log.endpointRegistered(path);
+  },
+
   _registerURL: function registerURL(path, urlDef) {
     this._urls[path] = urlDef;
     this.log.urlRegistered(path);
+  },
+
+  _registerRootDir: function registerRootDir(rootDir, rootDef) {
+    this._rootDirs[rootDir] = rootDef;
+    this.log.rootDirRegistered(rootDir);
   },
 
   registerServer: function registerServer(serverDef) {
@@ -817,8 +874,19 @@ AuthorizingServer.prototype = {
     for (var endpointName in serverDef.endpoints) {
       this._registerEndpoint(endpointName, serverDef.endpoints[endpointName]);
     }
+    if ("rawEndpoints" in serverDef) {
+    for (var rawEndpointName in serverDef.rawEndpoints) {
+      this._registerRawEndpoint(rawEndpointName,
+                                serverDef.rawEndpoints[rawEndpointName]);
+    }
+    }
     for (var urlName in serverDef.urls) {
       this._registerURL(urlName, serverDef.urls[urlName]);
+    }
+    if ("rootDirs" in serverDef) {
+      for (var rootDir in serverDef.rootDirs) {
+        this._registerRootDir(rootDir, serverDef.rootDirs[rootDir]);
+      }
     }
   },
 
@@ -965,6 +1033,7 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     events: {
       endpointRegistered: {path: true},
       urlRegistered: {path: true},
+      rootDirRegistered: {rootDir: true},
       listening: {},
 
       request: {protocol: true},

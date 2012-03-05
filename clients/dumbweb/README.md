@@ -8,7 +8,7 @@ The dumb web interface flow goes like this:
 - The server authenticates the BrowserID auth.  If successful, it attaches to
   an existing rawclient with a new moda bridge, or spins up a new rawclient if
   one does not exist.  The rawclient is handed a (redis) database connection
-  that gets prefixed with 'u' + the e-mail address.  (TODO: Use sqlite or
+  that gets prefixed with 'u_' + the e-mail address.  (TODO: Use sqlite or
   some other disky mechanism where we can also create a distinct file for the
   user.)
 - If the rawclient indicates that this is a new account, we (on the server)

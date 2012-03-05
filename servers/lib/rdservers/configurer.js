@@ -65,6 +65,8 @@ var $signup_server = require('rdservers/signup/server'),
     $mailstore_server = require('rdservers/mailstore/server'),
     $fanout_api = require('rdservers/fanout/api');
 
+var $dumbweb_server = require('rdservers/dumbweb/server');
+
 var $debuglog_server = require('rdservers/debuglog/server');
 
 /**
@@ -95,6 +97,9 @@ var SERVER_ROLE_MODULES = {
     apiModule: $mailstore_api,
     serverModule: $mailstore_server,
   },
+  dumbweb: {
+    serverModule: $dumbweb_server,
+  },
   debuglog: {
     apiModule: null,
     serverModule: $debuglog_server,
@@ -109,9 +114,17 @@ var SERVER_ROLE_MODULES = {
  */
 function ServerConfig(keyring, selfIdentBlob, dbConn, rootLogger) {
   this.keyring = keyring;
+
   this.selfIdentBlob = selfIdentBlob;
+  this.selfIdent = $pubident.assertGetServerSelfIdent(selfIdentBlob);
+  var idxDoubleSlash = this.selfIdent.url.indexOf('//'),
+      idxPathSlash = this.selfIdent.url.indexOf('/', idxDoubleSlash + 2);
+  /** hostname:port */
+  this.host = this.selfIdent.url.substring(idxDoubleSlash + 2, idxPathSlash);
+
   this.db = dbConn;
   this.rootLogger = rootLogger;
+  this.devMode = false;
   this._serverModules = [];
   this.aggrDbSchema = {
     tables: [],
@@ -150,7 +163,10 @@ ServerConfig.prototype = {
 };
 
 var FULLPUB_ROLES = exports.FULLPUB_ROLES =
-  ['auth', 'signup', 'drop', 'sender', 'fanout', 'store'];
+  ['auth', 'signup', 'drop', 'sender', 'fanout', 'store',
+   // XXX the reality is that this is a prototype system and anyone trying us
+   //  out may desire this option, so let's turn it on by default.
+   'dumbweb'];
 
 const TBL_SERVER_IDENTITY = 'server:identity';
 

@@ -19,3 +19,6 @@
 [submodule "clients/addon/lib/nacl-native-libs"]
 	path = clients/addon/lib/nacl-native-libs
 	url = git://github.com/asutherland/djb-nacl-binlibs.git
+[submodule "servers/node_modules/browserid-verifier"]
+	path = servers/node_modules/browserid-verifier
+	url = git://github.com/rfk/node-browserid.git

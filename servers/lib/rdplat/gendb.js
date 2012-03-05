@@ -94,7 +94,13 @@ function unboxPersisted(val) {
   }
 }
 
+const MAGIC_SUBCONN = {};
+
 function RedisDbConn(connInfo, nsprefix, _logger, dbNum) {
+  // fast-path out for our horrible subconnection implementation
+  if (connInfo === MAGIC_SUBCONN)
+    return;
+
   this._conn = $redis.createClient(connInfo.port, connInfo.host);
   if (connInfo.password)
     this._conn.auth(connInfo.password);
@@ -136,6 +142,25 @@ RedisDbConn.prototype = {
 
   defineSchema: function(schema) {
     // no schema for redis stuffs, yo.
+  },
+
+  /**
+   * Hackish: Create a namespaced connection that still uses this connection as
+   *  its transport.  This reduces resource usage and avoids hitting connection
+   *  limits, etc.
+   *
+   * This is not currently reflected in any other implementations.
+   */
+  createSubConnection: function(extraPrefix, logger) {
+    var prefix = this._prefix + extraPrefix;
+
+    var subConn = new RedisDbConn(MAGIC_SUBCONN);
+    subConn._conn = this._conn;
+    subConn._log = LOGFAB.gendbConn(subConn, logger, [prefix]);
+    subConn._dbNum = null;
+    subConn._prefix = prefix;
+
+    return subConn;
   },
 
   //////////////////////////////////////////////////////////////////////////////

@@ -17,7 +17,7 @@ if (location.href.split('#')[1]) {
   location.replace(location.pathname);
 }
 
-define(function (require) {
+define(function (require, exports, module) {
   var $ = require('jquery'),
       cards = require('cards'),
       moda = require('modality'),
@@ -1259,13 +1259,15 @@ define(function (require) {
   //////////////////////////////////////////////////////////////////////////////
 
 
-  // Find out the user.
-  moda.whoAmI({
-    'onCompleted': function (unknown)  {
-      me = unknown;
-      init('userDetermined');
-    }
-  });
+  exports.main = function main() {
+    // Find out the user.
+    moda.whoAmI({
+      'onCompleted': function (unknown)  {
+        me = unknown;
+        init('userDetermined');
+      }
+    });
+  };
 
   // Wait for DOM ready to do some DOM work.
   $(function () {
