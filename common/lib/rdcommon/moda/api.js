@@ -741,20 +741,24 @@ ConnectRequest.prototype = {
  * Represents a possible friend with a rationale of why that person is a
  *  candidate and perhaps how good a candidate they are.
  */
-function PossibleFriend(_liveset, localName, peep) {
+function PossibleFriend(_liveset, localName, peep, server) {
   this._eventMap = null;
   this._liveset = _liveset;
   this._localName = localName;
   this.peep = peep;
+  this.peepServer = server;
 }
 PossibleFriend.prototype = {
   __namespace: 'possfriends',
   __clone: function(liveset, cloneHelper) {
     return new PossibleFriend(
-      liveset, this._localName, cloneHelper(this.peep));
+      liveset, this._localName,
+      cloneHelper(this.peep),
+      cloneHelper(this.peepServer));
   },
   __forget: function(forgetHelper) {
     forgetHelper(this.peep);
+    forgetHelper(this.peepServer);
   },
   toString: function() {
     return '[PossibleFriend ' + this._localName + ']';
@@ -1526,8 +1530,9 @@ ModaBridge.prototype = {
   },
 
   _transform_possfriends: function(localName, wireRep, lookup) {
-    var peepRep = this._dataByNS.peeps[wireRep.peepLocalName];
-    return new PossibleFriend(null, localName, peepRep);
+    var peepRep = this._dataByNS.peeps[wireRep.peepLocalName],
+        serverRep = this._dataByNS.servers[wireRep.serverLocalName];
+    return new PossibleFriend(null, localName, peepRep, serverRep);
   },
 
   _delta_possfriends: function(curRep, delta) {
@@ -1538,8 +1543,8 @@ ModaBridge.prototype = {
    * Create a `ConnectRequest` representation from the wire rep.
    */
   _transform_connreqs: function(localName, wireRep, lookup) {
-    var peepRep = this._dataByNS.peeps[wireRep.peepLocalName];
-    var serverRep = this._dataByNS.servers[wireRep.serverLocalName];
+    var peepRep = this._dataByNS.peeps[wireRep.peepLocalName],
+        serverRep = this._dataByNS.servers[wireRep.serverLocalName];
     return new ConnectRequest(null, localName, peepRep, serverRep,
       wireRep.theirPocoForUs, wireRep.receivedAt, wireRep.messageText);
   },

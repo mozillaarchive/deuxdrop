@@ -1226,7 +1226,8 @@ define(function (require, exports, module) {
    * including including a small message to send with the request.
    */
   update['askFriend'] = function(data, dom, pfriendNode) {
-    var peep = pfriendNode.pfriend.peep;
+    var pfriend = pfriendNode.pfriend,
+        peep = pfriend.peep;
     function handleSubmit(evt) {
       evt.preventDefault();
       evt.stopPropagation();
@@ -1249,7 +1250,7 @@ define(function (require, exports, module) {
       // because the query should automatically update for us and that should
       // be triggering the animation.
     }
-    updateDom(dom, peep);
+    updateDom(dom, pfriend);
     dom.find('.askFriendForm').submit(handleSubmit);
     dom.find('[name="displayName"]').val(peep.selfPoco.displayName);
     dom.find('.pocoContainer').append(

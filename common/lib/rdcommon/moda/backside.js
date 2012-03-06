@@ -453,13 +453,24 @@ ModaBackside.prototype = {
 
           var peepClientData = self._store._convertSynthPeep(
                                  querySource, fullName, selfIdentBlob,
-                                 selfIdentPayload);
+                                 selfIdentPayload),
+              serverIdent = $pubident.peekServerSelfIdentNOVERIFY(
+                              selfIdentPayload.transitServerIdent),
+              serverClientData = self._notif.reuseIfAlreadyKnown(
+                                   querySource, NS_SERVERS,
+                                   serverIdent.rootPublicKey);
+          if (!serverClientData)
+            serverClientData = self._store._convertServerInfo(
+                                 querySource, serverIdent,
+                                 selfIdentPayload.transferServerIdent);
 
           var clientData = self._notif.generateClientData(
                              querySource, NS_POSSFRIENDS, fullName);
           clientData.deps.push(peepClientData);
+          clientData.deps.push(serverClientData);
           querySource.dataMap[NS_POSSFRIENDS][clientData.localName] = {
-            peepLocalName: peepClientData.localName
+            peepLocalName: peepClientData.localName,
+            serverLocalName: serverClientData.localName,
           };
 
           viewItems.push(clientData.localName);

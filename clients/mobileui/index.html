@@ -224,16 +224,20 @@
               <div class="hbox">
                 <div>
                   <div class="avatar">
-                    <img class="peepInfoPic" data-bind="pic"
+                    <img class="peepInfoPic" data-bind="peep.pic"
                          data-attr="src" data-missing="OMIT"
                          src="i/face2.png" />
                   </div>
                 </div>
                 <div>
                   <span class="untrustedData"
-                      data-bind="selfPoco.displayName"></span>
+                      data-bind="peep.selfPoco.displayName"></span>
                 </div>
               </div>
+            </div>
+            <div>
+              using server at <span class="untrustedData"
+                                    data-bind="peepServer.url"></span>
             </div>
             <div class="pocoContainer">
               with the additional contact information:

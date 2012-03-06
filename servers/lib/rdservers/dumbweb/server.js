@@ -397,6 +397,9 @@ BridgeConn.prototype = {
   },
 
   dieZombie: function() {
+    // we are already super dead if our backside is nulled out
+    if (!this.backside)
+      return;
     if (this.timerInterval) {
       clearTimeout(this.timerInterval);
       this.timerInterval = null;
