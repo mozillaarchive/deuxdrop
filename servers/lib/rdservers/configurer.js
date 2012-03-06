@@ -121,6 +121,9 @@ function ServerConfig(keyring, selfIdentBlob, dbConn, rootLogger) {
       idxPathSlash = this.selfIdent.url.indexOf('/', idxDoubleSlash + 2);
   /** hostname:port */
   this.host = this.selfIdent.url.substring(idxDoubleSlash + 2, idxPathSlash);
+  var idxColon = this.host.indexOf(':');
+  this.hostname = (idxColon === -1) ? this.host
+                                    : this.host.substring(0, idxColon);
 
   this.db = dbConn;
   this.rootLogger = rootLogger;
@@ -558,6 +561,12 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       queueBacklogExceeded: {},
       websocketError: {err: false},
       handlerFailure: {err: $log.EXCEPTION},
+
+      // unhandled rejections from Q.loggingEnableFriendly for use by the
+      //  'debuglog' role.
+      unhandledRejection: { ex: $log.EXCEPTION },
+      promiseException: { where: false, ex: $log.EXCEPTION },
+      promiseRejection: { reason: false, ex: $log.EXCEPTION },
     },
     LAYER_MAPPING: {
       layer: "protocol",

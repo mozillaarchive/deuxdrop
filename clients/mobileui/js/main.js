@@ -510,7 +510,7 @@ define(function (require, exports, module) {
           node = commonNodes['newbubPrivateConv'].cloneNode(true);
           // create the data the privateConv handler expects
           node.privBundle = {
-            blurb: convAct.convBlurb,
+            conv: convAct.convBlurb,
           };
         }
         else {

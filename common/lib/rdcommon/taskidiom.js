@@ -75,7 +75,7 @@ var TaskProto = exports.TaskProto = {
     if (this.__cleanup)
       this.log.cleaup(this, this.__cleanup);
     this.log.__die();
-    this.__deferred.reject();
+    this.__deferred.reject(err);
   },
 
   __succeed: function(val) {
@@ -92,7 +92,7 @@ var TaskProto = exports.TaskProto = {
         // report the conclusion of the async step.
         this.log[lastStepMeta[4]]();
         if ($Q.isRejected(val)) {
-          this.__fail();
+          this.__fail(val.valueOf().reason);
           return;
         }
       }
@@ -110,7 +110,7 @@ var TaskProto = exports.TaskProto = {
       // - synchronous failure
       if (rval instanceof Error) {
         this.log[stepMeta[4]]();
-        this.__fail(); // no need to pass the exception since the call got it
+        this.__fail(rval);
         return;
       }
       // - it's async!

@@ -58,6 +58,8 @@ function establishChannel(restorePayload) {
     if (connecting) {
       RECONNECT_DELAY = Math.min(RECONNECT_MAX_DELAY,
                                  RECONNECT_DELAY * 2);
+      console.log("error while connecting, increased delay to:",
+                  RECONNECT_DELAY);
       return;
     }
 
@@ -91,6 +93,7 @@ function establishChannel(restorePayload) {
       sock.onmessage = function(event) {
         lastInSeqNo++;
         var msg = JSON.parse(event.data);
+        console.log("MSG", msg);
         // Eat connectionStatus updates from the server because they are
         //  meaningless; they reflect the state of the server connecting to
         //  itself.
@@ -98,6 +101,8 @@ function establishChannel(restorePayload) {
           return;
         Moda._receive(msg);
       };
+
+      triggerRealUI();
     }
     // - authentication failure
     else if (msg.type === 'badverify') {
@@ -121,6 +126,7 @@ function establishChannel(restorePayload) {
     connecting = false;
     RECONNECT_DELAY = RECONNECT_BASE_DELAY;
     if (restorePayload) {
+      console.log(" sending restore payload:", restorePayload);
       sock.send(JSON.stringify(restorePayload));
       restorePayload = null;
     }
@@ -163,7 +169,9 @@ function establishChannel(restorePayload) {
 }
 
 function triggerRealUI() {
+  console.log("triggering real UI");
   var realUI = require('../mobileui/js/real-main.js');
+  realUI.main();
 }
 
 exports.main = function fronRunMain() {

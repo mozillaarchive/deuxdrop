@@ -60,11 +60,13 @@
 define(
   [
     'timers',
+    'q',
     'rdcommon/log', 'rdcommon/logreaper',
     'exports'
   ],
   function(
     $timers,
+    $Q,
     $log, $logreaper,
     exports
   ) {
@@ -74,7 +76,7 @@ const MAX_LOG_BACKLOG = 60;
 exports.makeServerDef = function(serverConfig) {
   console.log("!!! LOGGEST ROUND ROBIN LOGGING ACTIVE !!!");
 
-  // Spin up a log reaper for this server
+  // - Spin up a log reaper for this server
   var LOG_REAPER = new $logreaper.LogReaper(serverConfig.rootLogger),
       LOG_SCHEMA = $log.provideSchemaForAllKnownFabs();
 
@@ -89,6 +91,34 @@ exports.makeServerDef = function(serverConfig) {
         logbacklog.shift();
     }
   }, 1000);
+
+  // - Enable logging of unhandled rejections (if Q is 'fancy')
+  if ('loggingEnableFriendly' in $Q) {
+    $Q.loggingEnableFriendly({
+      // we always want to know about unhandled rejections in debug log mode
+      unhandledRejections: function(ex) {
+        serverConfig.rootLogger.unhandledRejection(ex);
+      },
+      // we want to know about all exceptions in our logic in superDebug mode
+      exceptions: function(ex, where) {
+        serverConfig.rootLogger.promiseException(where, ex);
+      },
+      // we want to know about all rejection call-sites in superDebug mode
+      rejections: function(reason, alreadyResolved) {
+        var exForLocation;
+        try {
+          throw new Error("Rejection call-stack and some...");
+        }
+        catch (ex) {
+          exForLocation = ex;
+        }
+        // XXX we should potentially log the already resolved ones too, just
+        //  under a different event type... like a warning...
+        if (!alreadyResolved)
+          serverConfig.rootLogger.promiseRejection(reason, exForLocation);
+      },
+    });
+  }
 
   return {
     endpoints: {},

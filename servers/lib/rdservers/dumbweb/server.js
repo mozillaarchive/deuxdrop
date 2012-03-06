@@ -22,7 +22,7 @@ define(function(require, exports, $module) {
 
 var $path = require('path'),
     $crypto = require('crypto'),
-    $Q = require('crypto'),
+    $Q = require('q'),
 
     $log = require('rdcommon/log'),
     $task = require('rdcommon/taskidiom'),
@@ -43,6 +43,8 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
       newConnection: {},
       deadConnection: {},
     },
+    errors: {
+    },
   },
 
   dumbClientAccount: {
@@ -51,6 +53,25 @@ var LOGFAB = exports.LOGFAB = $log.register($module, {
     topBilling: false,
     semanticIdent: {
       userIdent: 'key:root:user',
+    },
+  },
+
+  dumbConn: {
+    type: $log.CONNECTION,
+    subtype: $log.CLIENT,
+    topBilling: false,
+    semanticIdent: {
+      port: 'port',
+      email: 'client',
+    },
+    events: {
+      verified: { email: true },
+    },
+    asyncJobs: {
+      verifyAssertion: {},
+    },
+    errors: {
+      badPersonaAssertion: { err: false },
     },
   },
 });
@@ -79,7 +100,7 @@ function ClientContext(tracker, email) {
   this.conns = [];
 
   var gocTask = new GetOrCreateDumbAccountTask(
-                  { db: tracker._db, context: this }, tracker._log);
+                  { acctDb: tracker._db, context: this }, tracker._log);
   this.clientPromise = gocTask.run();
   var self = this;
   $Q.when(this.clientPromise, function(client) {
@@ -201,32 +222,31 @@ ConnectionTracker.prototype = {
     this._liveConnections.push(bconn);
   },
 
-  reportDeadConn: function(bconn) {
-    this._log.deadConnection();
+  reportZombieConn: function(bconn) {
     this._liveConnections.splice(this._liveConnections.indexOf(bconn), 1);
-    // hold onto its backside state for a little
-    if (bconn.sessionCookie) {
-      delete this._sessionCookieToLiveConnection[bconn.sessionCookie];
-      this._sessionCookieToDeadConnection[bconn.sessionCookie] = bconn;
-      var self = this;
-      // and totally kill it once it times out.
-      bconn.timerInterval = setTimeout(function() {
-          delete self._sessionCookieToDeadConnection[bconn.sessionCookie];
-          bconn.timerInterval = null;
-          bconn.backside.dead();
-          bconn.backside = null;
-          if (bconn.context.handleDeadConn(bconn)) {
-            delete this._emailToClientContext[bconn.context.email];
-          }
-        }, ZOMBIE_DURATION_MS);
+
+    delete this._sessionCookieToLiveConnection[bconn.sessionCookie];
+    this._sessionCookieToDeadConnection[bconn.sessionCookie] = bconn;
+  },
+
+  reportDeadConn: function(bconn, wasZombie, contextDied) {
+    if (!wasZombie) {
+      this._liveConnections.splice(this._liveConnections.indexOf(bconn), 1);
     }
+    else {
+      delete self._sessionCookieToDeadConnection[bconn.sessionCookie];
+    }
+    if (contextDied) {
+      delete this._emailToClientContext[bconn.context.email];
+    }
+    this._log.deadConnection();
   },
 
   hookupVerifiedConnection: function(bconn, email) {
     var context, self = this;
     if (!this._emailToClientContext.hasOwnProperty(email)) {
       context = this._emailToClientContext[email] =
-        new ClientContext(email);
+        new ClientContext(this, email);
     }
     else {
       context = this._emailToClientContext[email];
@@ -268,6 +288,8 @@ ConnectionTracker.prototype = {
 };
 
 function BridgeConn(tracker, conn) {
+  this._log = LOGFAB.dumbConn(this, tracker._log,
+                              [conn.socket.remotePort, 'unauthed']);
   this.tracker = tracker;
   this.conn = conn;
 
@@ -297,7 +319,10 @@ BridgeConn.prototype = {
 
   onClose: function() {
     this.conn = null;
-    this.tracker.reportDeadConn(this);
+    if (this.backside)
+      this.goZombie();
+    else
+      this.tracker.reportDeadConn(this, false);
   },
 
   onMessage: function(rawMsg) {
@@ -310,17 +335,25 @@ BridgeConn.prototype = {
 
     // - login!
     if (msg.type === 'assertion') {
+      this._log.verifyAssertion_begin();
       $persona.verify({
         assertion: msg.assertion,
-        audience: this.tracker.serverConfig.host,
+        // it seems to ignore the port, although that is wrong in terms of
+        //  origin determination
+        audience: this.tracker.serverConfig.hostname,
       }, function verified(err, r) {
+        self._log.verifyAssertion_end();
         if (err) {
+          self._log.badPersonaAssertion(err);
           self.conn.sendUTF(JSON.stringify({
             type: 'badverify'
           }));
           self.conn.close();
           return;
         }
+        self._log.verified(r.email);
+        self._log.__updateIdent([self.conn.socket.remotePort,
+                                 r.email]);
 
         // verification succeeded, hook it up, then send a success marker
         $Q.when(self.tracker.hookupVerifiedConnection(self, r.email),
@@ -357,7 +390,32 @@ BridgeConn.prototype = {
     backside._sendObjFunc = this._sendObj.bind(this);
   },
 
+  goZombie: function() {
+    this.tracker.reportZombieConn(this);
+    this.timerInterval = setTimeout(
+      this.dieZombie.bind(this), ZOMBIE_DURATION_MS);
+  },
+
+  dieZombie: function() {
+    if (this.timerInterval) {
+      clearTimeout(this.timerInterval);
+      this.timerInterval = null;
+    }
+    this.backside.dead();
+    this.backside = null;
+    var contextDied = this.context.handleDeadConn(this);
+    this.tracker.reportDeadConn(this, true, contextDied);
+  },
+
   _sendObj: function(obj) {
+    // if we are a zombie, this message is going to cause a desync, so we should
+    //  just die
+    // XXX we could also attempt to perform some type of limited buffering for
+    //  this situation before offing ourselves.
+    if (!this.conn) {
+      this.dieZombie();
+      return;
+    }
     this.outSeqNo++;
     this.conn.sendUTF(JSON.stringify(obj));
   },
