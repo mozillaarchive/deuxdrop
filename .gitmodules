@@ -22,3 +22,6 @@
 [submodule "servers/node_modules/browserid-verifier"]
 	path = servers/node_modules/browserid-verifier
 	url = git://github.com/rfk/node-browserid.git
+[submodule "servers/node_modules/xmlhttprequest"]
+	path = servers/node_modules/xmlhttprequest
+	url = git://github.com/asutherland/node-XMLHttpRequest.git

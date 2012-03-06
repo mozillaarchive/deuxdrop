@@ -91,10 +91,12 @@ function makeSessionCookie() {
   return $crypto.randomBytes(SESSION_COOKIE_BYTES).toString('base64');
 }
 
-function ClientContext(tracker, email) {
+function ClientContext(tracker, email, assertion) {
   this._log = LOGFAB.dumbClientAccount(this, tracker._log, [null]);
   this._tracker = tracker;
   this.email = email;
+  this.assertion = assertion;
+
   this.userDb = null;
 
   this.conns = [];
@@ -170,6 +172,13 @@ var GetOrCreateDumbAccountTask = taskMaster.defineEarlyReturnTask({
           emails: [this.context.email],
         },
         this.context.userDb, this.context._log);
+      // (the signup will wait for the following command to complete before it
+      //  actually starts)
+      this.client.provideProofOfIdentity({
+        type: 'email',
+        source: 'browserid',
+        assertion: this.context.assertion,
+      });
       // a signup failure (which should not happen), will get rejected and
       //  trigger the failure of this task.
       return this.client.signupUsingServerSelfIdent(
@@ -237,16 +246,16 @@ ConnectionTracker.prototype = {
       delete self._sessionCookieToDeadConnection[bconn.sessionCookie];
     }
     if (contextDied) {
-      delete this._emailToClientContext[bconn.context.email];
+      delete this._emailToClientContext[bconn.clientContext.email];
     }
     this._log.deadConnection();
   },
 
-  hookupVerifiedConnection: function(bconn, email) {
+  hookupVerifiedConnection: function(bconn, email, assertion) {
     var context, self = this;
     if (!this._emailToClientContext.hasOwnProperty(email)) {
       context = this._emailToClientContext[email] =
-        new ClientContext(this, email);
+        new ClientContext(this, email, assertion);
     }
     else {
       context = this._emailToClientContext[email];
@@ -282,7 +291,7 @@ ConnectionTracker.prototype = {
 
     this._sessionCookieToLiveConnection[stateCheck.sessionCookie] = bconn;
     bconn.attachToBackside(existing.backside);
-    existing.context.migrateConn(existing, bconn);
+    existing.clientContext.migrateConn(existing, bconn);
     return true;
   },
 };
@@ -356,7 +365,8 @@ BridgeConn.prototype = {
                                  r.email]);
 
         // verification succeeded, hook it up, then send a success marker
-        $Q.when(self.tracker.hookupVerifiedConnection(self, r.email),
+        $Q.when(self.tracker.hookupVerifiedConnection(self, r.email,
+                                                      msg.assertion),
           function() {
             self.conn.sendUTF(JSON.stringify({
               type: 'success',
@@ -406,7 +416,7 @@ BridgeConn.prototype = {
     }
     this.backside.dead();
     this.backside = null;
-    var contextDied = this.context.handleDeadConn(this);
+    var contextDied = this.clientContext.handleDeadConn(this);
     this.tracker.reportDeadConn(this, true, contextDied);
   },
 

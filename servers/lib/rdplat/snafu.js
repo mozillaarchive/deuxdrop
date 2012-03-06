@@ -48,12 +48,10 @@ define(
   ) {
 
 /**
- * Take the responseText from an XHR request and convert it to base64.  This
- *  is annoying because the 'xhr' npm shim we use explicitly forces the encoding
- *  to utf8 so we can't just use btoa (not that getting at btoa isn't annoying.)
+ * Take the responseText from an XHR request and convert it to base64.
  */
 exports.xhrResponseToBase64 = function(data) {
-  var buf = new Buffer(data, 'utf8');
+  var buf = new Buffer(data, 'binary');
   return buf.toString('base64');
 };
 

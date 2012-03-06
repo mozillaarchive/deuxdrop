@@ -694,7 +694,7 @@ RawClientAPI.prototype = {
 
     email = email.toLowerCase();
     var url = "http://www.gravatar.com/avatar/" + $md5.hex_md5(email) +
-        ".jpg?d=wavatar&s=" + imageSize;
+        "?d=wavatar&s=" + imageSize;
 
     request.open('GET', url, true);
     request.overrideMimeType('text/plain; charset=x-user-defined');
@@ -704,7 +704,7 @@ RawClientAPI.prototype = {
           self._log.fetchGravatar(url);
 
           var base64Jpeg = $snafu.xhrResponseToBase64(request.responseText);
-          var dataUrl = 'data:image/jpeg;base64,' + base64Jpeg;
+          var dataUrl = 'data:image/png;base64,' + base64Jpeg;
           deferred.resolve(dataUrl);
         } else {
           self._log.fetchGravatarFailure(url);
