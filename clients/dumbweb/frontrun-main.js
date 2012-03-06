@@ -73,6 +73,7 @@ function establishChannel(restorePayload) {
     if (msg.type === 'success' ||
         msg.type === 'restored') {
       if (msg.type === 'restored') {
+        restorePayload = null;
         // we could have sent some queries in the interim...
         outSeqNo += msg.clientSeq;
         lastInSeqNo = msg.serverSeq;
@@ -93,7 +94,7 @@ function establishChannel(restorePayload) {
       sock.onmessage = function(event) {
         lastInSeqNo++;
         var msg = JSON.parse(event.data);
-        console.log("MSG", msg);
+        //console.log("MSG", msg);
         // Eat connectionStatus updates from the server because they are
         //  meaningless; they reflect the state of the server connecting to
         //  itself.
@@ -111,6 +112,7 @@ function establishChannel(restorePayload) {
     }
     // - session restore failure
     else if (msg.type === 'badrestore') {
+      restorePayload = null;
       // we tried to restore, but it didn't work.
       // XXX it's feasible to make moda clever enough to re-establish its
       //  queries and locally nuke and re-establish as required, but for now
@@ -128,7 +130,6 @@ function establishChannel(restorePayload) {
     if (restorePayload) {
       console.log(" sending restore payload:", restorePayload);
       sock.send(JSON.stringify(restorePayload));
-      restorePayload = null;
     }
     if (toSend) {
       console.log("sending queued", toSend);

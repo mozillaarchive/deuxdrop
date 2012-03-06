@@ -1367,8 +1367,9 @@ LocalStore.prototype = {
           if (!blurbClientData) {
             blurbClientData = self._notif.generateClientData(
                                 querySource, NS_CONVBLURBS, convId);
-            self._convertConversationBlurb(blurbClientData, querySource,
-                                           mergedCells);
+            querySource.dataMap[NS_CONVBLURBS][blurbClientData.localName] =
+              self._convertConversationBlurb(blurbClientData, querySource,
+                                             mergedCells);
           }
           clientData.deps.push(blurbClientData);
 

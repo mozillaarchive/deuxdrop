@@ -114,7 +114,7 @@ function ClientContext(tracker, email) {
 }
 ClientContext.prototype = {
   accountChanged: function(client) {
-    this.userDb.putCells(TBL_USER_ACCOUNTS, this.email,
+    this._tracker._db.putCells(TBL_USER_ACCOUNTS, this.email,
       { 'd:clientblob': client.__persist() });
   },
 
@@ -155,7 +155,7 @@ var GetOrCreateDumbAccountTask = taskMaster.defineEarlyReturnTask({
         'u_' + this.context.email, this.context._log);
       if (cell) {
         return this.earlyReturn(
-          $rawclient.getClientForExistingIdentityFromStorage(
+          $rawclient.getClientForExistingIdentity(
             cell, this.context.userDb, this.context._log));
       }
       return null;
@@ -176,7 +176,7 @@ var GetOrCreateDumbAccountTask = taskMaster.defineEarlyReturnTask({
         this.context._tracker.serverConfig.selfIdentBlob);
     },
     signup_success_persist: function() {
-      return this.context.userDb.putCells(TBL_USER_ACCOUNTS, this.context.email,
+      return this.acctDb.putCells(TBL_USER_ACCOUNTS, this.context.email,
         { 'd:clientblob': this.client.__persist() });
     },
     persisted: function() {

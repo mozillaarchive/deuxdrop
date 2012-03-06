@@ -130,6 +130,8 @@ var TaskProto = exports.TaskProto = {
       else if (rval === MAGIC_EARLY_RETURN) {
         // effect the early return by jumping to the end
         this.__iNextStep = this.__steps.length;
+        // propagate the marker so __succeed sees it
+        val = rval;
         continue;
       }
       // - synchronous success

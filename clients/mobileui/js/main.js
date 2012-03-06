@@ -1374,8 +1374,10 @@ define(function (require, exports, module) {
       notifyDom = $('#notify');
     };
 
-    $('body')
-
+    $('body');
+    // XXX this global scope magic from the prototype should perhaps be
+    //  discarded since it's not clear it's going to get translated.
+    /*
       // Handle compose from a peep screen.
       .delegate('[data-cardid="user"] .compose', 'submit', function (evt) {
         evt.preventDefault();
@@ -1419,6 +1421,7 @@ define(function (require, exports, module) {
           id: id
         });
       });
+    */
 
     // Initialize the cards
     cards($('#cardContainer'));
