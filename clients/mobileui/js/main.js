@@ -23,7 +23,6 @@ define(function (require, exports, module) {
       moda = require('modality'),
       friendly = require('friendly'),
       browserId = require('browserId'),
-      IScroll = require('iscroll'),
 
       commonNodes = {},
       states = {},
@@ -32,9 +31,6 @@ define(function (require, exports, module) {
       newMessageIScroll, newConversationNodeWidth, init, me,
 
       jqBody = $('body');
-
-  //iScroll just defines a global, bind to it here
-  IScroll = window.iScroll;
 
   // Browser ID is not actually a module, get a handle on it now.
   browserId = navigator.id;
@@ -197,10 +193,6 @@ define(function (require, exports, module) {
       adjustNewScrollerWidth(convScrollerDom);
 
       cards.adjustCardSizes();
-
-      if (newMessageIScroll) {
-        newMessageIScroll.refresh();
-      }
 
       // Activate new notification, but only if not already on start page.
       if (cards.currentCard().attr('data-cardid') !== 'start') {

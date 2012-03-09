@@ -4,6 +4,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Deuxdrop</title>
+    <style type="text/css">
+    body {
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    </style>
     <link rel="stylesheet" type="text/css" href="style.css">
     <script src="../deps/require.js"></script>
     <script>
@@ -31,12 +37,10 @@
 
         <!-- signIn: Give us your name and e-mail (via BrowserID) -->
         <div data-cardid="signIn" title="Sign In" class="card noiscroll">
-          <div class="scroller">
-            <form class="signUpForm standardForm">
-              <input type="text" name="name" placeholder="Enter your name">
-              <button>Sign In With BrowserID</button>
-            </form>
-          </div>
+          <form class="signUpForm standardForm">
+            <input type="text" name="name" placeholder="Enter your name">
+            <button>Sign In With BrowserID</button>
+          </form>
         </div>
 
         <!-- needServer: "bad news, no server" bounce page; needs to die -->
@@ -327,9 +331,10 @@
         + Add Server
       </a>
 
-      <a data-classimpl="serverLink" class="item" data-nonav="nonav"
+      <a data-classimpl="serverLink" class="ps-server" data-nonav="nonav"
          href="#connectToServer">
-        <span data-bind="displayName"></span> (<span data-bind="url"></span>)
+        <span data-bind="displayName" class="ps-serverName"></span>
+        (<span data-bind="url" class="ps-serverUrl"></span>)
       </a>
 
       <form data-classimpl="compose" class="compose">
