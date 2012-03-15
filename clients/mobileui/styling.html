@@ -30,6 +30,11 @@
       $(function() {
         $('.card')
           .wrap($('#stylingCardTemplate').clone('true').removeAttr('id'));
+        $('.stylingCardWrapper')
+          .each(function() {
+            var title = $(this).find('[title]').attr('title');
+            $(this).find('.THEheaderText').text(title);
+          });
       });
     </script>
   </head>
@@ -68,13 +73,38 @@
     <div class="scroller" data-childclass="serverLink">
       <a data-classimpl="serverLink" class="ps-server"
          href="#connectToServer">
-        <span class="ps-serverName">Deuxdrop US Server</span>
+        <span class="ps-serverName">Raindrop US Server</span>
          (<span class="ps-serverUrl">us.raindrop.it</span>)
       </a>
       <a data-classimpl="serverLink" class="ps-server"
          href="#connectToServer">
-        <span class="ps-serverName">Deuxdrop German Server</span>
+        <span class="ps-serverName">Raindrop German Server</span>
          (<span class="ps-serverUrl">de.raindrop.it</span>)
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverName">Global Dynamics</span>
+         (<span class="ps-serverUrl">gd.example.com</span>)
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverName">Massive Dynamic</span>
+         (<span class="ps-serverUrl">md.example.com</span>)
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverName">4 Hipsters Only!!!</span>
+         (<span class="ps-serverUrl">hipsters.example.com</span>)
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverName">Friendly Mail Company's Friendly Mail Server that wants to be your friend, yes we do.  Do you not believe it?  You should!</span>
+         (<span class="ps-serverUrl">friendly.example.com</span>)
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverName">Fraudulent Raindrop US Server (us.raindrop.it) ____________________________________________________ Someotheryestotally for sure</span>
+         (<span class="ps-serverUrl">friendly.example.com</span>)
       </a>
     </div>
   </div>
@@ -98,21 +128,22 @@
         <a class="homeNav" href="#groups">Group</a>
         <a class="homeNav" href="#notifications">
           <span class="notifications">Notifications</span>
-            <span class="notificationCount hidden"></span>
+            <span class="notificationCount hidden">5</span>
         </a>
         <a class="homeNav" href="#add">+</a>
       </div>
       <div class="newConversationNotifications">
         <div class="newConversationScroller">
+  <!--(BEGIN indent change for new conversation activity bubbles)-->
 
   <!-- new private conv activity: 4 messages -->
   <a data-classimpl="newbubPrivateConv" class="hpn-privateConv"
      href="#privateConv">
-    <div class="summary">
+    <div class="hpn-privateSummary">
       <img class="hpn-pic" src="i/face2.png" />
       <span class="hpn-privatePeep">Alice</span>
     </div>
-    <div data-childclass="newbubPrivateMsg" class="msgContainer" >
+    <div data-childclass="newbubPrivateMsg" class="hpn-privateMsgContainer" >
 
       <!-- message 1 -->
       <span class="hpn-privateMsg">
@@ -152,28 +183,52 @@
     </div>
   </a>
 
-  <!-- new group conv activity: joins -->
+  <!-- new group conv activity -->
   <a data-classimpl="newbubGroupConv" class="hpn-groupConv"
      href="#groupConv">
-    <div class="summary">
-      <span class="convFirstMsgText">
+    <div class="hpn-groupSummary">
+      <span class="hpn-groupSummaryText">
         Let's throw a party!
       </span>
     </div>
-    <div data-childclass="newbubGroupMsg" class="msgContainer" >
-  <span data-classimpl="newbubGroupMsg-message"
-        class="hpn-groupMsg">
-    <div>
-      <img class="miniPeepInfoPic" data-bind="author.pic" data-attr="src"
-           data-missing="OMIT" src="i/face2.png" />
-      <span class="newConversationPeep name" data-bind="author.displayName"></span>
-      <span class="newConversationTime time"
-            data-bind="receivedAt" data-attr="data-time"></span>
+    <div data-childclass="newbubGroupMsg" class="hpn-groupMsgContainer" >
+      <!-- message 1: human -->
+      <span data-classimpl="newbubGroupMsg-message"
+            class="hpn-groupMsg">
+        <div>
+          <img class="hpn-pic" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Bob</span>
+          <span class="hpn-groupMsgTime">3 hours ago</span>
+        </div>
+        <span class="newConversationText">Let's ask Charlie what he thinks
+        about the roadtrip...</span>
+      </span>
+      <!-- message 2: join -->
+      <span data-classimpl="newbubGroupMsg-join"
+            class="newbubGroupMsg-join newbubGroupMsg newbubMsg">
+        <div>
+          <img class="hpn-pic" src="i/face2.png" />
+          <span class="hpn-groupInviterName">Bob</span>
+          <span class="hpn-groupInviteTime">3 hours ago</span>
+        </div>
+        <span>invited</span>
+        <span class="hpn-groupInviteeName">Charlie</span>
+        <img class="hpn-pic" src="i/face2.png" />
+      </span>
+      <!-- message 3: human -->
+      <span data-classimpl="newbubGroupMsg-message"
+            class="hpn-groupMsg">
+        <div>
+          <img class="hpn-pic" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Charlie</span>
+          <span class="hpn-groupMsgTime">1 hour ago</span>
+        </div>
+        <span class="newConversationText">I don't think a road trip to the
+        North Pole is viable with all this global warming going on.</span>
+      </span>
     </div>
-    <span class="newConversationText" data-bind="text"></span>
-  </span>
-</div>
   </a>
+  <!--(END indent change for new conversation activity bubbles)-->
         </div>
       </div>
     </div>
@@ -189,6 +244,32 @@
       <button class="button" data-href="#add">add contact</button>
     </div>
     <div class="scroller" data-childclass="peepPrivate">
+      <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
+         href="#privateConv">
+          <div>
+              <div class="avatar">
+                  <img src="i/face2.png" />
+              </div>
+          </div>
+          <div class="pcl-msgPreview">
+              <div class="pcl-msgPreviewHeader">
+                  <span class="author boxFlex overflow"
+                        data-bind="peep.displayName">
+                  </span>
+                  <span class="new">
+                    (<span data-bind="conv.numUnreadMessages"></span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="time" data-bind="conv.mostRecentActivity"
+                        data-attr="data-time" data-missing="never"></span>
+              </div>
+              <div class="hbox">
+                  <span class="snippet boxFlex overflow"
+                        data-bind="conv.firstUnreadMessage.text">
+                  </span>
+              </div>
+          </div>
+      </a>
     </div>
   </div>
 

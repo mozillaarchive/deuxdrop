@@ -84,6 +84,11 @@ a {
   font-style: italic;
 }
 
+.smoothVertGradient (@topLip, @top, @bottom) {
+  background: -moz-linear-gradient(top, @topLip 0, @topLip 1px, @top 1px, @bottom 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @topLip), color-stop(1%, @topLip), color-stop(1%, @top), color-stop(100%, @bottom));
+}
+
 button,
 .subHeader button,
 .compose button {
@@ -787,12 +792,13 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Home Page: new conversation notifications [hpn]
 
-.hpn-commonConv {
+////// Common!
+
+.hpn-commonConv() {
   display: inline-block;
   float: left;
   position: relative;
   margin: 10px;
-  padding: 10px;
   width: 180px;
   height: 160px;
 
@@ -802,10 +808,17 @@ html[xmlns] .cf {
   border-style: solid;
   border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
 
-  background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
-  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
+  .smoothVertGradient(#fefefe, #f2f2f2, #e6e6e6);
 
   overflow: hidden;
+  font-size: smaller;
+}
+
+.hpn-commonName() {
+}
+
+.hpn-commonTime() {
+  color: #777;
   font-size: smaller;
 }
 
@@ -814,41 +827,80 @@ html[xmlns] .cf {
   height: 16px;
 }
 
+////// Private Conversations
+
 // Private conversation bubble
 .hpn-privateConv {
   .hpn-commonConv;
 }
 
+// Summarization block for the private conversation
+.hpn-privateSummary {
+  border-bottom: 1px solid #aaa;
+}
+
 // The name of the other participant in the private conversation.
 .hpn-privatePeep {
+  font-weight: bold;
 }
 
+// Container for the .hpn-privateMsg instances
+.hpn-privateMsgContainer {
+  padding: 0px 4px;
+}
 .hpn-privateMsg {
 }
-
 .hpn-privateMsgTime {
+  .hpn-commonTime;
 }
-
 .hpn-privateMsgText {
 }
 
+
+////// Group Conversations
 
 // Group conversation bubble
 .hpn-groupConv {
   .hpn-commonConv;
 }
 
-.newConversationPeep {
+// Group conversation summary block
+.hpn-groupSummary {
+  border-bottom: 1px solid #aaa;
+  padding: 2px 4px;
 }
-.newConversationText {
+// The text of the first message in the conversation or an explicit title if one
+// has been set.
+.hpn-groupSummaryText {
+  font-weight: bold;
 }
 
-.newbubMsg {
-  display: block;
+// Container for the new messages in the conversation
+.hpn-groupMsgContainer {
+  padding: 0px 4px;
 }
-.newConversationTime {
-  color: #777;
-  font-size: smaller;
+
+// message container for a human message (with text!)
+.hpn-groupMsg {
+}
+.hpn-groupAuthorName {
+  .hpn-commonName;
+}
+.hpn-groupMsgTime {
+  .hpn-commonTime;
+}
+
+// message container for a join message (Alice invited Bob to join)
+.hpn-groupJoin {
+}
+.hpn-groupInviterName {
+  .hpn-commonName;
+}
+.hpn-groupInviteeName {
+  .hpn-commonName;
+}
+.hpn-groupInviteTime {
+  .hpn-commonTime;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -875,6 +927,21 @@ html[xmlns] .cf {
     height: 64px;
 }
 
+.pcl-perPeepItem {
+  .hbox;
+}
+.pcl-msgPreview {
+  .boxFlex;
+  line-height: 26px;
+}
+.pcl-msgPreviewHeader {
+  .hbox;
+}
+.pcl-msgPreview
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Private Conversations: Private Conversation Display (privateConv) [pcd]
 
 .privateMessage {
   width: 100%;
@@ -937,9 +1004,6 @@ html[xmlns] .cf {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Private Conversations: Private Conversation Display (privateConv) [pcd]
-
-////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Conversation List (groups) [gcl]
 
 .namecheck:after, .participant:after {
@@ -969,11 +1033,6 @@ html[xmlns] .cf {
         border-bottom: 1px solid #ddd;
         cursor: pointer;
         color: inherit;
-    }
-
-    .conversations a .msgPreviewHeader,
-    .conversation a .msgHeader {
-        line-height: 26px;
     }
 
     .conversations a .author,
