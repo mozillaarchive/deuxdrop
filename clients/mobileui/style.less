@@ -15,6 +15,8 @@ body {
     color: #222;
     font-size: 14px;
     line-height: 18px;
+
+    -webkit-overflow-scrolling: touch;
 }
 
 .hidden,
@@ -764,7 +766,7 @@ html[xmlns] .cf {
     cursor: pointer;
 }
 
-.notificationCount {
+.hps-notificationCount {
   display: inline-block;
   background-color: red;
   color: white;
@@ -781,14 +783,20 @@ html[xmlns] .cf {
           border-radius: 8px;
 }
 
-.newConversationNotifications {
+.hps-newConvsBlock {
   display: block;
   clear: both;
-}
 
-.newConversationScroller {
   overflow-y: hidden;
   overflow-x: auto;
+
+  height: 200px;
+}
+
+// Note that we dynamically set the css width of the scroller for this to work.
+// There is no easy way in HTML/CSS right now to say "make this div only grow
+// in the width direction.
+.hps-newConvsScroller {
   height: 180px;
 }
 

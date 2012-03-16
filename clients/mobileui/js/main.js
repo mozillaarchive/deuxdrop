@@ -28,7 +28,7 @@ define(function (require, exports, module) {
       states = {},
       servers,
       update = {}, remove = {}, notifyDom, nodelessActions,
-      newMessageIScroll, newConversationNodeWidth, init, me,
+      newConversationNodeWidth, init, me,
 
       jqBody = $('body');
 
@@ -483,13 +483,6 @@ define(function (require, exports, module) {
   //////////////////////////////////////////////////////////////////////////////
   // Home Page
   update['start'] = function (data, dom) {
-    newMessageIScroll = new IScroll(
-                          dom.find('.newConversationNotifications')[0],
-                          {
-                            hScrollbar: true,
-                            vScrollbar: false
-                          });
-
     var jqNotifCount = dom.find('.notificationCount');
 
     commonQueryBind(

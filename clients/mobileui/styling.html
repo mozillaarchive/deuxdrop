@@ -27,6 +27,12 @@
       .THEheader {
         position: relative !important;
       }
+      /* this would normally be dynamically computed/updated by the UI code
+         owing to limitations of horizontal layout with HTML/CSS */
+      .hps-newConvsScroller {
+        width: 620px;
+      }
+
 
       #stylingCardTemplate {
         display: none;
@@ -159,12 +165,12 @@
         <a class="homeNav" href="#groups">Group</a>
         <a class="homeNav" href="#notifications">
           <span class="notifications">Notifications</span>
-            <span class="notificationCount hidden">5</span>
+            <span class="hps-notificationCount">5</span>
         </a>
         <a class="homeNav" href="#add">+</a>
       </div>
-      <div class="newConversationNotifications">
-        <div class="newConversationScroller">
+      <div class="hps-newConvsBlock">
+        <div class="hps-newConvsScroller">
   <!--(BEGIN indent change for new conversation activity bubbles)-->
 
   <!-- new private conv activity: 4 messages -->
@@ -503,7 +509,7 @@
   </div>
 
   <!-- groupConv: Contents of a group conversation -->
-  <div data-cardid="groupConv" class="card">
+  <div data-cardid="groupConv" title="Group Conversation" class="card">
     <!-- non-scrolling reminder of the participants... -->
     <div class="subHeader hbox">
       <div class="participants boxFlex" data-childclass="participant">
@@ -520,7 +526,7 @@
   </div>
 
   <!-- newConv: Create a new group conversation -->
-  <div data-cardid="newConv" class="card">
+  <div data-cardid="newConv" title="New Conversation" class="card">
     <div class="scroller">
       Chat with:
       <div class="hbox">
@@ -537,7 +543,8 @@
   </div>
 
   <!-- pickPeeps: Multi-select from a list of peeps -->
-  <div data-cardid="pickPeeps" class="card">
+  <div data-cardid="pickPeeps" title="Add People to the Conversation"
+       class="card">
     <div class="subHeader hbox">
       <button class="done">Done</button>
     </div>
@@ -546,7 +553,7 @@
   </div>
 
   <!-- User: Details on a user/peep NOT SURE IF NECESSARY AS-IS -->
-  <div data-cardid="user" class="card">
+  <div data-cardid="user" title="User Details" class="card">
     <div class="scroller">
       <div class="peepInfo">
         <img class="peepInfoPic" data-bind="pic" data-attr="src"
