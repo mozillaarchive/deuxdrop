@@ -8,6 +8,8 @@
         position: relative;
       }
 
+      /* because position:fixed doesn't work with the header, we need to
+         clobber it and have the card be the scrolling region */
       .stylingCardWrapper {
         position: relative;
         display: inline-block;
@@ -15,6 +17,15 @@
         width: 480px;
         height: 800px;
         margin-bottom: 4px;
+        overflow: hidden;
+      }
+      .card {
+        height: 766px;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+      }
+      .THEheader {
+        position: relative !important;
       }
 
       #stylingCardTemplate {
@@ -24,18 +35,35 @@
     <link rel="stylesheet/less" type="text/css" href="style.less" />
     <script src="../deps/less.js"></script>
     <script src="../deps/jquery.js"></script>
-    <script>
-      // wrap every card with a stylingCardWrapper so they each look like
-      //  little screenshots.
+    <script>//<![CDATA[
       $(function() {
+        // - card stuff
+        // wrap every card with a stylingCardWrapper so they each look like
+        //  little screenshots.
         $('.card')
-          .wrap($('#stylingCardTemplate').clone('true').removeAttr('id'));
+          .wrap($('#stylingCardTemplate').clone(true).removeAttr('id'));
         $('.stylingCardWrapper')
           .each(function() {
             var title = $(this).find('[title]').attr('title');
             $(this).find('.THEheaderText').text(title);
           });
+
+        // - pictures of contacts
+        // these are all hashes of BLAH@asutherland.org since I control the
+        //  domain.
+        var PIC_ALICE = 'http://www.gravatar.com/avatar/4515e58a3ce433a5e54a4716191c5815?r=pg&d=wavatar&s=48',
+            PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
+            PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
+            PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48';
+
+        // Replace the image sources for .PIC-blah with the appropriate URls
+        $('.PIC-alice').attr('src', PIC_ALICE);
+        $('.PIC-bob').attr('src', PIC_BOB);
+        $('.PIC-charlie').attr('src', PIC_CHARLIE);
+        $('.PIC-me').attr('src', PIC_DAVE);
+        $('.PIC-you').attr('src', PIC_DAVE);
       });
+    //]]>
     </script>
   </head>
 <body>
@@ -48,11 +76,9 @@
   </div>
   <div id="stylingCardTemplate" class="stylingCardWrapper">
     <div class="THEheader hbox">
-        <button class="THEback">Back</button>
-        <div class="boxFlex">
-            <h1 class="THEheaderText overflow">Deuxdrop</h1>
-        </div>
-        <button class="next invisible">Info</button>
+      <button class="THEback">Back</button>
+      <div class="boxFlex"><h1 class="THEheaderText overflow">Deuxdrop</h1></div>
+      <button class="next invisible">Info</button>
     </div>
     <a class="THEnotify" data-nonav="nonav">!</a>
   </div>
@@ -61,7 +87,7 @@
 <div id="stylingCardContainer"><div id="cards">
 
   <!-- signIn: Give us your name and e-mail (via BrowserID) -->
-  <div data-cardid="signIn" title="Sign In" class="card noiscroll">
+  <div data-cardid="signIn" title="Sign In" class="card">
     <form class="signUpForm standardForm">
       <input type="text" name="name" placeholder="Enter your name">
       <button>Sign In With BrowserID</button>
@@ -104,7 +130,12 @@
       <a data-classimpl="serverLink" class="ps-server"
          href="#connectToServer">
         <span class="ps-serverName">Fraudulent Raindrop US Server (us.raindrop.it) ____________________________________________________ Someotheryestotally for sure</span>
-         (<span class="ps-serverUrl">friendly.example.com</span>)
+         (<span class="ps-serverUrl">nefarious1.example.com</span>)
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverName">Nefarious Server</span>
+         (<span class="ps-serverUrl">us.raindrop.it.ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.example.com</span>)
       </a>
     </div>
   </div>
@@ -121,7 +152,7 @@
   </div>
 
   <!-- start: The home page (once signed up). -->
-  <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
+  <div data-cardid="start" title="Deuxdrop" class="card">
     <div class="scroller">
       <div class="navButtons">
         <a class="homeNav" href="#private">Private</a>
@@ -140,7 +171,7 @@
   <a data-classimpl="newbubPrivateConv" class="hpn-privateConv"
      href="#privateConv">
     <div class="hpn-privateSummary">
-      <img class="hpn-pic" src="i/face2.png" />
+      <img class="hpn-pic PIC-alice" src="i/face2.png" />
       <span class="hpn-privatePeep">Alice</span>
     </div>
     <div data-childclass="newbubPrivateMsg" class="hpn-privateMsgContainer" >
@@ -196,7 +227,7 @@
       <span data-classimpl="newbubGroupMsg-message"
             class="hpn-groupMsg">
         <div>
-          <img class="hpn-pic" src="i/face2.png" />
+          <img class="hpn-pic PIC-bob" src="i/face2.png" />
           <span class="hpn-groupAuthorName">Bob</span>
           <span class="hpn-groupMsgTime">3 hours ago</span>
         </div>
@@ -207,24 +238,56 @@
       <span data-classimpl="newbubGroupMsg-join"
             class="newbubGroupMsg-join newbubGroupMsg newbubMsg">
         <div>
-          <img class="hpn-pic" src="i/face2.png" />
+          <img class="hpn-pic PIC-bob" src="i/face2.png" />
           <span class="hpn-groupInviterName">Bob</span>
           <span class="hpn-groupInviteTime">3 hours ago</span>
         </div>
         <span>invited</span>
         <span class="hpn-groupInviteeName">Charlie</span>
-        <img class="hpn-pic" src="i/face2.png" />
+        <img class="hpn-pic PIC-charlie" src="i/face2.png" />
       </span>
       <!-- message 3: human -->
       <span data-classimpl="newbubGroupMsg-message"
             class="hpn-groupMsg">
         <div>
-          <img class="hpn-pic" src="i/face2.png" />
+          <img class="hpn-pic PIC-charlie" src="i/face2.png" />
           <span class="hpn-groupAuthorName">Charlie</span>
           <span class="hpn-groupMsgTime">1 hour ago</span>
         </div>
         <span class="newConversationText">I don't think a road trip to the
         North Pole is viable with all this global warming going on.</span>
+      </span>
+    </div>
+  </a>
+
+  <!-- new group conv activity -->
+  <a data-classimpl="newbubGroupConv" class="hpn-groupConv"
+     href="#groupConv">
+    <div class="hpn-groupSummary">
+      <span class="hpn-groupSummaryText">
+        Let's throw a hootenannie!
+      </span>
+    </div>
+    <div data-childclass="newbubGroupMsg" class="hpn-groupMsgContainer" >
+      <!-- message 1: human -->
+      <span data-classimpl="newbubGroupMsg-message"
+            class="hpn-groupMsg">
+        <div>
+          <img class="hpn-pic PIC-alice" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Alice</span>
+          <span class="hpn-groupMsgTime">2 hours ago</span>
+        </div>
+        <span class="newConversationText">Is that like a party?</span>
+      </span>
+      <!-- message 2: human -->
+      <span data-classimpl="newbubGroupMsg-message"
+            class="hpn-groupMsg">
+        <div>
+          <img class="hpn-pic PIC-charlie" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Charlie</span>
+          <span class="hpn-groupMsgTime">1 hour ago</span>
+        </div>
+        <span class="newConversationText">Yes, exactly.</span>
       </span>
     </div>
   </a>
@@ -244,32 +307,84 @@
       <button class="button" data-href="#add">add contact</button>
     </div>
     <div class="scroller" data-childclass="peepPrivate">
+      <!-- Alice -->
       <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
          href="#privateConv">
-          <div>
-              <div class="avatar">
-                  <img src="i/face2.png" />
-              </div>
+        <div>
+          <div class="pcl-avatar">
+            <img class="pcl-pic PIC-alice" src="i/face2.png" />
           </div>
-          <div class="pcl-msgPreview">
-              <div class="pcl-msgPreviewHeader">
-                  <span class="author boxFlex overflow"
-                        data-bind="peep.displayName">
-                  </span>
-                  <span class="new">
-                    (<span data-bind="conv.numUnreadMessages"></span>)
-                  </span>
-                  <span class="boxFlexStrong"></span>
-                  <span class="time" data-bind="conv.mostRecentActivity"
-                        data-attr="data-time" data-missing="never"></span>
-              </div>
-              <div class="hbox">
-                  <span class="snippet boxFlex overflow"
-                        data-bind="conv.firstUnreadMessage.text">
-                  </span>
-              </div>
+        </div>
+        <div class="pcl-msgPreview">
+          <div class="pcl-msgPreviewHeader">
+            <span class="author boxFlex overflow">Alice</span>
+            <span class="new">(<span>2</span>)</span>
+            <span class="boxFlexStrong"></span>
+            <span class="time" data-bind="conv.mostRecentActivity">
+              10 minutes ago
+            </span>
           </div>
+          <div class="hbox">
+            <span class="pcl-msgPreviewSnippet"
+                  data-bind="conv.firstUnreadMessage.text">
+              Sure, we can do that.
+            </span>
+          </div>
+        </div>
       </a>
+      <!-- Bob -->
+      <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
+         href="#privateConv">
+        <div>
+          <div class="pcl-avatar">
+            <img class="pcl-pic PIC-bob" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="pcl-msgPreview">
+          <div class="pcl-msgPreviewHeader">
+            <span class="author boxFlex overflow">Bob</span>
+            <span class="new">(<span>0</span>)</span>
+            <span class="boxFlexStrong"></span>
+            <span class="time" data-bind="conv.mostRecentActivity">
+              1 day ago
+            </span>
+          </div>
+          <div class="hbox">
+            <span class="pcl-msgPreviewSnippet"
+                  data-bind="conv.firstUnreadMessage.text">
+              No, the fact that the monkey already was an alcoholic does not
+              make getting the monkey drunk any better.  And before you ask,
+              a panda wouldn't change things.
+            </span>
+          </div>
+        </div>
+      </a>
+      <!-- Charlie -->
+      <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
+         href="#privateConv">
+        <div>
+          <div class="pcl-avatar">
+            <img class="pcl-pic PIC-charlie" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="pcl-msgPreview">
+          <div class="pcl-msgPreviewHeader">
+            <span class="author boxFlex overflow">Charlie</span>
+            <span class="new">(<span>2</span>)</span>
+            <span class="boxFlexStrong"></span>
+            <span class="time" data-bind="conv.mostRecentActivity">
+              3 days ago
+            </span>
+          </div>
+          <div class="hbox">
+            <span class="pcl-msgPreviewSnippet"
+                  data-bind="conv.firstUnreadMessage.text">
+              Whaaaaaa?
+            </span>
+          </div>
+        </div>
+      </a>
+
     </div>
   </div>
 
@@ -277,34 +392,99 @@
   <div data-cardid="privateConv" title="Private Conv" 
        class="card privateConv">
     <!-- non-scrolling reminder of who our friend is... -->
-    <div class="bigSubHeader vbox center">
-      <div class="hbox">
-        <div class="hbox bgFromMe">
-          <div class="avatar">
-            <img class="peepInfoPic" data-bind="me.pic" data-attr="src"
-                 data-missing="OMIT" src="i/face2.png" />
-          </div>
-          <div class="vbox center">
-            <span class="peepInfoName">You</span>
-          </div>
+    <div class="pcd-header">
+      <div class="pcd-headerMe">
+        <div class="pcd-avatar">
+          <img class="pcd-pic PIC-you" src="i/face2.png" />
         </div>
-        <div class="boxFlex"></div>
-        <div class="hbox bgToMe">
-          <div class="vbox center">
-            <span data-bind="peep.displayName" class="peepInfoName"></span>
-          </div>
-          <div class="avatar">
-            <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
-                 data-missing="OMIT" src="i/face2.png" />
-          </div>
+        <div class="pcd-nameBox">
+          <span class="pcd-name">You</span>
+        </div>
+      </div>
+      <div class="pcd-headerSpacer"></div>
+      <div class="pcd-headerThem">
+        <div class="pcd-nameBox">
+          <span class="pcd-name">Bob</span>
+        </div>
+        <div class="pcd-avatar">
+          <img class="pcd-pic PIC-bob" src="i/face2.png" />
         </div>
       </div>
     </div>
     <!-- scrolling messages -->
-    <div class="scroller">
-      <div class="privateConversation" data-childclass="privateMessage">
+    <div class="pcd-conversation" data-childclass="privateMessage">
+      <!-- expand to messages -->
+      <script type="text/javascript">//<![CDATA[
+        // There are enough of these and the potential for changes high enough
+        //  that we just do very simple inline templating here.
+        var privateConvInited = false;
+        $(function() {
+        if (privateConvInited) return;
+        privateConvInited = true;
+        var messages = [
+          {t: "fromMe", d: "1 week ago", m: "How's it going?"},
+          {t: "toMe",   d: "1 week ago", m: "Pretty well."},
+          {t: "fromMe", d: "1 week ago", m: "Anything going on?"},
+          {t: "toMe",   d: "1 week ago", m: "The monkey escaped, gotta go"},
+          {t: "fromMe", d: "1 week ago", m: "Wait, what?"},
+          {t: "fromMe", d: "1 week ago", m: "What monkey?  How do you have a monkey?"},
+          {t: "fromMe", d: "1 week ago", m: "WHY do you have a monkey?"},
+          {t: "toMe",   d: "5 days ago", m: "Sorry, was trapped in the basement for a few days."},
+          {t: "toMe",   d: "5 days ago", m: "The monkey had locked and barricaded the door and it took me a while to tunnel out."},
+          {t: "fromMe", d: "5 days ago", m: "Again. WHY do you have a monkey?"},
+          {t: "toMe",   d: "5 days ago", m: "1-click shopping is very dangerous if you leave a cat alone in a room with a computer."},
+          {t: "fromMe", d: "5 days ago", m: "Okay, that almost makes sense.  But why did the monkey lock you downstairs?"},
+          {t: "toMe",   d: "5 days ago", m: "I knocked over his giant pile of bananas."},
+          {t: "fromMe", d: "5 days ago", m: "That sounds like an accident.  Perfectly understandable!"},
+          {t: "toMe",   d: "5 days ago", m: "Well..."},
+          {t: "toMe",   d: "5 days ago", m: "This was after the fifth time."},
+          {t: "fromMe", d: "5 days ago", m: "Okay, that sounds reasonable, then."},
+          {t: "fromMe", d: "5 days ago", m: "I would lock you in the basement if you did that."},
+          {t: "toMe",   d: "5 days ago", m: "Alright, well, I need to go clean up."},
+          {t: "toMe",   d: "3 days ago", m: "Hey, can you watch the monkey for me for a few days?"},
+          {t: "fromMe", d: "3 days ago", m: "Sure, but I'm having a party tomorrow night.  Is it a cool monkey?"},
+          {t: "fromMe", d: "3 days ago", m: "And how much feces flinging are we talking about?"},
+          {t: "toMe",   d: "3 days ago", m: "Yes.  And practically none!"},
+          {t: "fromMe", d: "3 days ago", m: "Fine."},
+          {t: "toMe",   d: "1 day ago", m: "WHY DOES MY MONKEY HAVE A HANGOVER?!"},
+          {t: "fromMe", d: "1 day ago", m: "Dude, I checked the feedback on the product page.  Apparently he was so cheap because that place only stocks alcoholic monkeys.  So, like, it's not my fault."},
+          {t: "toMe", d: "1 day ago", m: "No, the fact that the monkey already was an alcoholic does not make getting the monkey drunk any better.  And before you ask, a panda wouldn't change things."},
+        ];
+
+        var container = $('.pcd-conversation'),
+            template = $('.pcd-message').remove();
+        messages.forEach(function(msg) {
+          var msgNode = template.clone(true);
+          msgNode.addClass(msg.t);
+          msgNode.find('.pcd-messageText').text(msg.m);
+          msgNode.find('.pcd-messageTime').text(msg.d);
+          msgNode.appendTo(container);
+        });
+        
+        });
+      //]]></script>
+      <!-- message (template)-->
+      <div data-classimpl="privateMessage" class="pcd-message">
+        <div class="pcd-leftPad"></div>
+        <div class="pcd-messageContainer">
+          <span class="pcd-messageText" data-bind="text">
+            MESSAGE GOES HERE
+          </span>
+        </div>
+        <div class="pcd-rightPad"></div>
+        <div>
+          <span class="pcd-messageTime">DATE GOES HERE</span>
+        </div>
       </div>
+
+      <!-- compose is a subwidget and not specific to this card -->
       <form class="compose" data-class="compose">
+        <div class="hbox">
+          <div class="boxFlex">
+            <input type="text" placeholder="say hello" />
+          </div>
+          <button>send</button>
+        </div>
       </form>
     </div>
   </div>

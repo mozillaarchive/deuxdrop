@@ -5,17 +5,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Common HTML styling
 
-* {
+
+body {
     margin: 0;
     padding: 0;
 
-    -webkit-box-sizing: border-box;
-       -moz-box-sizing: border-box;
-         -o-box-sizing: border-box;
-            box-sizing: border-box;
-}
-
-body {
     font-family: "Helvetica", arial, sans-serif;
     background-color: #fafafa;
     color: #222;
@@ -157,18 +151,33 @@ input[type=text]#search {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Common Domain Styling
+
+.common-avatar() {
+  padding: 3px;
+  border: 1px solid #eee;
+  margin: 0 5px 0 0;
+  background-color: #fff;
+}
+.common-pic {
+  width: 48px;
+  height: 48px;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
 // Card styling
 
 .THEheader {
     position: fixed;
     top: 0;
     left: 0;
-    height: 34px;
+    height: 24px;
     overflow: hidden;
 
     padding: 5px;
     background-color: #222;
-    position: relative;
     z-index: 99;
 
     -webkit-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
@@ -194,7 +203,7 @@ input[type=text]#search {
 }
 
 .THEheader button {
-    height: 24px;
+    max-height: 24px;
     line-height: 24px;
     font-size: 11px;
     font-weight: bold;
@@ -240,6 +249,8 @@ input[type=text]#search {
     color: #eee;
     text-shadow: 0 -1px 0 #222;
     text-align: center;
+    padding: 0;
+    margin: 0;
 }
 
 .THEnotify {
@@ -297,8 +308,6 @@ input[type=text]#search {
 
 .card {
   float: left;
-  overflow-x: hidden;
-  overflow-y: auto;
   width: 100%;
 }
 
@@ -333,7 +342,7 @@ input[type=text]#search {
 
 .subHeader,
 .compose {
-    height: 34px;
+    height: 24px;
     line-height: 24px;
     padding: 5px;
     font-size: 12px;
@@ -924,11 +933,17 @@ html[xmlns] .cf {
 }
 
 .bigSubHeader {
-    height: 64px;
+  height: 64px;
 }
 
 .pcl-perPeepItem {
   .hbox;
+}
+.pcl-avatar {
+  .common-avatar;
+}
+.pcl-pic {
+  .common-pic;
 }
 .pcl-msgPreview {
   .boxFlex;
@@ -937,18 +952,67 @@ html[xmlns] .cf {
 .pcl-msgPreviewHeader {
   .hbox;
 }
-.pcl-msgPreview
+.pcl-msgPreviewSnippet {
+  .overflow;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Private Conversations: Private Conversation Display (privateConv) [pcd]
 
-.privateMessage {
+.pcd-header {
+  .bigSubHeader;
+  .vbox;
+  .center;
+}
+
+@fromMeForegroundColor: #444;
+@fromMeBackgroundColor: #222;
+
+@toMeForegroundColor: #448;
+@toMeBackgroundColor: #224;
+
+.pcd-headerPersonCommon(@fgColor, @bgColor) {
+  .hbox;
+  border: 1px solid @fgColor;
+  background-color: @bgColor;
+}
+
+.pcd-headerMe {
+  .pcd-headerPersonCommon(@fromMeForegroundColor, @fromMeBackgroundColor);
+}
+.pcd-headerSpacer {
+  .boxFlex;
+}
+.pcd-headerThem {
+  .pcd-headerPersonCommon(@toMeForegroundColor, @toMeBackgroundColor);
+}
+
+.pcd-avatar {
+  .common-avatar;
+}
+.pcd-pic {
+  .common-pic;
+}
+.pcd-nameBox {
+  .vbox;
+  .center;
+}
+.pcd-name {
+  .peepInfoName;
+}
+
+.pcd-message {
+  .hbox;
   width: 100%;
   height: 2.4em;
 }
-.privateMessage:hover {
+.pcd-message:hover {
   background-color: #111;
+}
+
+.pcd-messageContainer {
+  .boxFlex;
 }
 
 .privateMessage[watermark="true"] {
@@ -961,46 +1025,38 @@ html[xmlns] .cf {
   max-width: 80%;
 }
 
-.bgFromMe {
-  border: 1px solid #444;
-  background-color: #222;
-}
-.fromMe .message {
-  border: 1px solid #444;
-  background-color: #222;
-  padding: 4px;
+
+.pcd-messageCommon (@fgColor, @bgColor) {
+  > .pcd-messageContainer {
+    > .pcd-messageText {
+      border: 1px solid @fgColor;
+      background-color: @bgColor;
+      padding: 4px;
+    }
+  }
 }
 
-.bgToMe {
-  border: 1px solid #448;
-  background-color: #224;
-}
-.toMe .message {
-  border: 1px solid #448;
-  background-color: #224;
-  padding: 4px;
+.pcd-message.fromMe {
+  .pcd-messageCommon(@fromMeForegroundColor, @fromMeBackgroundColor);
+  > .pcd-leftPad {
+    width: 0;
+  }
+  > .pcd-rightPad {
+    width: 80px;
+  }
 }
 
-/*
-.fromMe + .toMe {
-  margin-bottom: 0.5em;
+.pcd-message.toMe {
+  .pcd-messageCommon(@toMeForegroundColor, @toMeBackgroundColor);
+  > .pcd-leftPad {
+    width: 80px;
+  }
+  > .pcd-rightPad {
+    width: 0;
+  }
 }
-.toMe + .fromMe {
-  margin-bottom: 0.5em;
-}
-*/
 
-.fromMe > .leftPad {
-  width: 0;
-}
-.fromMe > .rightPad {
-  width: 80px;
-}
-.toMe > .leftPad {
-  width: 80px;
-}
-.toMe > .rightPad {
-  width: 0px;
+.pcd-messageTime {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1016,15 +1072,6 @@ html[xmlns] .cf {
 .conversations,
 .conversation {
 }
-
-    .avatar {
-        width: 48px;
-        height: 48px;
-        padding: 3px;
-        border: 1px solid #eee;
-        margin: 0 5px 0 0;
-        background-color: #fff;
-    }
 
     .conversations a,
     .conversation a {

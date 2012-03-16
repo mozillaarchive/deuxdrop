@@ -816,7 +816,7 @@ define(function (require, exports, module) {
     updom();
 
     // - messages
-    var jqContainerNode = dom.find('.privateConversation'),
+    var jqContainerNode = dom.find('.pcd-conversation'),
         cloneNode = getChildCloneNode(jqContainerNode[0]);
     commonQueryBind(
       jqContainerNode,
