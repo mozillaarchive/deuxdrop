@@ -80,10 +80,16 @@ a {
   font-style: italic;
 }
 
-.smoothVertGradient (@topLip, @top, @bottom) {
+.lipVertGradient (@topLip, @top, @bottom) {
   background: -moz-linear-gradient(top, @topLip 0, @topLip 1px, @top 1px, @bottom 100%);
   background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @topLip), color-stop(1%, @topLip), color-stop(1%, @top), color-stop(100%, @bottom));
 }
+
+.smoothVertGradient (@top, @bottom) {
+  background: -moz-linear-gradient(top, @top 0, @bottom 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @top), color-stop(100%, @bottom));
+}
+
 
 button,
 .subHeader button,
@@ -825,7 +831,7 @@ html[xmlns] .cf {
   border-style: solid;
   border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
 
-  .smoothVertGradient(#fefefe, #f2f2f2, #e6e6e6);
+  .lipVertGradient(#fefefe, #f2f2f2, #e6e6e6);
 
   overflow: hidden;
   font-size: smaller;
@@ -968,32 +974,32 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Private Conversations: Private Conversation Display (privateConv) [pcd]
 
-.pcd-header {
-  .bigSubHeader;
-  .vbox;
-  .center;
+.card-privateConv {
+  .smoothVertGradient(#444, #111);
+  background-attachment: fixed;
 }
 
-@fromMeForegroundColor: #444;
-@fromMeBackgroundColor: #222;
+.pcd-header {
+  .bigSubHeader;
+  position: relative;
+}
 
-@toMeForegroundColor: #448;
-@toMeBackgroundColor: #224;
+@fromMeColor: "blue";
 
-.pcd-headerPersonCommon(@fgColor, @bgColor) {
-  .hbox;
-  border: 1px solid @fgColor;
-  background-color: @bgColor;
+@toMeColor: "yellow";
+
+.pcd-headerPersonCommon() {
+  border: 1px solid #888;
+  background-color: #444;
 }
 
 .pcd-headerMe {
-  .pcd-headerPersonCommon(@fromMeForegroundColor, @fromMeBackgroundColor);
-}
-.pcd-headerSpacer {
-  .boxFlex;
+  .pcd-headerPersonCommon;
+  float: left;
 }
 .pcd-headerThem {
-  .pcd-headerPersonCommon(@toMeForegroundColor, @toMeBackgroundColor);
+  .pcd-headerPersonCommon;
+  float: right;
 }
 
 .pcd-avatar {
@@ -1003,24 +1009,23 @@ html[xmlns] .cf {
   .common-pic;
 }
 .pcd-nameBox {
-  .vbox;
-  .center;
 }
 .pcd-name {
   .peepInfoName;
 }
 
 .pcd-message {
-  .hbox;
+  // make this relative so we can absolutely position the indicator
+  position: relative;
   width: 100%;
-  height: 2.4em;
-}
-.pcd-message:hover {
-  background-color: #111;
 }
 
 .pcd-messageContainer {
-  .boxFlex;
+  border: 8px solid #888;
+  border-width: 8px 10px;
+  -moz-border-image-slice: 8 10 fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
 }
 
 .privateMessage[watermark="true"] {
@@ -1034,33 +1039,49 @@ html[xmlns] .cf {
 }
 
 
-.pcd-messageCommon (@fgColor, @bgColor) {
+.pcd-messageCommon (@color) {
   > .pcd-messageContainer {
+    -moz-border-image-source: url("i/@{color}Curves.png");
+
     > .pcd-messageText {
-      border: 1px solid @fgColor;
-      background-color: @bgColor;
       padding: 4px;
+    }
+    > .pcd-messageTime {
+      color: #666;
+      font-size: 80%;
     }
   }
 }
 
 .pcd-message.fromMe {
-  .pcd-messageCommon(@fromMeForegroundColor, @fromMeBackgroundColor);
-  > .pcd-leftPad {
-    width: 0;
+  .pcd-messageCommon(@fromMeColor);
+  > .pcd-indicator {
+    position: absolute;
+    top: 14px;
+    left: 0;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{fromMeColor}Indicator.png");
   }
-  > .pcd-rightPad {
-    width: 80px;
+  > .pcd-messageContainer {
+    margin-left: 10px;
+    margin-right: 40px;
   }
 }
 
 .pcd-message.toMe {
-  .pcd-messageCommon(@toMeForegroundColor, @toMeBackgroundColor);
-  > .pcd-leftPad {
-    width: 80px;
+  .pcd-messageCommon(@toMeColor);
+  > .pcd-indicator {
+    position: absolute;
+    top: 14px;
+    right: 0;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{toMeColor}Indicator2.png");
   }
-  > .pcd-rightPad {
-    width: 0;
+  > .pcd-messageContainer {
+    margin-left: 40px;
+    margin-right: 11px;
   }
 }
 

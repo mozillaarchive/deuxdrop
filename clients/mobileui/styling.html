@@ -396,7 +396,7 @@
 
   <!-- privateConv: Private conversation with a friend peep. -->
   <div data-cardid="privateConv" title="Private Conv" 
-       class="card privateConv">
+       class="card card-privateConv">
     <!-- non-scrolling reminder of who our friend is... -->
     <div class="pcd-header">
       <div class="pcd-headerMe">
@@ -407,7 +407,6 @@
           <span class="pcd-name">You</span>
         </div>
       </div>
-      <div class="pcd-headerSpacer"></div>
       <div class="pcd-headerThem">
         <div class="pcd-nameBox">
           <span class="pcd-name">Bob</span>
@@ -453,7 +452,7 @@
           {t: "toMe",   d: "3 days ago", m: "Yes.  And practically none!"},
           {t: "fromMe", d: "3 days ago", m: "Fine."},
           {t: "toMe",   d: "1 day ago", m: "WHY DOES MY MONKEY HAVE A HANGOVER?!"},
-          {t: "fromMe", d: "1 day ago", m: "Dude, I checked the feedback on the product page.  Apparently he was so cheap because that place only stocks alcoholic monkeys.  So, like, it's not my fault."},
+          {t: "fromMe", d: "1 day ago", m: "Dude, I checked the feedback on the product page.  Apparently he was so cheap because that place only stocks alcoholic monkeys.  So, like, it's not my fault.", watermark: true},
           {t: "toMe", d: "1 day ago", m: "No, the fact that the monkey already was an alcoholic does not make getting the monkey drunk any better.  And before you ask, a panda wouldn't change things."},
         ];
 
@@ -464,6 +463,8 @@
           msgNode.addClass(msg.t);
           msgNode.find('.pcd-messageText').text(msg.m);
           msgNode.find('.pcd-messageTime').text(msg.d);
+          if (msg.watermark)
+            msgNode.attr('watermark', 'true');
           msgNode.appendTo(container);
         });
         
@@ -471,14 +472,11 @@
       //]]></script>
       <!-- message (template)-->
       <div data-classimpl="privateMessage" class="pcd-message">
-        <div class="pcd-leftPad"></div>
+        <div class="pcd-indicator"></div>
         <div class="pcd-messageContainer">
           <span class="pcd-messageText" data-bind="text">
             MESSAGE GOES HERE
           </span>
-        </div>
-        <div class="pcd-rightPad"></div>
-        <div>
           <span class="pcd-messageTime">DATE GOES HERE</span>
         </div>
       </div>
