@@ -750,14 +750,26 @@ html[xmlns] .cf {
 // Select which server to use
 
 .ps-server {
-  .clickableItem;
-}
-
-.ps-serverName {
+  display: block;
+  position: relative;
+  cursor: pointer;
+  border-bottom: 1px solid #888;
 }
 
 .ps-serverUrl {
+  display: inline-block;
+  min-width: 12em;
+  
   .url;
+  background-color: #ddddff;
+  border-right: 1px solid #aaaacc;
+  padding: 10px 12px 10px 8px;
+}
+
+.ps-serverName {
+  display: inline-block;
+  margin: 0px 5px;
+  color: black;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -850,6 +862,10 @@ html[xmlns] .cf {
   font-size: smaller;
 }
 
+.hpn-commonMsgStrip() {
+  background-color: #ddd;
+}
+
 .hpn-pic {
   width: 24px;
   height: 24px;
@@ -876,15 +892,18 @@ html[xmlns] .cf {
 
 // Container for the .hpn-privateMsg instances
 .hpn-privateMsgContainer {
-  padding: 0px 4px;
 }
 .hpn-privateMsg {
 }
 .hpn-privateMsgTime {
+  .hpn-commonMsgStrip;
   .hpn-commonTime;
+  padding: 0px 2px;
+  display: block;
 }
 .hpn-privateMsgText {
-  margin-left: 0.5em;
+  display: block;
+  padding: 0px 4px;
 }
 
 
@@ -899,22 +918,25 @@ html[xmlns] .cf {
 .hpn-groupSummary {
   border-bottom: 1px solid #aaa;
   line-height: 20px;
-  padding: 2px 4px;
 }
 // The text of the first message in the conversation or an explicit title if one
 // has been set.
 .hpn-groupSummaryText {
+  padding: 0px 4px;
   font-weight: bold;
+  .overflow;
 }
 
 // Container for the new messages in the conversation
 .hpn-groupMsgContainer {
-  padding: 0px 4px;
 }
 
 // message container for a human message (with text!)
 .hpn-groupMsg {
   margin-bottom: 2px;
+}
+.hpn-groupMsgHeader {
+  .hpn-commonMsgStrip;
 }
 .hpn-groupAuthorName {
   .hpn-commonName;
@@ -922,13 +944,22 @@ html[xmlns] .cf {
 .hpn-groupMsgTime {
   .hpn-commonTime;
 }
+.hpn-groupMsgText {
+  display: block;
+  padding: 0px 4px;
+}
 
 // message container for a join message (Alice invited Bob to join)
 .hpn-groupJoin {
-  margin: 0px 2px;
+}
+.hpn-groupJoinHeader {
+  .hpn-commonMsgStrip;
 }
 .hpn-groupInviterName {
   .hpn-commonName;
+}
+.hpn-groupInviteLabel {
+  font-style: italic;
 }
 .hpn-groupInviteeName {
   .hpn-commonName;
