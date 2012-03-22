@@ -14,7 +14,7 @@ body {
     background-color: #fafafa;
     color: #222;
     font-size: 14px;
-    line-height: 18px;
+    //line-height: 18px;
 
     -webkit-overflow-scrolling: touch;
 }
@@ -171,6 +171,11 @@ input[type=text]#search {
   width: 48px;
   height: 48px;
 }
+
+.bigSubHeader {
+  height: 64px;
+}
+
 
 
 
@@ -800,8 +805,8 @@ html[xmlns] .cf {
 }
 
 // Note that we dynamically set the css width of the scroller for this to work.
-// There is no easy way in HTML/CSS right now to say "make this div only grow
-// in the width direction.
+// There is no easy way in HTML/CSS right now to say 'make this div only grow
+// in the width direction.'
 .hps-newConvsScroller {
   height: 180px;
 }
@@ -846,8 +851,9 @@ html[xmlns] .cf {
 }
 
 .hpn-pic {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
 }
 
 ////// Private Conversations
@@ -865,6 +871,7 @@ html[xmlns] .cf {
 // The name of the other participant in the private conversation.
 .hpn-privatePeep {
   font-weight: bold;
+  vertical-align: middle;
 }
 
 // Container for the .hpn-privateMsg instances
@@ -877,6 +884,7 @@ html[xmlns] .cf {
   .hpn-commonTime;
 }
 .hpn-privateMsgText {
+  margin-left: 0.5em;
 }
 
 
@@ -890,6 +898,7 @@ html[xmlns] .cf {
 // Group conversation summary block
 .hpn-groupSummary {
   border-bottom: 1px solid #aaa;
+  line-height: 20px;
   padding: 2px 4px;
 }
 // The text of the first message in the conversation or an explicit title if one
@@ -905,6 +914,7 @@ html[xmlns] .cf {
 
 // message container for a human message (with text!)
 .hpn-groupMsg {
+  margin-bottom: 2px;
 }
 .hpn-groupAuthorName {
   .hpn-commonName;
@@ -915,6 +925,7 @@ html[xmlns] .cf {
 
 // message container for a join message (Alice invited Bob to join)
 .hpn-groupJoin {
+  margin: 0px 2px;
 }
 .hpn-groupInviterName {
   .hpn-commonName;
@@ -932,26 +943,22 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Private Conversations: People List (private) [pcl]
 
-.card.privateConv {
-  background-color: black;
-  color: white;
-}
-
-.card.privateConv .compose {
-  background-color: black;
-  color: white;
-}
-
-.peepInfoName {
-  padding: 8px;
-}
-
-.bigSubHeader {
-  height: 64px;
-}
-
 .pcl-perPeepItem {
+  background-color: #fff;
+  padding: 10px 5px;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  color: inherit;
+
   .hbox;
+
+  &[hasUnread="true"] {
+    > .pcl-msgPreview > .pcl-msgPreviewHeader > .pcl-author:before {
+      content: '\25cf';
+      color: #0063FF;
+      margin-right: 3px;
+    }
+  }
 }
 .pcl-avatar {
   .common-avatar;
@@ -963,10 +970,34 @@ html[xmlns] .cf {
   .boxFlex;
   line-height: 26px;
 }
+
 .pcl-msgPreviewHeader {
   .hbox;
 }
+.pcl-author {
+  font-weight: bold;
+
+  .boxFlex;
+  .overflow;
+}
+.pcl-new {
+  color: #0063FF;
+  margin-left: 3px;
+}
+.pcl-time {
+ font-size: 12px;
+ color: #aaa;
+ margin-left: 5px;
+}
+
+.pcl-msgPreviewBody {
+  .hbox;
+}
 .pcl-msgPreviewSnippet {
+  color: #aaa;
+  font-size: 12px;
+
+  .boxFlex;
   .overflow;
 }
 
@@ -974,9 +1005,16 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Private Conversations: Private Conversation Display (privateConv) [pcd]
 
-.card-privateConv {
+.pcd-card {
   .smoothVertGradient(#444, #111);
   background-attachment: fixed;
+}
+
+.pcd-compose {
+  background-color: black;
+  color: white;
+
+  .compose;
 }
 
 .pcd-header {
@@ -1011,7 +1049,7 @@ html[xmlns] .cf {
 .pcd-nameBox {
 }
 .pcd-name {
-  .peepInfoName;
+  padding: 8px;
 }
 
 .pcd-message {
@@ -1091,46 +1129,80 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Conversation List (groups) [gcl]
 
-.namecheck:after, .participant:after {
+.gcl-card {
+}
+
+.gcl-conv {
+  background-color: #fff;
+  padding: 10px 5px;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  color: inherit;
+
+  content: '\25cf';
+  color: #0063FF;
+  margin-right: 3px;
+
+  .hbox;
+}
+
+.gcl-avatar {
+  .common-avatar;
+}
+.gcl-pic {
+  .common-pic;
+}
+
+.gcl-msgPreview {
+  .boxFlex;
+  line-height: 26px;
+}
+.gcl-msgPreviewHeader {
+  .hbox;
+}
+
+.gcl-time {
+ font-size: 12px;
+ color: #aaa;
+ margin-left: 5px;
+}
+
+.gcl-namechecks {
+  font-weight: bold;
+  margin-left: 3px;
+  color: #666;
+
+  .boxFlex;
+  .overflow;
+}
+.gcl-namecheck {
+}
+
+.gcl-new {
+  color: #0063FF;
+  margin-left: 3px;
+}
+.gcl-numUnreadMessages {
+}
+
+.gcl-msgPreviewSnippet {
+  color: #aaa;
+  font-size: 12px;
+
+  .boxFlex;
+  .overflow;
+}
+
+.gcl-namecheck:after, .participant:after {
     content: ", ";
 }
-.namecheck:last-child:after, .participant:last-child:after {
+.gcl-namecheck:last-child:after, .participant:last-child:after {
     content: "";
 }
-
-.conversations,
-.conversation {
-}
-
-    .conversations a,
-    .conversation a {
-        background-color: #fff;
-        padding: 10px 5px;
-        border-bottom: 1px solid #ddd;
-        cursor: pointer;
-        color: inherit;
-    }
-
-    .conversations a .author,
-    .conversation a .author {
-        font-weight: bold;
-    }
-
-    .conversations a .participants {
-        margin-left: 3px;
-        color: #666;
-    }
 
     .conversations a .new {
         color: #0063FF;
         margin-left: 3px;
-    }
-
-    .conversations a .time,
-    .conversation a .time {
-        font-size: 12px;
-        color: #aaa;
-        margin-left: 5px;
     }
 
     .conversations a .snippet {
@@ -1151,6 +1223,7 @@ html[xmlns] .cf {
         color: #0063FF;
         margin-right: 3px;
     }
+
 
     .conversation .messages {
         list-style-type: none;

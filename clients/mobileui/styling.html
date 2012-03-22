@@ -183,14 +183,14 @@
     <div data-childclass="newbubPrivateMsg" class="hpn-privateMsgContainer" >
 
       <!-- message 1 -->
-      <span class="hpn-privateMsg">
+      <div class="hpn-privateMsg">
         <div>
           <span class="hpn-privateMsgTime">4 hours ago</span>
         </div>
         <span class="hpn-privateMsgText">Sure, we can do that.</span>
-      </span>
+      </div>
       <!-- message 2 -->
-      <span class="hpn-privateMsg">
+      <div class="hpn-privateMsg">
         <div>
           <span class="hpn-privateMsgTime">3 hours ago</span>
         </div>
@@ -198,25 +198,25 @@
           Oh, wait.  We probably can't.  I just looked it up and time travel is
           impossible after all.
         </span>
-      </span>
+      </div>
       <!-- message 3 -->
-      <span class="hpn-privateMsg">
+      <div class="hpn-privateMsg">
         <div>
           <span class="hpn-privateMsgTime">3 hours ago</span>
         </div>
         <span class="hpn-privateMsgText">
           Maybe we could just hire an Abe Lincoln look-alike?...
         </span>
-      </span>
+      </div>
       <!-- message 4 -->
-      <span class="hpn-privateMsg">
+      <div class="hpn-privateMsg">
         <div>
           <span class="hpn-privateMsgTime">10 minutes ago</span>
         </div>
         <span class="hpn-privateMsgText">
           ...and I found one!
         </span>
-      </span>
+      </div>
     </div>
   </a>
 
@@ -230,8 +230,7 @@
     </div>
     <div data-childclass="newbubGroupMsg" class="hpn-groupMsgContainer" >
       <!-- message 1: human -->
-      <span data-classimpl="newbubGroupMsg-message"
-            class="hpn-groupMsg">
+      <div class="hpn-groupMsg">
         <div>
           <img class="hpn-pic PIC-bob" src="i/face2.png" />
           <span class="hpn-groupAuthorName">Bob</span>
@@ -239,10 +238,9 @@
         </div>
         <span class="newConversationText">Let's ask Charlie what he thinks
         about the roadtrip...</span>
-      </span>
+      </div>
       <!-- message 2: join -->
-      <span data-classimpl="newbubGroupMsg-join"
-            class="newbubGroupMsg-join newbubGroupMsg newbubMsg">
+      <div class="hpn-groupJoin">
         <div>
           <img class="hpn-pic PIC-bob" src="i/face2.png" />
           <span class="hpn-groupInviterName">Bob</span>
@@ -251,10 +249,9 @@
         <span>invited</span>
         <span class="hpn-groupInviteeName">Charlie</span>
         <img class="hpn-pic PIC-charlie" src="i/face2.png" />
-      </span>
+      </div>
       <!-- message 3: human -->
-      <span data-classimpl="newbubGroupMsg-message"
-            class="hpn-groupMsg">
+      <div class="hpn-groupMsg">
         <div>
           <img class="hpn-pic PIC-charlie" src="i/face2.png" />
           <span class="hpn-groupAuthorName">Charlie</span>
@@ -262,7 +259,7 @@
         </div>
         <span class="newConversationText">I don't think a road trip to the
         North Pole is viable with all this global warming going on.</span>
-      </span>
+      </div>
     </div>
   </a>
 
@@ -276,25 +273,23 @@
     </div>
     <div data-childclass="newbubGroupMsg" class="hpn-groupMsgContainer" >
       <!-- message 1: human -->
-      <span data-classimpl="newbubGroupMsg-message"
-            class="hpn-groupMsg">
+      <div class="hpn-groupMsg">
         <div>
           <img class="hpn-pic PIC-alice" src="i/face2.png" />
           <span class="hpn-groupAuthorName">Alice</span>
           <span class="hpn-groupMsgTime">2 hours ago</span>
         </div>
         <span class="newConversationText">Is that like a party?</span>
-      </span>
+      </div>
       <!-- message 2: human -->
-      <span data-classimpl="newbubGroupMsg-message"
-            class="hpn-groupMsg">
+      <div class="hpn-groupMsg">
         <div>
           <img class="hpn-pic PIC-charlie" src="i/face2.png" />
           <span class="hpn-groupAuthorName">Charlie</span>
           <span class="hpn-groupMsgTime">1 hour ago</span>
         </div>
         <span class="newConversationText">Yes, exactly.</span>
-      </span>
+      </div>
     </div>
   </a>
   <!--(END indent change for new conversation activity bubbles)-->
@@ -304,7 +299,7 @@
   </div>
 
   <!-- private: Lists of peeps with most recent private conv msg snip -->
-  <div data-cardid="private" title="Private" class="card conversations">
+  <div data-cardid="private" title="Private" class="card card-private">
     <div class="subHeader hbox">
       <div class="boxFlex">
         <input id="search" type="text" placeholder="search people">
@@ -314,8 +309,8 @@
     </div>
     <div class="scroller" data-childclass="peepPrivate">
       <!-- Alice -->
-      <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
-         href="#privateConv">
+      <a class="pcl-perPeepItem" href="#privateConv"
+         hasUnread="true">
         <div>
           <div class="pcl-avatar">
             <img class="pcl-pic PIC-alice" src="i/face2.png" />
@@ -323,14 +318,14 @@
         </div>
         <div class="pcl-msgPreview">
           <div class="pcl-msgPreviewHeader">
-            <span class="author boxFlex overflow">Alice</span>
-            <span class="new">(<span>2</span>)</span>
+            <span class="pcl-author">Alice</span>
+            <span class="pcl-new">(<span>2</span>)</span>
             <span class="boxFlexStrong"></span>
-            <span class="time" data-bind="conv.mostRecentActivity">
+            <span class="pcl-time" data-bind="conv.mostRecentActivity">
               10 minutes ago
             </span>
           </div>
-          <div class="hbox">
+          <div class="pcl-msgPreviewBody">
             <span class="pcl-msgPreviewSnippet"
                   data-bind="conv.firstUnreadMessage.text">
               Sure, we can do that.
@@ -339,8 +334,8 @@
         </div>
       </a>
       <!-- Bob -->
-      <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
-         href="#privateConv">
+      <a class="pcl-perPeepItem" href="#privateConv"
+         hasUnread="false">
         <div>
           <div class="pcl-avatar">
             <img class="pcl-pic PIC-bob" src="i/face2.png" />
@@ -348,14 +343,14 @@
         </div>
         <div class="pcl-msgPreview">
           <div class="pcl-msgPreviewHeader">
-            <span class="author boxFlex overflow">Bob</span>
-            <span class="new">(<span>0</span>)</span>
+            <span class="pcl-author">Bob</span>
+            <span class="pcl-new">(<span>0</span>)</span>
             <span class="boxFlexStrong"></span>
-            <span class="time" data-bind="conv.mostRecentActivity">
+            <span class="pcl-time" data-bind="conv.mostRecentActivity">
               1 day ago
             </span>
           </div>
-          <div class="hbox">
+          <div class="pcl-msgPreviewBody">
             <span class="pcl-msgPreviewSnippet"
                   data-bind="conv.firstUnreadMessage.text">
               No, the fact that the monkey already was an alcoholic does not
@@ -366,8 +361,8 @@
         </div>
       </a>
       <!-- Charlie -->
-      <a class="pcl-perPeepItem" data-classimpl="peepPrivate"
-         href="#privateConv">
+      <a class="pcl-perPeepItem" href="#privateConv"
+         hasUnread="true">
         <div>
           <div class="pcl-avatar">
             <img class="pcl-pic PIC-charlie" src="i/face2.png" />
@@ -375,14 +370,14 @@
         </div>
         <div class="pcl-msgPreview">
           <div class="pcl-msgPreviewHeader">
-            <span class="author boxFlex overflow">Charlie</span>
-            <span class="new">(<span>2</span>)</span>
+            <span class="pcl-author">Charlie</span>
+            <span class="pcl-new">(<span>2</span>)</span>
             <span class="boxFlexStrong"></span>
-            <span class="time" data-bind="conv.mostRecentActivity">
+            <span class="pcl-time" data-bind="conv.mostRecentActivity">
               3 days ago
             </span>
           </div>
-          <div class="hbox">
+          <div class="pcl-msgPreviewBody">
             <span class="pcl-msgPreviewSnippet"
                   data-bind="conv.firstUnreadMessage.text">
               Whaaaaaa?
@@ -395,8 +390,7 @@
   </div>
 
   <!-- privateConv: Private conversation with a friend peep. -->
-  <div data-cardid="privateConv" title="Private Conv" 
-       class="card card-privateConv">
+  <div data-cardid="privateConv" title="Private Conv" class="card pcd-card">
     <!-- non-scrolling reminder of who our friend is... -->
     <div class="pcd-header">
       <div class="pcd-headerMe">
@@ -482,7 +476,7 @@
       </div>
 
       <!-- compose is a subwidget and not specific to this card -->
-      <form class="compose" data-class="compose">
+      <form class="pcd-compose" data-class="compose">
         <div class="hbox">
           <div class="boxFlex">
             <input type="text" placeholder="say hello" />
@@ -494,7 +488,7 @@
   </div>
 
   <!-- groups: Lists of all conversations -->
-  <div data-cardid="groups" title="Group" class="card conversations">
+  <div data-cardid="groups" title="Group" class="card gcl-card">
     <div class="subHeader hbox">
       <div class="boxFlex">
         <input id="search" type="text" placeholder="search people">
@@ -503,6 +497,108 @@
       <button class="button" data-href="#newConv">new</button>
     </div>
     <div class="scroller" data-childclass="convBlurb">
+      <!-- Conversation with new activity, reasonable first snippet  -->
+      <a class="gcl-conv" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="gcl-avatar">
+                  <img class="gcl-pic" src="i/group.png" />
+              </div>
+          </div>
+          <div class="gcl-msgPreview">
+              <div class="gcl-msgPreviewHeader">
+                  <!-- names -->
+                  <span class="gcl-namechecks"
+                        data-childclass="namecheck">
+                    <span class="gcl-namecheck">Alice</span>
+                    <span class="gcl-namecheck">Bob</span>
+                  </span>
+                  <span class="gcl-new">
+                    (<span data-bind="gcl-numUnreadMessages">2</span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="gcl-time">12 minutes ago</span>
+              </div>
+              <div class="hbox">
+                  <span class="gcl-msgPreviewSnippet">
+                    I don't know, that sounds pretty flammable.
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <!-- Conversation with new activity, tons of people  -->
+      <a class="gcl-conv" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="gcl-avatar">
+                  <img class="gcl-pic" src="i/group.png" />
+              </div>
+          </div>
+          <div class="gcl-msgPreview">
+              <div class="gcl-msgPreviewHeader">
+                  <!-- names -->
+                  <span class="gcl-namechecks">
+                    <span class="gcl-namecheck">Alice</span>
+                    <span class="gcl-namecheck">Bob</span>
+                    <span class="gcl-namecheck">Charlie</span>
+                    <span class="gcl-namecheck">Dave</span>
+                    <span class="gcl-namecheck">Eliza Dolittle</span>
+                    <span class="gcl-namecheck">Fred Q. Fredericks</span>
+                    <span class="gcl-namecheck">Georgette Q. Georgettington</span>
+                    <span class="gcl-namecheck">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
+                    <span class="gcl-namecheck">John Jacob Jingleheimer Schmidt</span>
+                  </span>
+                  <span class="gcl-new">
+                    (<span data-bind="gcl-numUnreadMessages">4</span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="gcl-time">2 hours ago</span>
+              </div>
+              <div class="hbox">
+                  <span class="gcl-msgPreviewSnippet">
+                    What do you get when you cross an elephant with a rhinocerous?
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <!-- Conversation with new activity, huge unread message snippet -->
+      <a class="gcl-conv" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="gcl-avatar">
+                  <img class="gcl-pic" src="i/group.png" />
+              </div>
+          </div>
+          <div class="gcl-msgPreview">
+              <div class="gcl-msgPreviewHeader">
+                  <!-- names -->
+                  <span class="gcl-namechecks"
+                        data-childclass="namecheck">
+                    <span class="gcl-namecheck">Bob</span>
+                    <span class="gcl-namecheck">Charlie</span>
+                    <span class="gcl-namecheck">Dave</span>
+                  </span>
+                  <span class="gcl-new">
+                    (<span data-bind="gcl-numUnreadMessages">1</span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="gcl-time">5 hours ago</span>
+              </div>
+              <div class="hbox">
+                  <span class="gcl-msgPreviewSnippet">
+                    Yes, I know my A, B, C's.  They are, in no particular order.
+                    Er, or rather, in a quite particular order: A, B, C, D, E,
+                    F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y,
+                    and Zed.  I mean Z.  Yes, Z.  I am not a British spy.
+                    And you'll never prove it, governa.  Damn!
+                  </span>
+              </div>
+          </div>
+      </a>
+
+
     </div>
   </div>
 
