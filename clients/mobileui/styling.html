@@ -398,21 +398,13 @@
   <div data-cardid="privateConv" title="Private Conv" class="card pcd-card">
     <!-- non-scrolling reminder of who our friend is... -->
     <div class="pcd-header">
-      <div class="pcd-headerMe">
-        <div class="pcd-avatar">
-          <img class="pcd-pic PIC-you" src="i/face2.png" />
-        </div>
-        <div class="pcd-nameBox">
-          <span class="pcd-name">You</span>
-        </div>
-      </div>
       <div class="pcd-headerThem">
-        <div class="pcd-nameBox">
-          <span class="pcd-name">Bob</span>
-        </div>
-        <div class="pcd-avatar">
-          <img class="pcd-pic PIC-bob" src="i/face2.png" />
-        </div>
+        <img class="pcd-pic PIC-bob" src="i/face2.png" />
+        <span class="pcd-name">Bob</span>
+      </div>
+      <div class="pcd-headerMe">
+        <span class="pcd-name">You</span>
+        <img class="pcd-pic PIC-you" src="i/face2.png" />
       </div>
     </div>
     <!-- scrolling messages -->
@@ -506,16 +498,16 @@
         </span>
       </div>
 
-      <!-- compose is a subwidget and not specific to this card -->
-      <form class="pcd-compose" data-class="compose">
-        <div class="hbox">
-          <div class="boxFlex">
-            <input type="text" placeholder="say hello" />
-          </div>
-          <button>send</button>
-        </div>
-      </form>
     </div>
+    <!-- compose is a subwidget and not specific to this card -->
+    <form class="pcd-compose" data-class="compose">
+      <div class="hbox">
+        <div class="boxFlex">
+          <input type="text" placeholder="say hello" />
+        </div>
+        <button>send</button>
+      </div>
+    </form>
   </div>
 
   <!-- groups: Lists of all conversations -->

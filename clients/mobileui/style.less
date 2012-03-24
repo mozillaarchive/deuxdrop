@@ -1042,45 +1042,41 @@ html[xmlns] .cf {
   background-attachment: fixed;
 }
 
+.pcd-header {
+}
+
 .pcd-compose {
+  .compose;
   background-color: black;
   color: white;
-
-  .compose;
 }
 
-.pcd-header {
-  .bigSubHeader;
-  position: relative;
-}
 
 @fromMeColor: "blue";
 
 @toMeColor: "yellow";
 
-.pcd-headerPersonCommon() {
-  border: 1px solid #888;
-  background-color: #444;
-}
-
-.pcd-headerMe {
-  .pcd-headerPersonCommon;
-  float: left;
-}
 .pcd-headerThem {
-  .pcd-headerPersonCommon;
+  display: inline-block;
+  vertical-align: middle;
+}
+.pcd-headerMe {
+  display: inline-block;
   float: right;
+  vertical-align: middle;
+  text-align: right;
 }
 
-.pcd-avatar {
-  .common-avatar;
-}
 .pcd-pic {
-  .common-pic;
-}
-.pcd-nameBox {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
 }
 .pcd-name {
+  color: white;
+  font-size: 120%;
+  font-weight: bold;  
+
   padding: 8px;
 }
 
@@ -1140,15 +1136,15 @@ html[xmlns] .cf {
   }
 }
 
-.pcd-message.fromMe {
-  .pcd-messageCommon(@fromMeColor);
+.pcd-message.toMe {
+  .pcd-messageCommon(@toMeColor);
   > .pcd-indicator {
     position: absolute;
     top: 14px;
     left: 0;
     width: 13px;
     height: 11px;
-    background: url("i/@{fromMeColor}Indicator.png");
+    background: url("i/@{toMeColor}Indicator.png");
   }
   > .pcd-messageContainer {
     margin-left: 10px;
@@ -1156,15 +1152,15 @@ html[xmlns] .cf {
   }
 }
 
-.pcd-message.toMe {
-  .pcd-messageCommon(@toMeColor);
+.pcd-message.fromMe {
+  .pcd-messageCommon(@fromMeColor);
   > .pcd-indicator {
     position: absolute;
     top: 14px;
     right: 0;
     width: 13px;
     height: 11px;
-    background: url("i/@{toMeColor}Indicator2.png");
+    background: url("i/@{fromMeColor}Indicator2.png");
   }
   > .pcd-messageContainer {
     margin-left: 40px;
