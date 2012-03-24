@@ -1298,9 +1298,39 @@ html[xmlns] .cf {
 }
 
 .gcd-header {
-  .bigSubHeader;
+  margin-top: 6px;
 }
 
+.gcd-participants {
+  display: inline-block;
+  padding: 4px;
+  vertical-align: middle;
+}
+.gcd-part-pic {
+  height: 24px;
+  width: 24px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.gcd-participant {
+  font-weight: bold;
+
+  &:after {
+    font-weight: normal;
+    content: ", ";
+  }
+  &:last-child:after {
+    content: "";
+  }
+}
+
+.gcd-add {
+  float: right;
+  margin: 4px;
+}
+
+
+///// Time Era
 .gcd-era {
   background-color: #eee;
   color: #888;
@@ -1359,6 +1389,7 @@ html[xmlns] .cf {
   height: 24px;
 }
 
+///// Messages (From our user and other peeps)
 .gcd-messageContainer {
   border: 8px solid #888;
   border-width: 8px 10px;
@@ -1456,6 +1487,7 @@ html[xmlns] .cf {
 .gcd-messageTime {
 }
 
+///// Join messages
 .gcd-join {
   width: 100%;
   text-align: center;
@@ -1468,6 +1500,7 @@ html[xmlns] .cf {
   font-size: 80%;
 }
 
+///// Compose sub-widget
 .gcd-compose {
   .compose;
 }
