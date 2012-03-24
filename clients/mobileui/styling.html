@@ -49,6 +49,11 @@
           PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
           PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
           PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48',
+          PIC_ELIZA = 'http://www.gravatar.com/avatar/64d725a972cfd6d76850eae8157b03f4?r=pg&d=wavatar&s=48',
+          PIC_FRED = 'http://www.gravatar.com/avatar/75d891bda3b9fcea07c5d98b75b60ca2?r=pg&d=wavatar&s=48',
+          PIC_GEORGETTE = 'http://www.gravatar.com/avatar/c576efa922215cd13bd1a7a8d8b6e3e3?r=pg&d=wavatar&s=48',
+          PIC_HIERONYMUS = 'http://www.gravatar.com/avatar/2211df9508ca7debddbe1f3f3551157c?r=pg&d=wavatar&s=48',
+          PIC_JOHN = 'http://www.gravatar.com/avatar/dd10051eda9b9837dbfdc18a3dc7c2af?r=pg&d=wavatar&s=48',
           PIC_ZORRO = 'http://www.gravatar.com/avatar/5bad16eeb23bd05a223baf7a0fb996dd?r=pg&d=wavatar&s=48',
           PIC_ZORRO_JR = 'http://www.gravatar.com/avatar/d7e0fa5fe16b5dc4743c5a7177b0c1ae?r=pg&d=wavatar&s=48',
           PICS = {alice: PIC_ALICE, bob: PIC_BOB, charlie: PIC_CHARLIE,
@@ -71,6 +76,11 @@
         $('.PIC-charlie').attr('src', PIC_CHARLIE);
         $('.PIC-me').attr('src', PIC_DAVE);
         $('.PIC-you').attr('src', PIC_DAVE);
+        $('.PIC-eliza').attr('src', PIC_ELIZA);
+        $('.PIC-fred').attr('src', PIC_FRED);
+        $('.PIC-georgette').attr('src', PIC_GEORGETTE);
+        $('.PIC-hieronymus').attr('src', PIC_HIERONYMUS);
+        $('.PIC-john').attr('src', PIC_JOHN);
         $('.PIC-zorro').attr('src', PIC_ZORRO);
         $('.PIC-zorrojr').attr('src', PIC_ZORRO_JR);
       });
@@ -86,10 +96,10 @@
     our URL and less will keep refreshing from the file for you automatically.
   </div>
   <div id="stylingCardTemplate" class="stylingCardWrapper">
-    <div class="THEheader hbox">
+    <div class="THEheader">
       <button class="THEback">Back</button>
-      <div class="boxFlex"><h1 class="THEheaderText overflow">Deuxdrop</h1></div>
-      <button class="next invisible">Info</button>
+      <h1 class="THEheaderText overflow">Deuxdrop</h1>
+      <button class="THEnext invisible">Info</button>
     </div>
     <a class="THEnotify" data-nonav="nonav">!</a>
   </div>
@@ -305,13 +315,6 @@
 
   <!-- private: Lists of peeps with most recent private conv msg snip -->
   <div data-cardid="private" title="Private" class="card card-private">
-    <div class="subHeader hbox">
-      <div class="boxFlex">
-        <input id="search" type="text" placeholder="search people">
-      </div>
-      <button class="search">search</button>
-      <button class="button" data-href="#add">add contact</button>
-    </div>
     <div class="scroller" data-childclass="peepPrivate">
       <!-- Alice -->
       <a class="pcl-perPeepItem" href="#privateConv"
@@ -512,12 +515,8 @@
 
   <!-- groups: Lists of all conversations -->
   <div data-cardid="groups" title="Group" class="card gcl-card">
-    <div class="subHeader hbox">
-      <div class="boxFlex">
-        <input id="search" type="text" placeholder="search people">
-      </div>
-      <button class="search">search</button>
-      <button class="button" data-href="#newConv">new</button>
+    <div class="subHeader">
+      <button class="button" data-href="#newConv">new conversation</button>
     </div>
     <div class="scroller" data-childclass="convBlurb">
       <!-- Conversation with new activity, reasonable first snippet  -->
@@ -844,11 +843,71 @@
 
   <!-- pickPeeps: Multi-select from a list of peeps -->
   <div data-cardid="pickPeeps" title="Add People to the Conversation"
-       class="card">
+       class="card gca-card">
     <div class="subHeader hbox">
       <button class="done">Done</button>
     </div>
     <div class="scroller" data-childclass="togglePeep">
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-alice" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Alice</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-bob" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Bob</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-charlie" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Charlie</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-eliza" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Eliza Dolittle</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-fred" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Fred Q. Fredericks</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-georgette" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Georgette Q. Georgettington</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-hieronymus" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-john" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">John Jacob Jingleheimer Schmidt</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-zorro" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Zorro</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-zorrojr" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Zorro, Jr.</span>
+        </div>
+      </a>
     </div>
   </div>
 
@@ -876,7 +935,7 @@
   </div>
 
   <!-- Add: List the server phonebooks to pick someone to connect to.  -->
-  <div data-cardid="add" title="Add a contact" class="card conversations">
+  <div data-cardid="add" title="Add a contact" class="card pbl-card">
     <div class="scroller" data-childclass="peepPhonebook">
     </div>
   </div>
