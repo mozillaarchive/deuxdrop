@@ -770,6 +770,7 @@ html[xmlns] .cf {
   display: inline-block;
   margin: 0px 5px;
   color: black;
+  padding: 10px 0px;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1037,7 +1038,7 @@ html[xmlns] .cf {
 // Private Conversations: Private Conversation Display (privateConv) [pcd]
 
 .pcd-card {
-  .smoothVertGradient(#444, #111);
+  .smoothVertGradient(#333, #111);
   background-attachment: fixed;
 }
 
@@ -1083,6 +1084,30 @@ html[xmlns] .cf {
   padding: 8px;
 }
 
+.pcd-era {
+  background-color: #444;
+  color: #aaa;
+  margin: 6px 0px;
+  font-size: 80%;
+}
+.pcd-eraRelativeDate {
+  display: inline-block;
+  width: 34%;
+  text-align: left;
+  padding-left: 4px;
+}
+.pcd-eraTimeDelta {
+  display: inline-block;
+  width: 24%;
+  text-align: center;
+}
+.pcd-eraAbsoluteDate {
+  display: inline-block;
+  width: 38%;
+  text-align: right;
+  padding-right: 4px;
+}
+
 .pcd-message {
   // make this relative so we can absolutely position the indicator
   position: relative;
@@ -1097,16 +1122,9 @@ html[xmlns] .cf {
   -moz-border-image-repeat: stretch;
 }
 
-.privateMessage[watermark="true"] {
-  border-bottom: 2px solid #448;
+.pcd-message[watermark="true"] {
+  border-bottom: 2px solid #55a;
 }
-
-.privateMessage > .container {
-  width: 80%;
-  min-width: 80%;
-  max-width: 80%;
-}
-
 
 .pcd-messageCommon (@color) {
   > .pcd-messageContainer {
@@ -1269,6 +1287,190 @@ html[xmlns] .cf {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Group Converation Display (groupConv) [gcd]
+//
+// We display messages from the user with the bubble originating from the right.
+//  Messages from other users originate from the left.  This allows us to place
+//  their avatar to the left which is consistent with left-to-right reading
+//  patterns.  We would ideally want this paramterized on a localization basis
+//  so we can change things for RTL languages.
+
+.gcd-card {
+}
+
+.gcd-header {
+  .bigSubHeader;
+}
+
+.gcd-era {
+  background-color: #eee;
+  color: #888;
+  margin: 6px 0px;
+  font-size: 80%;
+}
+.gcd-eraRelativeDate {
+  display: inline-block;
+  width: 34%;
+  text-align: left;
+  padding-left: 4px;
+}
+.gcd-eraTimeDelta {
+  display: inline-block;
+  width: 24%;
+  text-align: center;
+}
+.gcd-eraAbsoluteDate {
+  display: inline-block;
+  width: 38%;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.gcd-avatar {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+}
+/*
+.gcd-author {
+  display: inline-block;
+  position: relative;
+  top: -6px;
+  left: -7px;
+  padding: 2px;
+  padding-right: 4px;
+  margin-right: -10px;
+  margin-bottom: -4px;
+  border-right: 1px solid rgba(192, 192, 192, 0.5);
+  border-bottom: 1px solid rgba(192, 192, 192, 0.5);
+  border-bottom-right-radius: 6px;
+  border-top-left-radius: 4px;
+  font-style: italic;
+}
+*/
+.gcd-author {
+  font-style: italic;
+}
+.gcd-author:after {
+  content: ": ";
+}
+
+.gcd-pic {
+  width: 24px;
+  height: 24px;
+}
+
+.gcd-messageContainer {
+  border: 8px solid #888;
+  border-width: 8px 10px;
+  -moz-border-image-slice: 8 10 fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
+}
+
+.gcd-message {
+  position: relative;
+  width: 100%;
+}
+
+.gcd-messageText {
+  padding: 4px;
+}
+.gcd-messageTime {
+  color: #666;
+  font-size: 80%;
+}
+
+// put some space between join messages and human messages
+.gcd-join + .gcd-message, .gcd-message + .gcd-join,
+.gcd-join + .gcd-meMessage, .gcd-meMessage + .gcd-join {
+  margin-top: 6px;
+}
+
+.gcd-meMessage {
+  position: relative;
+  width: 100%;
+
+  > .gcd-messageContainer {
+    -moz-border-image-source: url("i/blueCurves.png");
+    margin-left: 55px;
+    margin-right: 11px;
+
+    > .gcd-messageText {
+      padding: 4px;
+    }
+    > .gcd-messageTime {
+      color: #666;
+      font-size: 80%;
+    }
+  }
+  > .gcd-indicator {
+    position: absolute;
+    top: 14px;
+    right: 0px;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{fromMeColor}Indicator2.png");
+  }
+}
+
+.gcd-messageCommon (@color) {
+  > .gcd-messageContainer {
+    position: relative;
+    -moz-border-image-source: url("i/@{color}Curves.png");
+    margin-left: 34px;
+    margin-right: 25px;
+
+  }
+  > .gcd-indicator {
+    position: absolute;
+    top: 7px;
+    left: 24px;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{color}Indicator.png");
+  }
+}
+.gcd-message[who="other1"] {
+  .gcd-messageCommon("yellow");
+}
+.gcd-message[who="other2"] {
+  .gcd-messageCommon("green");
+}
+.gcd-message[who="other3"] {
+  .gcd-messageCommon("red");
+}
+.gcd-message[who="other4"],
+.gcd-message[who="other5"],
+.gcd-message[who="other6"],
+.gcd-message[who="other7"],
+.gcd-message[who="otherN"] {
+  .gcd-messageCommon("steel");
+}
+
+.gcd-messageContinuation {
+  margin-top: 4px;
+  border-top: 1px dashed #ddd;
+  padding-top: 4px;
+}
+
+.gcd-messageTime {
+}
+
+.gcd-join {
+  width: 100%;
+  text-align: center;
+}
+.gcd-inviter, .gcd-invitee {
+  font-weight: bold;
+}
+.gcd-time {
+  color: #666;
+  font-size: 80%;
+}
+
+.gcd-compose {
+  .compose;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Create a new Conversation (newConv) [gcn]

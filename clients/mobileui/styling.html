@@ -42,6 +42,17 @@
     <script src="../deps/less.js"></script>
     <script src="../deps/jquery.js"></script>
     <script>//<![CDATA[
+      // - pictures of contacts
+      // these are all hashes of BLAH@asutherland.org since I control the
+      //  domain.
+      var PIC_ALICE = 'http://www.gravatar.com/avatar/4515e58a3ce433a5e54a4716191c5815?r=pg&d=wavatar&s=48',
+          PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
+          PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
+          PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48',
+          PIC_ZORRO = 'http://www.gravatar.com/avatar/5bad16eeb23bd05a223baf7a0fb996dd?r=pg&d=wavatar&s=48',
+          PIC_ZORRO_JR = 'http://www.gravatar.com/avatar/d7e0fa5fe16b5dc4743c5a7177b0c1ae?r=pg&d=wavatar&s=48',
+          PICS = {alice: PIC_ALICE, bob: PIC_BOB, charlie: PIC_CHARLIE,
+                  dave: PIC_DAVE, zorro: PIC_ZORRO, zorrojr: PIC_ZORRO_JR};
       $(function() {
         // - card stuff
         // wrap every card with a stylingCardWrapper so they each look like
@@ -54,20 +65,14 @@
             $(this).find('.THEheaderText').text(title);
           });
 
-        // - pictures of contacts
-        // these are all hashes of BLAH@asutherland.org since I control the
-        //  domain.
-        var PIC_ALICE = 'http://www.gravatar.com/avatar/4515e58a3ce433a5e54a4716191c5815?r=pg&d=wavatar&s=48',
-            PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
-            PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
-            PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48';
-
         // Replace the image sources for .PIC-blah with the appropriate URls
         $('.PIC-alice').attr('src', PIC_ALICE);
         $('.PIC-bob').attr('src', PIC_BOB);
         $('.PIC-charlie').attr('src', PIC_CHARLIE);
         $('.PIC-me').attr('src', PIC_DAVE);
         $('.PIC-you').attr('src', PIC_DAVE);
+        $('.PIC-zorro').attr('src', PIC_ZORRO);
+        $('.PIC-zorrojr').attr('src', PIC_ZORRO_JR);
       });
     //]]>
     </script>
@@ -420,45 +425,59 @@
         $(function() {
         if (privateConvInited) return;
         privateConvInited = true;
-        var messages = [
-          {t: "fromMe", d: "1 week ago", m: "How's it going?"},
-          {t: "toMe",   d: "1 week ago", m: "Pretty well."},
-          {t: "fromMe", d: "1 week ago", m: "Anything going on?"},
-          {t: "toMe",   d: "1 week ago", m: "The monkey escaped, gotta go"},
-          {t: "fromMe", d: "1 week ago", m: "Wait, what?"},
-          {t: "fromMe", d: "1 week ago", m: "What monkey?  How do you have a monkey?"},
-          {t: "fromMe", d: "1 week ago", m: "WHY do you have a monkey?"},
-          {t: "toMe",   d: "5 days ago", m: "Sorry, was trapped in the basement for a few days."},
-          {t: "toMe",   d: "5 days ago", m: "The monkey had locked and barricaded the door and it took me a while to tunnel out."},
-          {t: "fromMe", d: "5 days ago", m: "Again. WHY do you have a monkey?"},
-          {t: "toMe",   d: "5 days ago", m: "1-click shopping is very dangerous if you leave a cat alone in a room with a computer."},
-          {t: "fromMe", d: "5 days ago", m: "Okay, that almost makes sense.  But why did the monkey lock you downstairs?"},
-          {t: "toMe",   d: "5 days ago", m: "I knocked over his giant pile of bananas."},
-          {t: "fromMe", d: "5 days ago", m: "That sounds like an accident.  Perfectly understandable!"},
-          {t: "toMe",   d: "5 days ago", m: "Well..."},
-          {t: "toMe",   d: "5 days ago", m: "This was after the fifth time."},
-          {t: "fromMe", d: "5 days ago", m: "Okay, that sounds reasonable, then."},
-          {t: "fromMe", d: "5 days ago", m: "I would lock you in the basement if you did that."},
-          {t: "toMe",   d: "5 days ago", m: "Alright, well, I need to go clean up."},
-          {t: "toMe",   d: "3 days ago", m: "Hey, can you watch the monkey for me for a few days?"},
-          {t: "fromMe", d: "3 days ago", m: "Sure, but I'm having a party tomorrow night.  Is it a cool monkey?"},
-          {t: "fromMe", d: "3 days ago", m: "And how much feces flinging are we talking about?"},
-          {t: "toMe",   d: "3 days ago", m: "Yes.  And practically none!"},
-          {t: "fromMe", d: "3 days ago", m: "Fine."},
-          {t: "toMe",   d: "1 day ago", m: "WHY DOES MY MONKEY HAVE A HANGOVER?!"},
-          {t: "fromMe", d: "1 day ago", m: "Dude, I checked the feedback on the product page.  Apparently he was so cheap because that place only stocks alcoholic monkeys.  So, like, it's not my fault.", watermark: true},
-          {t: "toMe", d: "1 day ago", m: "No, the fact that the monkey already was an alcoholic does not make getting the monkey drunk any better.  And before you ask, a panda wouldn't change things."},
+        var items = [
+          {t: "era", rt: "1 week ago", dt: "", at: "Friday, June 3rd"},
+          {t: "fromMe", d: "10:43a", m: "How's it going?"},
+          {t: "toMe",   d: "10:45a", m: "Pretty well."},
+          {t: "fromMe", d: "10:45a", m: "Anything going on?"},
+          {t: "toMe",   d: "10:47a", m: "The monkey escaped, gotta go"},
+          {t: "fromMe", d: "10:48a", m: "Wait, what?"},
+          {t: "fromMe", d: "10:50a", m: "What monkey?  How do you have a monkey?"},
+          {t: "fromMe", d: "10:50a", m: "WHY do you have a monkey?"},
+          {t: "era", rt: "5 days ago", dt: "(3 days later)", at: "Monday, June 6th"},
+          {t: "toMe",   d: "3:21p", m: "Sorry, was trapped in the basement for a few days."},
+          {t: "toMe",   d: "3:21p", m: "The monkey had locked and barricaded the door and it took me a while to tunnel out."},
+          {t: "fromMe", d: "3:27p", m: "Again. WHY do you have a monkey?"},
+          {t: "toMe",   d: "3:28p", m: "1-click shopping is very dangerous if you leave a cat alone in a room with a computer."},
+          {t: "fromMe", d: "3:30p", m: "Okay, that almost makes sense.  But why did the monkey lock you downstairs?"},
+          {t: "toMe",   d: "3:33p", m: "I knocked over his giant pile of bananas."},
+          {t: "fromMe", d: "3:34p", m: "That sounds like an accident.  Perfectly understandable!"},
+          {t: "toMe",   d: "3:35p", m: "Well..."},
+          {t: "toMe",   d: "3:35p", m: "This was after the fifth time."},
+          {t: "fromMe", d: "3:39p", m: "Okay, that sounds reasonable, then."},
+          {t: "fromMe", d: "3:39p", m: "I would lock you in the basement if you did that."},
+          {t: "toMe",   d: "3:42p", m: "Alright, well, I need to go clean up."},
+          {t: "era", rt: "3 days ago", dt: "(2 days later)", at: "Wednesday, June 8th"},
+          {t: "toMe",   d: "12:03p", m: "Hey, can you watch the monkey for me for a few days?"},
+          {t: "fromMe", d: "2:09p", m: "Sure, but I'm having a party tomorrow night.  Is it a cool monkey?"},
+          {t: "fromMe", d: "2:12p", m: "And how much feces flinging are we talking about?"},
+          {t: "toMe",   d: "2:45p", m: "Yes.  And practically none!"},
+          {t: "fromMe", d: "4:17p", m: "Fine."},
+          {t: "era", rt: "1 day ago", dt: "(2 days later)", at: "Friday, June 10th"},
+          {t: "toMe",   d: "11:02a", m: "WHY DOES MY MONKEY HAVE A HANGOVER?!"},
+          {t: "fromMe", d: "11:15a", m: "Dude, I checked the feedback on the product page.  Apparently he was so cheap because that place only stocks alcoholic monkeys.  So, like, it's not my fault.", watermark: true},
+          {t: "toMe", d: "11:23a", m: "No, the fact that the monkey already was an alcoholic does not make getting the monkey drunk any better.  And before you ask, a panda wouldn't change things."},
         ];
 
-        var container = $('.pcd-conversation'),
-            template = $('.pcd-message').remove();
-        messages.forEach(function(msg) {
-          var msgNode = template.clone(true);
+        var container = $(".pcd-conversation"),
+            msgTemplate = $(".pcd-message").remove(),
+            eraTemplate = $(".pcd-era").remove();
+        items.forEach(function(msg) {
+          if (msg.t === "era") {
+            var eraNode = eraTemplate.clone(true);
+            eraNode.find(".pcd-eraRelativeDate").text(msg.rt);
+            eraNode.find(".pcd-eraTimeDelta").text(msg.dt);
+            eraNode.find(".pcd-eraAbsoluteDate").text(msg.at);
+            eraNode.appendTo(container);
+            return;
+          }
+
+          var msgNode = msgTemplate.clone(true);
           msgNode.addClass(msg.t);
-          msgNode.find('.pcd-messageText').text(msg.m);
-          msgNode.find('.pcd-messageTime').text(msg.d);
+          msgNode.find(".pcd-messageText").text(msg.m);
+          msgNode.find(".pcd-messageTime").text(msg.d);
           if (msg.watermark)
-            msgNode.attr('watermark', 'true');
+            msgNode.attr("watermark", "true");
           msgNode.appendTo(container);
         });
         
@@ -473,6 +492,18 @@
           </span>
           <span class="pcd-messageTime">DATE GOES HERE</span>
         </div>
+      </div>
+      <!-- time separator AKA era (template) -->
+      <div class="pcd-era">
+        <span class="pcd-eraRelativeDate">
+          RELATIVE DATE GOES HERE
+        </span>
+        <span class="pcd-eraTimeDelta">
+          TIME SINCE PREVIOUS ERA GOES HERE
+        </span>
+        <span class="pcd-eraAbsoluteDate">
+          ABSOLUTE DATE GOES HERE
+        </span>
       </div>
 
       <!-- compose is a subwidget and not specific to this card -->
@@ -542,7 +573,7 @@
                     <span class="gcl-namecheck">Alice</span>
                     <span class="gcl-namecheck">Bob</span>
                     <span class="gcl-namecheck">Charlie</span>
-                    <span class="gcl-namecheck">Dave</span>
+                    <span class="gcl-namecheck">the Dougster</span>
                     <span class="gcl-namecheck">Eliza Dolittle</span>
                     <span class="gcl-namecheck">Fred Q. Fredericks</span>
                     <span class="gcl-namecheck">Georgette Q. Georgettington</span>
@@ -603,18 +634,194 @@
   </div>
 
   <!-- groupConv: Contents of a group conversation -->
-  <div data-cardid="groupConv" title="Group Conversation" class="card">
+  <div data-cardid="groupConv" title="Group Conversation" class="card gcd-card">
     <!-- non-scrolling reminder of the participants... -->
-    <div class="subHeader hbox">
-      <div class="participants boxFlex" data-childclass="participant">
+    <div class="gcd-header">
+      <div class="gcd-participants" data-childclass="participant">
+        <span class="gcd-participant">Alice</span>
+        <span class="gcd-participant">Bob</span>
+        <span class="gcd-participant">Charlie</span>
+        <span class="gcd-participant">Zorro</span>
+        <span class="gcd-participant">Zorro, Jr.</span>
       </div>
       <button class="add">Add</button>
     </div>
     <!-- scrolling messages -->
     <div class="scroller">
-      <div class="conversation">
+      <div class="gcd-conversation">
+      <!-- expand to messages -->
+      <script type="text/javascript">//<![CDATA[
+      // There are enough of these and the potential for changes high enough
+      //  that we just do very simple inline templating here.
+      var groupConvInited = false;
+      $(function() {
+        if (groupConvInited) return;
+        groupConvInited = true;
+        var items = [
+          {t: "era", rt: "3 weeks ago", dt: "", at: "Friday, June 3rd"},
+          {t: "join", r: "Alice", e: "Alice", d: "9:13a" },
+          {t: "join", r: "Alice", e: "Bob", d: "9:13a"},
+          {t: "join", r: "Alice", e: "You", d: "9:13a"},
+          {t: "msg", s: "Alice", d: "9:13a", m: "We need to break out of metaphorical prison!"},
+          {t: "msg", s: "Bob", d: "9:18a", m: "Yes, we are all trapped inside a metaphorical prison that separates us from our fellow human beings.  And our journey in life is to escape that prison."},
+          {t: "msg", s: "Dave", d: "9:42a", m: "I think Alice made a typo.  We're trapped in an actual prison.  Aren't you in here too?"},
+          {t: "msg", s: "Bob", d: "9:54a", m: "No, just a metaphorical prison."},
+          {t: "msg", s: "Bob", d: "9:54a", m: "They were going to put me in an actual prison, but then I told them you guys were the ones who keyed that guy's car."},
+          {t: "join", r: "Dave", e: "Charlie", d: "10:08a"},
+          {t: "msg", s: "Dave", d: "10:09a", m: "Charlie, we need you to break us out of prison."},
+          {t: "msg", s: "Charlie", d: "4:10p", m: "The first step is to break down the walls by being completely honest."},
+          {t: "msg", s: "Alice", d: "4:14p", m: "Not the metaphorical one."},
+
+          {t: "era", rt: "3 weeks ago", dt: "(1 day later)", at: "Saturday, June 4th"},
+          {t: "msg", s: "Alice", d: "6:43a", m: "HEY! BREAK US OUT OF PRISON!"},
+          {t: "era", rt: "2 weeks ago", dt: "(4 days later)", at: "Wednesday, June 8th"},
+          {t: "msg", s: "Charlie", d: "1:01p", m: "Okay, I found a guy..."},
+          {t: "join", r: "Charlie", e: "Zorro", d: "1:02p"},
+          {t: "join", r: "Zorro", e: "Zorro, Jr.", d: "2:12p"},
+          {t: "msg", s: "Zorro", d: "2:13p", m: "I think you wanted my son..."},
+          {t: "msg", s: "Zorro, Jr.", d: "7:00p", m: "I talked to the prison guys."},
+          {t: "msg", s: "Zorro, Jr.", d: "7:05p", m: "They said I have to find the guy who actually keyed the car before you can go free."},
+          {t: "msg", s: "Zorro, Jr.", d: "7:13p", m: "Oh, and that Bob will have to spend a week in prison for lying about who keyed the car if it turns out he was indeed lying."},
+          {t: "era", rt: "2 weeks ago", dt: "(1 day later)", at: "Thursday, June 9th"},
+          {t: "msg", s: "Alice", d: "6:51a", m: "I can live with that."},
+          {t: "msg", s: "Dave", d: "8:41a", m: "Me too."},
+          {t: "msg", s: "Bob", d: "9:08a", m: "Hey!"},
+          {t: "era", rt: "1 week ago", dt: "(5 days later)", at: "Tuesday, June 14th"},
+          {t: "msg", s: "Dave", d: "7:04a", m: "Thanks for getting us out of prison!."},
+          {t: "msg", s: "Bob", d: "9:08a", m: "Help, help!  I'm in prison!"},
+          {t: "era", rt: "1 week ago", dt: "(1 day later)", at: "Wednesday, June 15th"},
+          {t: "msg", s: "Bob", d: "10:32a", m: "Please get me out of prison!"},
+          {t: "era", rt: "1 week ago", dt: "(1 day later)", at: "Thursday, June 16th"},
+          {t: "msg", s: "Bob", d: "10:03a", m: "Pretty please?"},
+          {t: "era", rt: "1 week ago", dt: "(1 day later)", at: "Friday, June 17th"},
+          {t: "msg", s: "Bob", d: "9:18a", m: "Pretty please with sugar on top?"},
+        ];
+
+        var whoMappings = { Alice: "other1", Bob: "other2", Charlie: "other3",
+                            Zorro: "other4", "Zorro, Jr.": "other5",
+                            Dave: "me", You: "me" };
+        var container = $(".gcd-conversation"),
+            meMsgTemplate = $(".gcd-meMessage").remove(),
+            msgTemplate = $(".gcd-message").remove(),
+            msgContTemplate = $(".gcd-messageContinuation").remove(),
+            joinTemplate = $(".gcd-join").remove(),
+            eraTemplate = $(".gcd-era").remove();
+        function picUrlForName(name) {
+          return PICS[name.toLowerCase(name).replace(/[, .]+/g, "")];
+        }
+        var lastMsgNode = null, lastSender = null;
+        items.forEach(function(item) {
+          if (item.t === "era") {
+            var eraNode = eraTemplate.clone(true);
+            eraNode.find(".gcd-eraRelativeDate").text(item.rt);
+            eraNode.find(".gcd-eraTimeDelta").text(item.dt);
+            eraNode.find(".gcd-eraAbsoluteDate").text(item.at);
+            eraNode.appendTo(container);
+            lastMsgNode = null;
+          }
+          else if (item.t === "msg") {
+            var msgNode;
+            if (lastMsgNode && lastSender === item.s) {
+              msgNode = msgContTemplate.clone();
+              msgNode.find(".gcd-messageText").text(item.m);
+              msgNode.find(".gcd-messageTime").text(item.d);
+              msgNode.appendTo(lastMsgNode.find('.gcd-messageContainer'));
+              return;
+            }
+
+            if (item.s === "Dave") {
+              msgNode = meMsgTemplate.clone(true);
+              lastMsgNode = null;
+            }
+            else {
+              lastMsgNode = msgNode = msgTemplate.clone(true);
+              // only non-me things want this.
+              lastSender = item.s;
+            }
+            msgNode.attr("who", whoMappings[item.s]);
+            msgNode.find(".gcd-pic").attr("src", picUrlForName(item.s));
+            msgNode.find(".gcd-author").text(item.s);
+            msgNode.find(".gcd-messageText").text(item.m);
+            msgNode.find(".gcd-messageTime").text(item.d);
+            msgNode.appendTo(container);
+          }
+          else if (item.t === "join") {
+            var joinNode = joinTemplate.clone(true);
+            joinNode.find(".INVITERPIC").attr("src", picUrlForName(item.r));
+            joinNode.find(".gcd-inviter").text(item.r);
+            joinNode.find(".gcd-invitee").text(item.e);
+            joinNode.find(".INVITEEPIC").attr("src", picUrlForName(item.e));
+            joinNode.find(".gcd-time").text(item.d);
+            joinNode.appendTo(container);
+            lastMsgNode = null;
+          }
+        });
+        
+      });
+      //]]></script>
+      <!-- message from me -->
+      <div class="gcd-meMessage">
+        <div class="gcd-messageContainer">
+          <span class="gcd-messageText" data-bind="text">
+            MESSAGE GOES HERE
+          </span>
+          <span class="gcd-messageTime">DATE GOES HERE</span>
+        </div>
+        <div class="gcd-indicator"></div>
       </div>
-      <form class="compose" data-class="compose">
+
+      <!-- message from someone else (template) -->
+      <div class="gcd-message">
+        <div class="gcd-avatar">
+          <img class="gcd-pic" />
+        </div>
+        <div class="gcd-messageContainer">
+          <span class="gcd-author"></span>
+          <span class="gcd-messageText" data-bind="text">
+            MESSAGE GOES HERE
+          </span>
+          <span class="gcd-messageTime">DATE GOES HERE</span>
+        </div>
+        <div class="gcd-indicator"></div>
+      </div>
+      <div class="gcd-messageContinuation">
+        <span class="gcd-messageText" data-bind="text">
+          MESSAGE GOES HERE
+        </span>
+        <span class="gcd-messageTime">DATE GOES HERE</span>
+      </div>
+      <!-- join (template)-->
+      <div class="gcd-join">
+        <img class="gcd-pic INVITERPIC" />
+        <span class="gcd-inviter">INVITER NAME GOES HERE</span>
+        <span class="gcd-inviteLabel">invited</span>
+        <span class="gcd-invitee">INVITEE NAME GOES HERE</span>
+        <img class="gcd-pic INVITEEPIC" />
+        <span class="gcd-time">TIME GOES HERE</span>
+      </div>
+      <!-- time separator AKA era (template) -->
+      <div class="gcd-era">
+        <span class="gcd-eraRelativeDate">
+          RELATIVE DATE GOES HERE
+        </span>
+        <span class="gcd-eraTimeDelta">
+          TIME SINCE PREVIOUS ERA GOES HERE
+        </span>
+        <span class="gcd-eraAbsoluteDate">
+          ABSOLUTE DATE GOES HERE
+        </span>
+      </div>
+      <!-- end templates -->
+      </div>
+
+      <!-- compose is a subwidget and not specific to this card -->
+      <form class="gcd-compose" data-class="compose">
+        <div class="hbox">
+          <div class="boxFlex">
+            <input type="text" placeholder="say hello" />
+          </div>
+          <button>send</button>
+        </div>
       </form>
     </div>
   </div>
