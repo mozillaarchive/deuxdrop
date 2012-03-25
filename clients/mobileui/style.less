@@ -62,9 +62,11 @@ button::-moz-focus-inner {
     color: #ccc;
 }
 
+@urlColor: #0063FF;
+
 a {
     text-decoration: none;
-    color: #0063FF;
+    color: @urlColor;
 }
 
 .overflow {
@@ -128,7 +130,6 @@ button,
 }
 
 input[type=text] {
-    width: 100%;
     font-size: 12px;
     height: 24px;
     padding: 0 5px;
@@ -753,26 +754,35 @@ html[xmlns] .cf {
 // 
 // Enter your name and trigger BrowserID sign-in.
 
+.asi-name {
+  width: 24em;
+}
+
+.asi-what, .asi-explanation {
+  text-align: left;
+  padding: 0.3em 2em;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Account Setup: pickServer [aps]
 //
 // Select which server to use
 
-.ps-server {
+.aps-server {
   display: block;
   position: relative;
   cursor: pointer;
   border-bottom: 1px solid #888;
 }
 
-.ps-serverIcon {
+.aps-serverIcon {
   width: 16px;
   height: 16px;
   margin-right: 4px;
   vertical-align: middle;
 }
 
-.ps-serverUrl {
+.aps-serverUrl {
   display: inline-block;
   min-width: 12em;
   
@@ -784,7 +794,7 @@ html[xmlns] .cf {
   padding: 10px 12px 10px 8px;
 }
 
-.ps-serverName {
+.aps-serverName {
   display: inline-block;
   margin: 0px 5px;
   color: black;
@@ -793,6 +803,15 @@ html[xmlns] .cf {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Account Setup: enterServer [aes]
+
+.aes-explanation {
+  text-align: left;
+  padding: 0.3em 2em;
+}
+
+.aes-serverUrl {
+  width: 28em;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Home Page: start [hps]
@@ -1527,6 +1546,14 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Create a new Conversation (newConv) [gcn]
 
+.gcn-sendLabel, .gcn-toLabel {
+  display: block;
+  padding: 4px;
+}
+.gcn-compose {
+  padding: 6px 4px;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Select people to add to a conversation (pickPeeps) [gca]
 
@@ -1611,4 +1638,201 @@ html[xmlns] .cf {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Connection Requests: Request details and approve/ignore/deny (acceptReq) [cra]
+
+.cra-card {
+}
+
+///// Avatar-level details on the potential contact
+.cra-infoBlock {
+  margin: 4px;
+}
+.cra-infoLabel {
+  display: inline-block;
+  font-size: 160%;
+  font-weight: bold;
+  vertical-align: middle;
+}
+.cra-infoBundle {
+  display: inline-block;
+  vertical-align: middle;
+}
+.cra-avatar {
+  border: 2px solid #ccc;
+  background-color: #eee;
+  border-radius: 8px;
+  padding: 4px;
+}
+.cra-pic {
+  vertical-align: top;
+}
+.cra-allegedName {
+}
+
+///// Info on their server
+.cra-serverInfo {
+}
+.cra-serverUrl {
+  .url;
+  color: lighten(@urlColor, 20%);
+}
+
+///// Poco details on the potential contact
+.cra-pocoContainer {
+  margin: 0.5em 3em;
+}
+.cra-pocoList {
+  list-style-type: none;
+  background-color: white;
+  border-radius: 10px;
+  border: 1px solid #aaa;
+  margin: 0 0 10px 0;
+}
+.cra-pocoItem {
+  font-size: 12px;
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+.cra-pocoLabel {
+  display: inline-block;
+  width: 40%;
+  color: #666;
+}
+.cra-pocoValue {
+  display: inline-block;
+  width: 40%;
+}
+
+///// Speech bubble for what they say
+.cra-saysBlock {
+  position: relative;
+  width: 100%;
+}
+.cra-saysPic {
+  width: 24px;
+  height: 24px;
+  position: absolute;
+  top: 0;
+  left: 2px;
+}
+.cra-messageText {
+  margin-left: 36px;
+  margin-right: 8px;
+  border: 8px solid #888;
+  border-width: 8px 10px;
+  -moz-border-image-slice: 8 10 fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
+  -moz-border-image-source: url("i/yellowCurves.png");
+}
+.cra-saysIndicator {
+  position: absolute;
+  top: 8px;
+  left: 26px;
+  width: 13px;
+  height: 11px;
+  background: url("i/yellowIndicator.png");
+}
+
+///// Name-checking Contacts who also know the person
+.cra-relations {
+  margin: 12px 4px;
+}
+.cra-relationLabel {
+  font-size: 120%;
+}
+.cra-relatedContacts {
+  padding: 6px;
+}
+.cra-relPic {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+.cra-relName {
+  display: inline-block;
+  font-weight: bold;
+  width: 10em;
+}
+.cra-relCalled {
+  font-weight: bold;
+  font-style: italic;
+}
+
+.cra-nameThem {
+  width: 24em;
+  margin: 1em 0em;
+}
+
+///// Name-checking Conversations involving the person
+.cra-convsBlock {
+  margin: 12px 4px;
+}
+.cra-convsLabel {
+  font-size: 120%;
+}
+.cra-convs {
+  padding: 4px;
+}
+
+.cra-conv:first-child {
+  border-top: 1px solid #ddd;
+}
+.cra-conv {
+  vertical-align: middle;
+  padding-bottom: 4px;
+  padding-left: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #ddd;
+}
+.cra-convDate {
+  display: inline-block;
+  font-size: 80%;
+  width: 6em;
+  color: #666;
+}
+.cra-subjectish {
+  font-size: 110%;
+}
+.cra-participants {
+  padding-left: 8px;
+}
+.cra-participant {
+  font-weight: bold;
+  font-size: 80%;
+}
+.cra-partPic {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.cra-partOthers {
+  font-weight: normal;
+  color: #555;
+}
+
+
+///// Potential action display
+.cra-action {
+  margin: 6px 4px;
+  padding: 4px 6px 6px 6px;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+}
+
+.cra-actionLabel {
+  display: inline-block;
+  color: #444;
+  font-size: 160%;
+  font-weight: bold;
+}
+
+.cra-actionButtons {
+  text-align: center;
+  margin-top: 8px;
+}
 
