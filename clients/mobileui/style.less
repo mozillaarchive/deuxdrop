@@ -79,6 +79,7 @@ a {
 
 .url() {
   font-style: italic;
+  word-wrap: break-word;
 }
 
 .lipVertGradient (@topLip, @top, @bottom) {
@@ -167,7 +168,7 @@ input[type=text]#search {
   margin: 0 5px 0 0;
   background-color: #fff;
 }
-.common-pic {
+.common-pic() {
   width: 48px;
   height: 48px;
 }
@@ -785,6 +786,7 @@ html[xmlns] .cf {
 .aps-serverUrl {
   display: inline-block;
   min-width: 12em;
+  max-width: 90%;
   
   .url;
   background-color: #ddddff;
@@ -1613,17 +1615,58 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Phonebook: List all possible contacts to add (add) [pbl]
 
+.pbl-card {
+}
+
+.pbl-item {
+  display: block;
+  width: 100%;
+  position: relative;
+  min-height: 55px;
+
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #eee;
+
+  background-color: #fff;
+  color: black;
+}
+
+.pbl-avatar {
+  .common-avatar;
+  float: left;
+  clear: both;
+  margin-top: -1px;
+}
+.pbl-pic {
+  .common-pic;
+}
+
+.pbl-info {
+  padding: 3px 0px;
+}
+.pbl-peepName {
+  font-weight: bold;
+}
+.pbl-serverUrl {
+  .url;
+  color: #4444aa;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Phonebook: Peep details and confirm requesting friendship (askFriend) [pba]
 //
 // Right now we are just reusing a lot of the "cra" contact request acceptance
 //  styling since the cases are so fundamentally similar in nature.
 
-.pbl-name {
+.pba-name {
   width: 24em;
 }
 
-.pbl-sendMessageText {
+.pba-sendMessageBox {
+}
+.pba-sendMessagePrompt {
+}
+.pba-sendMessageText {
   width: 24em;
 }
 
@@ -1634,10 +1677,10 @@ html[xmlns] .cf {
   display: block;
   width: 100%;
   position: relative;
+  min-height: 55px;
 
   padding-bottom: 0.3em;
   border-bottom: 1px solid #eee;
-  margin-bottom: 0.3em;
 
   background-color: #fff;
   color: black;
@@ -1648,12 +1691,14 @@ html[xmlns] .cf {
   .common-avatar;
   float: left;
   clear: both;
+  margin-top: -1px;
 }
 .crl-pic {
   .common-pic;
 }
 
 .crl-info {
+  padding: 3px 0px;
 }
 .crl-peepName {
   font-weight: bold;
