@@ -19,8 +19,13 @@ body {
     -webkit-overflow-scrolling: touch;
 }
 
-.hidden,
-button.hidden {
+button,
+input,
+textarea {
+    font-family: "Helvetica", arial, sans-serif;
+}
+
+.hidden {
   display: none;
 }
 
@@ -32,8 +37,7 @@ button.hidden {
   visibility: hidden;
 }
 
-.invisible,
-button.invisible {
+.invisible {
   visibility: hidden;
 }
 
@@ -41,11 +45,6 @@ button.invisible {
   background-color: #fee;
 }
 
-button,
-input,
-textarea {
-    font-family: "Helvetica", arial, sans-serif;
-}
 
 button {
     cursor: pointer;
@@ -63,17 +62,19 @@ button::-moz-focus-inner {
     color: #ccc;
 }
 
+@urlColor: #0063FF;
+
 a {
     text-decoration: none;
-    color: #0063FF;
+    color: @urlColor;
 }
 
 .overflow {
-    overflow: hidden;
-    white-space: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
 
-    -o-text-overflow: ellipsis;
-       text-overflow: ellipsis;
+  -o-text-overflow: ellipsis;
+  text-overflow: ellipsis;
 }
 
 .url() {
@@ -81,12 +82,12 @@ a {
 }
 
 .lipVertGradient (@topLip, @top, @bottom) {
-  background: -moz-linear-gradient(top, @topLip 0, @topLip 1px, @top 1px, @bottom 100%);
+  background: -moz-linear-gradient(to bottom, @topLip 0, @topLip 1px, @top 1px, @bottom 100%);
   background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @topLip), color-stop(1%, @topLip), color-stop(1%, @top), color-stop(100%, @bottom));
 }
 
 .smoothVertGradient (@top, @bottom) {
-  background: -moz-linear-gradient(top, @top 0, @bottom 100%);
+  background: -moz-linear-gradient(to bottom, @top 0%, @bottom 100%);
   background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @top), color-stop(100%, @bottom));
 }
 
@@ -129,7 +130,6 @@ button,
 }
 
 input[type=text] {
-    width: 100%;
     font-size: 12px;
     height: 24px;
     padding: 0 5px;
@@ -193,10 +193,10 @@ input[type=text]#search {
     background-color: #222;
     z-index: 99;
 
-    -webkit-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
-       -moz-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
-         -o-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
-            box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+    -webkit-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 0px 0 rgba(150, 150, 150, 0.25);
+       -moz-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 0px 0 rgba(150, 150, 150, 0.25);
+         -o-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 0px 0 rgba(150, 150, 150, 0.25);
+            box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 0px 0 rgba(150, 150, 150, 0.25);
 
     background-image: -webkit-gradient(
                             linear,
@@ -215,43 +215,53 @@ input[type=text]#search {
                                            #1A1A1A 100%);
 }
 
-.THEheader button {
-    max-height: 24px;
-    line-height: 24px;
-    font-size: 11px;
-    font-weight: bold;
-    color: #fff;
-    text-shadow: 0 -1px 0 #333;
-    padding: 0 5px;
-    border-width: 1px;
-    border-style: solid;
-    border-color: #222 #000 #000;
+.THEback, .THEnext {
+  max-height: 24px;
+  line-height: 24px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 -1px 0 #333;
+  padding: 0 5px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #222 #000 #000;
 
-    -webkit-border-radius: 3px;
-       -moz-border-radius: 3px;
-         -o-border-radius: 3px;
-            border-radius: 3px;
+  -webkit-border-radius: 3px;
+     -moz-border-radius: 3px;
+       -o-border-radius: 3px;
+          border-radius: 3px;
 
-    -webkit-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
-       -moz-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
-         -o-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
-            box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+  -webkit-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+     -moz-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+       -o-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+          box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
 
-    background-image: -webkit-gradient(
-                            linear,
-                            left top,
-                            left bottom,
-                            color-stop(0%, #828282),
-                            color-stop(50%, #565656),
-                            color-stop(50%, #4D4C4C),
-                            color-stop(100%, #1F1F1F)
-                      );
+  background-image: -webkit-gradient(
+                          linear,
+                          left top,
+                          left bottom,
+                          color-stop(0%, #828282),
+                          color-stop(50%, #565656),
+                          color-stop(50%, #4D4C4C),
+                          color-stop(100%, #1F1F1F)
+                    );
 
-    background-image: -moz-linear-gradient(center top,
-                                           #828282 0%,
-                                           #565656 50%,
-                                           #4D4C4C 50%,
-                                           #1F1F1F 100%);
+  background-image: -moz-linear-gradient(center top,
+                                         #828282 0%,
+                                         #565656 50%,
+                                         #4D4C4C 50%,
+                                         #1F1F1F 100%);
+}
+.THEback {
+  position: absolute;
+  top: 4px;
+  left: 0;
+}
+.THEnext {
+  position: absolute;
+  right: 0;
+  top: 4px;
 }
 
 .THEheaderText {
@@ -744,26 +754,35 @@ html[xmlns] .cf {
 // 
 // Enter your name and trigger BrowserID sign-in.
 
+.asi-name {
+  width: 24em;
+}
+
+.asi-what, .asi-explanation {
+  text-align: left;
+  padding: 0.3em 2em;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Account Setup: pickServer [aps]
 //
 // Select which server to use
 
-.ps-server {
+.aps-server {
   display: block;
   position: relative;
   cursor: pointer;
   border-bottom: 1px solid #888;
 }
 
-.ps-serverIcon {
+.aps-serverIcon {
   width: 16px;
   height: 16px;
   margin-right: 4px;
   vertical-align: middle;
 }
 
-.ps-serverUrl {
+.aps-serverUrl {
   display: inline-block;
   min-width: 12em;
   
@@ -775,7 +794,7 @@ html[xmlns] .cf {
   padding: 10px 12px 10px 8px;
 }
 
-.ps-serverName {
+.aps-serverName {
   display: inline-block;
   margin: 0px 5px;
   color: black;
@@ -784,6 +803,15 @@ html[xmlns] .cf {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Account Setup: enterServer [aes]
+
+.aes-explanation {
+  text-align: left;
+  padding: 0.3em 2em;
+}
+
+.aes-serverUrl {
+  width: 28em;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Home Page: start [hps]
@@ -1518,8 +1546,50 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Create a new Conversation (newConv) [gcn]
 
+.gcn-sendLabel, .gcn-toLabel {
+  display: block;
+  padding: 4px;
+}
+.gcn-compose {
+  padding: 6px 4px;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Select people to add to a conversation (pickPeeps) [gca]
+
+@gca-selectedBorder: #f8ca00;
+@gca-selectedFill: lighten(@gca-selectedBorder, 30%);
+.gca-peep {
+  display: inline-block;
+  vertical-align: middle;
+  position: relative;
+  width: 44%;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 4px;
+  margin: 2px;
+  min-height: 48px;
+}
+.gca-peep[selected="true"] {
+  border: 2px solid @gca-selectedBorder;
+  background-color: @gca-selectedFill;
+}
+
+.gca-pic {
+  .common-pic;
+  display: block;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  margin-right: 4px;
+}
+.gca-nameBox {
+  margin-left: 54px;
+}
+
+.gca-name {
+  color: black;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // LIMBO: User Info: detailed info on a user
@@ -1545,27 +1615,268 @@ html[xmlns] .cf {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Phonebook: Peep details and confirm requesting friendship (askFriend) [pba]
+//
+// Right now we are just reusing a lot of the "cra" contact request acceptance
+//  styling since the cases are so fundamentally similar in nature.
+
+.pbl-name {
+  width: 24em;
+}
+
+.pbl-sendMessageText {
+  width: 24em;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Connection Requests: List people asking to be your friend (notifications) [crl]
 
-.connReqItem {
-    width: 100%;
-    padding-bottom: 0.3em;
-    border-bottom: 1px solid #eee;
-    margin-bottom: 0.3em;
+.crl-item {
+  display: block;
+  width: 100%;
+  position: relative;
+
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 0.3em;
+
+  background-color: #fff;
+  color: black;
 }
 
-    .connReqItem .details {
-        margin-left: 1.5em;
-    }
-    .connReqItem .receivedAt {
-        color: #aaa;
-    }
-    .connReqItem .messageText {
-        color: #666;
-    }
+
+.crl-avatar {
+  .common-avatar;
+  float: left;
+  clear: both;
+}
+.crl-pic {
+  .common-pic;
+}
+
+.crl-info {
+}
+.crl-peepName {
+  font-weight: bold;
+}
+.crl-serverUrl {
+  .url;
+  color: #4444aa;
+}
+
+.crl-details {
+  margin-left: 1.5em;
+}
+.crl-receivedAt {
+  color: #aaa;
+}
+.crl-messageText {
+  color: #666;
+  font-style: italic;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Connection Requests: Request details and approve/ignore/deny (acceptReq) [cra]
+
+.cra-card {
+}
+
+///// Avatar-level details on the potential contact
+.cra-infoBlock {
+  margin: 4px;
+}
+.cra-infoLabel {
+  display: inline-block;
+  font-size: 160%;
+  font-weight: bold;
+  vertical-align: middle;
+}
+.cra-infoBundle {
+  display: inline-block;
+  vertical-align: middle;
+}
+.cra-avatar {
+  border: 2px solid #ccc;
+  background-color: #eee;
+  border-radius: 8px;
+  padding: 4px;
+}
+.cra-pic {
+  vertical-align: top;
+}
+.cra-allegedName {
+}
+
+///// Info on their server
+.cra-serverInfo {
+}
+.cra-serverUrl {
+  .url;
+  color: lighten(@urlColor, 20%);
+}
+
+///// Poco details on the potential contact
+.cra-pocoContainer {
+  margin: 0.5em 3em;
+}
+.cra-pocoList {
+  list-style-type: none;
+  background-color: white;
+  border-radius: 10px;
+  border: 1px solid #aaa;
+  margin: 0 0 10px 0;
+}
+.cra-pocoItem {
+  font-size: 12px;
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+.cra-pocoLabel {
+  display: inline-block;
+  width: 40%;
+  color: #666;
+}
+.cra-pocoValue {
+  display: inline-block;
+  width: 40%;
+}
+
+///// Speech bubble for what they say
+.cra-saysBlock {
+  position: relative;
+  width: 100%;
+}
+.cra-saysPic {
+  width: 24px;
+  height: 24px;
+  position: absolute;
+  top: 0;
+  left: 2px;
+}
+.cra-messageText {
+  margin-left: 36px;
+  margin-right: 8px;
+  border: 8px solid #888;
+  border-width: 8px 10px;
+  -moz-border-image-slice: 8 10 fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
+  -moz-border-image-source: url("i/yellowCurves.png");
+}
+.cra-saysIndicator {
+  position: absolute;
+  top: 8px;
+  left: 26px;
+  width: 13px;
+  height: 11px;
+  background: url("i/yellowIndicator.png");
+}
+
+///// Name-checking Contacts who also know the person
+.cra-relations {
+  margin: 8px 0px;
+  padding: 4px;
+  background-color: #eee;
+}
+.cra-relationLabel {
+  font-size: 120%;
+  font-weight: bold;
+}
+.cra-relatedContacts {
+  padding: 6px;
+}
+.cra-relPic {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+.cra-relName {
+  display: inline-block;
+  font-weight: bold;
+  width: 10em;
+}
+.cra-relCalled {
+  font-weight: bold;
+  font-style: italic;
+}
+
+.cra-nameThem {
+  width: 24em;
+  margin: 1em 0em;
+}
+
+///// Name-checking Conversations involving the person
+.cra-convsBlock {
+  margin: 8px 0px;
+  padding: 4px;
+  background-color: #eee;
+}
+.cra-convsLabel {
+  font-size: 120%;
+  font-weight: bold;
+}
+.cra-convs {
+  padding: 4px;
+}
+
+.cra-conv:first-child {
+  border-top: 1px solid #ddd;
+}
+.cra-conv {
+  vertical-align: middle;
+  padding-bottom: 4px;
+  padding-left: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #ddd;
+}
+.cra-convDate {
+  display: inline-block;
+  font-size: 80%;
+  width: 6em;
+  color: #666;
+}
+.cra-subjectish {
+  font-size: 110%;
+}
+.cra-participants {
+  padding-left: 8px;
+}
+.cra-participant {
+  font-weight: bold;
+  font-size: 80%;
+}
+.cra-partPic {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.cra-partOthers {
+  font-weight: normal;
+  color: #555;
+}
+
+
+///// Potential action display
+.cra-action {
+  margin: 6px 4px;
+  padding: 4px 6px 6px 6px;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+}
+
+.cra-actionLabel {
+  display: inline-block;
+  color: #444;
+  font-size: 160%;
+  font-weight: bold;
+}
+
+.cra-actionButtons {
+  text-align: center;
+  margin-top: 8px;
+}
 

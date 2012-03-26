@@ -49,6 +49,11 @@
           PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
           PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
           PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48',
+          PIC_ELIZA = 'http://www.gravatar.com/avatar/64d725a972cfd6d76850eae8157b03f4?r=pg&d=wavatar&s=48',
+          PIC_FRED = 'http://www.gravatar.com/avatar/75d891bda3b9fcea07c5d98b75b60ca2?r=pg&d=wavatar&s=48',
+          PIC_GEORGETTE = 'http://www.gravatar.com/avatar/c576efa922215cd13bd1a7a8d8b6e3e3?r=pg&d=wavatar&s=48',
+          PIC_HIERONYMUS = 'http://www.gravatar.com/avatar/2211df9508ca7debddbe1f3f3551157c?r=pg&d=wavatar&s=48',
+          PIC_JOHN = 'http://www.gravatar.com/avatar/dd10051eda9b9837dbfdc18a3dc7c2af?r=pg&d=wavatar&s=48',
           PIC_ZORRO = 'http://www.gravatar.com/avatar/5bad16eeb23bd05a223baf7a0fb996dd?r=pg&d=wavatar&s=48',
           PIC_ZORRO_JR = 'http://www.gravatar.com/avatar/d7e0fa5fe16b5dc4743c5a7177b0c1ae?r=pg&d=wavatar&s=48',
           PICS = {alice: PIC_ALICE, bob: PIC_BOB, charlie: PIC_CHARLIE,
@@ -71,6 +76,11 @@
         $('.PIC-charlie').attr('src', PIC_CHARLIE);
         $('.PIC-me').attr('src', PIC_DAVE);
         $('.PIC-you').attr('src', PIC_DAVE);
+        $('.PIC-eliza').attr('src', PIC_ELIZA);
+        $('.PIC-fred').attr('src', PIC_FRED);
+        $('.PIC-georgette').attr('src', PIC_GEORGETTE);
+        $('.PIC-hieronymus').attr('src', PIC_HIERONYMUS);
+        $('.PIC-john').attr('src', PIC_JOHN);
         $('.PIC-zorro').attr('src', PIC_ZORRO);
         $('.PIC-zorrojr').attr('src', PIC_ZORRO_JR);
       });
@@ -86,10 +96,10 @@
     our URL and less will keep refreshing from the file for you automatically.
   </div>
   <div id="stylingCardTemplate" class="stylingCardWrapper">
-    <div class="THEheader hbox">
+    <div class="THEheader">
       <button class="THEback">Back</button>
-      <div class="boxFlex"><h1 class="THEheaderText overflow">Deuxdrop</h1></div>
-      <button class="next invisible">Info</button>
+      <h1 class="THEheaderText overflow">Deuxdrop</h1>
+      <button class="THEnext invisible">Info</button>
     </div>
     <a class="THEnotify" data-nonav="nonav">!</a>
   </div>
@@ -98,55 +108,77 @@
 <div id="stylingCardContainer"><div id="cards">
 
   <!-- signIn: Give us your name and e-mail (via BrowserID) -->
-  <div data-cardid="signIn" title="Sign In" class="card">
+  <div data-cardid="signIn" title="Sign In" class="card asi-card">
     <form class="signUpForm standardForm">
-      <input type="text" name="name" placeholder="Enter your name">
-      <button>Sign In With BrowserID</button>
+      <h1 class="asi-welcome">Welcome!</h1>
+      <div class="asi-what">
+        Deuxdrop is an encrypted messaging client that is running locally in
+        your browser.
+      </div>
+      <div class="asi-explanation">
+        Before we can create an account, we need to know your name and an
+        existing e-mail address.
+        <ul>
+          <li>Your name is what is shown to other deuxdrop users.  It can be
+              what you would put on your business card, your nickname, whatever
+              you want.</li>
+          <li>Your e-mail address will be used for account recovery procedures
+              some day, but for now is just something we include in your
+              profile.</li>
+        </ul>
+      </div>
+      <div class="asi-input">
+        <input class="asi-name" type="text" name="name"
+               placeholder="Enter your name" />
+      </div>
+      <div class="asi-buttons">
+        <button>Sign In With BrowserID</button>
+      </div>
     </form>
   </div>
 
   <!-- pickServer: list known servers the user can sign-up with -->
-  <div data-cardid="pickServer" title="Pick Server" class="card">
+  <div data-cardid="pickServer" title="Pick Server" class="card aps-card">
     <div class="scroller" data-childclass="serverLink">
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/raindrop-us.png" />us.raindrop.it</span>
-        <span class="ps-serverName">Raindrop US Server</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/raindrop-us.png" />us.raindrop.it</span>
+        <span class="aps-serverName">Raindrop US Server</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/raindrop-de.png" />de.raindrop.it</span>
-        <span class="ps-serverName">Raindrop German Server</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/raindrop-de.png" />de.raindrop.it</span>
+        <span class="aps-serverName">Raindrop German Server</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />gd.example.com</span>
-        <span class="ps-serverName">Global Dynamics</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/missing.png" />gd.example.com</span>
+        <span class="aps-serverName">Global Dynamics</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />md.example.com</span>
-        <span class="ps-serverName">Massive Dynamic</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/missing.png" />md.example.com</span>
+        <span class="aps-serverName">Massive Dynamic</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />hipsters.example.com</span>
-        <span class="ps-serverName">4 Hipsters Only!!!</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/missing.png" />hipsters.example.com</span>
+        <span class="aps-serverName">4 Hipsters Only!!!</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />friendly.example.com</span>
-        <span class="ps-serverName">Friendly Mail Company's Friendly Mail Server that wants to be your friend, yes we do.  Do you not believe it?  You should!</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/missing.png" />friendly.example.com</span>
+        <span class="aps-serverName">Friendly Mail Company's Friendly Mail Server that wants to be your friend, yes we do.  Do you not believe it?  You should!</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />nefarious1.example.com</span>
-        <span class="ps-serverName">Fraudulent Raindrop US Server (us.raindrop.it) ____________________________________________________ Someotheryestotally for sure</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/missing.png" />nefarious1.example.com</span>
+        <span class="aps-serverName">Fraudulent Raindrop US Server (us.raindrop.it) ____________________________________________________ Someotheryestotally for sure</span>
       </a>
-      <a data-classimpl="serverLink" class="ps-server"
+      <a data-classimpl="serverLink" class="aps-server"
          href="#connectToServer">
-        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />us.raindrop.it.ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.example.com</span>
-        <span class="ps-serverName">Nefarious Server</span>
+        <span class="aps-serverUrl"><img class="aps-serverIcon" src="../../styling/server-icons/missing.png" />us.raindrop.it.ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.example.com</span>
+        <span class="aps-serverName">Nefarious Server</span>
       </a>
     </div>
   </div>
@@ -155,9 +187,17 @@
   <div data-cardid="enterServer" title="Enter Server" class="card">
     <div class="scroller">
       <form class="enterServerForm standardForm">
-        <input type="text" name="server" placeholder="Enter server name">
-        <button>Connect</button>
-        <div>Warning, this is advanced voodoo and not very secure.</div>
+        <div class="aes-explanation">
+          Enter the URL of the server you want to use and we will contact it
+          to find out its encryption keys.  <em>This is currently done without
+          using SSL and so is inherently insecure and vulnerable to a
+          man-in-the-middle attack</em>.
+        </div>
+        <input class="aes-serverUrl" type="text" name="server"
+               placeholder="Enter server URL">
+        <div class="aes-buttons">
+          <button>Connect</button>
+        </div>
       </form>
     </div>
   </div>
@@ -305,13 +345,6 @@
 
   <!-- private: Lists of peeps with most recent private conv msg snip -->
   <div data-cardid="private" title="Private" class="card card-private">
-    <div class="subHeader hbox">
-      <div class="boxFlex">
-        <input id="search" type="text" placeholder="search people">
-      </div>
-      <button class="search">search</button>
-      <button class="button" data-href="#add">add contact</button>
-    </div>
     <div class="scroller" data-childclass="peepPrivate">
       <!-- Alice -->
       <a class="pcl-perPeepItem" href="#privateConv"
@@ -512,12 +545,8 @@
 
   <!-- groups: Lists of all conversations -->
   <div data-cardid="groups" title="Group" class="card gcl-card">
-    <div class="subHeader hbox">
-      <div class="boxFlex">
-        <input id="search" type="text" placeholder="search people">
-      </div>
-      <button class="search">search</button>
-      <button class="button" data-href="#newConv">new</button>
+    <div class="subHeader">
+      <button class="button" data-href="#newConv">new conversation</button>
     </div>
     <div class="scroller" data-childclass="convBlurb">
       <!-- Conversation with new activity, reasonable first snippet  -->
@@ -659,7 +688,7 @@
           {t: "msg", s: "Dave", d: "9:42a", m: "I think Alice made a typo.  We're trapped in an actual prison.  Aren't you in here too?"},
           {t: "msg", s: "Bob", d: "9:54a", m: "No, just a metaphorical prison."},
           {t: "msg", s: "Bob", d: "9:54a", m: "They were going to put me in an actual prison, but then I told them you guys were the ones who keyed that guy's car."},
-          {t: "join", r: "Dave", e: "Charlie", d: "10:08a"},
+          {t: "join", r: "You", e: "Charlie", d: "10:08a"},
           {t: "msg", s: "Dave", d: "10:09a", m: "Charlie, we need you to break us out of prison."},
           {t: "msg", s: "Charlie", d: "4:10p", m: "The first step is to break down the walls by being completely honest."},
           {t: "msg", s: "Alice", d: "4:14p", m: "Not the metaphorical one."},
@@ -828,55 +857,154 @@
   <!-- newConv: Create a new group conversation -->
   <div data-cardid="newConv" title="New Conversation" class="card">
     <div class="scroller">
-      Chat with:
-      <div class="hbox">
-        <div class="participants boxFlex" data-childclass="participant">
+      <span class="gcn-sendLabel">Send message:</span>
+      <!-- compose is a subwidget and not specific to this card -->
+      <form class="gcn-compose" data-class="compose">
+        <div class="hbox">
+          <div class="boxFlex">
+            <input type="text" placeholder="say hello" />
+          </div>
+          <button>send</button>
         </div>
-        <button class="add">Add</button>
-      </div>
-      <div>
-        &nbsp;
-      </div>
-      <form class="compose" data-class="compose">
       </form>
+      <span class="gcn-toLabel">To:</span>
+      <div>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-alice" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Alice</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-bob" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Bob</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-charlie" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Charlie</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-eliza" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Eliza Dolittle</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-fred" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Fred Q. Fredericks</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-georgette" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Georgette Q. Georgettington</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-hieronymus" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-john" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">John Jacob Jingleheimer Schmidt</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-zorro" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Zorro</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-zorrojr" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Zorro, Jr.</span>
+        </div>
+      </a>
+      </div>
     </div>
   </div>
 
   <!-- pickPeeps: Multi-select from a list of peeps -->
   <div data-cardid="pickPeeps" title="Add People to the Conversation"
-       class="card">
+       class="card gca-card">
     <div class="subHeader hbox">
       <button class="done">Done</button>
     </div>
     <div class="scroller" data-childclass="togglePeep">
-    </div>
-  </div>
-
-  <!-- User: Details on a user/peep NOT SURE IF NECESSARY AS-IS -->
-  <div data-cardid="user" title="User Details" class="card">
-    <div class="scroller">
-      <div class="peepInfo">
-        <img class="peepInfoPic" data-bind="pic" data-attr="src"
-             data-missing="OMIT" src="i/face2.png" />
-        <span data-bind="displayName" class="peepInfoName"></span>
-      </div>
-      <div class="pocoContainer">
-      </div>
-      <!-- we can put the list of involved conversations here -->
-      <!-- this contingent adding stuff needs to be hooked up -->
-      <span class="addToChatMessage hidden">
-        This person needs to add you before you can chat with them.
-      </span>
-      <form class="addPeepButtonForm hidden">
-        <input type="hidden" name="peepId" value=""
-               data-bind="id" data-attr="value">
-        <button class="">Add</button>
-      </form>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-alice" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Alice</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-bob" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Bob</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-charlie" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Charlie</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-eliza" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Eliza Dolittle</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-fred" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Fred Q. Fredericks</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-georgette" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Georgette Q. Georgettington</span>
+        </div>
+      </a>
+      <a class="gca-peep" selected="true">
+        <img class="gca-pic PIC-hieronymus" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-john" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">John Jacob Jingleheimer Schmidt</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-zorro" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Zorro</span>
+        </div>
+      </a>
+      <a class="gca-peep">
+        <img class="gca-pic PIC-zorrojr" src="i/face2.png" />
+        <div class="gca-nameBox">
+          <span class="gca-name">Zorro, Jr.</span>
+        </div>
+      </a>
     </div>
   </div>
 
   <!-- Add: List the server phonebooks to pick someone to connect to.  -->
-  <div data-cardid="add" title="Add a contact" class="card conversations">
+  <div data-cardid="add" title="Add a contact" class="card pbl-card">
     <div class="scroller" data-childclass="peepPhonebook">
     </div>
   </div>
@@ -884,38 +1012,84 @@
   <!-- askFriend: Confirm connecting to someone, provide a message -->
   <div data-cardid="askFriend" title="Request a connection" class="card">
     <div class="scroller">
-      <div>
-        Connect to the person identifying themselves as:
-        <div class="hbox">
-          <div>
-            <div class="avatar">
-              <img class="peepInfoPic" data-bind="peep.pic"
-                   data-attr="src" data-missing="OMIT"
-                   src="i/face2.png" />
+
+      <div class="cra-infoBlock">
+        <div class="cra-infoLabel">The Alleged:</div>
+        <div class="cra-infoBundle">
+          <div class="cra-avatar">
+            <img class="cra-pic PIC-fred" />
+            <span class="cra-allegedName">Fred Q. Fredericks</span>
+          </div>
+          <div class="cra-serverInfo">
+            using server: <span class="cra-serverUrl">fredadelic.example.com</span>
+          </div>
+        </div>
+      </div>
+      <div class="cra-pocoContainer">
+        <ul class="cra-pocoList">
+          <li class="cra-pocoItem">
+            <label class="cra-pocoLabel">e-mail</label>
+            <div class="cra-pocoValue">fred@fred.fred</div>
+          </li>
+        </ul>
+      </div>
+      <!-- Known to your contacts -->
+      <div class="cra-relations">
+        <div class="cra-relationLabel">Known to your contacts:</div>
+        <div class="cra-relatedContacts">
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-alice" />
+            <span class="cra-relName">Alice</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">Freddy F</span>
+          </div>
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-bob" />
+            <span class="cra-relName">Bob</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">the Fredster</span>
+          </div>
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-charlie" />
+            <span class="cra-relName">Charlie</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">Fred Q. Fredericks</span>
+          </div>
+        </div>
+      </div>
+      <!-- Conversation Participation (write ordering) -->
+      <div class="cra-convsBlock">
+        <div class="cra-convsLabel">Participating in conversations:</div>
+        <div class="cra-convs">
+          <div class="cra-conv">
+            <span class="cra-convDate">5 days ago</span>
+            <span class="cra-subjectish">Let's visit the mouse-trap factory!</span>
+            <div class="cra-participants">
+              <span class="cra-participant"><img class="cra-partPic PIC-alice">Alice</span>
+              <span class="cra-participant"><img class="cra-partPic PIC-charlie">Charlie</span>
+              <span class="cra-participant cra-partOthers">and 2 others</span>
             </div>
           </div>
-          <div>
-            <span class="untrustedData"
-                data-bind="peep.selfPoco.displayName"></span>
+          <div class="cra-conv">
+            <span class="cra-convDate">1 month ago</span>
+            <span class="cra-subjectish">I'm having a holiday party, and you're invited!</span>
+            <div class="cra-participants">
+              <span class="cra-participant"><img class="cra-partPic PIC-bob">Bob</span>
+              <span class="cra-participant cra-partOthers">and 12 others</span>
+            </div>
           </div>
         </div>
       </div>
-      <div>
-        using server at <span class="untrustedData"
-                              data-bind="peepServer.url"></span>
-      </div>
-      <div class="pocoContainer">
-        with the additional contact information:
-      </div>
+
       <form class="askFriendForm standardForm">
         <div>
-          I call this person: <input type="text" name="displayName">
+          I call this person: <input class="pbl-name" type="text" name="displayName">
         </div>
-        <div class="askMessageBox">
-          <div class="askMessagePrompt">
+        <div class="pbl-sendMessageBox">
+          <div class="pbl-sendMessagePrompt">
             Message to send with this request:
           </div>
-          <textarea class="askMessageTextArea" name="message"></textarea>
+          <textarea class="pbl-sendMessageText" name="message"></textarea>
         </div>
         <button>Send connect request</button>
       </form>
@@ -923,62 +1097,177 @@
   </div>
 
   <!-- notifications: Friend/connect requests, for now at least. -->
-  <div data-cardid="notifications" title="Friend requests" class="card">
+  <div data-cardid="notifications" title="Friend requests" class="card crl-card">
     <div class="scroller" data-childclass="connReq">
+      <!-- connreq 1 -->
+      <a class="crl-item" data-classimpl="connReq" href="#acceptReq">
+        <div>
+          <div class="crl-avatar">
+            <img class="crl-pic PIC-zorro" src="i/face2.png" />
+          </div>
+          <div class="crl-info">
+            <div>
+              <span class="crl-peepName">Zorro Z. Zorrington</span>
+            </div>
+            <div>
+              using server <span class="crl-serverUrl">masked.example.com</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="crl-details">
+            <span class="crl-receivedAt" data-bind="receivedAt">2 days ago</span>: 
+            <span class="crl-messageText" data-bind="messageText">It's me!</span>
+          </div>
+        </div>
+      </a>
+      <!-- connreq 2 -->
+      <a class="crl-item" data-classimpl="connReq" href="#acceptReq">
+        <div>
+          <div class="crl-avatar">
+            <img class="crl-pic PIC-hieronymus" src="i/face2.png" />
+          </div>
+          <div class="crl-info">
+            <div>
+              <span class="crl-peepName">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D, DJ, MC, RAID-10, Fanta Drinker</span>
+            </div>
+            <div>
+              using server <span class="crl-serverUrl">hier.example.com</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="crl-details">
+            <span class="crl-receivedAt" data-bind="receivedAt">1 week ago</span>: 
+            <span class="crl-messageText" data-bind="messageText">Work at home!  Easy money!  Just by packing envelopes and occasionally engaging in daring daylight raids on armored cars that pass by your home!  Must have own thing that punctures car tires.  You know, the one you drag across the road?  It kind of telescopes...  Easy money!</span>
+          </div>
+        </div>
+      </a>
+      <!-- connreq 3 -->
+      <a class="crl-item" data-classimpl="connReq" href="#acceptReq">
+        <div>
+          <div class="crl-avatar">
+            <img class="crl-pic PIC-eliza" src="i/face2.png" />
+          </div>
+          <div class="crl-info">
+            <div>
+              <span class="crl-peepName">Eliza Dolittle</span>
+            </div>
+            <div>
+              using server <span class="crl-serverUrl">pygmael.example.com</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="crl-details">
+            <span class="crl-receivedAt" data-bind="receivedAt">2 weeks ago</span>: 
+            <span class="crl-messageText" data-bind="messageText">The rain in Spain stays mainly in the plane.</span>
+          </div>
+        </div>
+      </a>
     </div>
   </div>
 
   <!-- acceptReq: Confirm accepting a connect/friend requestion  -->
-  <div data-cardid="acceptReq" title="Accept a connection" class="card">
+  <div data-cardid="acceptReq" title="Accept a connection" class="card cra-card">
     <div class="scroller">
-      <div>
-        A person identifying themselves as:
-        <div class="hbox">
-          <div>
-            <div class="avatar">
-              <img class="peepInfoPic" data-bind="peep.pic"
-                   data-attr="src" data-missing="OMIT"
-                   src="i/face2.png" />
+      <!-- Who? -->
+      <div class="cra-infoBlock">
+        <div class="cra-infoLabel">The Alleged:</div>
+        <div class="cra-infoBundle">
+          <div class="cra-avatar">
+            <img class="cra-pic PIC-fred" />
+            <span class="cra-allegedName">Fred Q. Fredericks</span>
+          </div>
+          <div class="cra-serverInfo">
+            using server: <span class="cra-serverUrl">fredadelic.example.com</span>
+          </div>
+        </div>
+      </div>
+      <div class="cra-pocoContainer">
+        <ul class="cra-pocoList">
+          <li class="cra-pocoItem">
+            <label class="cra-pocoLabel">e-mail</label>
+            <div class="cra-pocoValue">fred@fred.fred</div>
+          </li>
+        </ul>
+      </div>
+      <!-- What they say -->
+      <div class="cra-saysBlock">
+        <img class="cra-saysPic PIC-fred" />
+        <div class="cra-saysIndicator"></div>
+        <div class="cra-messageText">Hey, it's me!  The guy from the
+          mouse-trap factory!  I just got out of the hospital.  The doctors were
+          able to remove almost all of the mouse-traps!
+        </div>
+      </div>
+      <!-- Known to your contacts -->
+      <div class="cra-relations">
+        <div class="cra-relationLabel">Known to your contacts:</div>
+        <div class="cra-relatedContacts">
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-alice" />
+            <span class="cra-relName">Alice</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">Freddy F</span>
+          </div>
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-bob" />
+            <span class="cra-relName">Bob</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">the Fredster</span>
+          </div>
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-charlie" />
+            <span class="cra-relName">Charlie</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">Fred Q. Fredericks</span>
+          </div>
+        </div>
+      </div>
+      <!-- Conversation Participation (write ordering) -->
+      <div class="cra-convsBlock">
+        <div class="cra-convsLabel">Participating in conversations:</div>
+        <div class="cra-convs">
+          <div class="cra-conv">
+            <span class="cra-convDate">5 days ago</span>
+            <span class="cra-subjectish">Let's visit the mouse-trap factory!</span>
+            <div class="cra-participants">
+              <span class="cra-participant"><img class="cra-partPic PIC-alice">Alice</span>
+              <span class="cra-participant"><img class="cra-partPic PIC-charlie">Charlie</span>
+              <span class="cra-participant cra-partOthers">and 2 others</span>
             </div>
           </div>
-          <div>
-            <span class="untrustedData"
-                data-bind="peep.selfPoco.displayName"></span>
+          <div class="cra-conv">
+            <span class="cra-convDate">1 month ago</span>
+            <span class="cra-subjectish">I'm having a holiday party, and you're invited!</span>
+            <div class="cra-participants">
+              <span class="cra-participant"><img class="cra-partPic PIC-bob">Bob</span>
+              <span class="cra-participant cra-partOthers">and 12 others</span>
+            </div>
           </div>
         </div>
       </div>
-      <div>
-        using server at <span class="untrustedData"
-                              data-bind="peepServer.url"></span>
-      </div>
-      <div class="pocoContainer">
-        with the additional contact information:
-      </div>
-      <div>
-        would like to establish a connection with you.  They sent along
-        this message with the request:
-      </div>
-      <div>
-        <span class="untrustedData" data-bind="messageText"></span>
-      </div>
-      <form class="acceptFriendForm standardForm settings">
-        Yes, I want to connect with them, and...
+
+      <!-- Actions -->
+      <div class="cra-action">
+        <div class="cra-actionLabel">Yes</div>, I want to connect with them.
         <div>
-          I call this person: <input type="text" name="displayName">
+          I call this person: <input class="cra-nameThem" type="text" name="displayName">
         </div>
-        <button class="green">Accept connect request</button>
-      </form>
-      <form class="ignoreFriendForm standardForm settings">
-        Not sure right now, I'll want to look at this again in the future.
-        <br />
-        <button>Ignore request for now</button>
-      </form>
-      <form class="rejectFriendForm standardForm settings">
-        No, I don't want to connect with them and I NEVER want to see
-        this request again, so I...
-        <br />
-        <button class="red">Reject connect request</button>
-      </form>
+        <div class="cra-actionButtons"><button>Accept</button></div>
+      </div>
+      <div class="cra-action">
+        <div class="cra-actionLabel">Not now</div>.  Leave the request as-is and
+        I'll get to it in the future.
+        <div class="cra-actionButtons"><button>Ignore</button></div>
+      </div>
+      <div class="cra-action">
+        <div class="cra-actionLabel">Not ever</div>.  Delete the request.  The
+        other person will never know.
+
+        <div class="cra-actionButtons"><button>Delete</button></div>
+      </div>
     </div>
   </div>
 </div></div>
