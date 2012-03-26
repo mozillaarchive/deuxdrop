@@ -1,0 +1,978 @@
+/*
+ * The CSS in this file is unhappy.
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+
+    -webkit-box-sizing: border-box;
+       -moz-box-sizing: border-box;
+         -o-box-sizing: border-box;
+            box-sizing: border-box;
+}
+
+body {
+    font-family: "Helvetica", arial, sans-serif;
+    background-color: #fafafa;
+    color: #222;
+    font-size: 14px;
+    line-height: 18px;
+}
+
+.hidden,
+button.hidden {
+  display: none;
+}
+
+/* Used by card.js to hide inputs on other cards
+  so that mobile firefox does not do the up/down arrow
+  controls over the screen.
+*/
+.inputHidden {
+  visibility: hidden;
+}
+
+.invisible,
+button.invisible {
+  visibility: hidden;
+}
+
+.untrustedData {
+  background-color: #fee;
+}
+
+button,
+input,
+textarea {
+    font-family: "Helvetica", arial, sans-serif;
+}
+
+button {
+    cursor: pointer;
+}
+
+button::-moz-focus-inner {
+    padding: 0;
+    border: 0
+}
+
+::-webkit-input-placeholder {
+    color: #ccc;
+}
+:-moz-placeholder {
+    color: #ccc;
+}
+
+a {
+    text-decoration: none;
+    color: #0063FF;
+}
+
+.overflow {
+    overflow: hidden;
+    white-space: nowrap;
+
+    -o-text-overflow: ellipsis;
+       text-overflow: ellipsis;
+}
+
+#header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 34px;
+    overflow: hidden;
+
+    padding: 5px;
+    background-color: #222;
+    position: relative;
+    z-index: 99;
+
+    -webkit-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+       -moz-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+         -o-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+            box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #595959),
+                            color-stop(50%, #444444),
+                            color-stop(50%, #404040),
+                            color-stop(100%, #1a1a1a)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #595959 0%,
+                                           #444444 50%,
+                                           #404040 50%,
+                                           #1A1A1A 100%);
+}
+
+#header button {
+    height: 24px;
+    line-height: 24px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 -1px 0 #333;
+    padding: 0 5px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #222 #000 #000;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+
+    -webkit-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+       -moz-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+         -o-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+            box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #828282),
+                            color-stop(50%, #565656),
+                            color-stop(50%, #4D4C4C),
+                            color-stop(100%, #1F1F1F)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #828282 0%,
+                                           #565656 50%,
+                                           #4D4C4C 50%,
+                                           #1F1F1F 100%);
+}
+
+#headerText {
+    font-size: 16px;
+    line-height: 24px;
+    height: 24px;
+    font-weight: bold;
+    color: #eee;
+    text-shadow: 0 -1px 0 #222;
+    text-align: center;
+}
+
+#notify {
+    display: none;
+    position: absolute;
+    right: 50px;
+    top: 7px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    border: 1px solid #0063FF;
+    color: white;
+    background-color: #0063FF;
+    z-index: 200;
+    text-align: center;
+
+    -webkit-border-radius: 10px;
+       -moz-border-radius: 10px;
+         -o-border-radius: 10px;
+            border-radius: 10px;
+}
+
+#notify.active {
+    display: block;
+}
+
+#cardContainer {
+  position: relative;
+  left: 0;
+  overflow: hidden;
+}
+
+#cards {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition-property: left;
+  transition-duration: 300ms;
+  transition-timing-function: linear;
+  -moz-transition-property: left;
+  -moz-transition-duration: 300ms;
+  -moz-transition-timing-function: linear;
+  -webkit-transition-property: left;
+  -webkit-transition-duration: 300ms;
+  -webkit-transition-timing-function: linear;
+  -o-transition-property: left;
+  -o-transition-duration: 300ms;
+  -otransition-timing-function: linear;
+
+  /* To trigger hardward acceleration for webkit:
+     http://www.html5rocks.com/en/tutorials/speed/quick/#toc-hwaccel
+     May need to remove */
+  -webkit-transform: translateZ(0);
+}
+
+.card {
+  float: left;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.scroller {
+}
+
+.subHeader,
+.compose {
+    height: 34px;
+    line-height: 24px;
+    padding: 5px;
+    font-size: 12px;
+    text-shadow: 1px 1px 0 #fff;
+    color: #666;
+    background-color: #fff;
+    position: relative;
+    z-index: 100;
+}
+
+.subHeader {
+    border-bottom: 1px solid #aaa;
+
+    -webkit-box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+       -moz-box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+         -o-box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+            box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+}
+
+.compose {
+    border-top: 1px solid #aaa;
+    margin-top: -1px;
+
+    -webkit-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+       -moz-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+         -o-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+            box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+}
+
+.homeNav {
+    outline: 1px solid #eee;
+    background-color: #fff;
+    width: 50%;
+    display: block;
+    float: left;
+    text-align: center;
+    line-height: 238px;
+    cursor: pointer;
+}
+
+.homeNav.browserSignIn {
+  width: 100%;
+}
+
+#loading {
+    height: 48px;
+    line-height: 48px;
+    background-color: #fff;
+    font-size: 12px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+    color: #666;
+
+    -webkit-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+       -moz-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+         -o-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+            box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+}
+
+#loading img {
+    vertical-align: middle;
+}
+
+button,
+.subHeader button,
+.compose button {
+    background-color: #EEEEEE;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #708BB5 #708BB5 #516B95;
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: bold;
+    height: 24px;
+    padding: 0 10px;
+    text-shadow: 0 -1px 0 #516B95;
+    margin: 0 0 0 5px;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #A7BDE0),
+                            color-stop(50%, #8199BF),
+                            color-stop(50%, #708BB5),
+                            color-stop(100%, #516B95)
+                      );
+
+    background-image: -moz-linear-gradient(center top ,
+                                           #A7BDE0 0%,
+                                           #8199BF 50%,
+                                           #708BB5 50%,
+                                           #516B95 100%);
+}
+
+.subHeader button.search {
+    border-radius: 0 3px 3px 0;
+    margin: 0;
+}
+
+input[type=text] {
+    width: 100%;
+    font-size: 12px;
+    height: 24px;
+    padding: 0 5px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #bbb #bbb #ccc;
+    outline: none;
+
+    -webkit-box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+       -moz-box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+         -o-box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+            box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+}
+
+input[type=text]#search {
+    -webkit-border-radius: 3px 0 0 3px;
+       -moz-border-radius: 3px 0 0 3px;
+         -o-border-radius: 3px 0 0 3px;
+            border-radius: 3px 0 0 3px;
+
+    border-width: 1px 0 1px 1px;
+}
+
+.notificationCount {
+  display: inline-block;
+  background-color: red;
+  color: white;
+  font-size: 12px;
+  height: 16px;
+  width: 16px;
+  padding: 0;
+  margin-bottom: 4px;
+  line-height: normal;
+  text-align: center;
+
+  -webkit-border-radius: 8px;
+     -moz-border-radius: 8px;
+          border-radius: 8px;
+}
+
+.newConversationNotifications {
+  display: block;
+  clear: both;
+}
+
+.newConversationScroller {
+  overflow-y: hidden;
+  overflow-x: auto;
+  height: 180px;
+}
+
+
+.peepInfoPic {
+  width: 40px;
+  height: 40px;
+}
+
+.newConversation {
+  float: left;
+  position: relative;
+  margin: 10px;
+  padding: 10px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+  display: inline-block;
+  width: 180px;
+  height: 160px;
+  border-radius: 5px;
+  color: #111;
+  background: -moz-linear-gradient(top, #fefefe 0, #fefefe 1px, #f2f2f2 1px, #e6e6e6 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fefefe), color-stop(1%, #fefefe), color-stop(1%, #f2f2f2), color-stop(100%, #e6e6e6));
+
+  overflow: hidden;
+  font-size: smaller;
+}
+
+
+.miniPeepInfoPic {
+  width: 16px;
+  height: 16px;
+}
+
+.newConversationPeep {
+}
+.newConversationText {
+}
+
+.newbubMsg {
+  display: block;
+}
+.newConversationTime {
+  color: #777;
+  font-size: smaller;
+}
+
+.connReqItem {
+    width: 100%;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 0.3em;
+}
+
+    .connReqItem .details {
+        margin-left: 1.5em;
+    }
+    .connReqItem .receivedAt {
+        color: #aaa;
+    }
+    .connReqItem .messageText {
+        color: #666;
+    }
+
+.name {
+  font-weight: bold;
+}
+
+.checked {
+    background-color: yellow;
+}
+
+.namecheck:after, .participant:after {
+    content: ", ";
+}
+.namecheck:last-child:after, .participant:last-child:after {
+    content: "";
+}
+
+.conversations,
+.conversation {
+}
+
+    .avatar {
+        width: 48px;
+        height: 48px;
+        padding: 3px;
+        border: 1px solid #eee;
+        margin: 0 5px 0 0;
+        background-color: #fff;
+    }
+
+    .conversations a,
+    .conversation a {
+        background-color: #fff;
+        padding: 10px 5px;
+        border-bottom: 1px solid #ddd;
+        cursor: pointer;
+        color: inherit;
+    }
+
+    .conversations a .msgPreviewHeader,
+    .conversation a .msgHeader {
+        line-height: 26px;
+    }
+
+    .conversations a .author,
+    .conversation a .author {
+        font-weight: bold;
+    }
+
+    .conversations a .participants {
+        margin-left: 3px;
+        color: #666;
+    }
+
+    .conversations a .new {
+        color: #0063FF;
+        margin-left: 3px;
+    }
+
+    .conversations a .time,
+    .conversation a .time {
+        font-size: 12px;
+        color: #aaa;
+        margin-left: 5px;
+    }
+
+    .conversations a .snippet {
+        color: #aaa;
+        font-size: 12px;
+    }
+
+    .conversations a.read {
+        background-color: #fafafa;
+    }
+
+    .conversations a.read .author {
+        color: #666;
+    }
+
+    .conversations a.unread .author:before {
+        content: '\25cf';
+        color: #0063FF;
+        margin-right: 3px;
+    }
+
+    .conversation .messages {
+        list-style-type: none;
+    }
+
+    .conversation .messages a {
+        margin: 0 0 5px 0;
+        padding: 0;
+        font-size: 12px;
+        border-bottom: none;
+    }
+
+.card.privateConv {
+  background-color: black;
+  color: white;
+}
+
+.card.privateConv .compose {
+  background-color: black;
+  color: white;
+}
+
+.peepInfoName {
+  padding: 8px;
+}
+
+.bigSubHeader {
+    height: 64px;
+}
+
+
+.privateMessage {
+  width: 100%;
+  height: 2.4em;
+}
+.privateMessage:hover {
+  background-color: #111;
+}
+
+.privateMessage[watermark="true"] {
+  border-bottom: 2px solid #448;
+}
+
+.privateMessage > .container {
+  width: 80%;
+  min-width: 80%;
+  max-width: 80%;
+}
+
+.bgFromMe {
+  border: 1px solid #444;
+  background-color: #222;
+}
+.fromMe .message {
+  border: 1px solid #444;
+  background-color: #222;
+  padding: 4px;
+}
+
+.bgToMe {
+  border: 1px solid #448;
+  background-color: #224;
+}
+.toMe .message {
+  border: 1px solid #448;
+  background-color: #224;
+  padding: 4px;
+}
+
+/*
+.fromMe + .toMe {
+  margin-bottom: 0.5em;
+}
+.toMe + .fromMe {
+  margin-bottom: 0.5em;
+}
+*/
+
+.fromMe > .leftPad {
+  width: 0;
+}
+.fromMe > .rightPad {
+  width: 80px;
+}
+.toMe > .leftPad {
+  width: 80px;
+}
+.toMe > .rightPad {
+  width: 0px;
+}
+
+.settings {
+    padding: 10px 5px;
+}
+
+.standardForm {
+    text-align: center;
+}
+
+.standardForm > div {
+    margin: 20px 0;
+}
+
+.standardForm [type="text"] {
+    text-align: center;
+}
+
+.item {
+    display: block;
+    background-color: #fff;
+    padding: 10px 5px;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+}
+
+#userProfileHeader {
+    margin: 0 0 10px;
+}
+
+#userProfileHeader .username {
+    line-height: 48px;
+    font-weight: bold;
+}
+
+.pocoContainer {
+  margin: 1em 0em;
+}
+
+.menu {
+    list-style-type: none;
+    background-color: white;
+    border-radius: 10px;
+    border: 1px solid #aaa;
+    margin: 0 0 10px 0;
+}
+
+.menu li {
+    font-size: 12px;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.menu li:last-child {
+    border-bottom: none;
+}
+
+.menu li label {
+    color: #666;
+}
+
+#alert {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 10000;
+    opacity: 0;
+    margin-left: -100%;
+
+    -webkit-transition: margin 0s 0.4s ease, opacity 0.4s ease;
+       -moz-transition: margin 0s 0.4s ease, opacity 0.4s ease;
+         -o-transition: margin 0s 0.4s ease, opacity 0.4s ease;
+            transition: margin 0s 0.4s ease, opacity 0.4s ease;
+}
+
+#alert.visible {
+    margin-left: 0;
+    opacity: 1;
+
+    -webkit-transition: margin 0s ease, opacity 0.4s ease;
+       -moz-transition: margin 0s ease, opacity 0.4s ease;
+         -o-transition: margin 0s ease, opacity 0.4s ease;
+            transition: margin 0s ease, opacity 0.4s ease;
+}
+
+#alert .notificationWrapper {
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+    opacity: 0;
+
+    -webkit-transition: all 0.4s ease;
+       -moz-transition: all 0.4s ease;
+         -o-transition: all 0.4s ease;
+            transition: all 0.4s ease;
+}
+
+#alert.visible .notificationWrapper {
+    bottom: 10px;
+    opacity: 1;
+
+    -webkit-transition: all 0.4s ease;
+       -moz-transition: all 0.4s ease;
+         -o-transition: all 0.4s ease;
+            transition: all 0.4s ease;
+}
+
+#alert .notification {
+    display: block;
+    position: relative;
+    margin: 10px;
+    background-color: #111;
+    padding: 20px;
+    color: #eee;
+    font-weight: bold;
+
+    border-radius: 10px;
+}
+
+#alert .notification p {
+    margin: 0 0 9px 0;
+    text-shadow: 0 -1px 0 #000;
+}
+
+#alert button,
+.settings button {
+    width: 100%;
+    margin: 0 0 9px 0;
+    height: 36px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #444;
+    text-shadow: 1px 1px 0 #fff;
+    border: none;
+
+    -webkit-border-radius: 5px;
+       -moz-border-radius: 5px;
+         -o-border-radius: 5px;
+            border-radius: 5px;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #fafafa),
+                            color-stop(50%, #f2f2f2),
+                            color-stop(50%, #e6e6e6),
+                            color-stop(100%, #ccc)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #fafafa 0%,
+                                           #f2f2f2 50%,
+                                           #e6e6e6 50%,
+                                           #ccc 100%);
+}
+
+#alert button.red,
+.settings button.red {
+    color: #FFFFFF;
+    text-shadow: 0 -1px 0 #B13D3D;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #EA7676),
+                            color-stop(50%, #EA5C5C),
+                            color-stop(50%, #E15050),
+                            color-stop(100%, #C84343)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #EA7676 0%,
+                                           #EA5C5C 50%,
+                                           #E15050 50%,
+                                           #C84343 100%);
+}
+
+#alert button.green,
+.settings button.green {
+    color: #FFFFFF;
+    text-shadow: 0 -1px 0 #478248;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #70D972),
+                            color-stop(50%, #5CB35E),
+                            color-stop(50%, #49AA4B),
+                            color-stop(100%, #478248)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #70D972 0%,
+                                           #5CB35E 50%,
+                                           #49AA4B 50%,
+                                           #478248 100%)
+}
+
+.settings button {
+    border: 1px solid #aaa;
+    height: 24px;
+    font-size: 11px;
+    width: auto;
+    padding: 0 10px;
+    margin-top: 12px;
+    margin-bottom: 0;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+}
+
+.settings button.red {
+    border: 1px solid #B13D3D;
+}
+
+.settings button.green {
+    border: 1px solid #478248;
+}
+
+#alert button:last-child {
+    margin: 0;
+}
+
+/* hbox and vbox classes */
+
+.hbox {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal;
+    -webkit-box-align: stretch;
+
+    display: -moz-box !important;
+    -moz-box-orient: horizontal;
+    -moz-box-align: stretch;
+
+    display: box !important;
+    box-orient: horizontal;
+    box-align: stretch;
+    width: 100%;
+}
+
+.hbox > * {
+    -webkit-box-flex: 0;
+    -moz-box-flex: 0;
+    box-flex: 0;
+    display: block;
+}
+
+.vbox {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-box-align: stretch;
+
+    display: -moz-box;
+    -moz-box-orient: vertical;
+    -moz-box-align: stretch;
+
+    display: box;
+    box-orient: vertical;
+    box-align: stretch;
+}
+
+.vbox > * {
+    -webkit-box-flex: 0;
+    -moz-box-flex: 0;
+    box-flex: 0;
+    display: block;
+}
+
+.spacer {
+    -webkit-box-flex: 1;
+    -moz-box-flex: 1;
+    box-flex: 1;
+}
+
+.reverse {
+    -webkit-box-direction: reverse;
+    -moz-box-direction: reverse;
+    box-direction: reverse;
+}
+
+.boxFlex0 {
+    -webkit-box-flex: 0;
+    -moz-box-flex: 0;
+    box-flex: 0;
+}
+
+.boxFlex1, .boxFlex {
+    -webkit-box-flex: 1;
+    -moz-box-flex: 1;
+    box-flex: 1;
+}
+
+.boxFlexStrong {
+    -webkit-box-flex: 50;
+    -moz-box-flex: 50;
+    box-flex: 50;
+}
+
+.boxGroup1 {
+    -webkit-box-flex-group: 1;
+    -moz-box-flex-group: 1;
+    box-flex-group: 1;
+}
+
+.boxGroup2 {
+    -webkit-box-flex-group: 2;
+    -moz-box-flex-group: 2;
+    box-flex-group: 2;
+}
+
+.start {
+    -webkit-box-pack: start;
+    -moz-box-pack: start;
+    box-pack: start;
+}
+
+.end {
+    -webkit-box-pack: end;
+    -moz-box-pack: end;
+    box-pack: end;
+}
+
+.center {
+    -webkit-box-pack: center;
+    -moz-box-pack: center;
+    box-pack: center;
+}
+/* END hbox/vbox normalization from http://alex.dojotoolkit.org/2009/08/css-3-progress/ */
+
+/* clearfix */
+
+.cf:after {
+    content: ".";
+    display: block;
+    clear: both;
+    visibility: hidden;
+    line-height: 0;
+    height: 0;
+}
+
+html[xmlns] .cf {
+    display: block;
+}
+
+* html .cf {
+    height: 1%;
+}

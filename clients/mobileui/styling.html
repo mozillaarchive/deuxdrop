@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop Styling Haxorin'</title>
+    <style type="text/css">
+      #stylingCardContainer {
+        position: relative;
+      }
+
+      /* because position:fixed doesn't work with the header, we need to
+         clobber it and have the card be the scrolling region */
+      .stylingCardWrapper {
+        position: relative;
+        display: inline-block;
+        border: 1px solid #aaa;
+        width: 480px;
+        height: 800px;
+        margin-bottom: 4px;
+        overflow: hidden;
+      }
+      .card {
+        height: 766px;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+      }
+      .THEheader {
+        position: relative !important;
+      }
+      /* this would normally be dynamically computed/updated by the UI code
+         owing to limitations of horizontal layout with HTML/CSS */
+      .hps-newConvsScroller {
+        width: 620px;
+      }
+
+
+      #stylingCardTemplate {
+        display: none;
+      }
+    </style>
+    <link rel="stylesheet/less" type="text/css" href="style.less" />
+    <script src="../deps/less.js"></script>
+    <script src="../deps/jquery.js"></script>
+    <script>//<![CDATA[
+      // - pictures of contacts
+      // these are all hashes of BLAH@asutherland.org since I control the
+      //  domain.
+      var PIC_ALICE = 'http://www.gravatar.com/avatar/4515e58a3ce433a5e54a4716191c5815?r=pg&d=wavatar&s=48',
+          PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
+          PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
+          PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48',
+          PIC_ZORRO = 'http://www.gravatar.com/avatar/5bad16eeb23bd05a223baf7a0fb996dd?r=pg&d=wavatar&s=48',
+          PIC_ZORRO_JR = 'http://www.gravatar.com/avatar/d7e0fa5fe16b5dc4743c5a7177b0c1ae?r=pg&d=wavatar&s=48',
+          PICS = {alice: PIC_ALICE, bob: PIC_BOB, charlie: PIC_CHARLIE,
+                  dave: PIC_DAVE, zorro: PIC_ZORRO, zorrojr: PIC_ZORRO_JR};
+      $(function() {
+        // - card stuff
+        // wrap every card with a stylingCardWrapper so they each look like
+        //  little screenshots.
+        $('.card')
+          .wrap($('#stylingCardTemplate').clone(true).removeAttr('id'));
+        $('.stylingCardWrapper')
+          .each(function() {
+            var title = $(this).find('[title]').attr('title');
+            $(this).find('.THEheaderText').text(title);
+          });
+
+        // Replace the image sources for .PIC-blah with the appropriate URls
+        $('.PIC-alice').attr('src', PIC_ALICE);
+        $('.PIC-bob').attr('src', PIC_BOB);
+        $('.PIC-charlie').attr('src', PIC_CHARLIE);
+        $('.PIC-me').attr('src', PIC_DAVE);
+        $('.PIC-you').attr('src', PIC_DAVE);
+        $('.PIC-zorro').attr('src', PIC_ZORRO);
+        $('.PIC-zorrojr').attr('src', PIC_ZORRO_JR);
+      });
+    //]]>
+    </script>
+  </head>
+<body>
+  <div style="margin: 2em;"> 
+    This page is a manually created static document to be used for styling.
+    We use <a href="http://lesscss.org/">LESS</a> for styling, so you will want
+    to edit <a href="style.less">style.less</a> in an editor.  To have changes
+    update in sorta-realtime, you can append <a href="#!watch">#!watch</a> to
+    our URL and less will keep refreshing from the file for you automatically.
+  </div>
+  <div id="stylingCardTemplate" class="stylingCardWrapper">
+    <div class="THEheader hbox">
+      <button class="THEback">Back</button>
+      <div class="boxFlex"><h1 class="THEheaderText overflow">Deuxdrop</h1></div>
+      <button class="next invisible">Info</button>
+    </div>
+    <a class="THEnotify" data-nonav="nonav">!</a>
+  </div>
+
+  <!-- ===== Cards ======================================================= -->
+<div id="stylingCardContainer"><div id="cards">
+
+  <!-- signIn: Give us your name and e-mail (via BrowserID) -->
+  <div data-cardid="signIn" title="Sign In" class="card">
+    <form class="signUpForm standardForm">
+      <input type="text" name="name" placeholder="Enter your name">
+      <button>Sign In With BrowserID</button>
+    </form>
+  </div>
+
+  <!-- pickServer: list known servers the user can sign-up with -->
+  <div data-cardid="pickServer" title="Pick Server" class="card">
+    <div class="scroller" data-childclass="serverLink">
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/raindrop-us.png" />us.raindrop.it</span>
+        <span class="ps-serverName">Raindrop US Server</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/raindrop-de.png" />de.raindrop.it</span>
+        <span class="ps-serverName">Raindrop German Server</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />gd.example.com</span>
+        <span class="ps-serverName">Global Dynamics</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />md.example.com</span>
+        <span class="ps-serverName">Massive Dynamic</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />hipsters.example.com</span>
+        <span class="ps-serverName">4 Hipsters Only!!!</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />friendly.example.com</span>
+        <span class="ps-serverName">Friendly Mail Company's Friendly Mail Server that wants to be your friend, yes we do.  Do you not believe it?  You should!</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />nefarious1.example.com</span>
+        <span class="ps-serverName">Fraudulent Raindrop US Server (us.raindrop.it) ____________________________________________________ Someotheryestotally for sure</span>
+      </a>
+      <a data-classimpl="serverLink" class="ps-server"
+         href="#connectToServer">
+        <span class="ps-serverUrl"><img class="ps-serverIcon" src="../../styling/server-icons/missing.png" />us.raindrop.it.ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.example.com</span>
+        <span class="ps-serverName">Nefarious Server</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- enterServer: Manual server selection (not from the list) -->
+  <div data-cardid="enterServer" title="Enter Server" class="card">
+    <div class="scroller">
+      <form class="enterServerForm standardForm">
+        <input type="text" name="server" placeholder="Enter server name">
+        <button>Connect</button>
+        <div>Warning, this is advanced voodoo and not very secure.</div>
+      </form>
+    </div>
+  </div>
+
+  <!-- start: The home page (once signed up). -->
+  <div data-cardid="start" title="Deuxdrop" class="card">
+    <div class="scroller">
+      <div class="navButtons">
+        <a class="homeNav" href="#private">Private</a>
+        <a class="homeNav" href="#groups">Group</a>
+        <a class="homeNav" href="#notifications">
+          <span class="notifications">Notifications</span>
+            <span class="hps-notificationCount">5</span>
+        </a>
+        <a class="homeNav" href="#add">+</a>
+      </div>
+      <div class="hps-newConvsBlock">
+        <div class="hps-newConvsScroller">
+  <!--(BEGIN indent change for new conversation activity bubbles)-->
+
+  <!-- new private conv activity: 4 messages -->
+  <a data-classimpl="newbubPrivateConv" class="hpn-privateConv"
+     href="#privateConv">
+    <div class="hpn-privateSummary">
+      <img class="hpn-pic PIC-alice" src="i/face2.png" />
+      <span class="hpn-privatePeep">Alice</span>
+    </div>
+    <div data-childclass="newbubPrivateMsg" class="hpn-privateMsgContainer" >
+
+      <!-- message 1 -->
+      <div class="hpn-privateMsg">
+        <div>
+          <span class="hpn-privateMsgTime">4 hours ago</span>
+        </div>
+        <span class="hpn-privateMsgText">Sure, we can do that.</span>
+      </div>
+      <!-- message 2 -->
+      <div class="hpn-privateMsg">
+        <div>
+          <span class="hpn-privateMsgTime">3 hours ago</span>
+        </div>
+        <span class="hpn-privateMsgText">
+          Oh, wait.  We probably can't.  I just looked it up and time travel is
+          impossible after all.
+        </span>
+      </div>
+      <!-- message 3 -->
+      <div class="hpn-privateMsg">
+        <div>
+          <span class="hpn-privateMsgTime">3 hours ago</span>
+        </div>
+        <span class="hpn-privateMsgText">
+          Maybe we could just hire an Abe Lincoln look-alike?...
+        </span>
+      </div>
+      <!-- message 4 -->
+      <div class="hpn-privateMsg">
+        <div>
+          <span class="hpn-privateMsgTime">10 minutes ago</span>
+        </div>
+        <span class="hpn-privateMsgText">
+          ...and I found one!
+        </span>
+      </div>
+    </div>
+  </a>
+
+  <!-- new group conv activity -->
+  <a data-classimpl="newbubGroupConv" class="hpn-groupConv"
+     href="#groupConv">
+    <div class="hpn-groupSummary">
+      <span class="hpn-groupSummaryText">
+        Let's throw a party!
+      </span>
+    </div>
+    <div data-childclass="newbubGroupMsg" class="hpn-groupMsgContainer" >
+      <!-- message 1: human -->
+      <div class="hpn-groupMsg">
+        <div class="hpn-groupMsgHeader">
+          <img class="hpn-pic PIC-bob" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Bob</span>
+          <span class="hpn-groupMsgTime">3 hours ago</span>
+        </div>
+        <span class="hpn-groupMsgText">Let's ask Charlie what he thinks
+        about the roadtrip...</span>
+      </div>
+      <!-- message 2: join -->
+      <div class="hpn-groupJoin">
+        <div class="hpn-groupJoinHeader">
+          <img class="hpn-pic PIC-bob" src="i/face2.png" />
+          <span class="hpn-groupInviterName">Bob</span>
+          <span class="hpn-groupInviteTime">3 hours ago</span>
+        </div>
+        <span class="hpn-groupInviteLabel">invited</span>
+        <span class="hpn-groupInviteeName">Charlie</span>
+        <img class="hpn-pic PIC-charlie" src="i/face2.png" />
+      </div>
+      <!-- message 3: human -->
+      <div class="hpn-groupMsg">
+        <div class="hpn-groupMsgHeader">
+          <img class="hpn-pic PIC-charlie" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Charlie</span>
+          <span class="hpn-groupMsgTime">1 hour ago</span>
+        </div>
+        <span class="hpn-groupMsgText">I don't think a road trip to the
+        North Pole is viable with all this global warming going on.</span>
+      </div>
+    </div>
+  </a>
+
+  <!-- new group conv activity -->
+  <a data-classimpl="newbubGroupConv" class="hpn-groupConv"
+     href="#groupConv">
+    <div class="hpn-groupSummary">
+      <span class="hpn-groupSummaryText">
+        Let's throw a hootenannie as soon as possible!  NOW NOW NOW!
+      </span>
+    </div>
+    <div data-childclass="newbubGroupMsg" class="hpn-groupMsgContainer" >
+      <!-- message 1: human -->
+      <div class="hpn-groupMsg">
+        <div class="hpn-groupMsgHeader">
+          <img class="hpn-pic PIC-alice" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Alice</span>
+          <span class="hpn-groupMsgTime">2 hours ago</span>
+        </div>
+        <span class="hpn-groupMsgText">Is that like a party?</span>
+      </div>
+      <!-- message 2: human -->
+      <div class="hpn-groupMsg">
+        <div class="hpn-groupMsgHeader">
+          <img class="hpn-pic PIC-charlie" src="i/face2.png" />
+          <span class="hpn-groupAuthorName">Charlie</span>
+          <span class="hpn-groupMsgTime">1 hour ago</span>
+        </div>
+        <span class="hpn-groupMsgText">Yes, exactly.</span>
+      </div>
+    </div>
+  </a>
+  <!--(END indent change for new conversation activity bubbles)-->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- private: Lists of peeps with most recent private conv msg snip -->
+  <div data-cardid="private" title="Private" class="card card-private">
+    <div class="subHeader hbox">
+      <div class="boxFlex">
+        <input id="search" type="text" placeholder="search people">
+      </div>
+      <button class="search">search</button>
+      <button class="button" data-href="#add">add contact</button>
+    </div>
+    <div class="scroller" data-childclass="peepPrivate">
+      <!-- Alice -->
+      <a class="pcl-perPeepItem" href="#privateConv"
+         hasUnread="true">
+        <div>
+          <div class="pcl-avatar">
+            <img class="pcl-pic PIC-alice" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="pcl-msgPreview">
+          <div class="pcl-msgPreviewHeader">
+            <span class="pcl-author">Alice</span>
+            <span class="pcl-new">(<span>2</span>)</span>
+            <span class="boxFlexStrong"></span>
+            <span class="pcl-time" data-bind="conv.mostRecentActivity">
+              10 minutes ago
+            </span>
+          </div>
+          <div class="pcl-msgPreviewBody">
+            <span class="pcl-msgPreviewSnippet"
+                  data-bind="conv.firstUnreadMessage.text">
+              Sure, we can do that.
+            </span>
+          </div>
+        </div>
+      </a>
+      <!-- Bob -->
+      <a class="pcl-perPeepItem" href="#privateConv"
+         hasUnread="false">
+        <div>
+          <div class="pcl-avatar">
+            <img class="pcl-pic PIC-bob" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="pcl-msgPreview">
+          <div class="pcl-msgPreviewHeader">
+            <span class="pcl-author">Bob</span>
+            <span class="pcl-new">(<span>0</span>)</span>
+            <span class="boxFlexStrong"></span>
+            <span class="pcl-time" data-bind="conv.mostRecentActivity">
+              1 day ago
+            </span>
+          </div>
+          <div class="pcl-msgPreviewBody">
+            <span class="pcl-msgPreviewSnippet"
+                  data-bind="conv.firstUnreadMessage.text">
+              No, the fact that the monkey already was an alcoholic does not
+              make getting the monkey drunk any better.  And before you ask,
+              a panda wouldn't change things.
+            </span>
+          </div>
+        </div>
+      </a>
+      <!-- Charlie -->
+      <a class="pcl-perPeepItem" href="#privateConv"
+         hasUnread="true">
+        <div>
+          <div class="pcl-avatar">
+            <img class="pcl-pic PIC-charlie" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="pcl-msgPreview">
+          <div class="pcl-msgPreviewHeader">
+            <span class="pcl-author">Charlie</span>
+            <span class="pcl-new">(<span>2</span>)</span>
+            <span class="boxFlexStrong"></span>
+            <span class="pcl-time" data-bind="conv.mostRecentActivity">
+              3 days ago
+            </span>
+          </div>
+          <div class="pcl-msgPreviewBody">
+            <span class="pcl-msgPreviewSnippet"
+                  data-bind="conv.firstUnreadMessage.text">
+              Whaaaaaa?
+            </span>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- privateConv: Private conversation with a friend peep. -->
+  <div data-cardid="privateConv" title="Private Conv" class="card pcd-card">
+    <!-- non-scrolling reminder of who our friend is... -->
+    <div class="pcd-header">
+      <div class="pcd-headerThem">
+        <img class="pcd-pic PIC-bob" src="i/face2.png" />
+        <span class="pcd-name">Bob</span>
+      </div>
+      <div class="pcd-headerMe">
+        <span class="pcd-name">You</span>
+        <img class="pcd-pic PIC-you" src="i/face2.png" />
+      </div>
+    </div>
+    <!-- scrolling messages -->
+    <div class="pcd-conversation" data-childclass="privateMessage">
+      <!-- expand to messages -->
+      <script type="text/javascript">//<![CDATA[
+        // There are enough of these and the potential for changes high enough
+        //  that we just do very simple inline templating here.
+        var privateConvInited = false;
+        $(function() {
+        if (privateConvInited) return;
+        privateConvInited = true;
+        var items = [
+          {t: "era", rt: "1 week ago", dt: "", at: "Friday, June 3rd"},
+          {t: "fromMe", d: "10:43a", m: "How's it going?"},
+          {t: "toMe",   d: "10:45a", m: "Pretty well."},
+          {t: "fromMe", d: "10:45a", m: "Anything going on?"},
+          {t: "toMe",   d: "10:47a", m: "The monkey escaped, gotta go"},
+          {t: "fromMe", d: "10:48a", m: "Wait, what?"},
+          {t: "fromMe", d: "10:50a", m: "What monkey?  How do you have a monkey?"},
+          {t: "fromMe", d: "10:50a", m: "WHY do you have a monkey?"},
+          {t: "era", rt: "5 days ago", dt: "(3 days later)", at: "Monday, June 6th"},
+          {t: "toMe",   d: "3:21p", m: "Sorry, was trapped in the basement for a few days."},
+          {t: "toMe",   d: "3:21p", m: "The monkey had locked and barricaded the door and it took me a while to tunnel out."},
+          {t: "fromMe", d: "3:27p", m: "Again. WHY do you have a monkey?"},
+          {t: "toMe",   d: "3:28p", m: "1-click shopping is very dangerous if you leave a cat alone in a room with a computer."},
+          {t: "fromMe", d: "3:30p", m: "Okay, that almost makes sense.  But why did the monkey lock you downstairs?"},
+          {t: "toMe",   d: "3:33p", m: "I knocked over his giant pile of bananas."},
+          {t: "fromMe", d: "3:34p", m: "That sounds like an accident.  Perfectly understandable!"},
+          {t: "toMe",   d: "3:35p", m: "Well..."},
+          {t: "toMe",   d: "3:35p", m: "This was after the fifth time."},
+          {t: "fromMe", d: "3:39p", m: "Okay, that sounds reasonable, then."},
+          {t: "fromMe", d: "3:39p", m: "I would lock you in the basement if you did that."},
+          {t: "toMe",   d: "3:42p", m: "Alright, well, I need to go clean up."},
+          {t: "era", rt: "3 days ago", dt: "(2 days later)", at: "Wednesday, June 8th"},
+          {t: "toMe",   d: "12:03p", m: "Hey, can you watch the monkey for me for a few days?"},
+          {t: "fromMe", d: "2:09p", m: "Sure, but I'm having a party tomorrow night.  Is it a cool monkey?"},
+          {t: "fromMe", d: "2:12p", m: "And how much feces flinging are we talking about?"},
+          {t: "toMe",   d: "2:45p", m: "Yes.  And practically none!"},
+          {t: "fromMe", d: "4:17p", m: "Fine."},
+          {t: "era", rt: "1 day ago", dt: "(2 days later)", at: "Friday, June 10th"},
+          {t: "toMe",   d: "11:02a", m: "WHY DOES MY MONKEY HAVE A HANGOVER?!"},
+          {t: "fromMe", d: "11:15a", m: "Dude, I checked the feedback on the product page.  Apparently he was so cheap because that place only stocks alcoholic monkeys.  So, like, it's not my fault.", watermark: true},
+          {t: "toMe", d: "11:23a", m: "No, the fact that the monkey already was an alcoholic does not make getting the monkey drunk any better.  And before you ask, a panda wouldn't change things."},
+        ];
+
+        var container = $(".pcd-conversation"),
+            msgTemplate = $(".pcd-message").remove(),
+            eraTemplate = $(".pcd-era").remove();
+        items.forEach(function(msg) {
+          if (msg.t === "era") {
+            var eraNode = eraTemplate.clone(true);
+            eraNode.find(".pcd-eraRelativeDate").text(msg.rt);
+            eraNode.find(".pcd-eraTimeDelta").text(msg.dt);
+            eraNode.find(".pcd-eraAbsoluteDate").text(msg.at);
+            eraNode.appendTo(container);
+            return;
+          }
+
+          var msgNode = msgTemplate.clone(true);
+          msgNode.addClass(msg.t);
+          msgNode.find(".pcd-messageText").text(msg.m);
+          msgNode.find(".pcd-messageTime").text(msg.d);
+          if (msg.watermark)
+            msgNode.attr("watermark", "true");
+          msgNode.appendTo(container);
+        });
+        
+        });
+      //]]></script>
+      <!-- message (template)-->
+      <div data-classimpl="privateMessage" class="pcd-message">
+        <div class="pcd-indicator"></div>
+        <div class="pcd-messageContainer">
+          <span class="pcd-messageText" data-bind="text">
+            MESSAGE GOES HERE
+          </span>
+          <span class="pcd-messageTime">DATE GOES HERE</span>
+        </div>
+      </div>
+      <!-- time separator AKA era (template) -->
+      <div class="pcd-era">
+        <span class="pcd-eraRelativeDate">
+          RELATIVE DATE GOES HERE
+        </span>
+        <span class="pcd-eraTimeDelta">
+          TIME SINCE PREVIOUS ERA GOES HERE
+        </span>
+        <span class="pcd-eraAbsoluteDate">
+          ABSOLUTE DATE GOES HERE
+        </span>
+      </div>
+
+    </div>
+    <!-- compose is a subwidget and not specific to this card -->
+    <form class="pcd-compose" data-class="compose">
+      <div class="hbox">
+        <div class="boxFlex">
+          <input type="text" placeholder="say hello" />
+        </div>
+        <button>send</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- groups: Lists of all conversations -->
+  <div data-cardid="groups" title="Group" class="card gcl-card">
+    <div class="subHeader hbox">
+      <div class="boxFlex">
+        <input id="search" type="text" placeholder="search people">
+      </div>
+      <button class="search">search</button>
+      <button class="button" data-href="#newConv">new</button>
+    </div>
+    <div class="scroller" data-childclass="convBlurb">
+      <!-- Conversation with new activity, reasonable first snippet  -->
+      <a class="gcl-conv" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="gcl-avatar">
+                  <img class="gcl-pic" src="i/group.png" />
+              </div>
+          </div>
+          <div class="gcl-msgPreview">
+              <div class="gcl-msgPreviewHeader">
+                  <!-- names -->
+                  <span class="gcl-namechecks"
+                        data-childclass="namecheck">
+                    <span class="gcl-namecheck">Alice</span>
+                    <span class="gcl-namecheck">Bob</span>
+                  </span>
+                  <span class="gcl-new">
+                    (<span data-bind="gcl-numUnreadMessages">2</span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="gcl-time">12 minutes ago</span>
+              </div>
+              <div class="hbox">
+                  <span class="gcl-msgPreviewSnippet">
+                    I don't know, that sounds pretty flammable.
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <!-- Conversation with new activity, tons of people  -->
+      <a class="gcl-conv" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="gcl-avatar">
+                  <img class="gcl-pic" src="i/group.png" />
+              </div>
+          </div>
+          <div class="gcl-msgPreview">
+              <div class="gcl-msgPreviewHeader">
+                  <!-- names -->
+                  <span class="gcl-namechecks">
+                    <span class="gcl-namecheck">Alice</span>
+                    <span class="gcl-namecheck">Bob</span>
+                    <span class="gcl-namecheck">Charlie</span>
+                    <span class="gcl-namecheck">the Dougster</span>
+                    <span class="gcl-namecheck">Eliza Dolittle</span>
+                    <span class="gcl-namecheck">Fred Q. Fredericks</span>
+                    <span class="gcl-namecheck">Georgette Q. Georgettington</span>
+                    <span class="gcl-namecheck">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
+                    <span class="gcl-namecheck">John Jacob Jingleheimer Schmidt</span>
+                  </span>
+                  <span class="gcl-new">
+                    (<span data-bind="gcl-numUnreadMessages">4</span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="gcl-time">2 hours ago</span>
+              </div>
+              <div class="hbox">
+                  <span class="gcl-msgPreviewSnippet">
+                    What do you get when you cross an elephant with a rhinocerous?
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <!-- Conversation with new activity, huge unread message snippet -->
+      <a class="gcl-conv" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="gcl-avatar">
+                  <img class="gcl-pic" src="i/group.png" />
+              </div>
+          </div>
+          <div class="gcl-msgPreview">
+              <div class="gcl-msgPreviewHeader">
+                  <!-- names -->
+                  <span class="gcl-namechecks"
+                        data-childclass="namecheck">
+                    <span class="gcl-namecheck">Bob</span>
+                    <span class="gcl-namecheck">Charlie</span>
+                    <span class="gcl-namecheck">Dave</span>
+                  </span>
+                  <span class="gcl-new">
+                    (<span data-bind="gcl-numUnreadMessages">1</span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="gcl-time">5 hours ago</span>
+              </div>
+              <div class="hbox">
+                  <span class="gcl-msgPreviewSnippet">
+                    Yes, I know my A, B, C's.  They are, in no particular order.
+                    Er, or rather, in a quite particular order: A, B, C, D, E,
+                    F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y,
+                    and Zed.  I mean Z.  Yes, Z.  I am not a British spy.
+                    And you'll never prove it, governa.  Damn!
+                  </span>
+              </div>
+          </div>
+      </a>
+
+
+    </div>
+  </div>
+
+  <!-- groupConv: Contents of a group conversation -->
+  <div data-cardid="groupConv" title="Group Conversation" class="card gcd-card">
+    <!-- non-scrolling reminder of the participants... -->
+    <div class="gcd-header">
+      <div class="gcd-participants" data-childclass="participant">
+        <span class="gcd-participant"><img class="gcd-part-pic PIC-alice" />Alice</span>
+        <span class="gcd-participant"><img class="gcd-part-pic PIC-bob" />Bob</span>
+        <span class="gcd-participant"><img class="gcd-part-pic PIC-charlie" />Charlie</span>
+        <span class="gcd-participant"><img class="gcd-part-pic PIC-zorro" />Zorro</span>
+        <span class="gcd-participant"><img class="gcd-part-pic PIC-zorrojr" />Zorro, Jr.</span>
+      </div>
+      <button class="gcd-add">Add</button>
+    </div>
+    <!-- scrolling messages -->
+    <div class="scroller">
+      <div class="gcd-conversation">
+      <!-- expand to messages -->
+      <script type="text/javascript">//<![CDATA[
+      // There are enough of these and the potential for changes high enough
+      //  that we just do very simple inline templating here.
+      var groupConvInited = false;
+      $(function() {
+        if (groupConvInited) return;
+        groupConvInited = true;
+        var items = [
+          {t: "era", rt: "3 weeks ago", dt: "", at: "Friday, June 3rd"},
+          {t: "join", r: "Alice", e: "Alice", d: "9:13a" },
+          {t: "join", r: "Alice", e: "Bob", d: "9:13a"},
+          {t: "join", r: "Alice", e: "You", d: "9:13a"},
+          {t: "msg", s: "Alice", d: "9:13a", m: "We need to break out of metaphorical prison!"},
+          {t: "msg", s: "Bob", d: "9:18a", m: "Yes, we are all trapped inside a metaphorical prison that separates us from our fellow human beings.  And our journey in life is to escape that prison."},
+          {t: "msg", s: "Dave", d: "9:42a", m: "I think Alice made a typo.  We're trapped in an actual prison.  Aren't you in here too?"},
+          {t: "msg", s: "Bob", d: "9:54a", m: "No, just a metaphorical prison."},
+          {t: "msg", s: "Bob", d: "9:54a", m: "They were going to put me in an actual prison, but then I told them you guys were the ones who keyed that guy's car."},
+          {t: "join", r: "Dave", e: "Charlie", d: "10:08a"},
+          {t: "msg", s: "Dave", d: "10:09a", m: "Charlie, we need you to break us out of prison."},
+          {t: "msg", s: "Charlie", d: "4:10p", m: "The first step is to break down the walls by being completely honest."},
+          {t: "msg", s: "Alice", d: "4:14p", m: "Not the metaphorical one."},
+          {t: "msg", s: "Charlie", d: "4:16p", m: "Then the first step is to break down the physical walls with some form of explosive."},
+          {t: "msg", s: "Alice", d: "4:14p", m: "They took away all of our fireworks."},
+          {t: "msg", s: "Charlie", d: "4:19p", m: "Powertools?"},
+          {t: "msg", s: "Charlie", d: "4:19p", m: "Silverware?"},
+          {t: "msg", s: "Alice", d: "4:19p", m: "Taken."},
+          {t: "msg", s: "Alice", d: "4:20p", m: "Replaced with plastic sporks."},
+          {t: "msg", s: "Charlie", d: "4:23p", m: "Gimme a minute."},
+
+          {t: "era", rt: "3 weeks ago", dt: "(1 day later)", at: "Saturday, June 4th"},
+          {t: "msg", s: "Alice", d: "6:43a", m: "HEY! BREAK US OUT OF PRISON!"},
+          {t: "era", rt: "2 weeks ago", dt: "(4 days later)", at: "Wednesday, June 8th"},
+          {t: "msg", s: "Charlie", d: "1:01p", m: "Okay, I found a guy..."},
+          {t: "join", r: "Charlie", e: "Zorro", d: "1:02p"},
+          {t: "join", r: "Zorro", e: "Zorro, Jr.", d: "2:12p"},
+          {t: "msg", s: "Zorro", d: "2:13p", m: "I think you wanted my son..."},
+          {t: "msg", s: "Zorro, Jr.", d: "7:00p", m: "I talked to the prison guys."},
+          {t: "msg", s: "Zorro, Jr.", d: "7:05p", m: "They said I have to find the guy who actually keyed the car before you can go free."},
+          {t: "msg", s: "Zorro, Jr.", d: "7:13p", m: "Oh, and that Bob will have to spend a week in prison for lying about who keyed the car if it turns out he was indeed lying."},
+          {t: "era", rt: "2 weeks ago", dt: "(1 day later)", at: "Thursday, June 9th"},
+          {t: "msg", s: "Alice", d: "6:51a", m: "I can live with that."},
+          {t: "msg", s: "Dave", d: "8:41a", m: "Me too."},
+          {t: "msg", s: "Bob", d: "9:08a", m: "Hey!"},
+          {t: "era", rt: "1 week ago", dt: "(5 days later)", at: "Tuesday, June 14th"},
+          {t: "msg", s: "Dave", d: "7:04a", m: "Thanks for getting us out of prison!."},
+          {t: "msg", s: "Bob", d: "9:08a", m: "Help, help!  I'm in prison!"},
+          {t: "era", rt: "1 week ago", dt: "(1 day later)", at: "Wednesday, June 15th"},
+          {t: "msg", s: "Bob", d: "10:32a", m: "Please get me out of prison!"},
+          {t: "era", rt: "1 week ago", dt: "(1 day later)", at: "Thursday, June 16th"},
+          {t: "msg", s: "Bob", d: "10:03a", m: "Pretty please?"},
+          {t: "era", rt: "1 week ago", dt: "(1 day later)", at: "Friday, June 17th"},
+          {t: "msg", s: "Bob", d: "9:18a", m: "Pretty please with sugar on top?"},
+        ];
+
+        var whoMappings = { Alice: "other1", Bob: "other2", Charlie: "other3",
+                            Zorro: "other4", "Zorro, Jr.": "other5",
+                            Dave: "me", You: "me" };
+        var container = $(".gcd-conversation"),
+            meMsgTemplate = $(".gcd-meMessage").remove(),
+            msgTemplate = $(".gcd-message").remove(),
+            msgContTemplate = $(".gcd-messageContinuation").remove(),
+            joinTemplate = $(".gcd-join").remove(),
+            eraTemplate = $(".gcd-era").remove();
+        function picUrlForName(name) {
+          return PICS[name.toLowerCase(name).replace(/[, .]+/g, "")];
+        }
+        var lastMsgNode = null, lastSender = null;
+        items.forEach(function(item) {
+          if (item.t === "era") {
+            var eraNode = eraTemplate.clone(true);
+            eraNode.find(".gcd-eraRelativeDate").text(item.rt);
+            eraNode.find(".gcd-eraTimeDelta").text(item.dt);
+            eraNode.find(".gcd-eraAbsoluteDate").text(item.at);
+            eraNode.appendTo(container);
+            lastMsgNode = null;
+          }
+          else if (item.t === "msg") {
+            var msgNode;
+            if (lastMsgNode && lastSender === item.s) {
+              msgNode = msgContTemplate.clone();
+              msgNode.find(".gcd-messageText").text(item.m);
+              msgNode.find(".gcd-messageTime").text(item.d);
+              msgNode.appendTo(lastMsgNode.find('.gcd-messageContainer'));
+              return;
+            }
+
+            if (item.s === "Dave") {
+              msgNode = meMsgTemplate.clone(true);
+              lastMsgNode = null;
+            }
+            else {
+              lastMsgNode = msgNode = msgTemplate.clone(true);
+              // only non-me things want this.
+              lastSender = item.s;
+            }
+            msgNode.attr("who", whoMappings[item.s]);
+            msgNode.find(".gcd-pic").attr("src", picUrlForName(item.s));
+            msgNode.find(".gcd-author").text(item.s);
+            msgNode.find(".gcd-messageText").text(item.m);
+            msgNode.find(".gcd-messageTime").text(item.d);
+            msgNode.appendTo(container);
+          }
+          else if (item.t === "join") {
+            var joinNode = joinTemplate.clone(true);
+            joinNode.find(".INVITERPIC").attr("src", picUrlForName(item.r));
+            joinNode.find(".gcd-inviter").text(item.r);
+            joinNode.find(".gcd-invitee").text(item.e);
+            joinNode.find(".INVITEEPIC").attr("src", picUrlForName(item.e));
+            joinNode.find(".gcd-time").text(item.d);
+            joinNode.appendTo(container);
+            lastMsgNode = null;
+          }
+        });
+        
+      });
+      //]]></script>
+      <!-- message from me -->
+      <div class="gcd-meMessage">
+        <div class="gcd-messageContainer">
+          <span class="gcd-messageText" data-bind="text">
+            MESSAGE GOES HERE
+          </span>
+          <span class="gcd-messageTime">DATE GOES HERE</span>
+        </div>
+        <div class="gcd-indicator"></div>
+      </div>
+
+      <!-- message from someone else (template) -->
+      <div class="gcd-message">
+        <div class="gcd-avatar">
+          <img class="gcd-pic" />
+        </div>
+        <div class="gcd-messageContainer">
+          <span class="gcd-author"></span>
+          <span class="gcd-messageText" data-bind="text">
+            MESSAGE GOES HERE
+          </span>
+          <span class="gcd-messageTime">DATE GOES HERE</span>
+        </div>
+        <div class="gcd-indicator"></div>
+      </div>
+      <div class="gcd-messageContinuation">
+        <span class="gcd-messageText" data-bind="text">
+          MESSAGE GOES HERE
+        </span>
+        <span class="gcd-messageTime">DATE GOES HERE</span>
+      </div>
+      <!-- join (template)-->
+      <div class="gcd-join">
+        <img class="gcd-pic INVITERPIC" />
+        <span class="gcd-inviter">INVITER NAME GOES HERE</span>
+        <span class="gcd-inviteLabel">invited</span>
+        <span class="gcd-invitee">INVITEE NAME GOES HERE</span>
+        <img class="gcd-pic INVITEEPIC" />
+        <span class="gcd-time">TIME GOES HERE</span>
+      </div>
+      <!-- time separator AKA era (template) -->
+      <div class="gcd-era">
+        <span class="gcd-eraRelativeDate">
+          RELATIVE DATE GOES HERE
+        </span>
+        <span class="gcd-eraTimeDelta">
+          TIME SINCE PREVIOUS ERA GOES HERE
+        </span>
+        <span class="gcd-eraAbsoluteDate">
+          ABSOLUTE DATE GOES HERE
+        </span>
+      </div>
+      <!-- end templates -->
+      </div>
+
+      <!-- compose is a subwidget and not specific to this card -->
+      <form class="gcd-compose" data-class="compose">
+        <div class="hbox">
+          <div class="boxFlex">
+            <input type="text" placeholder="say hello" />
+          </div>
+          <button>send</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- newConv: Create a new group conversation -->
+  <div data-cardid="newConv" title="New Conversation" class="card">
+    <div class="scroller">
+      Chat with:
+      <div class="hbox">
+        <div class="participants boxFlex" data-childclass="participant">
+        </div>
+        <button class="add">Add</button>
+      </div>
+      <div>
+        &nbsp;
+      </div>
+      <form class="compose" data-class="compose">
+      </form>
+    </div>
+  </div>
+
+  <!-- pickPeeps: Multi-select from a list of peeps -->
+  <div data-cardid="pickPeeps" title="Add People to the Conversation"
+       class="card">
+    <div class="subHeader hbox">
+      <button class="done">Done</button>
+    </div>
+    <div class="scroller" data-childclass="togglePeep">
+    </div>
+  </div>
+
+  <!-- User: Details on a user/peep NOT SURE IF NECESSARY AS-IS -->
+  <div data-cardid="user" title="User Details" class="card">
+    <div class="scroller">
+      <div class="peepInfo">
+        <img class="peepInfoPic" data-bind="pic" data-attr="src"
+             data-missing="OMIT" src="i/face2.png" />
+        <span data-bind="displayName" class="peepInfoName"></span>
+      </div>
+      <div class="pocoContainer">
+      </div>
+      <!-- we can put the list of involved conversations here -->
+      <!-- this contingent adding stuff needs to be hooked up -->
+      <span class="addToChatMessage hidden">
+        This person needs to add you before you can chat with them.
+      </span>
+      <form class="addPeepButtonForm hidden">
+        <input type="hidden" name="peepId" value=""
+               data-bind="id" data-attr="value">
+        <button class="">Add</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add: List the server phonebooks to pick someone to connect to.  -->
+  <div data-cardid="add" title="Add a contact" class="card conversations">
+    <div class="scroller" data-childclass="peepPhonebook">
+    </div>
+  </div>
+
+  <!-- askFriend: Confirm connecting to someone, provide a message -->
+  <div data-cardid="askFriend" title="Request a connection" class="card">
+    <div class="scroller">
+      <div>
+        Connect to the person identifying themselves as:
+        <div class="hbox">
+          <div>
+            <div class="avatar">
+              <img class="peepInfoPic" data-bind="peep.pic"
+                   data-attr="src" data-missing="OMIT"
+                   src="i/face2.png" />
+            </div>
+          </div>
+          <div>
+            <span class="untrustedData"
+                data-bind="peep.selfPoco.displayName"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        using server at <span class="untrustedData"
+                              data-bind="peepServer.url"></span>
+      </div>
+      <div class="pocoContainer">
+        with the additional contact information:
+      </div>
+      <form class="askFriendForm standardForm">
+        <div>
+          I call this person: <input type="text" name="displayName">
+        </div>
+        <div class="askMessageBox">
+          <div class="askMessagePrompt">
+            Message to send with this request:
+          </div>
+          <textarea class="askMessageTextArea" name="message"></textarea>
+        </div>
+        <button>Send connect request</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- notifications: Friend/connect requests, for now at least. -->
+  <div data-cardid="notifications" title="Friend requests" class="card">
+    <div class="scroller" data-childclass="connReq">
+    </div>
+  </div>
+
+  <!-- acceptReq: Confirm accepting a connect/friend requestion  -->
+  <div data-cardid="acceptReq" title="Accept a connection" class="card">
+    <div class="scroller">
+      <div>
+        A person identifying themselves as:
+        <div class="hbox">
+          <div>
+            <div class="avatar">
+              <img class="peepInfoPic" data-bind="peep.pic"
+                   data-attr="src" data-missing="OMIT"
+                   src="i/face2.png" />
+            </div>
+          </div>
+          <div>
+            <span class="untrustedData"
+                data-bind="peep.selfPoco.displayName"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        using server at <span class="untrustedData"
+                              data-bind="peepServer.url"></span>
+      </div>
+      <div class="pocoContainer">
+        with the additional contact information:
+      </div>
+      <div>
+        would like to establish a connection with you.  They sent along
+        this message with the request:
+      </div>
+      <div>
+        <span class="untrustedData" data-bind="messageText"></span>
+      </div>
+      <form class="acceptFriendForm standardForm settings">
+        Yes, I want to connect with them, and...
+        <div>
+          I call this person: <input type="text" name="displayName">
+        </div>
+        <button class="green">Accept connect request</button>
+      </form>
+      <form class="ignoreFriendForm standardForm settings">
+        Not sure right now, I'll want to look at this again in the future.
+        <br />
+        <button>Ignore request for now</button>
+      </form>
+      <form class="rejectFriendForm standardForm settings">
+        No, I don't want to connect with them and I NEVER want to see
+        this request again, so I...
+        <br />
+        <button class="red">Reject connect request</button>
+      </form>
+    </div>
+  </div>
+</div></div>
+</body>
+</html>

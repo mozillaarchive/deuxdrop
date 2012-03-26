@@ -1,0 +1,1571 @@
+
+////////////////////////////////////////////////////////////////////////////////
+// Browser Compat
+
+////////////////////////////////////////////////////////////////////////////////
+// Common HTML styling
+
+
+body {
+    margin: 0;
+    padding: 0;
+
+    font-family: "Helvetica", arial, sans-serif;
+    background-color: #fafafa;
+    color: #222;
+    font-size: 14px;
+    //line-height: 18px;
+
+    -webkit-overflow-scrolling: touch;
+}
+
+.hidden,
+button.hidden {
+  display: none;
+}
+
+/* Used by card.js to hide inputs on other cards
+  so that mobile firefox does not do the up/down arrow
+  controls over the screen.
+*/
+.inputHidden {
+  visibility: hidden;
+}
+
+.invisible,
+button.invisible {
+  visibility: hidden;
+}
+
+.untrustedData {
+  background-color: #fee;
+}
+
+button,
+input,
+textarea {
+    font-family: "Helvetica", arial, sans-serif;
+}
+
+button {
+    cursor: pointer;
+}
+
+button::-moz-focus-inner {
+    padding: 0;
+    border: 0
+}
+
+::-webkit-input-placeholder {
+    color: #ccc;
+}
+:-moz-placeholder {
+    color: #ccc;
+}
+
+a {
+    text-decoration: none;
+    color: #0063FF;
+}
+
+.overflow {
+    overflow: hidden;
+    white-space: nowrap;
+
+    -o-text-overflow: ellipsis;
+       text-overflow: ellipsis;
+}
+
+.url() {
+  font-style: italic;
+}
+
+.lipVertGradient (@topLip, @top, @bottom) {
+  background: -moz-linear-gradient(top, @topLip 0, @topLip 1px, @top 1px, @bottom 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @topLip), color-stop(1%, @topLip), color-stop(1%, @top), color-stop(100%, @bottom));
+}
+
+.smoothVertGradient (@top, @bottom) {
+  background: -moz-linear-gradient(top, @top 0, @bottom 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0%, @top), color-stop(100%, @bottom));
+}
+
+
+button,
+.subHeader button,
+.compose button {
+    background-color: #EEEEEE;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #708BB5 #708BB5 #516B95;
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: bold;
+    height: 24px;
+    padding: 0 10px;
+    text-shadow: 0 -1px 0 #516B95;
+    margin: 0 0 0 5px;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #A7BDE0),
+                            color-stop(50%, #8199BF),
+                            color-stop(50%, #708BB5),
+                            color-stop(100%, #516B95)
+                      );
+
+    background-image: -moz-linear-gradient(center top ,
+                                           #A7BDE0 0%,
+                                           #8199BF 50%,
+                                           #708BB5 50%,
+                                           #516B95 100%);
+}
+
+input[type=text] {
+    width: 100%;
+    font-size: 12px;
+    height: 24px;
+    padding: 0 5px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #bbb #bbb #ccc;
+    outline: none;
+
+    -webkit-box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+       -moz-box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+         -o-box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+            box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25) inset;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+}
+
+input[type=text]#search {
+    -webkit-border-radius: 3px 0 0 3px;
+       -moz-border-radius: 3px 0 0 3px;
+         -o-border-radius: 3px 0 0 3px;
+            border-radius: 3px 0 0 3px;
+
+    border-width: 1px 0 1px 1px;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Common Domain Styling
+
+.common-avatar() {
+  padding: 3px;
+  border: 1px solid #eee;
+  margin: 0 5px 0 0;
+  background-color: #fff;
+}
+.common-pic {
+  width: 48px;
+  height: 48px;
+}
+
+.bigSubHeader {
+  height: 64px;
+}
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Card styling
+
+.THEheader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 24px;
+    overflow: hidden;
+
+    padding: 5px;
+    background-color: #222;
+    z-index: 99;
+
+    -webkit-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+       -moz-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+         -o-box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+            box-shadow: 0 1px 0 #7A7A7A inset, 0 -1px 0 #000 inset, 0 3px 0 rgba(150, 150, 150, 0.25);
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #595959),
+                            color-stop(50%, #444444),
+                            color-stop(50%, #404040),
+                            color-stop(100%, #1a1a1a)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #595959 0%,
+                                           #444444 50%,
+                                           #404040 50%,
+                                           #1A1A1A 100%);
+}
+
+.THEheader button {
+    max-height: 24px;
+    line-height: 24px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 -1px 0 #333;
+    padding: 0 5px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #222 #000 #000;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+
+    -webkit-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+       -moz-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+         -o-box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+            box-shadow: 0 1px 0 #444, 0 1px 0 #666 inset;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #828282),
+                            color-stop(50%, #565656),
+                            color-stop(50%, #4D4C4C),
+                            color-stop(100%, #1F1F1F)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #828282 0%,
+                                           #565656 50%,
+                                           #4D4C4C 50%,
+                                           #1F1F1F 100%);
+}
+
+.THEheaderText {
+    font-size: 16px;
+    line-height: 24px;
+    height: 24px;
+    font-weight: bold;
+    color: #eee;
+    text-shadow: 0 -1px 0 #222;
+    text-align: center;
+    padding: 0;
+    margin: 0;
+}
+
+.THEnotify {
+    display: none;
+    position: absolute;
+    right: 50px;
+    top: 7px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    border: 1px solid #0063FF;
+    color: white;
+    background-color: #0063FF;
+    z-index: 200;
+    text-align: center;
+
+    -webkit-border-radius: 10px;
+       -moz-border-radius: 10px;
+         -o-border-radius: 10px;
+            border-radius: 10px;
+}
+
+.THEnotify.active {
+    display: block;
+}
+
+#cardContainer {
+  position: relative;
+  left: 0;
+  overflow: hidden;
+}
+
+#cards {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition-property: left;
+  transition-duration: 300ms;
+  transition-timing-function: linear;
+  -moz-transition-property: left;
+  -moz-transition-duration: 300ms;
+  -moz-transition-timing-function: linear;
+  -webkit-transition-property: left;
+  -webkit-transition-duration: 300ms;
+  -webkit-transition-timing-function: linear;
+  -o-transition-property: left;
+  -o-transition-duration: 300ms;
+  -otransition-timing-function: linear;
+
+  /* To trigger hardward acceleration for webkit:
+     http://www.html5rocks.com/en/tutorials/speed/quick/#toc-hwaccel
+     May need to remove */
+  -webkit-transform: translateZ(0);
+}
+
+.card {
+  float: left;
+  width: 100%;
+}
+
+.scroller {
+  width: 100%;
+}
+
+#loading {
+    height: 48px;
+    line-height: 48px;
+    background-color: #fff;
+    font-size: 12px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+    color: #666;
+
+    -webkit-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+       -moz-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+         -o-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+            box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.1) inset;
+}
+
+#loading img {
+    vertical-align: middle;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Various mix-in blah
+
+.subHeader,
+.compose {
+    height: 24px;
+    line-height: 24px;
+    padding: 5px;
+    font-size: 12px;
+    text-shadow: 1px 1px 0 #fff;
+    color: #666;
+    background-color: #fff;
+    position: relative;
+    z-index: 100;
+}
+
+.subHeader {
+    border-bottom: 1px solid #aaa;
+
+    -webkit-box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+       -moz-box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+         -o-box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+            box-shadow: 0 2px 0 rgba(150, 150, 150, 0.15);
+}
+
+.compose {
+    border-top: 1px solid #aaa;
+    margin-top: -1px;
+
+    -webkit-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+       -moz-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+         -o-box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+            box-shadow: 0 -2px 0 rgba(150, 150, 150, 0.15);
+}
+
+.subHeader button.search {
+    border-radius: 0 3px 3px 0;
+    margin: 0;
+}
+
+.name {
+  font-weight: bold;
+}
+
+.checked {
+    background-color: yellow;
+}
+
+.settings {
+    padding: 10px 5px;
+}
+
+.standardForm {
+    width: 100%;
+    text-align: center;
+}
+
+.standardForm > div {
+    margin: 20px 0;
+}
+
+.standardForm [type="text"] {
+    text-align: center;
+}
+
+.clickableItem() {
+    display: block;
+    background-color: #fff;
+    padding: 10px 5px;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+}
+
+.menu {
+    list-style-type: none;
+    background-color: white;
+    border-radius: 10px;
+    border: 1px solid #aaa;
+    margin: 0 0 10px 0;
+}
+
+.menu li {
+    font-size: 12px;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.menu li:last-child {
+    border-bottom: none;
+}
+
+.menu li label {
+    color: #666;
+}
+
+#alert {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 10000;
+    opacity: 0;
+    margin-left: -100%;
+
+    -webkit-transition: margin 0s 0.4s ease, opacity 0.4s ease;
+       -moz-transition: margin 0s 0.4s ease, opacity 0.4s ease;
+         -o-transition: margin 0s 0.4s ease, opacity 0.4s ease;
+            transition: margin 0s 0.4s ease, opacity 0.4s ease;
+}
+
+#alert.visible {
+    margin-left: 0;
+    opacity: 1;
+
+    -webkit-transition: margin 0s ease, opacity 0.4s ease;
+       -moz-transition: margin 0s ease, opacity 0.4s ease;
+         -o-transition: margin 0s ease, opacity 0.4s ease;
+            transition: margin 0s ease, opacity 0.4s ease;
+}
+
+#alert .notificationWrapper {
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+    opacity: 0;
+
+    -webkit-transition: all 0.4s ease;
+       -moz-transition: all 0.4s ease;
+         -o-transition: all 0.4s ease;
+            transition: all 0.4s ease;
+}
+
+#alert.visible .notificationWrapper {
+    bottom: 10px;
+    opacity: 1;
+
+    -webkit-transition: all 0.4s ease;
+       -moz-transition: all 0.4s ease;
+         -o-transition: all 0.4s ease;
+            transition: all 0.4s ease;
+}
+
+#alert .notification {
+    display: block;
+    position: relative;
+    margin: 10px;
+    background-color: #111;
+    padding: 20px;
+    color: #eee;
+    font-weight: bold;
+
+    border-radius: 10px;
+}
+
+#alert .notification p {
+    margin: 0 0 9px 0;
+    text-shadow: 0 -1px 0 #000;
+}
+
+#alert button,
+.settings button {
+    width: 100%;
+    margin: 0 0 9px 0;
+    height: 36px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #444;
+    text-shadow: 1px 1px 0 #fff;
+    border: none;
+
+    -webkit-border-radius: 5px;
+       -moz-border-radius: 5px;
+         -o-border-radius: 5px;
+            border-radius: 5px;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #fafafa),
+                            color-stop(50%, #f2f2f2),
+                            color-stop(50%, #e6e6e6),
+                            color-stop(100%, #ccc)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #fafafa 0%,
+                                           #f2f2f2 50%,
+                                           #e6e6e6 50%,
+                                           #ccc 100%);
+}
+
+#alert button.red,
+.settings button.red {
+    color: #FFFFFF;
+    text-shadow: 0 -1px 0 #B13D3D;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #EA7676),
+                            color-stop(50%, #EA5C5C),
+                            color-stop(50%, #E15050),
+                            color-stop(100%, #C84343)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #EA7676 0%,
+                                           #EA5C5C 50%,
+                                           #E15050 50%,
+                                           #C84343 100%);
+}
+
+#alert button.green,
+.settings button.green {
+    color: #FFFFFF;
+    text-shadow: 0 -1px 0 #478248;
+
+    background-image: -webkit-gradient(
+                            linear,
+                            left top,
+                            left bottom,
+                            color-stop(0%, #70D972),
+                            color-stop(50%, #5CB35E),
+                            color-stop(50%, #49AA4B),
+                            color-stop(100%, #478248)
+                      );
+
+    background-image: -moz-linear-gradient(center top,
+                                           #70D972 0%,
+                                           #5CB35E 50%,
+                                           #49AA4B 50%,
+                                           #478248 100%)
+}
+
+.settings button {
+    border: 1px solid #aaa;
+    height: 24px;
+    font-size: 11px;
+    width: auto;
+    padding: 0 10px;
+    margin-top: 12px;
+    margin-bottom: 0;
+
+    -webkit-border-radius: 3px;
+       -moz-border-radius: 3px;
+         -o-border-radius: 3px;
+            border-radius: 3px;
+}
+
+.settings button.red {
+    border: 1px solid #B13D3D;
+}
+
+.settings button.green {
+    border: 1px solid #478248;
+}
+
+#alert button:last-child {
+    margin: 0;
+}
+
+/* hbox and vbox classes */
+
+.hbox {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal;
+    -webkit-box-align: stretch;
+
+    display: -moz-box !important;
+    -moz-box-orient: horizontal;
+    -moz-box-align: stretch;
+
+    display: box !important;
+    box-orient: horizontal;
+    box-align: stretch;
+    width: 100%;
+}
+
+.hbox > * {
+    -webkit-box-flex: 0;
+    -moz-box-flex: 0;
+    box-flex: 0;
+    display: block;
+}
+
+.vbox {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-box-align: stretch;
+
+    display: -moz-box;
+    -moz-box-orient: vertical;
+    -moz-box-align: stretch;
+
+    display: box;
+    box-orient: vertical;
+    box-align: stretch;
+}
+
+.vbox > * {
+    -webkit-box-flex: 0;
+    -moz-box-flex: 0;
+    box-flex: 0;
+    display: block;
+}
+
+.spacer {
+    -webkit-box-flex: 1;
+    -moz-box-flex: 1;
+    box-flex: 1;
+}
+
+.reverse {
+    -webkit-box-direction: reverse;
+    -moz-box-direction: reverse;
+    box-direction: reverse;
+}
+
+.boxFlex0 {
+    -webkit-box-flex: 0;
+    -moz-box-flex: 0;
+    box-flex: 0;
+}
+
+.boxFlex1, .boxFlex {
+    -webkit-box-flex: 1;
+    -moz-box-flex: 1;
+    box-flex: 1;
+}
+
+.boxFlexStrong {
+    -webkit-box-flex: 50;
+    -moz-box-flex: 50;
+    box-flex: 50;
+}
+
+.boxGroup1 {
+    -webkit-box-flex-group: 1;
+    -moz-box-flex-group: 1;
+    box-flex-group: 1;
+}
+
+.boxGroup2 {
+    -webkit-box-flex-group: 2;
+    -moz-box-flex-group: 2;
+    box-flex-group: 2;
+}
+
+.start {
+    -webkit-box-pack: start;
+    -moz-box-pack: start;
+    box-pack: start;
+}
+
+.end {
+    -webkit-box-pack: end;
+    -moz-box-pack: end;
+    box-pack: end;
+}
+
+.center {
+    -webkit-box-pack: center;
+    -moz-box-pack: center;
+    box-pack: center;
+}
+/* END hbox/vbox normalization from http://alex.dojotoolkit.org/2009/08/css-3-progress/ */
+
+/* clearfix */
+
+.cf:after {
+    content: ".";
+    display: block;
+    clear: both;
+    visibility: hidden;
+    line-height: 0;
+    height: 0;
+}
+
+html[xmlns] .cf {
+    display: block;
+}
+
+* html .cf {
+    height: 1%;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Account Setup: signIn [asi]
+// 
+// Enter your name and trigger BrowserID sign-in.
+
+////////////////////////////////////////////////////////////////////////////////
+// Account Setup: pickServer [aps]
+//
+// Select which server to use
+
+.ps-server {
+  display: block;
+  position: relative;
+  cursor: pointer;
+  border-bottom: 1px solid #888;
+}
+
+.ps-serverIcon {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.ps-serverUrl {
+  display: inline-block;
+  min-width: 12em;
+  
+  .url;
+  background-color: #ddddff;
+  border-right: 1px solid #aaaacc;
+  margin-bottom: -1px;
+  border-bottom: 1px solid #aaaacc;
+  padding: 10px 12px 10px 8px;
+}
+
+.ps-serverName {
+  display: inline-block;
+  margin: 0px 5px;
+  color: black;
+  padding: 10px 0px;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Account Setup: enterServer [aes]
+
+////////////////////////////////////////////////////////////////////////////////
+// Home Page: start [hps]
+
+.homeNav {
+    outline: 1px solid #eee;
+    background-color: #fff;
+    width: 50%;
+    display: block;
+    float: left;
+    text-align: center;
+    line-height: 238px;
+    cursor: pointer;
+}
+
+.hps-notificationCount {
+  display: inline-block;
+  background-color: red;
+  color: white;
+  font-size: 12px;
+  height: 16px;
+  width: 16px;
+  padding: 0;
+  margin-bottom: 4px;
+  line-height: normal;
+  text-align: center;
+
+  -webkit-border-radius: 8px;
+     -moz-border-radius: 8px;
+          border-radius: 8px;
+}
+
+.hps-newConvsBlock {
+  display: block;
+  clear: both;
+
+  overflow-y: hidden;
+  overflow-x: auto;
+
+  height: 200px;
+}
+
+// Note that we dynamically set the css width of the scroller for this to work.
+// There is no easy way in HTML/CSS right now to say 'make this div only grow
+// in the width direction.'
+.hps-newConvsScroller {
+  height: 180px;
+}
+
+
+.peepInfoPic {
+  width: 40px;
+  height: 40px;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Home Page: new conversation notifications [hpn]
+
+////// Common!
+
+.hpn-commonConv() {
+  display: inline-block;
+  float: left;
+  position: relative;
+  margin: 10px;
+  width: 180px;
+  height: 160px;
+
+  border-radius: 5px;
+  color: #111;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #c4c4c4 #b4b4b4 #a4a4a4 #b4b4b4;
+
+  .lipVertGradient(#fefefe, #f2f2f2, #e6e6e6);
+
+  overflow: hidden;
+  font-size: smaller;
+}
+
+.hpn-commonName() {
+}
+
+.hpn-commonTime() {
+  color: #777;
+  font-size: smaller;
+}
+
+.hpn-commonMsgStrip() {
+  background-color: #ddd;
+}
+
+.hpn-pic {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+
+////// Private Conversations
+
+// Private conversation bubble
+.hpn-privateConv {
+  .hpn-commonConv;
+}
+
+// Summarization block for the private conversation
+.hpn-privateSummary {
+  border-bottom: 1px solid #aaa;
+}
+
+// The name of the other participant in the private conversation.
+.hpn-privatePeep {
+  font-weight: bold;
+  vertical-align: middle;
+}
+
+// Container for the .hpn-privateMsg instances
+.hpn-privateMsgContainer {
+}
+.hpn-privateMsg {
+}
+.hpn-privateMsgTime {
+  .hpn-commonMsgStrip;
+  .hpn-commonTime;
+  padding: 0px 2px;
+  display: block;
+}
+.hpn-privateMsgText {
+  display: block;
+  padding: 0px 4px;
+}
+
+
+////// Group Conversations
+
+// Group conversation bubble
+.hpn-groupConv {
+  .hpn-commonConv;
+}
+
+// Group conversation summary block
+.hpn-groupSummary {
+  border-bottom: 1px solid #aaa;
+  line-height: 20px;
+}
+// The text of the first message in the conversation or an explicit title if one
+// has been set.
+.hpn-groupSummaryText {
+  padding: 0px 4px;
+  font-weight: bold;
+  .overflow;
+}
+
+// Container for the new messages in the conversation
+.hpn-groupMsgContainer {
+}
+
+// message container for a human message (with text!)
+.hpn-groupMsg {
+  margin-bottom: 2px;
+}
+.hpn-groupMsgHeader {
+  .hpn-commonMsgStrip;
+}
+.hpn-groupAuthorName {
+  .hpn-commonName;
+}
+.hpn-groupMsgTime {
+  .hpn-commonTime;
+}
+.hpn-groupMsgText {
+  display: block;
+  padding: 0px 4px;
+}
+
+// message container for a join message (Alice invited Bob to join)
+.hpn-groupJoin {
+}
+.hpn-groupJoinHeader {
+  .hpn-commonMsgStrip;
+}
+.hpn-groupInviterName {
+  .hpn-commonName;
+}
+.hpn-groupInviteLabel {
+  font-style: italic;
+}
+.hpn-groupInviteeName {
+  .hpn-commonName;
+}
+.hpn-groupInviteTime {
+  .hpn-commonTime;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// COMMON Conversations
+
+////////////////////////////////////////////////////////////////////////////////
+// Private Conversations: People List (private) [pcl]
+
+.pcl-perPeepItem {
+  background-color: #fff;
+  padding: 10px 5px;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  color: inherit;
+
+  .hbox;
+
+  &[hasUnread="true"] {
+    > .pcl-msgPreview > .pcl-msgPreviewHeader > .pcl-author:before {
+      content: '\25cf';
+      color: #0063FF;
+      margin-right: 3px;
+    }
+  }
+}
+.pcl-avatar {
+  .common-avatar;
+}
+.pcl-pic {
+  .common-pic;
+}
+.pcl-msgPreview {
+  .boxFlex;
+  line-height: 26px;
+}
+
+.pcl-msgPreviewHeader {
+  .hbox;
+}
+.pcl-author {
+  font-weight: bold;
+
+  .boxFlex;
+  .overflow;
+}
+.pcl-new {
+  color: #0063FF;
+  margin-left: 3px;
+}
+.pcl-time {
+ font-size: 12px;
+ color: #aaa;
+ margin-left: 5px;
+}
+
+.pcl-msgPreviewBody {
+  .hbox;
+}
+.pcl-msgPreviewSnippet {
+  color: #aaa;
+  font-size: 12px;
+
+  .boxFlex;
+  .overflow;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Private Conversations: Private Conversation Display (privateConv) [pcd]
+
+.pcd-card {
+  .smoothVertGradient(#333, #111);
+  background-attachment: fixed;
+}
+
+.pcd-header {
+}
+
+.pcd-compose {
+  .compose;
+  background-color: black;
+  color: white;
+}
+
+
+@fromMeColor: "blue";
+
+@toMeColor: "yellow";
+
+.pcd-headerThem {
+  display: inline-block;
+  vertical-align: middle;
+}
+.pcd-headerMe {
+  display: inline-block;
+  float: right;
+  vertical-align: middle;
+  text-align: right;
+}
+
+.pcd-pic {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+.pcd-name {
+  color: white;
+  font-size: 120%;
+  font-weight: bold;  
+
+  padding: 8px;
+}
+
+.pcd-era {
+  background-color: #444;
+  color: #aaa;
+  margin: 6px 0px;
+  font-size: 80%;
+}
+.pcd-eraRelativeDate {
+  display: inline-block;
+  width: 34%;
+  text-align: left;
+  padding-left: 4px;
+}
+.pcd-eraTimeDelta {
+  display: inline-block;
+  width: 24%;
+  text-align: center;
+}
+.pcd-eraAbsoluteDate {
+  display: inline-block;
+  width: 38%;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.pcd-message {
+  // make this relative so we can absolutely position the indicator
+  position: relative;
+  width: 100%;
+}
+
+.pcd-messageContainer {
+  border: 8px solid #888;
+  border-width: 8px 10px;
+  -moz-border-image-slice: 8 10 fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
+}
+
+.pcd-message[watermark="true"] {
+  border-bottom: 2px solid #55a;
+}
+
+.pcd-messageCommon (@color) {
+  > .pcd-messageContainer {
+    -moz-border-image-source: url("i/@{color}Curves.png");
+
+    > .pcd-messageText {
+      padding: 4px;
+    }
+    > .pcd-messageTime {
+      color: #666;
+      font-size: 80%;
+    }
+  }
+}
+
+.pcd-message.toMe {
+  .pcd-messageCommon(@toMeColor);
+  > .pcd-indicator {
+    position: absolute;
+    top: 14px;
+    left: 0;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{toMeColor}Indicator.png");
+  }
+  > .pcd-messageContainer {
+    margin-left: 10px;
+    margin-right: 40px;
+  }
+}
+
+.pcd-message.fromMe {
+  .pcd-messageCommon(@fromMeColor);
+  > .pcd-indicator {
+    position: absolute;
+    top: 14px;
+    right: 0;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{fromMeColor}Indicator2.png");
+  }
+  > .pcd-messageContainer {
+    margin-left: 40px;
+    margin-right: 11px;
+  }
+}
+
+.pcd-messageTime {
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Group Conversations: Conversation List (groups) [gcl]
+
+.gcl-card {
+}
+
+.gcl-conv {
+  background-color: #fff;
+  padding: 10px 5px;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  color: inherit;
+
+  content: '\25cf';
+  color: #0063FF;
+  margin-right: 3px;
+
+  .hbox;
+}
+
+.gcl-avatar {
+  .common-avatar;
+}
+.gcl-pic {
+  .common-pic;
+}
+
+.gcl-msgPreview {
+  .boxFlex;
+  line-height: 26px;
+}
+.gcl-msgPreviewHeader {
+  .hbox;
+}
+
+.gcl-time {
+ font-size: 12px;
+ color: #aaa;
+ margin-left: 5px;
+}
+
+.gcl-namechecks {
+  font-weight: bold;
+  margin-left: 3px;
+  color: #666;
+
+  .boxFlex;
+  .overflow;
+}
+.gcl-namecheck {
+}
+
+.gcl-new {
+  color: #0063FF;
+  margin-left: 3px;
+}
+.gcl-numUnreadMessages {
+}
+
+.gcl-msgPreviewSnippet {
+  color: #aaa;
+  font-size: 12px;
+
+  .boxFlex;
+  .overflow;
+}
+
+.gcl-namecheck:after, .participant:after {
+    content: ", ";
+}
+.gcl-namecheck:last-child:after, .participant:last-child:after {
+    content: "";
+}
+
+    .conversations a .new {
+        color: #0063FF;
+        margin-left: 3px;
+    }
+
+    .conversations a .snippet {
+        color: #aaa;
+        font-size: 12px;
+    }
+
+    .conversations a.read {
+        background-color: #fafafa;
+    }
+
+    .conversations a.read .author {
+        color: #666;
+    }
+
+    .conversations a.unread .author:before {
+        content: '\25cf';
+        color: #0063FF;
+        margin-right: 3px;
+    }
+
+
+    .conversation .messages {
+        list-style-type: none;
+    }
+
+    .conversation .messages a {
+        margin: 0 0 5px 0;
+        padding: 0;
+        font-size: 12px;
+        border-bottom: none;
+    }
+
+////////////////////////////////////////////////////////////////////////////////
+// Group Conversations: Group Converation Display (groupConv) [gcd]
+//
+// We display messages from the user with the bubble originating from the right.
+//  Messages from other users originate from the left.  This allows us to place
+//  their avatar to the left which is consistent with left-to-right reading
+//  patterns.  We would ideally want this paramterized on a localization basis
+//  so we can change things for RTL languages.
+
+.gcd-card {
+}
+
+.gcd-header {
+  margin-top: 6px;
+}
+
+.gcd-participants {
+  display: inline-block;
+  padding: 4px;
+  vertical-align: middle;
+}
+.gcd-part-pic {
+  height: 24px;
+  width: 24px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.gcd-participant {
+  font-weight: bold;
+
+  &:after {
+    font-weight: normal;
+    content: ", ";
+  }
+  &:last-child:after {
+    content: "";
+  }
+}
+
+.gcd-add {
+  float: right;
+  margin: 4px;
+}
+
+
+///// Time Era
+.gcd-era {
+  background-color: #eee;
+  color: #888;
+  margin: 6px 0px;
+  font-size: 80%;
+}
+.gcd-eraRelativeDate {
+  display: inline-block;
+  width: 34%;
+  text-align: left;
+  padding-left: 4px;
+}
+.gcd-eraTimeDelta {
+  display: inline-block;
+  width: 24%;
+  text-align: center;
+}
+.gcd-eraAbsoluteDate {
+  display: inline-block;
+  width: 38%;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.gcd-avatar {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+}
+/*
+.gcd-author {
+  display: inline-block;
+  position: relative;
+  top: -6px;
+  left: -7px;
+  padding: 2px;
+  padding-right: 4px;
+  margin-right: -10px;
+  margin-bottom: -4px;
+  border-right: 1px solid rgba(192, 192, 192, 0.5);
+  border-bottom: 1px solid rgba(192, 192, 192, 0.5);
+  border-bottom-right-radius: 6px;
+  border-top-left-radius: 4px;
+  font-style: italic;
+}
+*/
+.gcd-author {
+  font-style: italic;
+}
+.gcd-author:after {
+  content: ": ";
+}
+
+.gcd-pic {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+
+///// Messages (From our user and other peeps)
+.gcd-messageContainer {
+  border: 8px solid #888;
+  border-width: 8px 10px;
+  -moz-border-image-slice: 8 10 fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
+}
+
+.gcd-message {
+  position: relative;
+  width: 100%;
+}
+
+.gcd-messageText {
+  padding: 4px;
+}
+.gcd-messageTime {
+  color: #666;
+  font-size: 80%;
+}
+
+// put some space between join messages and human messages
+.gcd-join + .gcd-message, .gcd-message + .gcd-join,
+.gcd-join + .gcd-meMessage, .gcd-meMessage + .gcd-join {
+  margin-top: 6px;
+}
+
+.gcd-meMessage {
+  position: relative;
+  width: 100%;
+
+  > .gcd-messageContainer {
+    -moz-border-image-source: url("i/blueCurves.png");
+    margin-left: 55px;
+    margin-right: 11px;
+
+    > .gcd-messageText {
+      padding: 4px;
+    }
+    > .gcd-messageTime {
+      color: #666;
+      font-size: 80%;
+    }
+  }
+  > .gcd-indicator {
+    position: absolute;
+    top: 14px;
+    right: 0px;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{fromMeColor}Indicator2.png");
+  }
+}
+
+.gcd-messageCommon (@color) {
+  > .gcd-messageContainer {
+    position: relative;
+    -moz-border-image-source: url("i/@{color}Curves.png");
+    margin-left: 34px;
+    margin-right: 25px;
+
+  }
+  > .gcd-indicator {
+    position: absolute;
+    top: 7px;
+    left: 24px;
+    width: 13px;
+    height: 11px;
+    background: url("i/@{color}Indicator.png");
+  }
+}
+.gcd-message[who="other1"] {
+  .gcd-messageCommon("yellow");
+}
+.gcd-message[who="other2"] {
+  .gcd-messageCommon("green");
+}
+.gcd-message[who="other3"] {
+  .gcd-messageCommon("red");
+}
+.gcd-message[who="other4"],
+.gcd-message[who="other5"],
+.gcd-message[who="other6"],
+.gcd-message[who="other7"],
+.gcd-message[who="otherN"] {
+  .gcd-messageCommon("steel");
+}
+
+.gcd-messageContinuation {
+  margin-top: 4px;
+  border-top: 1px dashed #ddd;
+  padding-top: 4px;
+}
+
+.gcd-messageTime {
+}
+
+///// Join messages
+.gcd-join {
+  width: 100%;
+  text-align: center;
+  vertical-align: middle;
+}
+.gcd-join + .gcd-join {
+  margin-top: 4px;
+}
+.gcd-inviter, .gcd-invitee {
+  font-weight: bold;
+}
+.gcd-time {
+  color: #666;
+  font-size: 80%;
+}
+
+///// Compose sub-widget
+.gcd-compose {
+  .compose;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Group Conversations: Create a new Conversation (newConv) [gcn]
+
+////////////////////////////////////////////////////////////////////////////////
+// Group Conversations: Select people to add to a conversation (pickPeeps) [gca]
+
+////////////////////////////////////////////////////////////////////////////////
+// LIMBO: User Info: detailed info on a user
+//
+// This is from the original prototype and not currently used.
+
+#userProfileHeader {
+    margin: 0 0 10px;
+}
+
+#userProfileHeader .username {
+    line-height: 48px;
+    font-weight: bold;
+}
+
+.pocoContainer {
+  margin: 1em 0em;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Phonebook: List all possible contacts to add (add) [pbl]
+
+////////////////////////////////////////////////////////////////////////////////
+// Phonebook: Peep details and confirm requesting friendship (askFriend) [pba]
+
+////////////////////////////////////////////////////////////////////////////////
+// Connection Requests: List people asking to be your friend (notifications) [crl]
+
+.connReqItem {
+    width: 100%;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 0.3em;
+}
+
+    .connReqItem .details {
+        margin-left: 1.5em;
+    }
+    .connReqItem .receivedAt {
+        color: #aaa;
+    }
+    .connReqItem .messageText {
+        color: #666;
+    }
+
+////////////////////////////////////////////////////////////////////////////////
+// Connection Requests: Request details and approve/ignore/deny (acceptReq) [cra]
+

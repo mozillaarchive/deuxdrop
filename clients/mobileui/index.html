@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Deuxdrop</title>
+    <style type="text/css">
+    body {
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    </style>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script src="../deps/require.js"></script>
+    <script>
+      require(
+        {
+          baseUrl: '../deps',
+          paths: {
+            //'browserId': 'include'
+            'browserId': 'https://browserid.org/include',
+            'main': '../mobileui/js/main',
+          }
+        },
+        ['main'],
+        function(main) {
+          main.main();
+        }
+      );
+    </script>
+  </head>
+  <body>
+
+    <!-- ===== Cards ======================================================= -->
+    <div id="cardContainer">
+      <div id="cards">
+
+        <!-- signIn: Give us your name and e-mail (via BrowserID) -->
+        <div data-cardid="signIn" title="Sign In" class="card noiscroll">
+          <form class="signUpForm standardForm">
+            <input type="text" name="name" placeholder="Enter your name">
+            <button>Sign In With BrowserID</button>
+          </form>
+        </div>
+
+        <!-- needServer: "bad news, no server" bounce page; needs to die -->
+        <div data-cardid="needServer" title="Missing Server" class="card noiscroll">
+          <div class="scroller">
+            <a class="item" href="#pickServer">Pick a server</a>
+          </div>
+        </div>
+
+        <!-- pickServer: list known servers the user can sign-up with -->
+        <div data-cardid="pickServer" title="Pick Server" class="card">
+          <div class="scroller" data-childclass="serverLink">
+          </div>
+        </div>
+
+        <!-- enterServer: Manual server selection (not from the list) -->
+        <div data-cardid="enterServer" title="Enter Server" class="card">
+          <div class="scroller">
+            <form class="enterServerForm standardForm">
+              <input type="text" name="server" placeholder="Enter server name">
+              <button>Connect</button>
+              <div>Warning, this is advanced voodoo and not very secure.</div>
+            </form>
+          </div>
+        </div>
+
+        <!-- start: The home page (once signed up). -->
+        <div data-cardid="start" title="Deuxdrop" class="card noiscroll">
+          <div class="scroller">
+            <div class="navButtons">
+              <a class="homeNav" href="#private">Private</a>
+              <a class="homeNav" href="#groups">Group</a>
+              <a class="homeNav" href="#notifications">
+                <span class="notifications">Notifications</span>
+                  <span class="notificationCount hidden"></span>
+              </a>
+              <a class="homeNav" href="#add">+</a>
+            </div>
+            <div class="newConversationNotifications">
+              <div class="newConversationScroller">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- private: Lists of peeps with most recent private conv msg snip -->
+        <div data-cardid="private" title="Private" class="card conversations">
+          <div class="subHeader hbox">
+            <div class="boxFlex">
+              <input id="search" type="text" placeholder="search people">
+            </div>
+            <button class="search">search</button>
+            <button class="button" data-href="#add">add contact</button>
+          </div>
+          <div class="scroller" data-childclass="peepPrivate">
+          </div>
+        </div>
+
+        <!-- privateConv: Private conversation with a friend peep. -->
+        <div data-cardid="privateConv" title="Private Conv" 
+             class="card privateConv">
+          <!-- non-scrolling reminder of who our friend is... -->
+          <div class="bigSubHeader vbox center">
+            <div class="hbox">
+              <div class="hbox bgFromMe">
+                <div class="avatar">
+                  <img class="peepInfoPic" data-bind="me.pic" data-attr="src"
+                       data-missing="OMIT" src="i/face2.png" />
+                </div>
+                <div class="vbox center">
+                  <span class="peepInfoName">You</span>
+                </div>
+              </div>
+              <div class="boxFlex"></div>
+              <div class="hbox bgToMe">
+                <div class="vbox center">
+                  <span data-bind="peep.displayName" class="peepInfoName"></span>
+                </div>
+                <div class="avatar">
+                  <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
+                       data-missing="OMIT" src="i/face2.png" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- scrolling messages -->
+          <div class="scroller">
+            <div class="privateConversation" data-childclass="privateMessage">
+            </div>
+            <form class="compose" data-class="compose">
+            </form>
+          </div>
+        </div>
+
+        <!-- groups: Lists of all conversations -->
+        <div data-cardid="groups" title="Group" class="card conversations">
+          <div class="subHeader hbox">
+            <div class="boxFlex">
+              <input id="search" type="text" placeholder="search people">
+            </div>
+            <button class="search">search</button>
+            <button class="button" data-href="#newConv">new</button>
+          </div>
+          <div class="scroller" data-childclass="convBlurb">
+          </div>
+        </div>
+
+        <!-- groupConv: Contents of a group conversation -->
+        <div data-cardid="groupConv" class="card">
+          <!-- non-scrolling reminder of the participants... -->
+          <div class="subHeader hbox">
+            <div class="participants boxFlex" data-childclass="participant">
+            </div>
+            <button class="add">Add</button>
+          </div>
+          <!-- scrolling messages -->
+          <div class="scroller">
+            <div class="conversation">
+            </div>
+            <form class="compose" data-class="compose">
+            </form>
+          </div>
+        </div>
+
+        <!-- newConv: Create a new group conversation -->
+        <div data-cardid="newConv" class="card">
+          <div class="scroller">
+            Chat with:
+            <div class="hbox">
+              <div class="participants boxFlex" data-childclass="participant">
+              </div>
+              <button class="add">Add</button>
+            </div>
+            <div>
+              &nbsp;
+            </div>
+            <form class="compose" data-class="compose">
+            </form>
+          </div>
+        </div>
+
+        <!-- pickPeeps: Multi-select from a list of peeps -->
+        <div data-cardid="pickPeeps" class="card">
+          <div class="subHeader hbox">
+            <button class="done">Done</button>
+          </div>
+          <div class="scroller" data-childclass="togglePeep">
+          </div>
+        </div>
+
+        <!-- User: Details on a user/peep NOT SURE IF NECESSARY AS-IS -->
+        <div data-cardid="user" class="card">
+          <div class="scroller">
+            <div class="peepInfo">
+              <img class="peepInfoPic" data-bind="pic" data-attr="src"
+                   data-missing="OMIT" src="i/face2.png" />
+              <span data-bind="displayName" class="peepInfoName"></span>
+            </div>
+            <div class="pocoContainer">
+            </div>
+            <!-- we can put the list of involved conversations here -->
+            <!-- this contingent adding stuff needs to be hooked up -->
+            <span class="addToChatMessage hidden">
+              This person needs to add you before you can chat with them.
+            </span>
+            <form class="addPeepButtonForm hidden">
+              <input type="hidden" name="peepId" value=""
+                     data-bind="id" data-attr="value">
+              <button class="">Add</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Add: List the server phonebooks to pick someone to connect to.  -->
+        <div data-cardid="add" title="Add a contact" class="card conversations">
+          <div class="scroller" data-childclass="peepPhonebook">
+          </div>
+        </div>
+
+        <!-- askFriend: Confirm connecting to someone, provide a message -->
+        <div data-cardid="askFriend" title="Request a connection" class="card">
+          <div class="scroller">
+            <div>
+              Connect to the person identifying themselves as:
+              <div class="hbox">
+                <div>
+                  <div class="avatar">
+                    <img class="peepInfoPic" data-bind="peep.pic"
+                         data-attr="src" data-missing="OMIT"
+                         src="i/face2.png" />
+                  </div>
+                </div>
+                <div>
+                  <span class="untrustedData"
+                      data-bind="peep.selfPoco.displayName"></span>
+                </div>
+              </div>
+            </div>
+            <div>
+              using server at <span class="untrustedData"
+                                    data-bind="peepServer.url"></span>
+            </div>
+            <div class="pocoContainer">
+              with the additional contact information:
+            </div>
+            <form class="askFriendForm standardForm">
+              <div>
+                I call this person: <input type="text" name="displayName">
+              </div>
+              <div class="askMessageBox">
+                <div class="askMessagePrompt">
+                  Message to send with this request:
+                </div>
+                <textarea class="askMessageTextArea" name="message"></textarea>
+              </div>
+              <button>Send connect request</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- notifications: Friend/connect requests, for now at least. -->
+        <div data-cardid="notifications" title="Friend requests" class="card">
+          <div class="scroller" data-childclass="connReq">
+          </div>
+        </div>
+
+        <!-- acceptReq: Confirm accepting a connect/friend requestion  -->
+        <div data-cardid="acceptReq" title="Accept a connection" class="card">
+          <div class="scroller">
+            <div>
+              A person identifying themselves as:
+              <div class="hbox">
+                <div>
+                  <div class="avatar">
+                    <img class="peepInfoPic" data-bind="peep.pic"
+                         data-attr="src" data-missing="OMIT"
+                         src="i/face2.png" />
+                  </div>
+                </div>
+                <div>
+                  <span class="untrustedData"
+                      data-bind="peep.selfPoco.displayName"></span>
+                </div>
+              </div>
+            </div>
+            <div>
+              using server at <span class="untrustedData"
+                                    data-bind="peepServer.url"></span>
+            </div>
+            <div class="pocoContainer">
+              with the additional contact information:
+            </div>
+            <div>
+              would like to establish a connection with you.  They sent along
+              this message with the request:
+            </div>
+            <div>
+              <span class="untrustedData" data-bind="messageText"></span>
+            </div>
+            <form class="acceptFriendForm standardForm settings">
+              Yes, I want to connect with them, and...
+              <div>
+                I call this person: <input type="text" name="displayName">
+              </div>
+              <button class="green">Accept connect request</button>
+            </form>
+            <form class="ignoreFriendForm standardForm settings">
+              Not sure right now, I'll want to look at this again in the future.
+              <br />
+              <button>Ignore request for now</button>
+            </form>
+            <form class="rejectFriendForm standardForm settings">
+              No, I don't want to connect with them and I NEVER want to see
+              this request again, so I...
+              <br />
+              <button class="red">Reject connect request</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Widgety ===================================================== -->
+    <div id="common" class="hidden">
+      <!-- === Universal === -->
+
+      <a data-classimpl="addServerLink" class="item" href="#enterServer">
+        + Add Server
+      </a>
+
+      <a data-classimpl="serverLink" class="ps-server" data-nonav="nonav"
+         href="#connectToServer">
+        <span data-bind="displayName" class="ps-serverName"></span>
+        (<span data-bind="url" class="ps-serverUrl"></span>)
+      </a>
+
+      <form data-classimpl="compose" class="compose">
+        <div class="hbox">
+          <div class="boxFlex">
+            <input type="text" placeholder="say hello" />
+          </div>
+          <button>send</button>
+        </div>
+      </form>
+
+      <a data-classimpl="newbubPrivateConv" class="newConversation"
+         href="#privateConv">
+        <div class="summary">
+          <img class="miniPeepInfoPic" data-bind="otherPeep.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span class="newConversationPeep" data-bind="otherPeep.displayName">
+          </span>
+        </div>
+        <div data-childclass="newbubPrivateMsg" class="msgContainer" ></div>
+      </a>
+
+      <span data-classimpl="newbubPrivateMsg-message" class="newbubPrivateMsg newbubMsg">
+        <div>
+          <span class="newConversationTime" data-bind="receivedAt"
+                data-attr="data-time"></span>
+        </div>
+        <span class="newConversationText" data-bind="text"></span>
+      </span>
+
+      <a data-classimpl="newbubGroupConv" class="newConversation"
+         href="#groupConv">
+        <div class="summary">
+          <span class="convFirstMsgText" data-bind="convBlurb.effectiveSubject">
+          </span>
+        </div>
+        <div data-childclass="newbubGroupMsg" class="msgContainer" ></div>
+      </a>
+
+      <span data-classimpl="newbubGroupMsg-message"
+            class=".hpn-groupMsg">
+        <div>
+          <img class="miniPeepInfoPic" data-bind="author.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span class="newConversationPeep name" data-bind="author.displayName"></span>
+          <span class="newConversationTime time"
+                data-bind="receivedAt" data-attr="data-time"></span>
+        </div>
+        <span class="newConversationText" data-bind="text"></span>
+      </span>
+
+      <span data-classimpl="newbubGroupMsg-join"
+            class=".hpn-groupJoin">
+        <div>
+          <img class="miniPeepInfoPic" data-bind="inviter.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span class="name" data-bind="inviter.displayName"></span>
+          <span class="newConversationTime time" data-bind="receivedAt"
+               data-attr="data-time"></span>
+        </div>
+        <span>invited</span>
+        <span class="name" data-bind="invitee.displayName"></span>
+        <img class="miniPeepInfoPic" data-bind="invitee.pic" data-attr="src"
+             data-missing="OMIT" src="i/face2.png" />
+      </span>
+
+
+      <ul class="menu" data-classimpl="menuRoot">
+      </ul>
+
+      <li class="hbox" data-classimpl="menuItem">
+        <label class="boxFlex"></label>
+        <div class="value">
+        </div>
+      </li>
+
+      <!-- === Limbo (Not yet used, maybe never) === -->
+
+      <a data-classimpl="addPeepLink" data-nonav="nonav" class="item"
+         href="#user?&id=">
+      </a>
+
+      <a data-classimpl="personLink" class="item" href="#user">
+        <img class="peepInfoPic" src="i/face2.png"
+             data-bind="pic" data-attr="src" data-missing="OMIT"
+             align="absmiddle" />
+        <span class="personName" data-bind="displayName"></span>
+      </a>
+
+      <a data-classimpl="convListItem" class="item" href="#conversation?id=">
+        <span class="meta"></span>
+      </a>
+
+
+      <!-- === Card Specialized === -->
+
+      <!-- addPersonLink: (private) mechanism shortcut to phonebook -->
+      <a data-classimpl="addPersonLink" class="item" href="#add">
+        + Add Peep
+      </a>
+
+      <div class="hbox checkable" data-classimpl="togglePeep">
+        <div>
+          <div class="avatar">
+            <img class="peepInfoPic" data-bind="pic" data-attr="src"
+                 data-missing="OMIT" src="i/face2.png" />
+          </div>
+        </div>
+        <div class="vbox center">
+          <div>
+            <span data-bind="displayName" class="peepInfoName">
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- peepPhonebook: A peep from the phonebook -->
+      <a class="phonebookItem hbox" data-classimpl="peepPhonebook"
+         href="#askFriend">
+        <div class="peepInfo">
+          <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
+               data-missing="OMIT" src="i/face2.png" />
+          <span data-bind="peep.selfPoco.displayName" class="peepInfoName">
+          </span>
+        </div>
+      </a>
+
+      <!-- connReq: A connect/friendship request -->
+      <a class="connReqItem vbox" data-classimpl="connReq" href="#acceptReq">
+        <div class="hbox">
+          <div>
+            <div class="avatar">
+              <img class="peepInfoPic" data-bind="peep.pic" data-attr="src"
+                   data-missing="OMIT" src="i/face2.png" />
+            </div>
+          </div>
+          <div class="vbox center">
+            <div>
+              <span data-bind="peep.selfPoco.displayName" class="peepInfoName">
+              </span>
+            </div>
+            <div>
+              <span data-bind="peepServer.displayName"></span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="details">
+            <span class="receivedAt" data-bind="receivedAt"></span>: 
+            <span class="messageText" data-bind="messageText"></span>
+          </div>
+        </div>
+      </a>
+
+      <!-- peepPrivate: Identities the peep, provides most recent message -->
+      <a class="private hbox" data-classimpl="peepPrivate"
+         href="#privateConv">
+          <div>
+              <div class="avatar">
+                  <img src="i/face2.png" data-bind="peep.pic" data-attr="src"
+                       data-missing="OMIT" />
+              </div>
+          </div>
+          <div class="msgPreview boxFlex">
+              <div class="msgPreviewHeader hbox">
+                  <span class="author boxFlex overflow"
+                        data-bind="peep.displayName">
+                  </span>
+                  <span class="new">
+                    (<span data-bind="conv.numUnreadMessages"></span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="time" data-bind="conv.mostRecentActivity"
+                        data-attr="data-time" data-missing="never"></span>
+              </div>
+              <div class="hbox">
+                  <span class="snippet boxFlex overflow"
+                        data-bind="conv.firstUnreadMessage.text">
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <!-- Private messaging human message -->
+      <div data-classimpl="privateMessage" class="privateMessage hbox">
+        <div class="leftPad"></div>
+        <div class="boxFlex">
+          <span class="message" data-bind="text"></span>
+        </div>
+        <div class="rightPad"></div>
+        <div>
+          <span class="time" data-bind="receivedAt" data-attr="data-time">
+          </span>
+        </div>
+      </div>
+
+
+      <!-- =============================== -->
+      <!-- === Group Conversation List === -->
+
+      <!-- convBlurb: group conversation blurb -->
+      <a class="unread hbox" data-classimpl="convBlurb"
+         href="#groupConv">
+          <div>
+              <div class="avatar">
+                  <img src="i/group.png" />
+              </div>
+          </div>
+          <div class="msgPreview boxFlex">
+              <div class="msgPreviewHeader hbox">
+                  <span class="author boxFlex overflow namechecks"
+                        data-childclass="namecheck">
+                  </span>
+                  <span class="new">
+                    (<span data-bind="numUnreadMessages"></span>)
+                  </span>
+                  <span class="boxFlexStrong"></span>
+                  <span class="time" data-bind="mostRecentActivity"
+                        data-attr="data-time"></span>
+              </div>
+              <div class="hbox">
+                  <span class="snippet boxFlex overflow"
+                        data-bind="firstUnreadMessage.text">
+                  </span>
+              </div>
+          </div>
+      </a>
+
+      <!-- namecheck: Cite a participant in a convBlurb -->
+      <span data-classimpl="namecheck" data-bind="displayName"
+            class="namecheck">
+      </span>
+
+
+      <!-- ================================== -->
+      <!-- === Group Conversation Display === -->
+
+      <!-- participant: Cite a participant in a conversation display card -->
+      <span data-classimpl="participant" data-bind="displayName"
+            class="participant">
+      </span>
+
+      <!-- Group messaging join message -->
+      <div data-classimpl="join" class="sender hbox">
+        <div class="boxFlex">
+          <span class="name" data-bind="inviter.displayName"></span>
+          <span>invited</span>
+          <span class="name" data-bind="invitee.displayName"></span>
+        </div>
+        <div class="time" data-bind="receivedAt" data-attr="data-time"></div>
+      </div>
+
+      <!-- Group messaging human message -->
+      <a data-classimpl="message" class="sender hbox" href="#user">
+        <div>
+          <div class="avatar">
+            <img src="i/face2.png" data-bind="author.pic" data-attr="src"
+                 data-missing="OMIT" />
+          </div>
+        </div>
+        <div class="msg boxFlex">
+          <div class="msgHeader hbox">
+            <span class="author boxFlex overflow"
+                  data-bind="author.displayName"></span>
+            <span class="time" data-bind="receivedAt" data-attr="data-time">
+            </span>
+          </div>
+          <ul class="messages">
+            <li class="message" data-bind="text"></li>
+          </ul>
+        </div>
+      </a>
+
+    </div>
+    <!-- =================================================================== -->
+  </body>
+</html>
