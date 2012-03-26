@@ -526,12 +526,10 @@
 
     </div>
     <!-- compose is a subwidget and not specific to this card -->
-    <form class="pcd-compose" data-class="compose">
-      <div class="hbox">
-        <div class="boxFlex">
-          <input type="text" placeholder="say hello" />
-        </div>
-        <button>send</button>
+    <form data-class="compose">
+      <div class="widget-compose">
+        <input class="widget-composeText" type="text" placeholder="say hello" />
+        <button class="widget-composeSend">send</button>
       </div>
     </form>
   </div>
@@ -854,16 +852,14 @@
   </div>
 
   <!-- newConv: Create a new group conversation -->
-  <div data-cardid="newConv" title="New Conversation" class="card">
+  <div data-cardid="newConv" title="New Conversation" class="card gcn-card">
     <div class="scroller">
       <span class="gcn-sendLabel">Send message:</span>
       <!-- compose is a subwidget and not specific to this card -->
       <form class="gcn-compose" data-class="compose">
-        <div class="hbox">
-          <div class="boxFlex">
-            <input type="text" placeholder="say hello" />
-          </div>
-          <button>send</button>
+        <div class="widget-compose">
+          <input class="widget-composeText" type="text" placeholder="say hello" />
+          <button class="widget-composeSend">send</button>
         </div>
       </form>
       <span class="gcn-toLabel">To:</span>
