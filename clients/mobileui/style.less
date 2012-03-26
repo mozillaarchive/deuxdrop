@@ -1,3 +1,26 @@
+//
+// STRATEGY:
+//
+// Our CSS goals are:
+// - Efficient style resolution through use of specific classes and avoiding
+//   descendant selectors and minimizing the use of child selectors.
+// - Avoiding accidental side-effects and allowing extensive customization / 
+//   tweaking by using a specific class on each item type and mixing in common 
+//   styling.
+//
+// Our conventions:
+// - Each card gets a three-letter prefix which goes on the front of all of the
+//   styles for that card.
+// - Common styling goes in mix-ins at the top of the file.  The mix-ins may be
+//   unprefixed if their names are fairly specific, otherwise they should use
+//   a prefix of "common-".
+//
+// We are avoiding:
+// - Use of flex-boxes (although our styling was originally based on them).
+//   The standard has changed significantly since the browser-specific variants
+//   were created and has not yet been widely adopted.  Also, the
+//   browser-specific variants are not entirely consistent with each other, and
+//   at least gecko's implementation can be hard to work with.
 
 ////////////////////////////////////////////////////////////////////////////////
 // Browser Compat
@@ -69,6 +92,12 @@ a {
     color: @urlColor;
 }
 
+.ellipsis() {
+  overflow: hidden;
+  -o-text-overflow: ellipsis;
+  text-overflow: ellipsis;
+}
+
 .overflow {
   overflow: hidden;
   white-space: nowrap;
@@ -79,6 +108,7 @@ a {
 
 .url() {
   font-style: italic;
+  word-wrap: break-word;
 }
 
 .lipVertGradient (@topLip, @top, @bottom) {
@@ -161,15 +191,53 @@ input[type=text]#search {
 ////////////////////////////////////////////////////////////////////////////////
 // Common Domain Styling
 
+// Items in a scrolling list display
+.common-listItem() {
+  display: block;
+  padding: 10px 5px;
+  position: relative;
+  background-color: #fff;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  color: inherit;
+  min-height: 56px; // 48 + 3+3 + 1+1 = 56
+}
+
+// The avatar box to surround the .common-pic.  Adds whitespace and padding.
 .common-avatar() {
+  float: left;
+  clear: both;
+
   padding: 3px;
   border: 1px solid #eee;
   margin: 0 5px 0 0;
   background-color: #fff;
 }
-.common-pic {
+// Full-size avatar pictures.
+.common-pic() {
   width: 48px;
   height: 48px;
+}
+// Small, inline avatar pictures
+.common-minipic() {
+  height: 24px;
+  width: 24px;
+}
+
+.common-time() {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.common-msgPreviewBody {
+  display: block;
+  font-size: 12px;
+  line-height: 1.3em;
+  max-height: 2.6em;
+  .ellipsis;
+}
+.common-msgPreviewSnippet {
+  color: #444;
 }
 
 .bigSubHeader {
@@ -359,6 +427,21 @@ input[type=text]#search {
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+// Recurring widgets
+
+.widget-compose {
+  padding: 5px;
+}
+
+.widget-composeText {
+  width: 350px;
+  margin-left: 5px;
+}
+
+.widget-composeSend {
+  width: 75px;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Various mix-in blah
@@ -398,18 +481,6 @@ input[type=text]#search {
 .subHeader button.search {
     border-radius: 0 3px 3px 0;
     margin: 0;
-}
-
-.name {
-  font-weight: bold;
-}
-
-.checked {
-    background-color: yellow;
-}
-
-.settings {
-    padding: 10px 5px;
 }
 
 .standardForm {
@@ -624,112 +695,6 @@ input[type=text]#search {
     margin: 0;
 }
 
-/* hbox and vbox classes */
-
-.hbox {
-    display: -webkit-box !important;
-    -webkit-box-orient: horizontal;
-    -webkit-box-align: stretch;
-
-    display: -moz-box !important;
-    -moz-box-orient: horizontal;
-    -moz-box-align: stretch;
-
-    display: box !important;
-    box-orient: horizontal;
-    box-align: stretch;
-    width: 100%;
-}
-
-.hbox > * {
-    -webkit-box-flex: 0;
-    -moz-box-flex: 0;
-    box-flex: 0;
-    display: block;
-}
-
-.vbox {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-box-align: stretch;
-
-    display: -moz-box;
-    -moz-box-orient: vertical;
-    -moz-box-align: stretch;
-
-    display: box;
-    box-orient: vertical;
-    box-align: stretch;
-}
-
-.vbox > * {
-    -webkit-box-flex: 0;
-    -moz-box-flex: 0;
-    box-flex: 0;
-    display: block;
-}
-
-.spacer {
-    -webkit-box-flex: 1;
-    -moz-box-flex: 1;
-    box-flex: 1;
-}
-
-.reverse {
-    -webkit-box-direction: reverse;
-    -moz-box-direction: reverse;
-    box-direction: reverse;
-}
-
-.boxFlex0 {
-    -webkit-box-flex: 0;
-    -moz-box-flex: 0;
-    box-flex: 0;
-}
-
-.boxFlex1, .boxFlex {
-    -webkit-box-flex: 1;
-    -moz-box-flex: 1;
-    box-flex: 1;
-}
-
-.boxFlexStrong {
-    -webkit-box-flex: 50;
-    -moz-box-flex: 50;
-    box-flex: 50;
-}
-
-.boxGroup1 {
-    -webkit-box-flex-group: 1;
-    -moz-box-flex-group: 1;
-    box-flex-group: 1;
-}
-
-.boxGroup2 {
-    -webkit-box-flex-group: 2;
-    -moz-box-flex-group: 2;
-    box-flex-group: 2;
-}
-
-.start {
-    -webkit-box-pack: start;
-    -moz-box-pack: start;
-    box-pack: start;
-}
-
-.end {
-    -webkit-box-pack: end;
-    -moz-box-pack: end;
-    box-pack: end;
-}
-
-.center {
-    -webkit-box-pack: center;
-    -moz-box-pack: center;
-    box-pack: center;
-}
-/* END hbox/vbox normalization from http://alex.dojotoolkit.org/2009/08/css-3-progress/ */
-
 /* clearfix */
 
 .cf:after {
@@ -785,6 +750,7 @@ html[xmlns] .cf {
 .aps-serverUrl {
   display: inline-block;
   min-width: 12em;
+  max-width: 90%;
   
   .url;
   background-color: #ddddff;
@@ -1012,14 +978,11 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Private Conversations: People List (private) [pcl]
 
-.pcl-perPeepItem {
-  background-color: #fff;
-  padding: 10px 5px;
-  border-bottom: 1px solid #ddd;
-  cursor: pointer;
-  color: inherit;
+.pcl-card {
+}
 
-  .hbox;
+.pcl-item {
+  .common-listItem;
 
   &[hasUnread="true"] {
     > .pcl-msgPreview > .pcl-msgPreviewHeader > .pcl-author:before {
@@ -1036,17 +999,14 @@ html[xmlns] .cf {
   .common-pic;
 }
 .pcl-msgPreview {
-  .boxFlex;
   line-height: 26px;
 }
 
 .pcl-msgPreviewHeader {
-  .hbox;
 }
 .pcl-author {
   font-weight: bold;
 
-  .boxFlex;
   .overflow;
 }
 .pcl-new {
@@ -1054,20 +1014,15 @@ html[xmlns] .cf {
   margin-left: 3px;
 }
 .pcl-time {
- font-size: 12px;
- color: #aaa;
- margin-left: 5px;
+  .common-time;
+  margin-left: 5px;
 }
 
 .pcl-msgPreviewBody {
-  .hbox;
+  .common-msgPreviewBody;
 }
 .pcl-msgPreviewSnippet {
-  color: #aaa;
-  font-size: 12px;
-
-  .boxFlex;
-  .overflow;
+  .common-msgPreviewSnippet;
 }
 
 
@@ -1214,52 +1169,41 @@ html[xmlns] .cf {
 .gcl-card {
 }
 
-.gcl-conv {
-  background-color: #fff;
-  padding: 10px 5px;
-  border-bottom: 1px solid #ddd;
-  cursor: pointer;
-  color: inherit;
+.gcl-item {
+  .common-listItem;
+  padding: 0px;
+  padding-bottom: 10px;
 
-  content: '\25cf';
-  color: #0063FF;
-  margin-right: 3px;
-
-  .hbox;
+  &[hasUnread="true"] {
+    > .gcl-header > .gcl-subject:before {
+      content: '\25cf';
+      color: #0063FF;
+      margin-right: 3px;
+    }
+  }
 }
 
-.gcl-avatar {
-  .common-avatar;
-}
-.gcl-pic {
-  .common-pic;
-}
 
-.gcl-msgPreview {
-  .boxFlex;
-  line-height: 26px;
+.gcl-header {
+  padding-top: 4px;
+  padding-bottom: 2px;
+  margin-bottom: 6px;
+  position: relative;
+  width: 100%;
+  background-color: #eee;
 }
-.gcl-msgPreviewHeader {
-  .hbox;
+.gcl-headerRight {
+  float: right;
+  padding-right: 5px;
 }
-
-.gcl-time {
- font-size: 12px;
- color: #aaa;
- margin-left: 5px;
-}
-
-.gcl-namechecks {
+.gcl-subject {
+  padding-left: 5px;
+  display: block;
+  font-size: 120%;
   font-weight: bold;
-  margin-left: 3px;
-  color: #666;
-
-  .boxFlex;
   .overflow;
+  color: #222;
 }
-.gcl-namecheck {
-}
-
 .gcl-new {
   color: #0063FF;
   margin-left: 3px;
@@ -1267,56 +1211,49 @@ html[xmlns] .cf {
 .gcl-numUnreadMessages {
 }
 
-.gcl-msgPreviewSnippet {
-  color: #aaa;
-  font-size: 12px;
+.gcl-time {
+  .common-time;
+  margin-left: 5px;
+}
 
-  .boxFlex;
+.gcl-msgPreview {
+  line-height: 24px;
+  padding: 0px 5px;
+}
+.gcl-msgPreviewHeader {
+  margin: 0;
+  padding: 0;
+}
+
+.gcl-participants {
+  display: block;
+  color: #000;
+  line-height: 20px;
+}
+.gcl-participants-overflow {
+  font-style: italic;
+}
+.gcl-part-pic {
+  .common-minipic;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.gcl-participant {
+  display: inline-block;
+  height: 24px;
+  vertical-align: middle;
+  width: 49%;
   .overflow;
 }
 
-.gcl-namecheck:after, .participant:after {
-    content: ", ";
+.gcl-msgPreviewBody {
+  .common-msgPreviewBody;
+  margin-top: 6px;
 }
-.gcl-namecheck:last-child:after, .participant:last-child:after {
-    content: "";
+.gcl-msgPreviewSnippet {
+  .common-msgPreviewSnippet;
 }
 
-    .conversations a .new {
-        color: #0063FF;
-        margin-left: 3px;
-    }
-
-    .conversations a .snippet {
-        color: #aaa;
-        font-size: 12px;
-    }
-
-    .conversations a.read {
-        background-color: #fafafa;
-    }
-
-    .conversations a.read .author {
-        color: #666;
-    }
-
-    .conversations a.unread .author:before {
-        content: '\25cf';
-        color: #0063FF;
-        margin-right: 3px;
-    }
-
-
-    .conversation .messages {
-        list-style-type: none;
-    }
-
-    .conversation .messages a {
-        margin: 0 0 5px 0;
-        padding: 0;
-        font-size: 12px;
-        border-bottom: none;
-    }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Group Conversations: Group Converation Display (groupConv) [gcd]
@@ -1337,11 +1274,9 @@ html[xmlns] .cf {
 .gcd-participants {
   display: inline-block;
   padding: 4px;
-  vertical-align: middle;
 }
 .gcd-part-pic {
-  height: 24px;
-  width: 24px;
+  .common-minipic;
   vertical-align: middle;
   margin-right: 4px;
 }
@@ -1551,7 +1486,7 @@ html[xmlns] .cf {
   padding: 4px;
 }
 .gcn-compose {
-  padding: 6px 4px;
+  padding: 6px 4px 6px 8px;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1613,47 +1548,68 @@ html[xmlns] .cf {
 ////////////////////////////////////////////////////////////////////////////////
 // Phonebook: List all possible contacts to add (add) [pbl]
 
+.pbl-card {
+}
+
+.pbl-item {
+  .common-listItem;
+}
+
+.pbl-avatar {
+  .common-avatar;
+}
+.pbl-pic {
+  .common-pic;
+}
+
+.pbl-info {
+  padding: 3px 0px;
+}
+.pbl-peepName {
+  font-weight: bold;
+}
+.pbl-serverUrl {
+  .url;
+  color: #4444aa;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Phonebook: Peep details and confirm requesting friendship (askFriend) [pba]
 //
 // Right now we are just reusing a lot of the "cra" contact request acceptance
 //  styling since the cases are so fundamentally similar in nature.
 
-.pbl-name {
+.pba-name {
   width: 24em;
 }
 
-.pbl-sendMessageText {
+.pba-sendMessageBox {
+}
+.pba-sendMessagePrompt {
+}
+.pba-sendMessageText {
   width: 24em;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Connection Requests: List people asking to be your friend (notifications) [crl]
 
-.crl-item {
-  display: block;
-  width: 100%;
-  position: relative;
-
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 0.3em;
-
-  background-color: #fff;
-  color: black;
+.crl-card {
 }
 
+.crl-item {
+  .common-listItem;
+}
 
 .crl-avatar {
   .common-avatar;
-  float: left;
-  clear: both;
 }
 .crl-pic {
   .common-pic;
 }
 
 .crl-info {
+  padding: 3px 0px;
 }
 .crl-peepName {
   font-weight: bold;

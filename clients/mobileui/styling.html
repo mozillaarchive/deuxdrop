@@ -49,6 +49,7 @@
           PIC_BOB = 'http://www.gravatar.com/avatar/e1e4d264eb2c6d25393e309030594572?r=pg&d=wavatar&s=48',
           PIC_CHARLIE = 'http://www.gravatar.com/avatar/810c1dfbca3bd1224eab9871ba47cd41?r=pg&d=wavatar&s=48',
           PIC_DAVE = 'http://www.gravatar.com/avatar/5164a5db191edd7bbf5cd87a78829e85?r=pg&d=wavatar&s=48',
+          PIC_DOUG = 'http://www.gravatar.com/avatar/a0e13579dbd9bb7ccba990f739f368ee?r=pg&d=wavatar&s=48',
           PIC_ELIZA = 'http://www.gravatar.com/avatar/64d725a972cfd6d76850eae8157b03f4?r=pg&d=wavatar&s=48',
           PIC_FRED = 'http://www.gravatar.com/avatar/75d891bda3b9fcea07c5d98b75b60ca2?r=pg&d=wavatar&s=48',
           PIC_GEORGETTE = 'http://www.gravatar.com/avatar/c576efa922215cd13bd1a7a8d8b6e3e3?r=pg&d=wavatar&s=48',
@@ -62,27 +63,28 @@
         // - card stuff
         // wrap every card with a stylingCardWrapper so they each look like
         //  little screenshots.
-        $('.card')
-          .wrap($('#stylingCardTemplate').clone(true).removeAttr('id'));
-        $('.stylingCardWrapper')
+        $(".card")
+          .wrap($("#stylingCardTemplate").clone(true).removeAttr("id"));
+        $(".stylingCardWrapper")
           .each(function() {
-            var title = $(this).find('[title]').attr('title');
-            $(this).find('.THEheaderText').text(title);
+            var title = $(this).find("[title]").attr("title");
+            $(this).find(".THEheaderText").text(title);
           });
 
         // Replace the image sources for .PIC-blah with the appropriate URls
-        $('.PIC-alice').attr('src', PIC_ALICE);
-        $('.PIC-bob').attr('src', PIC_BOB);
-        $('.PIC-charlie').attr('src', PIC_CHARLIE);
-        $('.PIC-me').attr('src', PIC_DAVE);
-        $('.PIC-you').attr('src', PIC_DAVE);
-        $('.PIC-eliza').attr('src', PIC_ELIZA);
-        $('.PIC-fred').attr('src', PIC_FRED);
-        $('.PIC-georgette').attr('src', PIC_GEORGETTE);
-        $('.PIC-hieronymus').attr('src', PIC_HIERONYMUS);
-        $('.PIC-john').attr('src', PIC_JOHN);
-        $('.PIC-zorro').attr('src', PIC_ZORRO);
-        $('.PIC-zorrojr').attr('src', PIC_ZORRO_JR);
+        $(".PIC-alice").attr("src", PIC_ALICE);
+        $(".PIC-bob").attr("src", PIC_BOB);
+        $(".PIC-charlie").attr("src", PIC_CHARLIE);
+        $(".PIC-me").attr("src", PIC_DAVE);
+        $(".PIC-you").attr("src", PIC_DAVE);
+        $(".PIC-doug").attr("src", PIC_DOUG);
+        $(".PIC-eliza").attr("src", PIC_ELIZA);
+        $(".PIC-fred").attr("src", PIC_FRED);
+        $(".PIC-georgette").attr("src", PIC_GEORGETTE);
+        $(".PIC-hieronymus").attr("src", PIC_HIERONYMUS);
+        $(".PIC-john").attr("src", PIC_JOHN);
+        $(".PIC-zorro").attr("src", PIC_ZORRO);
+        $(".PIC-zorrojr").attr("src", PIC_ZORRO_JR);
       });
     //]]>
     </script>
@@ -344,21 +346,18 @@
   </div>
 
   <!-- private: Lists of peeps with most recent private conv msg snip -->
-  <div data-cardid="private" title="Private" class="card card-private">
+  <div data-cardid="private" title="Private" class="card pcl-card">
     <div class="scroller" data-childclass="peepPrivate">
       <!-- Alice -->
-      <a class="pcl-perPeepItem" href="#privateConv"
+      <a class="pcl-item" href="#privateConv"
          hasUnread="true">
-        <div>
-          <div class="pcl-avatar">
-            <img class="pcl-pic PIC-alice" src="i/face2.png" />
-          </div>
+        <div class="pcl-avatar">
+          <img class="pcl-pic PIC-alice" src="i/face2.png" />
         </div>
         <div class="pcl-msgPreview">
           <div class="pcl-msgPreviewHeader">
             <span class="pcl-author">Alice</span>
             <span class="pcl-new">(<span>2</span>)</span>
-            <span class="boxFlexStrong"></span>
             <span class="pcl-time" data-bind="conv.mostRecentActivity">
               10 minutes ago
             </span>
@@ -372,18 +371,15 @@
         </div>
       </a>
       <!-- Bob -->
-      <a class="pcl-perPeepItem" href="#privateConv"
+      <a class="pcl-item" href="#privateConv"
          hasUnread="false">
-        <div>
-          <div class="pcl-avatar">
-            <img class="pcl-pic PIC-bob" src="i/face2.png" />
-          </div>
+        <div class="pcl-avatar">
+          <img class="pcl-pic PIC-bob" src="i/face2.png" />
         </div>
         <div class="pcl-msgPreview">
           <div class="pcl-msgPreviewHeader">
             <span class="pcl-author">Bob</span>
             <span class="pcl-new">(<span>0</span>)</span>
-            <span class="boxFlexStrong"></span>
             <span class="pcl-time" data-bind="conv.mostRecentActivity">
               1 day ago
             </span>
@@ -399,18 +395,15 @@
         </div>
       </a>
       <!-- Charlie -->
-      <a class="pcl-perPeepItem" href="#privateConv"
+      <a class="pcl-item" href="#privateConv"
          hasUnread="true">
-        <div>
-          <div class="pcl-avatar">
-            <img class="pcl-pic PIC-charlie" src="i/face2.png" />
-          </div>
+        <div class="pcl-avatar">
+          <img class="pcl-pic PIC-charlie" src="i/face2.png" />
         </div>
         <div class="pcl-msgPreview">
           <div class="pcl-msgPreviewHeader">
             <span class="pcl-author">Charlie</span>
             <span class="pcl-new">(<span>2</span>)</span>
-            <span class="boxFlexStrong"></span>
             <span class="pcl-time" data-bind="conv.mostRecentActivity">
               3 days ago
             </span>
@@ -428,7 +421,7 @@
   </div>
 
   <!-- privateConv: Private conversation with a friend peep. -->
-  <div data-cardid="privateConv" title="Private Conv" class="card pcd-card">
+  <div data-cardid="privateConv" title="Private Conv: Bob" class="card pcd-card">
     <!-- non-scrolling reminder of who our friend is... -->
     <div class="pcd-header">
       <div class="pcd-headerThem">
@@ -533,12 +526,10 @@
 
     </div>
     <!-- compose is a subwidget and not specific to this card -->
-    <form class="pcd-compose" data-class="compose">
-      <div class="hbox">
-        <div class="boxFlex">
-          <input type="text" placeholder="say hello" />
-        </div>
-        <button>send</button>
+    <form data-class="compose">
+      <div class="widget-compose">
+        <input class="widget-composeText" type="text" placeholder="say hello" />
+        <button class="widget-composeSend">send</button>
       </div>
     </form>
   </div>
@@ -550,104 +541,110 @@
     </div>
     <div class="scroller" data-childclass="convBlurb">
       <!-- Conversation with new activity, reasonable first snippet  -->
-      <a class="gcl-conv" data-classimpl="convBlurb"
-         href="#groupConv">
-          <div>
-              <div class="gcl-avatar">
-                  <img class="gcl-pic" src="i/group.png" />
-              </div>
+      <a class="gcl-item" data-classimpl="convBlurb"
+         href="#groupConv" hasUnread="true">
+        <div class="gcl-header">
+          <div class="gcl-headerRight">
+            <span class="gcl-new">
+              (<span data-bind="gcl-numUnreadMessages">2</span>)
+            </span>
+            <span class="gcl-time">12 minutes ago</span>
           </div>
-          <div class="gcl-msgPreview">
-              <div class="gcl-msgPreviewHeader">
-                  <!-- names -->
-                  <span class="gcl-namechecks"
-                        data-childclass="namecheck">
-                    <span class="gcl-namecheck">Alice</span>
-                    <span class="gcl-namecheck">Bob</span>
-                  </span>
-                  <span class="gcl-new">
-                    (<span data-bind="gcl-numUnreadMessages">2</span>)
-                  </span>
-                  <span class="boxFlexStrong"></span>
-                  <span class="gcl-time">12 minutes ago</span>
-              </div>
-              <div class="hbox">
-                  <span class="gcl-msgPreviewSnippet">
-                    I don't know, that sounds pretty flammable.
-                  </span>
-              </div>
+          <span class="gcl-subject">
+            I want to buy some t-shirts for the team; any ideas on where to
+            find good ones?
+          </span>
+        </div>
+        <div class="gcl-msgPreview">
+          <div class="gcl-msgPreviewHeader">
+            <!-- names -->
+            <span class="gcl-participants"
+                  data-childclass="participant">
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-alice" />Alice</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-bob" />Bob</span>
+            </span>
           </div>
+          <div class="gcl-msgPreviewBody">
+            <span class="gcl-msgPreviewSnippet">
+              I don't know, that sounds pretty flammable.
+            </span>
+          </div>
+        </div>
       </a>
 
       <!-- Conversation with new activity, tons of people  -->
-      <a class="gcl-conv" data-classimpl="convBlurb"
-         href="#groupConv">
-          <div>
-              <div class="gcl-avatar">
-                  <img class="gcl-pic" src="i/group.png" />
-              </div>
+      <a class="gcl-item" data-classimpl="convBlurb"
+         href="#groupConv" hasUnread="true">
+        <!-- This is an example of a subject which is just the first message
+             from the conversation. -->
+        <div class="gcl-header">
+          <div class="gcl-headerRight">
+            <span class="gcl-new">
+              (<span data-bind="gcl-numUnreadMessages">4</span>)
+            </span>
+            <span class="gcl-time">2 hours ago</span>
           </div>
-          <div class="gcl-msgPreview">
-              <div class="gcl-msgPreviewHeader">
-                  <!-- names -->
-                  <span class="gcl-namechecks">
-                    <span class="gcl-namecheck">Alice</span>
-                    <span class="gcl-namecheck">Bob</span>
-                    <span class="gcl-namecheck">Charlie</span>
-                    <span class="gcl-namecheck">the Dougster</span>
-                    <span class="gcl-namecheck">Eliza Dolittle</span>
-                    <span class="gcl-namecheck">Fred Q. Fredericks</span>
-                    <span class="gcl-namecheck">Georgette Q. Georgettington</span>
-                    <span class="gcl-namecheck">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
-                    <span class="gcl-namecheck">John Jacob Jingleheimer Schmidt</span>
-                  </span>
-                  <span class="gcl-new">
-                    (<span data-bind="gcl-numUnreadMessages">4</span>)
-                  </span>
-                  <span class="boxFlexStrong"></span>
-                  <span class="gcl-time">2 hours ago</span>
-              </div>
-              <div class="hbox">
-                  <span class="gcl-msgPreviewSnippet">
-                    What do you get when you cross an elephant with a rhinocerous?
-                  </span>
-              </div>
+          <span class="gcl-subject">
+            Jokes!
+          </span>
+        </div>
+        <div class="gcl-msgPreview">
+          <div class="gcl-msgPreviewHeader">
+            <!-- names -->
+            <span class="gcl-participants">
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-doug" />the Dougster</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-eliza" />Eliza Dolittle</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-fred" />Fred Q. Fredericks</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-georgette" />Georgette Q. Georgettington</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-hieronymus" />Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-john" />John Jacob Jingleheimer Schmidt</span>
+            </span>
+            <span class="gcl-participants-overflow">
+              <img class="gcl-part-pic PIC-alice" /><img class="gcl-part-pic PIC-bob" /><img class="gcl-part-pic PIC-charlie" /> and 3 others.
+            </span>
           </div>
+          <div class="gcl-msgPreviewBody">
+            <span class="gcl-msgPreviewSnippet">
+              What do you get when you cross an elephant with a rhinocerous?
+            </span>
+          </div>
+        </div>
       </a>
 
       <!-- Conversation with new activity, huge unread message snippet -->
-      <a class="gcl-conv" data-classimpl="convBlurb"
+      <a class="gcl-item" data-classimpl="convBlurb"
          href="#groupConv">
-          <div>
-              <div class="gcl-avatar">
-                  <img class="gcl-pic" src="i/group.png" />
-              </div>
+        <div class="gcl-header">
+          <div class="gcl-headerRight">
+            <span class="gcl-new">
+              (<span data-bind="gcl-numUnreadMessages">0</span>)
+            </span>
+            <span class="gcl-time">5 hours ago</span>
           </div>
-          <div class="gcl-msgPreview">
-              <div class="gcl-msgPreviewHeader">
-                  <!-- names -->
-                  <span class="gcl-namechecks"
-                        data-childclass="namecheck">
-                    <span class="gcl-namecheck">Bob</span>
-                    <span class="gcl-namecheck">Charlie</span>
-                    <span class="gcl-namecheck">Dave</span>
-                  </span>
-                  <span class="gcl-new">
-                    (<span data-bind="gcl-numUnreadMessages">1</span>)
-                  </span>
-                  <span class="boxFlexStrong"></span>
-                  <span class="gcl-time">5 hours ago</span>
-              </div>
-              <div class="hbox">
-                  <span class="gcl-msgPreviewSnippet">
-                    Yes, I know my A, B, C's.  They are, in no particular order.
-                    Er, or rather, in a quite particular order: A, B, C, D, E,
-                    F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y,
-                    and Zed.  I mean Z.  Yes, Z.  I am not a British spy.
-                    And you'll never prove it, governa.  Damn!
-                  </span>
-              </div>
+          <span class="gcl-subject">
+            Wassssssssup?
+          </span>
+        </div>
+        <div class="gcl-msgPreview">
+          <div class="gcl-msgPreviewHeader">
+            <!-- names -->
+            <span class="gcl-participants"
+                  data-childclass="participant">
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-bob" />Bob</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-charlie" />Charlie</span>
+              <span class="gcl-participant"><img class="gcl-part-pic PIC-doug" />the Dougster</span>
+            </span>
           </div>
+          <div class="gcl-msgPreviewBody">
+            <span class="gcl-msgPreviewSnippet">
+              Yes, I know my A, B, C's.  They are, in no particular order.
+              Er, or rather, in a quite particular order: A, B, C, D, E,
+              F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y,
+              and Zed.  I mean Z.  Yes, Z.  I am not a British spy.
+              And you'll never prove it, governa.  Damn!
+            </span>
+          </div>
+        </div>
       </a>
 
 
@@ -855,16 +852,14 @@
   </div>
 
   <!-- newConv: Create a new group conversation -->
-  <div data-cardid="newConv" title="New Conversation" class="card">
+  <div data-cardid="newConv" title="New Conversation" class="card gcn-card">
     <div class="scroller">
       <span class="gcn-sendLabel">Send message:</span>
       <!-- compose is a subwidget and not specific to this card -->
       <form class="gcn-compose" data-class="compose">
-        <div class="hbox">
-          <div class="boxFlex">
-            <input type="text" placeholder="say hello" />
-          </div>
-          <button>send</button>
+        <div class="widget-compose">
+          <input class="widget-composeText" type="text" placeholder="say hello" />
+          <button class="widget-composeSend">send</button>
         </div>
       </form>
       <span class="gcn-toLabel">To:</span>
@@ -1006,6 +1001,51 @@
   <!-- Add: List the server phonebooks to pick someone to connect to.  -->
   <div data-cardid="add" title="Add a contact" class="card pbl-card">
     <div class="scroller" data-childclass="peepPhonebook">
+      <!-- Phonebook Entry -->
+      <a class="pbl-item" data-classimpl="peepPhonebook"
+         href="#askFriend">
+        <div class="pbl-avatar">
+          <img class="pbl-pic PIC-eliza" />
+        </div>
+        <div class="pbl-info">
+          <div>
+            <span class="pbl-peepName">Eliza Dolittle</span>
+          </div>
+          <div>
+            using server <span class="pbl-serverUrl">pygmael.example.com</span>
+          </div>
+        </div>
+      </a>
+      <!-- Phonebook Entry -->
+      <a class="pbl-item" data-classimpl="peepPhonebook"
+         href="#askFriend">
+        <div class="pbl-avatar">
+          <img class="pbl-pic PIC-hieronymus" />
+        </div>
+        <div class="pbl-info">
+          <div>
+            <span class="pbl-peepName">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D, DJ, MC, RAID-10, Fanta Drinker</span>
+          </div>
+          <div>
+            using server <span class="pbl-serverUrl">hier.arch.y.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.example.com</span>
+          </div>
+        </div>
+      </a>
+      <!-- Phonebook Entry -->
+      <a class="pbl-item" data-classimpl="peepPhonebook"
+         href="#askFriend">
+        <div class="pbl-avatar">
+          <img class="pbl-pic PIC-zorro" />
+        </div>
+        <div class="pbl-info">
+          <div>
+            <span class="pbl-peepName">Zorro Z. Zorrington</span>
+          </div>
+          <div>
+            using server <span class="pbl-serverUrl">masked.example.com</span>
+          </div>
+        </div>
+      </a>
     </div>
   </div>
 
@@ -1085,11 +1125,11 @@
         <div>
           I call this person: <input class="pbl-name" type="text" name="displayName">
         </div>
-        <div class="pbl-sendMessageBox">
-          <div class="pbl-sendMessagePrompt">
+        <div class="pba-sendMessageBox">
+          <div class="pba-sendMessagePrompt">
             Message to send with this request:
           </div>
-          <textarea class="pbl-sendMessageText" name="message"></textarea>
+          <textarea class="pba-sendMessageText" name="message"></textarea>
         </div>
         <button>Send connect request</button>
       </form>
@@ -1132,7 +1172,7 @@
               <span class="crl-peepName">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D, DJ, MC, RAID-10, Fanta Drinker</span>
             </div>
             <div>
-              using server <span class="crl-serverUrl">hier.example.com</span>
+              using server <span class="crl-serverUrl">hier.arch.y.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.yeah.example.com</span>
             </div>
           </div>
         </div>
@@ -1161,7 +1201,7 @@
         <div>
           <div class="crl-details">
             <span class="crl-receivedAt" data-bind="receivedAt">2 weeks ago</span>: 
-            <span class="crl-messageText" data-bind="messageText">The rain in Spain stays mainly in the plane.</span>
+            <span class="crl-messageText" data-bind="messageText">The rain in Spain stays mainly in the plane.  But sometimes this compromises the flightworthiness of the plane and then it crashes.  Which is why I recommend not visiting Spain.</span>
           </div>
         </div>
       </a>
