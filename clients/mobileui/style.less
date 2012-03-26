@@ -1615,26 +1615,64 @@ html[xmlns] .cf {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Phonebook: Peep details and confirm requesting friendship (askFriend) [pba]
+//
+// Right now we are just reusing a lot of the "cra" contact request acceptance
+//  styling since the cases are so fundamentally similar in nature.
+
+.pbl-name {
+  width: 24em;
+}
+
+.pbl-sendMessageText {
+  width: 24em;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Connection Requests: List people asking to be your friend (notifications) [crl]
 
-.connReqItem {
-    width: 100%;
-    padding-bottom: 0.3em;
-    border-bottom: 1px solid #eee;
-    margin-bottom: 0.3em;
+.crl-item {
+  display: block;
+  width: 100%;
+  position: relative;
+
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 0.3em;
+
+  background-color: #fff;
+  color: black;
 }
 
-    .connReqItem .details {
-        margin-left: 1.5em;
-    }
-    .connReqItem .receivedAt {
-        color: #aaa;
-    }
-    .connReqItem .messageText {
-        color: #666;
-    }
+
+.crl-avatar {
+  .common-avatar;
+  float: left;
+  clear: both;
+}
+.crl-pic {
+  .common-pic;
+}
+
+.crl-info {
+}
+.crl-peepName {
+  font-weight: bold;
+}
+.crl-serverUrl {
+  .url;
+  color: #4444aa;
+}
+
+.crl-details {
+  margin-left: 1.5em;
+}
+.crl-receivedAt {
+  color: #aaa;
+}
+.crl-messageText {
+  color: #666;
+  font-style: italic;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Connection Requests: Request details and approve/ignore/deny (acceptReq) [cra]
@@ -1739,10 +1777,13 @@ html[xmlns] .cf {
 
 ///// Name-checking Contacts who also know the person
 .cra-relations {
-  margin: 12px 4px;
+  margin: 8px 0px;
+  padding: 4px;
+  background-color: #eee;
 }
 .cra-relationLabel {
   font-size: 120%;
+  font-weight: bold;
 }
 .cra-relatedContacts {
   padding: 6px;
@@ -1769,10 +1810,13 @@ html[xmlns] .cf {
 
 ///// Name-checking Conversations involving the person
 .cra-convsBlock {
-  margin: 12px 4px;
+  margin: 8px 0px;
+  padding: 4px;
+  background-color: #eee;
 }
 .cra-convsLabel {
   font-size: 120%;
+  font-weight: bold;
 }
 .cra-convs {
   padding: 4px;

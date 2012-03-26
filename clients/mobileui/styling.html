@@ -1012,38 +1012,84 @@
   <!-- askFriend: Confirm connecting to someone, provide a message -->
   <div data-cardid="askFriend" title="Request a connection" class="card">
     <div class="scroller">
-      <div>
-        Connect to the person identifying themselves as:
-        <div class="hbox">
-          <div>
-            <div class="avatar">
-              <img class="peepInfoPic" data-bind="peep.pic"
-                   data-attr="src" data-missing="OMIT"
-                   src="i/face2.png" />
+
+      <div class="cra-infoBlock">
+        <div class="cra-infoLabel">The Alleged:</div>
+        <div class="cra-infoBundle">
+          <div class="cra-avatar">
+            <img class="cra-pic PIC-fred" />
+            <span class="cra-allegedName">Fred Q. Fredericks</span>
+          </div>
+          <div class="cra-serverInfo">
+            using server: <span class="cra-serverUrl">fredadelic.example.com</span>
+          </div>
+        </div>
+      </div>
+      <div class="cra-pocoContainer">
+        <ul class="cra-pocoList">
+          <li class="cra-pocoItem">
+            <label class="cra-pocoLabel">e-mail</label>
+            <div class="cra-pocoValue">fred@fred.fred</div>
+          </li>
+        </ul>
+      </div>
+      <!-- Known to your contacts -->
+      <div class="cra-relations">
+        <div class="cra-relationLabel">Known to your contacts:</div>
+        <div class="cra-relatedContacts">
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-alice" />
+            <span class="cra-relName">Alice</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">Freddy F</span>
+          </div>
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-bob" />
+            <span class="cra-relName">Bob</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">the Fredster</span>
+          </div>
+          <div class="cra-relContact">
+            <img class="cra-relPic PIC-charlie" />
+            <span class="cra-relName">Charlie</span>
+            <span class="cra-relCallsLabel"> calls them: </span>
+            <span class="cra-relCalled">Fred Q. Fredericks</span>
+          </div>
+        </div>
+      </div>
+      <!-- Conversation Participation (write ordering) -->
+      <div class="cra-convsBlock">
+        <div class="cra-convsLabel">Participating in conversations:</div>
+        <div class="cra-convs">
+          <div class="cra-conv">
+            <span class="cra-convDate">5 days ago</span>
+            <span class="cra-subjectish">Let's visit the mouse-trap factory!</span>
+            <div class="cra-participants">
+              <span class="cra-participant"><img class="cra-partPic PIC-alice">Alice</span>
+              <span class="cra-participant"><img class="cra-partPic PIC-charlie">Charlie</span>
+              <span class="cra-participant cra-partOthers">and 2 others</span>
             </div>
           </div>
-          <div>
-            <span class="untrustedData"
-                data-bind="peep.selfPoco.displayName"></span>
+          <div class="cra-conv">
+            <span class="cra-convDate">1 month ago</span>
+            <span class="cra-subjectish">I'm having a holiday party, and you're invited!</span>
+            <div class="cra-participants">
+              <span class="cra-participant"><img class="cra-partPic PIC-bob">Bob</span>
+              <span class="cra-participant cra-partOthers">and 12 others</span>
+            </div>
           </div>
         </div>
       </div>
-      <div>
-        using server at <span class="untrustedData"
-                              data-bind="peepServer.url"></span>
-      </div>
-      <div class="pocoContainer">
-        with the additional contact information:
-      </div>
+
       <form class="askFriendForm standardForm">
         <div>
-          I call this person: <input type="text" name="displayName">
+          I call this person: <input class="pbl-name" type="text" name="displayName">
         </div>
-        <div class="askMessageBox">
-          <div class="askMessagePrompt">
+        <div class="pbl-sendMessageBox">
+          <div class="pbl-sendMessagePrompt">
             Message to send with this request:
           </div>
-          <textarea class="askMessageTextArea" name="message"></textarea>
+          <textarea class="pbl-sendMessageText" name="message"></textarea>
         </div>
         <button>Send connect request</button>
       </form>
@@ -1051,8 +1097,74 @@
   </div>
 
   <!-- notifications: Friend/connect requests, for now at least. -->
-  <div data-cardid="notifications" title="Friend requests" class="card">
+  <div data-cardid="notifications" title="Friend requests" class="card crl-card">
     <div class="scroller" data-childclass="connReq">
+      <!-- connreq 1 -->
+      <a class="crl-item" data-classimpl="connReq" href="#acceptReq">
+        <div>
+          <div class="crl-avatar">
+            <img class="crl-pic PIC-zorro" src="i/face2.png" />
+          </div>
+          <div class="crl-info">
+            <div>
+              <span class="crl-peepName">Zorro Z. Zorrington</span>
+            </div>
+            <div>
+              using server <span class="crl-serverUrl">masked.example.com</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="crl-details">
+            <span class="crl-receivedAt" data-bind="receivedAt">2 days ago</span>: 
+            <span class="crl-messageText" data-bind="messageText">It's me!</span>
+          </div>
+        </div>
+      </a>
+      <!-- connreq 2 -->
+      <a class="crl-item" data-classimpl="connReq" href="#acceptReq">
+        <div>
+          <div class="crl-avatar">
+            <img class="crl-pic PIC-hieronymus" src="i/face2.png" />
+          </div>
+          <div class="crl-info">
+            <div>
+              <span class="crl-peepName">Hieronymus Q. Hierarchicalnamespace, MD, Ph.D, Sc.D, DJ, MC, RAID-10, Fanta Drinker</span>
+            </div>
+            <div>
+              using server <span class="crl-serverUrl">hier.example.com</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="crl-details">
+            <span class="crl-receivedAt" data-bind="receivedAt">1 week ago</span>: 
+            <span class="crl-messageText" data-bind="messageText">Work at home!  Easy money!  Just by packing envelopes and occasionally engaging in daring daylight raids on armored cars that pass by your home!  Must have own thing that punctures car tires.  You know, the one you drag across the road?  It kind of telescopes...  Easy money!</span>
+          </div>
+        </div>
+      </a>
+      <!-- connreq 3 -->
+      <a class="crl-item" data-classimpl="connReq" href="#acceptReq">
+        <div>
+          <div class="crl-avatar">
+            <img class="crl-pic PIC-eliza" src="i/face2.png" />
+          </div>
+          <div class="crl-info">
+            <div>
+              <span class="crl-peepName">Eliza Dolittle</span>
+            </div>
+            <div>
+              using server <span class="crl-serverUrl">pygmael.example.com</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="crl-details">
+            <span class="crl-receivedAt" data-bind="receivedAt">2 weeks ago</span>: 
+            <span class="crl-messageText" data-bind="messageText">The rain in Spain stays mainly in the plane.</span>
+          </div>
+        </div>
+      </a>
     </div>
   </div>
 
