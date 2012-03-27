@@ -25,6 +25,28 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Browser Compat
 
+.borderImage(@a, @b) {
+  -moz-border-image-slice: @a @b fill;
+  -moz-border-image-width: auto;
+  -moz-border-image-repeat: stretch;
+  -webkit-border-image-slice: @a @b fill;
+  -webkit-border-image-width: auto;
+  -webkit-border-image-repeat: stretch;
+  -o-border-image-slice: @a @b fill;
+  -o-border-image-width: auto;
+  -o-border-image-repeat: stretch;
+  border-image-slice: @a @b fill;
+  border-image-width: auto;
+  border-image-repeat: stretch;
+}
+
+.borderImageSource(@url) {
+  -moz-border-image-source: url("@{url}");
+  -webkit-border-image-source: url("@{url}");
+  -o-border-image-source: url("@{url}");
+  border-image-source: url("@{url}");
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Common HTML styling
 
@@ -1105,9 +1127,7 @@ html[xmlns] .cf {
 .pcd-messageContainer {
   border: 8px solid #888;
   border-width: 8px 10px;
-  -moz-border-image-slice: 8 10 fill;
-  -moz-border-image-width: auto;
-  -moz-border-image-repeat: stretch;
+  .borderImage(8, 10);
 }
 
 .pcd-message[watermark="true"] {
@@ -1116,7 +1136,7 @@ html[xmlns] .cf {
 
 .pcd-messageCommon (@color) {
   > .pcd-messageContainer {
-    -moz-border-image-source: url("i/@{color}Curves.png");
+    .borderImageSource("i/@{color}Curves.png");
 
     > .pcd-messageText {
       padding: 4px;
@@ -1362,9 +1382,7 @@ html[xmlns] .cf {
 .gcd-messageContainer {
   border: 8px solid #888;
   border-width: 8px 10px;
-  -moz-border-image-slice: 8 10 fill;
-  -moz-border-image-width: auto;
-  -moz-border-image-repeat: stretch;
+  .borderImage(8, 10);
 }
 
 .gcd-message {
@@ -1391,7 +1409,7 @@ html[xmlns] .cf {
   width: 100%;
 
   > .gcd-messageContainer {
-    -moz-border-image-source: url("i/blueCurves.png");
+    .borderImageSource("i/blueCurves.png");
     margin-left: 55px;
     margin-right: 11px;
 
@@ -1416,7 +1434,7 @@ html[xmlns] .cf {
 .gcd-messageCommon (@color) {
   > .gcd-messageContainer {
     position: relative;
-    -moz-border-image-source: url("i/@{color}Curves.png");
+    .borderImageSource("i/@{color}Curves.png");
     margin-left: 34px;
     margin-right: 25px;
 
@@ -1717,10 +1735,8 @@ html[xmlns] .cf {
   margin-right: 8px;
   border: 8px solid #888;
   border-width: 8px 10px;
-  -moz-border-image-slice: 8 10 fill;
-  -moz-border-image-width: auto;
-  -moz-border-image-repeat: stretch;
-  -moz-border-image-source: url("i/yellowCurves.png");
+  .borderImage(8, 10);
+  .borderImageSource("i/yellowCurves.png");
 }
 .cra-saysIndicator {
   position: absolute;
