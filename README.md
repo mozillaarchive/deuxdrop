@@ -1,3 +1,6 @@
+### :warning: This project is not actively maintained :warning:
+Proceed at own risk :no_good:
+
 # Deuxdrop
 
 Secure messaging with the distributed federation and deliver model of email but with the contact list model of chat systems like jabber.
